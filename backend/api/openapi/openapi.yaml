@@ -1,0 +1,110 @@
+openapi: 3.0.3
+info:
+  title: AI Governance API
+  description: |
+    Contract for the AI Governance control plane and data plane APIs.
+
+    This file is the source of truth for wire types: package :contracts
+    generates TypeScript types from it (packages/contracts), and the Go
+    backend implements these endpoints manually with the standard library
+    (docs/adr/0002-foundation-conventions.md). The contract currently
+    covers system/health endpoints only; business endpoints (tenants,
+    policies, credentials, audit, billing) are added as they are designed,
+    milestone by milestone — never speculatively.
+  version: 0.1.0
+  contact:
+    name: AI Governance Platform Team
+servers:
+  - url: http://localhost:8080
+    description: Local control API / gateway
+tags:
+  - name: system
+    description: Liveness, readiness and health of a service instance
+paths:
+  /livez:
+    get:
+      operationId: getLiveness
+      tags: [system]
+      summary: Liveness probe — true if the process is up
+      responses:
+        "200":
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /readyz:
+    get:
+      operationId: getReadiness
+      tags: [system]
+      summary: Readiness probe — true if all registered dependency checks pass
+      responses:
+        "200":
+          description: Service is ready to serve traffic
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+        "503":
+          description: One or more dependency checks failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /healthz:
+    get:
+      operationId: getHealth
+      tags: [system]
+      summary: Aggregate health — current readiness plus per-check detail
+      responses:
+        "200":
+          description: All checks passed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+        "503":
+          description: One or more checks failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+          description: Per-check name to outcome ("ok" or an error description)
+          example:
+            postgres: ok
+            redis: ok
+    ErrorEnvelope:
+      type: object
+      description: Structured error returned by every API endpoint
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Stable machine-readable error code, e.g. invalid_argument
+            message:
+              type: string
+              description: Human-readable description safe for end users
+            request_id:
+              type: string
+              description: Request ID echoed back for correlation with logs
+            details:
+              type: object
+              additionalProperties: true
+              description: Optional structured context (never secrets)

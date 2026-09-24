@@ -1,0 +1,14 @@
+{
+  "name": "ai-governance-saas",
+  "private": true,
+  "version": "0.0.0",
+  "description": "AI Governance SaaS — monorepo (Next.js web + Go backend + shared TS packages)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "packageManager": "npm@11.12.1",
+  "engines": {
+    "node": ">=20"
+  }
+}

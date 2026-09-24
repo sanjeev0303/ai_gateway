@@ -1,0 +1,33 @@
+# ---- Go ----
+backend/bin/
+*.test
+*.out
+coverage.*
+
+# ---- Node / Next.js ----
+node_modules/
+apps/web/.next/
+apps/web/out/
+dist/
+.turbo/
+
+# ---- Env / secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- Terraform ----
+deploy/terraform/aws/.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# ---- Editor / OS ----
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# ---- Local tooling state (never commit) ----
+.omo/
+.codegraph

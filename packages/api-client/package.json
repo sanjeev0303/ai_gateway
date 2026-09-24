@@ -1,0 +1,19 @@
+{
+  "name": "@ai-governance/api-client",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Typed API client for the AI Governance control/gateway API (generated types from @ai-governance/contracts)",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-governance/contracts": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
