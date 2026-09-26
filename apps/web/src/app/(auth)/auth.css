@@ -1,0 +1,216 @@
+/* Auth surface styles. Scoped under .auth-shell and built from the shared tokens
+   in globals.css so sign-in and sign-up read as part of the same product as the
+   landing page. See DESIGN.md. */
+
+.auth-shell {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 3rem 1.5rem;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  caret-color: var(--link);
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.auth-shell ::selection {
+  background: var(--ink);
+  color: var(--canvas);
+}
+
+.auth-panel {
+  width: 100%;
+  max-width: 26rem;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+
+.auth-brand:hover {
+  color: var(--ink-secondary);
+}
+
+.auth-brand:focus-visible,
+.auth-alt a:focus-visible,
+.auth-note a:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+  border-radius: var(--radius-tag);
+}
+
+.auth-card {
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  border-radius: var(--radius-card);
+  padding: 2rem;
+}
+
+.auth-head {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1.75rem;
+}
+
+.auth-eyebrow {
+  margin: 0;
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.auth-title {
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  font-weight: 600;
+  text-wrap: balance;
+}
+
+.auth-lead {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--ink-secondary);
+  text-wrap: pretty;
+}
+
+.auth-form {
+  display: grid;
+  gap: 1.125rem;
+}
+
+.auth-field {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.auth-field > label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+}
+
+.auth-field > input {
+  height: 40px;
+  padding: 0 0.75rem;
+  font: inherit;
+  font-size: 0.9375rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 0;
+  border-radius: var(--radius-btn);
+  box-shadow: 0 0 0 1px var(--line);
+  transition: box-shadow 120ms var(--ease-micro);
+}
+
+.auth-field > input::placeholder {
+  color: var(--ink-tertiary);
+}
+
+.auth-field > input:hover {
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+
+.auth-field > input:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px var(--ink);
+}
+
+.auth-submit {
+  height: 40px;
+  margin-top: 0.375rem;
+  padding: 0 1.25rem;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--canvas);
+  background: var(--ink);
+  border: 0;
+  border-radius: var(--radius-btn);
+  cursor: pointer;
+  transition: transform 120ms var(--ease-micro), box-shadow 120ms var(--ease-micro),
+    background-color 120ms var(--ease-micro);
+}
+
+.auth-submit:hover:not(:disabled) {
+  background: #000;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-1);
+}
+
+.auth-submit:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.auth-submit:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
+.auth-submit:disabled {
+  color: var(--ink-tertiary);
+  background: var(--surface-dim);
+  box-shadow: 0 0 0 1px var(--line);
+  cursor: not-allowed;
+}
+
+.auth-note {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--ink-tertiary);
+}
+
+.auth-note a {
+  color: var(--link);
+  text-underline-offset: 2px;
+}
+
+.auth-alt {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: var(--ink-secondary);
+}
+
+.auth-alt a {
+  color: var(--link);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.auth-alt a:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-field > input,
+  .auth-submit {
+    transition: none;
+  }
+
+  .auth-submit:hover:not(:disabled) {
+    transform: none;
+  }
+}

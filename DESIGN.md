@@ -1,9 +1,13 @@
-# Design System: AI Governance (apps/web marketing site)
+# Design System: AI Governance (apps/web)
 
-Committed design direction for the public marketing site (landing) and the
-in-app documentation routes. The dashboard (`(dashboard)`) and auth
-(`(auth)`) surfaces keep their existing minimal styles and are out of scope
-for this document; they may be folded in during a later milestone.
+Committed design direction for the public marketing site (landing), the in-app
+documentation routes, and the auth surfaces (`/login`, `/signup`). The
+dashboard (`(dashboard)`) keeps its existing minimal styles and is out of
+scope for this document; it may be folded in during a later milestone.
+
+Design tokens are declared once in `apps/web/src/app/globals.css` and consumed
+by each route group, so `(marketing)` and `(auth)` read the same system instead
+of drifting apart.
 
 ## 0. Research Log
 
@@ -20,7 +24,7 @@ Greenfield: no prior marketing design exists (stub page only).
 - **Imagen drafts**: skipped lane. No user-supplied reference image exists,
   and the hero focal object (request hot-path terminal card) is rendered in
   HTML/CSS, which stays crisp at every viewport and avoids image weight.
-- **react-scan / react-doctor**: **accepted debt**, see §8. This marketing
+- **react-scan / react-doctor**: **accepted debt**, see §9. This marketing
   route is static server-rendered markup with zero client interactivity
   beyond `<a>` navigation; render-profiling tooling adds noise without
   signal here and would pollute the monorepo devDependencies. Revisit with
@@ -194,7 +198,37 @@ Rules:
 - Terminal card is the single dark surface; it sits directly on `--canvas`
   with `--shadow-2` to anchor the hero.
 
-## 8. Accessibility & Accepted Debt
+## 8. Auth Surface (`(auth)`)
+
+- Folds `/login` and `/signup` into this system. Both are server-rendered with
+  zero client JS, so native validation, real anchors, and `:focus-visible` carry
+  the entire interaction.
+- Page frame: `--canvas` centered column, `max-width: 26rem`. The auth
+  background matches the landing page exactly, so crossing the route does not
+  shift the surface.
+- Card: `--surface`, `--shadow-2` (shadow-as-border, never a real border),
+  `--radius-card`, `2rem` padding. A centered brand lockup (`BrandMark` +
+  `site.name`) links home and replaces a separate back affordance.
+- Type: mono eyebrow (`--font-geist-mono`, 13px, uppercase, `0.04em`) names the
+  surface, the `<h1>` states the task, and the lead runs 16px in
+  `--ink-secondary`.
+- Fields: explicit `<label for>` and `<input id>` pairs, 40px inputs,
+  `--radius-btn`, resting `0 0 0 1px var(--line)` (shadow-as-border), hover to
+  `--line-strong`, focus-visible 2px `--link` ring offset 2px. Every input
+  carries `name` and `autoComplete` so password managers still recognize the
+  form.
+- Primary action: a full-width 40px ink button (`--ink` background, `--canvas`
+  text), matching the landing primary. The legacy blue `--accent` belongs to the
+  dashboard's untouched styles and is not used here.
+- Truthful unbuilt state: these forms have no handler to POST to, so the submit
+  button ships `disabled` and each page states plainly that the flow is not
+  connected yet, linking `/docs/api`. The form declares `method="post"` so a
+  password can never reach a query string, browser history, or access log.
+- `/login` and `/signup` cross-link below the card.
+- Browser surfaces are themed from the same palette: `caret-color: --link`,
+  `--ink` selection, `--line-strong` scrollbar.
+
+## 9. Accessibility & Accepted Debt
 
 - Contrast: all text pairs verified ≥ 4.5:1 AA (primary/secondary/tertiary
   inks on white and `--surface-dim`; `--link` 4.5:1 on white). Terminal uses

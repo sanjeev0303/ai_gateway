@@ -1,32 +1,7 @@
-/* Marketing site styles. Scoped under .landing so the (auth) and (dashboard)
-   routes keep their existing minimal styles. Design system: DESIGN.md. */
+/* Marketing site styles. Scoped under .landing so (auth) and (dashboard) routes
+   are unaffected. Design tokens live in globals.css; see DESIGN.md. */
 
 .landing {
-  --canvas: #ffffff;
-  --canvas-subtle: #fafafa;
-  --ink: #171717;
-  --ink-secondary: #4d4d4d;
-  --ink-tertiary: #666666;
-  --line: rgba(0, 0, 0, 0.08);
-  --line-strong: rgba(0, 0, 0, 0.14);
-  --surface: #ffffff;
-  --surface-dim: #fafafa;
-  --link: #0069e0;
-  --link-subtle: #1f1f1f;
-  --terminal-bg: #0d0d0d;
-  --terminal-text: #d4d4d4;
-  --terminal-dim: #8a8a8a;
-  --terminal-ok: #3fb950;
-  --terminal-warn: #d29922;
-  --shadow-1: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-2: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04),
-    0 4px 12px rgba(0, 0, 0, 0.06);
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-micro: cubic-bezier(0.5, 0, 0.5, 1);
-  --radius-card: 8px;
-  --radius-btn: 6px;
-  --radius-tag: 4px;
-
   background: var(--canvas);
   color: var(--ink);
   font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI",
@@ -333,6 +308,9 @@
 .landing .hero {
   position: relative;
   overflow: hidden;
+  /* undo globals.css .hero{max-width:42rem;padding-block:4rem 3rem} dashboard leak */
+  max-width: none;
+  padding-block: 0;
 }
 
 .landing .hero-inner {
@@ -423,7 +401,8 @@
 
 .landing .term-line {
   color: var(--terminal-text);
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .landing .term-row {
@@ -956,7 +935,7 @@
   }
 
   .landing .hero-inner {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 48px;
     padding-block: 72px 64px;
   }
