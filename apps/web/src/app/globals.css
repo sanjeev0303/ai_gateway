@@ -1,0 +1,178 @@
+:root {
+  --bg: #fafafa;
+  --fg: #1a1a1a;
+  --muted: #6b6b6b;
+  --border: #e3e3e3;
+  --accent: #2563eb;
+  --card-bg: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.55;
+}
+
+a {
+  color: var(--accent);
+}
+
+.container {
+  max-width: 1080px;
+  margin-inline: auto;
+  padding-inline: 1.5rem;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.btn {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  text-decoration: none;
+  border: 1px solid transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--border);
+}
+
+/* marketing */
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: 1rem;
+}
+
+.site-header nav {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.brand {
+  font-weight: 700;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.hero {
+  padding-block: 4rem 3rem;
+  max-width: 42rem;
+}
+
+.hero h1 {
+  font-size: 2.5rem;
+  line-height: 1.15;
+  margin: 0 0 1rem;
+}
+
+.hero p {
+  color: var(--muted);
+  font-size: 1.125rem;
+  margin: 0 0 1.5rem;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding-block: 1.5rem;
+  margin-top: 3rem;
+  color: var(--muted);
+}
+
+/* auth */
+.auth-shell {
+  max-width: 26rem;
+  margin-inline: auto;
+  padding-block: 4rem 2rem;
+}
+
+.auth-card {
+  padding: 2rem;
+}
+
+.auth-back {
+  text-align: center;
+  margin-top: 1rem;
+  color: var(--muted);
+}
+
+.form {
+  display: grid;
+  gap: 1rem;
+}
+
+.form label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.form input {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+}
+
+.form .btn {
+  justify-self: start;
+}
+
+/* dashboard */
+.dash {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+}
+
+.dash-side {
+  border-right: 1px solid var(--border);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.dash-side nav {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.dash-side nav a {
+  color: var(--fg);
+  text-decoration: none;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+}
+
+.dash-side nav a:hover {
+  background: var(--border);
+}
+
+.dash-main {
+  padding: 1.5rem;
+}

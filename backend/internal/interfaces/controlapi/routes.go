@@ -1,0 +1,92 @@
+package controlapi
+
+import "net/http"
+
+// registerV1Routes wires the v1 identity surface onto mux. Every v1 route runs
+// behind requireAuth; dev-login and logout are the exceptions, registered
+// only when their feature flags are on so a disabled deployment simply 404s
+// them.
+func registerV1Routes(mux *http.ServeMux, deps Deps) {
+	a := newAPI(deps)
+
+	if deps.DevLoginEnabled {
+		mux.Handle("POST /v1/auth/dev-login", http.HandlerFunc(a.devLogin))
+	}
+	if deps.SessionCookieName != "" {
+		mux.Handle("POST /v1/auth/logout", http.HandlerFunc(a.logout))
+	}
+
+	// members
+	mux.Handle("GET /v1/members", a.requireAuth(a.listMembers))
+	mux.Handle("PATCH /v1/members/{userID}/role", a.requireAuth(a.setMemberRole))
+	mux.Handle("DELETE /v1/members/{userID}", a.requireAuth(a.removeMember))
+
+	// invitations
+	mux.Handle("POST /v1/invitations", a.requireAuth(a.invite))
+	mux.Handle("POST /v1/invitations/accept", a.requireAuth(a.acceptInvitation))
+	mux.Handle("GET /v1/invitations", a.requireAuth(a.listInvitations))
+	mux.Handle("DELETE /v1/invitations/{id}", a.requireAuth(a.revokeInvitation))
+
+	// projects
+	mux.Handle("POST /v1/projects", a.requireAuth(a.createProject))
+	mux.Handle("GET /v1/projects", a.requireAuth(a.listProjects))
+	mux.Handle("GET /v1/projects/{id}", a.requireAuth(a.getProject))
+	mux.Handle("POST /v1/projects/{id}/members", a.requireAuth(a.addProjectMember))
+	mux.Handle("GET /v1/projects/{id}/members", a.requireAuth(a.listProjectMembers))
+	mux.Handle("DELETE /v1/projects/{id}/members/{userID}", a.requireAuth(a.removeProjectMember))
+
+	// teams
+	mux.Handle("POST /v1/teams", a.requireAuth(a.createTeam))
+	mux.Handle("GET /v1/teams", a.requireAuth(a.listTeams))
+	mux.Handle("GET /v1/teams/{id}", a.requireAuth(a.getTeam))
+	mux.Handle("POST /v1/teams/{id}/members", a.requireAuth(a.addTeamMember))
+	mux.Handle("GET /v1/teams/{id}/members", a.requireAuth(a.listTeamMembers))
+	mux.Handle("DELETE /v1/teams/{id}/members/{userID}", a.requireAuth(a.removeTeamMember))
+
+	// service accounts
+	mux.Handle("POST /v1/service-accounts", a.requireAuth(a.createServiceAccount))
+	mux.Handle("GET /v1/service-accounts", a.requireAuth(a.listServiceAccounts))
+	mux.Handle("DELETE /v1/service-accounts/{id}", a.requireAuth(a.revokeServiceAccount))
+
+	// credentials
+	mux.Handle("POST /v1/credentials", a.requireAuth(a.createCredential))
+	mux.Handle("GET /v1/credentials", a.requireAuth(a.listCredentials))
+	mux.Handle("DELETE /v1/credentials/{id}", a.requireAuth(a.revokeCredential))
+
+	// gateway credentials
+	registerGatewayCredentialRoutes(mux, deps)
+}
+
+// registerGatewayCredentialRoutes wires the gateway credential surface onto mux.
+func registerGatewayCredentialRoutes(mux *http.ServeMux, deps Deps) {
+	a := newAPI(deps)
+	mux.Handle("POST /v1/gateway-credentials", a.requireAuth(a.createGatewayCredential))
+	mux.Handle("GET /v1/gateway-credentials", a.requireAuth(a.listGatewayCredentials))
+	mux.Handle("GET /v1/gateway-credentials/{id}", a.requireAuth(a.getGatewayCredential))
+	mux.Handle("DELETE /v1/gateway-credentials/{id}", a.requireAuth(a.revokeGatewayCredential))
+	mux.Handle("POST /v1/gateway-credentials/{id}/rotate", a.requireAuth(a.rotateGatewayCredential))
+	mux.Handle("POST /v1/gateway-credentials/{id}/expire", a.requireAuth(a.expireGatewayCredential))
+	mux.Handle("POST /v1/gateway-credentials/{id}/restore", a.requireAuth(a.restoreGatewayCredential))
+}
+
+// registerProviderRoutes wires the M4 provider surface onto mux. Every
+// provider route runs behind requireAuth and is registered only when both the
+// identity and provider services are wired in.
+func registerProviderRoutes(mux *http.ServeMux, deps Deps) {
+	a := newAPI(deps)
+
+	// provider accounts
+	mux.Handle("POST /v1/provider-accounts", a.requireAuth(a.createProviderAccount))
+	mux.Handle("GET /v1/provider-accounts", a.requireAuth(a.listProviderAccounts))
+	mux.Handle("GET /v1/provider-accounts/{id}", a.requireAuth(a.getProviderAccount))
+
+	// provider credentials, created under their provider account
+	mux.Handle("POST /v1/provider-accounts/{id}/credentials", a.requireAuth(a.createProviderCredential))
+	mux.Handle("GET /v1/provider-credentials", a.requireAuth(a.listProviderCredentials))
+	mux.Handle("GET /v1/provider-credentials/{id}", a.requireAuth(a.getProviderCredential))
+	mux.Handle("DELETE /v1/provider-credentials/{id}", a.requireAuth(a.revokeProviderCredential))
+	mux.Handle("POST /v1/provider-credentials/{id}/rotate", a.requireAuth(a.rotateProviderCredential))
+
+	// provider model catalog
+	mux.Handle("GET /v1/models", a.requireAuth(a.listModels))
+}

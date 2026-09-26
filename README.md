@@ -21,13 +21,16 @@ provider/models, enforces budgets and rate limits, and records audited usage.
 
 ## Architecture at a glance
 
-Three Go processes plus a web app, in one monorepo:
+Five Go processes plus a web app, in one monorepo:
 
 | Process | Role |
 |---|---|
 | `backend/cmd/gateway` | Data plane: the hot-path proxy (auth → policy snapshot → rate/budget → forward → stream → async usage) |
+| `backend/cmd/gateway-v2` | Data plane v2: next-gen hot-path proxy (currently serves provider passthrough) |
 | `backend/cmd/control-api` | Control plane API: tenants, policies, credentials, audit, billing |
 | `backend/cmd/worker` | Async: usage rollups, retention, alerts |
+| `backend/cmd/migrate` | One-shot: applies DB migrations |
+| `backend/cmd/seed` | One-shot: applies migrations + seeds demo data |
 | `apps/web` | Next.js dashboard over the control API |
 
 Design decisions live in [`docs/adr`](docs/adr); the roadmap is in
@@ -36,7 +39,7 @@ Design decisions live in [`docs/adr`](docs/adr); the roadmap is in
 ## Repository layout
 
 ```
-backend/    Go module: cmd/{gateway,control-api,worker} + internal/ (domain, application, ports, interfaces, infrastructure, platform, bootstrap)
+backend/    Go module: cmd/{gateway,gateway-v2,control-api,worker,migrate,seed} + internal/ (domain, application, ports, interfaces, infrastructure, platform, bootstrap)
 apps/web    Next.js web app
 packages/   Shared TS: api-client, contracts, cli
 deploy/     Docker, docker-compose, Kubernetes, Terraform (AWS)
@@ -53,8 +56,55 @@ the phased implementation plan and current milestone.
 
 Requires Go 1.25+, Node 20+ (for the web app), Docker (for local Postgres/Redis).
 
+### Run the full stack (docker compose)
+
+The compose file in [`deploy/compose`](deploy/compose) runs everything: the DB,
+Redis, NATS, migrations, all five backend processes, and the web dashboard.
+
 ```bash
-make dev-up      # start local Postgres + Redis
+cp deploy/compose/.env.example deploy/compose/.env   # adjust secrets if desired
+make dev-up                                          # build + start the whole stack
+make dev-seed                                        # optional: load demo data
+make dev-down                                        # stop everything
+make dev-logs                                       # tail all service logs
+```
+
+`make dev-up` also runs the one-shot `migrate` service for you (it exits after
+applying migrations; the backend services wait for it via
+`depends_on: service_completed_successfully`). `seed` is behind the `seed`
+profile, so it only runs when you explicitly ask (`make dev-seed`).
+
+| Service | Host port | Notes |
+|---|---|---|
+| `postgres` | 5432 | control-plane DB (`ai_gateway`) |
+| `redis` | 6379 | reserved; consume once the Redis milestone lands |
+| `nats` | 4222 / 8222 | event bus; reserve until the eventbus milestone lands |
+| `gateway` | 8080 | data plane proxy |
+| `gateway-v2` | 8084 | data plane v2 |
+| `control-api` | 8081 | control plane API |
+| `worker` | 8082 | async worker |
+| `web` | 3000 | Next.js dashboard |
+
+Context: `deploy/compose/.env` holds the compose-level credentials
+(POSTGRES_*, REDIS_PASSWORD, AUTH_HMAC_SIGNING_KEY). The backend processes
+receive them as `AIGW_*` env vars via the compose `x-backend-env` anchor — you
+normally never edit per-service env by hand.
+
+Health probes: every backend process exposes `/livez` and `/readyz` (plus
+`/healthz`); compose uses them for dependency ordering and restart checks.
+
+Usage guide:
+
+- Dashboard: http://localhost:3000 (web talks to `control-api` on :8081).
+- Control plane API: http://localhost:8081 (OpenAPI under `/docs`; dev login
+  enabled for local use).
+- Provider gateway: http://localhost:8080 (route provider traffic through it).
+- Remote envs / local runs can read [`backend/.env.example`](backend/.env.example)
+  and export the same `AIGW_*` variables.
+
+### Without Docker (backend only)
+
+```bash
 make build       # build all Go binaries
 make test        # run Go tests with race detector
 ```

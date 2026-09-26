@@ -1,0 +1,14 @@
+# Build-context hygiene for all Docker builds (backend + web share the repo root context).
+
+node_modules
+**/node_modules
+.next
+**/.next
+.git
+.omo
+.codegraph
+*.log
+.env
+**/.env
+backend/data
+deploy/terraform/.terraform

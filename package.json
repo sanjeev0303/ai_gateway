@@ -10,5 +10,9 @@
   "packageManager": "npm@11.12.1",
   "engines": {
     "node": ">=20"
+  },
+  "scripts": {
+    "generate": "npm run generate --workspace=@ai-governance/contracts",
+    "typecheck": "npm run typecheck --workspaces --if-present"
   }
 }

@@ -1,38 +1,252 @@
-# Local development services for the AI Governance SaaS.
-# Bring up with `make dev-up`; tear down with `make dev-down`.
+# Full-stack dev stack for the AI Gateway monorepo.
 #
-# Postgres and Redis back the gateway/control-api in development.
-# NATS is intentionally left out until an eventbus milestone justifies it (ADR-0).
+# Copy deploy/compose/.env.example -> deploy/compose/.env and adjust secrets.
+# Then:  docker compose -f deploy/compose/docker-compose.yml up -d --build
+# (or `make dev-up`). Convenience: `make dev-seed` for demo data.
+#
+# Services
+#   postgres   control-plane database (migrations, tenants, policies, audit)
+#   redis      cache + rate limits (provisioned; wired when the Redis milestone lands)
+#   nats       event bus (provisioned; AIGW_EVENTBUS_KIND=nats already set, flip AIGW_EVENTBUS_ENABLED=true when the eventbus milestone lands)
+#   migrate    one-shot: applies DB migrations, then exits
+#   seed       optional (profile "seed"): one-shot demo data
+#   gateway      data plane proxy   (hot path)          host :8080
+#   gateway-v2   data plane v2      (hot path)          host :8084
+#   control-api  control plane API                      host :8081
+#   worker       async: rollups, retention, alerts      host :8082
+#   web          Next.js dashboard (port :3000)
+
+name: ai-gateway
+
+x-backend-image: &backend-image
+  image: ai-gateway-backend:dev
+  build:
+    context: ../..
+    dockerfile: backend/Dockerfile
+
+# Shared AIGW_* environment; every backend service merges it first.
+x-backend-env: &backend-env
+  AIGW_SERVER_READ_HEADER_TIMEOUT: 10s
+  AIGW_SERVER_SHUTDOWN_TIMEOUT: 10s
+  AIGW_SERVER_REQUEST_TIMEOUT: 0s # streaming data plane; no per-request deadline
+
+  AIGW_DATABASE_ENABLED: "true"
+  AIGW_DATABASE_URL: postgres://${POSTGRES_USER:-gateway}:${POSTGRES_PASSWORD:-gateway}@postgres:5432/${POSTGRES_DB:-ai_gateway}?sslmode=disable
+  AIGW_DATABASE_MAX_OPEN_CONNS: "20"
+  AIGW_DATABASE_MAX_IDLE_CONNS: "10"
+  AIGW_DATABASE_CONN_MAX_LIFETIME: 5m
+  AIGW_DATABASE_CONNECT_TIMEOUT: 5s
+
+  AIGW_REDIS_ENABLED: "false" # flip to "true" with the Redis milestone
+  AIGW_REDIS_ADDR: redis:6379
+  AIGW_REDIS_PASSWORD: ${REDIS_PASSWORD:-change-me}
+  AIGW_REDIS_DB: "0"
+
+  AIGW_EVENTBUS_ENABLED: "false" # flip to "true" with the eventbus milestone
+  AIGW_EVENTBUS_KIND: nats # none | postgres | kafka | nats
+  AIGW_EVENTBUS_URL: nats://nats:4222
+
+  AIGW_PROVIDER_REQUEST_TIMEOUT: 2m
+  AIGW_PROVIDER_DEFAULT_MAX_RETRIES: "0"
+
+  AIGW_SECRETS_PROVIDER: env # local encrypted store persisted on the secrets volume
+  AIGW_SECRETS_FILE: /data/secrets.json
+
+  AIGW_AUTH_JWT_ISSUER: ai-governance
+  AIGW_AUTH_JWT_TTL: 24h
+  AIGW_AUTH_SESSION_TTL: 12h
+  AIGW_AUTH_HMAC_SIGNING_KEY: ${AUTH_HMAC_SIGNING_KEY:-change-me-change-me-change-me-change-me} # >= 32 bytes
+  AIGW_AUTH_SESSION_COOKIE_NAME: session
+  AIGW_AUTH_SESSION_COOKIE_SECURE: "false" # http in dev
+  AIGW_AUTH_CSRF_ENABLED: "false"
+  AIGW_AUTH_DEV_LOGIN_ENABLED: "true" # demo login via control-api
+
+  AIGW_BILLING_ENABLED: "false"
+  AIGW_BILLING_PROVIDER: none
+  AIGW_BILLING_CURRENCY: usd
+
+  AIGW_OBSERVABILITY_LOG_LEVEL: info
+  AIGW_OBSERVABILITY_LOG_FORMAT: json
+  AIGW_OBSERVABILITY_METRICS_ENABLED: "false"
+
+  AIGW_SECURITY_TRUST_PROXY: "false"
+  AIGW_SECURITY_REQUEST_ID_HEADER: X-Request-Id
 
 services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: gateway
-      POSTGRES_PASSWORD: gateway
-      POSTGRES_DB: ai_gateway
+      POSTGRES_USER: ${POSTGRES_USER:-gateway}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gateway}
+      POSTGRES_DB: ${POSTGRES_DB:-ai_gateway}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gateway -d ai_gateway"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gateway} -d ${POSTGRES_DB:-ai_gateway}"]
       interval: 5s
-      timeout: 3s
+      timeout: 5s
       retries: 10
 
   redis:
     image: redis:7-alpine
+    command: redis-server --requirepass $${REDIS_PASSWORD}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-change-me}
     ports:
       - "6379:6379"
     volumes:
       - redisdata:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping"]
       interval: 5s
       timeout: 3s
       retries: 10
 
+  nats:
+    image: nats:2-alpine
+    command: ["-m", "8222"] # enable monitoring (host 8222)
+    ports:
+      - "4222:4222" # client
+      - "8222:8222" # monitoring /healthz
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    <<: *backend-image
+    command: ["/app/migrate"]
+    environment:
+      <<: *backend-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no" # one-shot: run to completion, then exit
+
+  seed:
+    <<: *backend-image
+    profiles: ["seed"]
+    command: ["/app/seed"]
+    environment:
+      <<: *backend-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no" # one-shot: seed demo data, then exit
+
+  gateway:
+    <<: *backend-image
+    command: ["/app/gateway"]
+    environment:
+      <<: *backend-env
+      AIGW_SERVER_ADDR: ":8080"
+      AIGW_OBSERVABILITY_SERVICE_NAME: gateway
+    ports:
+      - "8080:8080"
+    volumes:
+      - secrets:/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/livez"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  gateway-v2:
+    <<: *backend-image
+    command: ["/app/gateway-v2"]
+    environment:
+      <<: *backend-env
+      AIGW_SERVER_ADDR: ":8080"
+      AIGW_OBSERVABILITY_SERVICE_NAME: gateway-v2
+    ports:
+      - "8084:8080"
+    volumes:
+      - secrets:/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/livez"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  control-api:
+    <<: *backend-image
+    command: ["/app/control-api"]
+    environment:
+      <<: *backend-env
+      AIGW_SERVER_ADDR: ":8080"
+      AIGW_OBSERVABILITY_SERVICE_NAME: control-api
+    ports:
+      - "8081:8080"
+    volumes:
+      - secrets:/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/livez"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  worker:
+    <<: *backend-image
+    command: ["/app/worker"]
+    environment:
+      <<: *backend-env
+      AIGW_SERVER_ADDR: ":8080"
+      AIGW_OBSERVABILITY_SERVICE_NAME: worker
+    ports:
+      - "8082:8080"
+    volumes:
+      - secrets:/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/livez"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  web:
+    image: ai-gateway-web:dev
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      NEXT_PUBLIC_API_URL: http://localhost:8081 # default: control-api
+    ports:
+      - "3000:3000"
+    depends_on:
+      control-api:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   pgdata:
   redisdata:
+  secrets: # AIGW_SECRETS_FILE=./data/secrets.json (+ sibling .key) live here
