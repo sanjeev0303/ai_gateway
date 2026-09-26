@@ -18,11 +18,11 @@
 
 name: ai-gateway
 
+# Shared image tag for all backend services. ONLY migrate carries `build:` —
+# compose bake errors with "image already exists" when multiple services build
+# the same tag concurrently; the rest reuse the locally-built image.
 x-backend-image: &backend-image
   image: ai-gateway-backend:dev
-  build:
-    context: ../..
-    dockerfile: backend/Dockerfile
 
 # Shared AIGW_* environment; every backend service merges it first.
 x-backend-env: &backend-env
@@ -118,6 +118,9 @@ services:
 
   migrate:
     <<: *backend-image
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
     command: ["/app/migrate"]
     environment:
       <<: *backend-env

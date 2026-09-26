@@ -2,7 +2,7 @@
 
 A multi-tenant AI gateway and governance control plane. Teams route their AI
 traffic through one gateway, while a control plane governs who can call which
-provider/models, enforces budgets and rate limits, and records audited usage.
+provider/models and enforces budgets and rate limits in the request path.
 
 ## Why it exists
 
@@ -13,22 +13,24 @@ provider/models, enforces budgets and rate limits, and records audited usage.
 - **Native provider compatibility**: provider payloads pass through
   provider-native (including Claude Code passthrough) — the gateway does not
   force a universal schema on the wire.
-- **Audit-grade usage**: every request yields normalized usage
-  (input/output/cached/thinking/tool tokens + `provider_usage_json`) with
-  configurable retention and privacy modes.
+- **Usage accounting, schema first**: `usage_events` carries a unit, a quantity,
+  and a unique key on `(organization_id, request_id, event_type)` that makes
+  ingest idempotent, plus hourly/daily/monthly rollup tables. Not wired up yet:
+  neither data plane writes usage events, and the async worker runs only health
+  probes. Retention windows and privacy modes are not implemented.
 - **Self-serve control plane**: a web app and REST API to manage tenants,
   policies, credentials, audit, and billing.
 
 ## Architecture at a glance
 
-Five Go processes plus a web app, in one monorepo:
+Six Go processes plus a web app, in one monorepo:
 
 | Process | Role |
 |---|---|
-| `backend/cmd/gateway` | Data plane: the hot-path proxy (auth → policy snapshot → rate/budget → forward → stream → async usage) |
+| `backend/cmd/gateway` | Data plane: the hot-path proxy (auth → policy snapshot → rate/budget → forward → stream) |
 | `backend/cmd/gateway-v2` | Data plane v2: next-gen hot-path proxy (currently serves provider passthrough) |
 | `backend/cmd/control-api` | Control plane API: tenants, policies, credentials, audit, billing |
-| `backend/cmd/worker` | Async: usage rollups, retention, alerts |
+| `backend/cmd/worker` | Async worker: health probes only, no jobs wired up yet |
 | `backend/cmd/migrate` | One-shot: applies DB migrations |
 | `backend/cmd/seed` | One-shot: applies migrations + seeds demo data |
 | `apps/web` | Next.js dashboard over the control API |
@@ -59,7 +61,7 @@ Requires Go 1.25+, Node 20+ (for the web app), Docker (for local Postgres/Redis)
 ### Run the full stack (docker compose)
 
 The compose file in [`deploy/compose`](deploy/compose) runs everything: the DB,
-Redis, NATS, migrations, all five backend processes, and the web dashboard.
+Redis, NATS, migrations, all six backend processes, and the web dashboard.
 
 ```bash
 cp deploy/compose/.env.example deploy/compose/.env   # adjust secrets if desired

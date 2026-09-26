@@ -1,4 +1,5 @@
-// The worker runs async jobs: usage rollups, retention, alerts.
+// The worker currently serves health probes only. Async jobs (usage rollups,
+// retention, alerts) are not wired up yet.
 package main
 
 import (
