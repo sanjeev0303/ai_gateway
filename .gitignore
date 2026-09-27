@@ -31,3 +31,6 @@ deploy/terraform/aws/.terraform/
 # ---- Local tooling state (never commit) ----
 .omo/
 .codegraph
+.opencode
+.playwright-mcp
+.kilo

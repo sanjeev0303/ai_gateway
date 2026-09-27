@@ -986,6 +986,10 @@
     display: none;
   }
 
+  .landing .theme-switch {
+    display: none;
+  }
+
   .landing .control-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 16px;

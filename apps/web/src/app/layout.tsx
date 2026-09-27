@@ -16,10 +16,19 @@ export const metadata: Metadata = {
   description: site.description,
 };
 
+const themeBootstrap = `(function(){try{var s=localStorage.getItem("theme");var m=(s==="light"||s==="dark")?s:"system";var d=m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);var e=document.documentElement;e.dataset.theme=d?"dark":"light";e.style.colorScheme=d?"dark":"light";}catch(_){}})();`;
+
 export default function RootLayout({ children }: { readonly children: ReactNode }) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
-      <body>{children}</body>
+    <html
+      lang="en"
+      className={`${GeistSans.variable} ${GeistMono.variable}`}
+      suppressHydrationWarning
+    >
+      <body>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+        {children}
+      </body>
     </html>
   );
 }

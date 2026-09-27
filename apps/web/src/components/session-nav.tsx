@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { MenuIcon } from "@/components/icons";
+import { ThemeSwitch } from "@/components/theme-switch";
 import { getSession, type Session } from "@/lib/control-api";
 
 interface NavLink {
@@ -42,6 +43,7 @@ export function SessionNav({ links }: { readonly links: readonly NavLink[] }) {
 
   return (
     <div className="nav-actions">
+      <ThemeSwitch />
       {identity === null ? (
         <>
           <Link href="/login" className="nav-signin">

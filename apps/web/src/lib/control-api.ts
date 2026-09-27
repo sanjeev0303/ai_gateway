@@ -16,6 +16,25 @@ export interface Session {
   readonly csrf_token?: string;
 }
 
+export interface ListResponse<T> {
+  readonly items: readonly T[];
+}
+
+export interface MemberUser {
+  readonly id: string;
+  readonly email: string;
+  readonly display_name: string;
+  readonly status: string;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export interface Member {
+  readonly user: MemberUser;
+  readonly role: string;
+  readonly member_since: string;
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
@@ -90,3 +109,18 @@ export const signOut = (csrfToken: string): Promise<void> =>
     method: "POST",
     headers: { "X-CSRF-Token": csrfToken },
   });
+
+export const listMembers = (): Promise<ListResponse<Member>> => request<ListResponse<Member>>("/v1/members");
+
+// The remaining inventory endpoints are only counted by the overview, so their
+// item shape stays untyped rather than guessed at.
+const countItems = (path: string): Promise<number> =>
+  request<ListResponse<unknown>>(path).then((r) => r.items.length);
+
+export const countProjects = (): Promise<number> => countItems("/v1/projects");
+
+export const countTeams = (): Promise<number> => countItems("/v1/teams");
+
+export const countServiceAccounts = (): Promise<number> => countItems("/v1/service-accounts");
+
+export const countCredentials = (): Promise<number> => countItems("/v1/credentials");
