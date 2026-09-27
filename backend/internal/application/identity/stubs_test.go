@@ -50,6 +50,9 @@ type testStubs struct {
 	issuer      *stubIssuer
 	verifier    *stubVerifier
 	hasher      *stubHasher
+	auth        *stubAuth
+	refresh     *stubRefreshTokens
+	passwords   *stubPasswords
 }
 
 // newTestService wires a Service against the stubs with a fixed clock and a
@@ -70,24 +73,33 @@ func newTestService() (*Service, *testStubs) {
 		issuer:      &stubIssuer{},
 		verifier:    &stubVerifier{},
 		hasher:      &stubHasher{},
+		auth:        &stubAuth{},
+		refresh:     &stubRefreshTokens{},
+		passwords:   &stubPasswords{},
 	}
 	svc := NewService(ServiceDeps{
-		Orgs:        st.orgs,
-		Users:       st.users,
-		Members:     st.members,
-		Invitations: st.invitations,
-		Projects:    st.projects,
-		Teams:       st.teams,
-		TeamMembers: st.teamMembers,
-		ProjMembers: st.projMembers,
-		Accounts:    st.accounts,
-		Credentials: st.credentials,
-		Audits:      st.audits,
-		Issuer:      st.issuer,
-		Verifier:    st.verifier,
-		Hasher:      st.hasher,
-		Now:         func() time.Time { return testNow },
-		InviteTTL:   testInviteTTL,
+		Orgs:          st.orgs,
+		Users:         st.users,
+		Members:       st.members,
+		Invitations:   st.invitations,
+		Projects:      st.projects,
+		Teams:         st.teams,
+		TeamMembers:   st.teamMembers,
+		ProjMembers:   st.projMembers,
+		Accounts:      st.accounts,
+		Credentials:   st.credentials,
+		Audits:        st.audits,
+		Auth:          st.auth,
+		RefreshTokens: st.refresh,
+		Issuer:        st.issuer,
+		Verifier:      st.verifier,
+		Hasher:        st.hasher,
+		Passwords:     st.passwords,
+		Now:           func() time.Time { return testNow },
+		InviteTTL:     testInviteTTL,
+		// Non-default so the defaulting branch in NewService stays distinct
+		// from this harness's wiring.
+		RefreshTokenTTL: 30 * 24 * time.Hour,
 	})
 	return svc, st
 }
@@ -422,3 +434,100 @@ var (
 	_ ports.TokenVerifier                   = (*stubVerifier)(nil)
 	_ ports.TokenHasher                     = (*stubHasher)(nil)
 )
+
+type stubAuth struct {
+	repositories.AuthRepository
+	register   func(context.Context, domain.Registration) (domain.User, domain.Organization, error)
+	byEmail    func(context.Context, string) (domain.UserCredential, error)
+	setHash    func(context.Context, uuid.UUID, string) error
+	touchLogin func(context.Context, uuid.UUID) error
+}
+
+func (s *stubAuth) Register(ctx context.Context, reg domain.Registration) (domain.User, domain.Organization, error) {
+	if s.register == nil {
+		notConfigured("stubAuth.Register")
+	}
+	return s.register(ctx, reg)
+}
+
+func (s *stubAuth) GetCredentialByEmail(ctx context.Context, email string) (domain.UserCredential, error) {
+	if s.byEmail == nil {
+		notConfigured("stubAuth.GetCredentialByEmail")
+	}
+	return s.byEmail(ctx, email)
+}
+
+func (s *stubAuth) SetPasswordHash(ctx context.Context, userID uuid.UUID, encoded string) error {
+	if s.setHash == nil {
+		notConfigured("stubAuth.SetPasswordHash")
+	}
+	return s.setHash(ctx, userID, encoded)
+}
+
+func (s *stubAuth) TouchLastLogin(ctx context.Context, userID uuid.UUID) error {
+	if s.touchLogin == nil {
+		notConfigured("stubAuth.TouchLastLogin")
+	}
+	return s.touchLogin(ctx, userID)
+}
+
+type stubRefreshTokens struct {
+	repositories.RefreshTokenRepository
+	create    func(context.Context, uuid.UUID, string, time.Time) (domain.RefreshToken, error)
+	getByHash func(context.Context, string) (domain.RefreshToken, error)
+	revoke    func(context.Context, string) error
+	revokeAll func(context.Context, uuid.UUID) error
+}
+
+func (s *stubRefreshTokens) Create(ctx context.Context, userID uuid.UUID, hash string, expiresAt time.Time) (domain.RefreshToken, error) {
+	if s.create == nil {
+		notConfigured("stubRefreshTokens.Create")
+	}
+	return s.create(ctx, userID, hash, expiresAt)
+}
+
+func (s *stubRefreshTokens) GetByHash(ctx context.Context, hash string) (domain.RefreshToken, error) {
+	if s.getByHash == nil {
+		notConfigured("stubRefreshTokens.GetByHash")
+	}
+	return s.getByHash(ctx, hash)
+}
+
+func (s *stubRefreshTokens) Revoke(ctx context.Context, hash string) error {
+	if s.revoke == nil {
+		notConfigured("stubRefreshTokens.Revoke")
+	}
+	return s.revoke(ctx, hash)
+}
+
+func (s *stubRefreshTokens) RevokeAllForUser(ctx context.Context, userID uuid.UUID) error {
+	if s.revokeAll == nil {
+		notConfigured("stubRefreshTokens.RevokeAllForUser")
+	}
+	return s.revokeAll(ctx, userID)
+}
+
+type stubPasswords struct {
+	ports.PasswordHasher
+	hash   func(context.Context, string) (string, error)
+	verify func(context.Context, string, string) error
+	decoy  string
+}
+
+func (s *stubPasswords) Hash(ctx context.Context, password string) (string, error) {
+	if s.hash == nil {
+		notConfigured("stubPasswords.Hash")
+	}
+	return s.hash(ctx, password)
+}
+
+func (s *stubPasswords) Verify(ctx context.Context, encoded, password string) error {
+	if s.verify == nil {
+		notConfigured("stubPasswords.Verify")
+	}
+	return s.verify(ctx, encoded, password)
+}
+
+func (s *stubPasswords) DecoyDigest() string {
+	return s.decoy
+}

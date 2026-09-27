@@ -1,0 +1,375 @@
+- generic [active] [ref=f2e1]:
+  - generic [ref=f2e2]:
+    - banner [ref=f2e3]:
+      - generic [ref=f2e4]:
+        - link [ref=f2e5] [cursor=pointer]:
+          - /url: /
+        - navigation "Main" [ref=f2e9]:
+          - link "Product" [ref=f2e10] [cursor=pointer]:
+            - /url: /#product
+          - link "Pricing" [ref=f2e11] [cursor=pointer]:
+            - /url: /#pricing
+          - link "Docs" [ref=f2e12] [cursor=pointer]:
+            - /url: /docs
+        - generic [ref=f2e13]:
+          - link "Sign in" [ref=f2e14] [cursor=pointer]:
+            - /url: /login
+          - link "Get started" [ref=f2e15] [cursor=pointer]:
+            - /url: /signup
+    - main [ref=f2e16]:
+      - generic [ref=f2e18]:
+        - generic [ref=f2e19]:
+          - heading [level=1] [ref=f2e20]:
+            - text: Every AI request,
+            - emphasis [ref=f2e21]: governed
+            - text: before it reaches a provider
+          - paragraph [ref=f2e22]: AI Governance sits between your applications and Anthropic, OpenAI, and Gemini. Credentials are scoped, policies are compiled into immutable snapshots, and every request is budgeted, rate limited, and audited.
+          - generic [ref=f2e23]:
+            - link "Get started" [ref=f2e24] [cursor=pointer]:
+              - /url: /signup
+            - link "Read the docs" [ref=f2e25] [cursor=pointer]:
+              - /url: /docs/getting-started
+          - paragraph [ref=f2e26]:
+            - text: "Self-hostable in one stack:"
+            - generic [ref=f2e27]: docker compose up
+        - generic "Example of a governed request through the gateway" [ref=f2e28]:
+          - generic [ref=f2e29]: gateway :8080 · request trace
+          - generic [ref=f2e34]:
+            - paragraph [ref=f2e35]: $ curl -sS gateway:8080/v1/messages \
+            - paragraph [ref=f2e36]: "-H \"authorization: Bearer aigw_live_9f2...\" \\"
+            - paragraph [ref=f2e37]: "-d {\"model\":\"claude-sonnet-4-5\",\"stream\":true}"
+            - generic [ref=f2e39]:
+              - generic [ref=f2e40]: → authn aigw_live_9f2… · project payments
+              - generic [ref=f2e41]: PASS
+            - generic [ref=f2e42]:
+              - generic [ref=f2e43]: → policy snapshot v41 · rules 12 · immutable
+              - generic [ref=f2e44]: PASS
+            - generic [ref=f2e45]:
+              - generic [ref=f2e46]: → rate 60 req/min · 47 used · 13 left
+              - generic [ref=f2e47]: PASS
+            - generic [ref=f2e48]:
+              - generic [ref=f2e49]: → budget $2,400.00/mo · $1,712.30 used
+              - generic [ref=f2e50]: PASS
+            - generic [ref=f2e51]:
+              - generic [ref=f2e52]: → forward anthropic · claude-sonnet-4-5 · stream
+              - generic [ref=f2e53]: OK
+            - paragraph [ref=f2e55]: usage input 1,204 · cached 3,108 · output 942 · thinking 0 · tool 84
+            - paragraph [ref=f2e56]: audit written · rollup hourly · idempotent per request_id
+      - generic [ref=f2e58]:
+        - generic [ref=f2e59]:
+          - heading "Governance lives in the hot path" [level=2] [ref=f2e60]
+          - paragraph [ref=f2e61]: Authorization, rate limits, and budget checks run at request time, backed by compiled, immutable policy snapshots. The data plane does not call home for permission.
+        - generic [ref=f2e62]:
+          - article [ref=f2e63]:
+            - heading "Scoped access for every caller" [level=3] [ref=f2e69]
+            - paragraph [ref=f2e70]: Organizations, teams, projects, and users each get scoped credentials. A service credential can only do what its scope says it can.
+            - generic [ref=f2e71]: org / team / project / user
+          - article [ref=f2e72]:
+            - heading "Compiled policy snapshots" [level=3] [ref=f2e77]
+            - paragraph [ref=f2e78]: Policies compile into immutable snapshots loaded ahead of the request. Authorization is a lookup, not a live evaluation.
+            - generic [ref=f2e79]: compiled · immutable
+          - article [ref=f2e80]:
+            - heading "Rate limits and budgets in the hot path" [level=3] [ref=f2e85]
+            - paragraph [ref=f2e86]: Per-credential rate limits and monthly budgets are checked before the request is forwarded. Over budget fails closed.
+            - generic [ref=f2e87]: checked before forward
+          - article [ref=f2e88]:
+            - heading "Provider-native passthrough" [level=3] [ref=f2e92]
+            - paragraph [ref=f2e93]: Anthropic, OpenAI, and Gemini payloads pass through unchanged, including Claude Code. No universal schema forced on the wire.
+            - generic [ref=f2e94]: anthropic · openai · gemini
+          - article [ref=f2e95]:
+            - heading "Idempotent usage schema" [level=3] [ref=f2e101]
+            - paragraph [ref=f2e102]: Usage events carry a unit and quantity, keyed unique per organization, request, and event type so replayed writes cannot double count. Not wired up yet.
+            - generic [ref=f2e103]: idempotent ingest · not wired up
+          - article [ref=f2e104]:
+            - heading "Self-serve control plane" [level=3] [ref=f2e109]
+            - paragraph [ref=f2e110]: Manage tenants, policies, credentials, and audit from the web app or the REST API. OpenAPI generated, contracts shared.
+            - generic [ref=f2e111]: web + REST · /v1
+      - generic [ref=f2e113]:
+        - generic [ref=f2e114]:
+          - heading "A data plane and a control plane" [level=2] [ref=f2e115]
+          - paragraph [ref=f2e116]: Six Go processes and one web app, in a single monorepo. Data plane processes carry traffic; control plane processes carry policy, credentials, and audit.
+        - generic [ref=f2e117]:
+          - article [ref=f2e118]:
+            - heading "gateway :8080" [level=3] [ref=f2e119]:
+              - text: gateway
+              - generic [ref=f2e120]: :8080
+            - paragraph [ref=f2e121]: "Data plane hot path: auth, policy snapshot, rate and budget checks, forward, stream."
+          - article [ref=f2e122]:
+            - heading "gateway-v2 :8084" [level=3] [ref=f2e123]:
+              - text: gateway-v2
+              - generic [ref=f2e124]: :8084
+            - paragraph [ref=f2e125]: Next-generation proxy, currently serving provider passthrough traffic.
+          - article [ref=f2e126]:
+            - heading "control-api :8081" [level=3] [ref=f2e127]:
+              - text: control-api
+              - generic [ref=f2e128]: :8081
+            - paragraph [ref=f2e129]: "Control plane: tenants, policies, credentials, audit, and billing over REST."
+          - article [ref=f2e130]:
+            - heading "worker :8082" [level=3] [ref=f2e131]:
+              - text: worker
+              - generic [ref=f2e132]: :8082
+            - paragraph [ref=f2e133]: "Async worker: health probes only. Rollups, retention, and alerting are not wired up."
+          - article [ref=f2e134]:
+            - heading "migrate · seed" [level=3] [ref=f2e135]
+            - paragraph [ref=f2e136]: One-shot processes that apply migrations and optionally load demo data.
+          - article [ref=f2e137]:
+            - heading "web :3000" [level=3] [ref=f2e138]:
+              - text: web
+              - generic [ref=f2e139]: :3000
+            - paragraph [ref=f2e140]: Next.js dashboard and this site, talking to the control API.
+      - generic [ref=f2e142]:
+        - generic [ref=f2e143]:
+          - heading "What the gateway actually enforces" [level=2] [ref=f2e144]
+          - paragraph [ref=f2e145]: Most pricing pages list seat counts. These are the controls the data plane evaluates on every request, with the exact values the code uses. Each row names the type or function it comes from, so you can check it against the repository.
+        - generic [ref=f2e146]:
+          - generic [ref=f2e147]:
+            - generic [ref=f2e148]:
+              - paragraph [ref=f2e149]: Policy rule types
+              - paragraph [ref=f2e150]: The complete rule vocabulary a policy can contain.
+            - list [ref=f2e151]:
+              - listitem [ref=f2e152]: rate_limit
+              - listitem [ref=f2e153]: token_budget
+              - listitem [ref=f2e154]: budget
+              - listitem [ref=f2e155]: blocklist
+              - listitem [ref=f2e156]: allowlist
+              - listitem [ref=f2e157]: content_filter
+            - paragraph [ref=f2e158]: domain.RuleType*
+          - generic [ref=f2e159]:
+            - generic [ref=f2e160]:
+              - paragraph [ref=f2e161]: Enforcement modes
+              - paragraph [ref=f2e162]: How aggressively a compiled policy gates live traffic.
+            - list [ref=f2e163]:
+              - listitem [ref=f2e164]: permissive
+              - listitem [ref=f2e165]: active
+              - listitem [ref=f2e166]: disabled
+            - paragraph [ref=f2e167]: domain.Enforcement*
+          - generic [ref=f2e168]:
+            - generic [ref=f2e169]:
+              - paragraph [ref=f2e170]: Rate limit scopes
+              - paragraph [ref=f2e171]: A limit is evaluated per scope key, so one credential cannot spend another scope's budget.
+            - list [ref=f2e172]:
+              - listitem [ref=f2e173]: organization
+              - listitem [ref=f2e174]: project
+              - listitem [ref=f2e175]: credential
+              - listitem [ref=f2e176]: user
+            - paragraph [ref=f2e177]: gatewayv2.RateLimitConfig.Scope
+          - generic [ref=f2e178]:
+            - generic [ref=f2e179]:
+              - paragraph [ref=f2e180]: Rate limit algorithm
+              - paragraph [ref=f2e181]: Token bucket with sliding window, plus a timestamp-set variant for stricter burst handling.
+            - list [ref=f2e182]:
+              - listitem [ref=f2e183]: token bucket
+              - listitem [ref=f2e184]: sliding window
+            - paragraph [ref=f2e185]: gatewayv2.RateLimiter
+          - generic [ref=f2e186]:
+            - generic [ref=f2e187]:
+              - paragraph [ref=f2e188]: Rate limit result
+              - paragraph [ref=f2e189]: Every check returns a full decision, not a bare allow or deny.
+            - list [ref=f2e190]:
+              - listitem [ref=f2e191]: limit
+              - listitem [ref=f2e192]: remaining
+              - listitem [ref=f2e193]: reset_at
+              - listitem [ref=f2e194]: retry_after
+            - paragraph [ref=f2e195]: gatewayv2.RateLimitResult
+          - generic [ref=f2e196]:
+            - generic [ref=f2e197]:
+              - paragraph [ref=f2e198]: Default rate limit
+              - paragraph [ref=f2e199]: Applied when a snapshot carries no explicit rate_limit rule for a scope.
+            - list [ref=f2e200]:
+              - listitem [ref=f2e201]: 1000 requests
+              - listitem [ref=f2e202]: per 1 minute
+            - paragraph [ref=f2e203]: DefaultGatewayConfig
+          - generic [ref=f2e204]:
+            - generic [ref=f2e205]:
+              - paragraph [ref=f2e206]: Budget controls
+              - paragraph [ref=f2e207]: Spend is checked against a limit and window, with an independent alert threshold.
+            - list [ref=f2e208]:
+              - listitem [ref=f2e209]: limit
+              - listitem [ref=f2e210]: window
+              - listitem [ref=f2e211]: scope
+              - listitem [ref=f2e212]: alert_at
+            - paragraph [ref=f2e213]: gatewayv2.BudgetConfig
+          - generic [ref=f2e214]:
+            - generic [ref=f2e215]:
+              - paragraph [ref=f2e216]: Default budget
+              - paragraph [ref=f2e217]: Applied when a snapshot carries no explicit budget rule for a scope.
+            - list [ref=f2e218]:
+              - listitem [ref=f2e219]: "1000.00"
+              - listitem [ref=f2e220]: per 1 hour
+            - paragraph [ref=f2e221]: DefaultGatewayConfig
+          - generic [ref=f2e222]:
+            - generic [ref=f2e223]:
+              - paragraph [ref=f2e224]: Model authorization
+              - paragraph [ref=f2e225]: Deny-overrides. A blocklist match denies, an allowlist that omits the model denies, no matching rule permits.
+            - list [ref=f2e226]:
+              - listitem [ref=f2e227]: deny-overrides
+              - listitem [ref=f2e228]: provider-qualified ids
+            - paragraph [ref=f2e229]: gatewayv2.PolicySnapshot.Authorize
+          - generic [ref=f2e230]:
+            - generic [ref=f2e231]:
+              - paragraph [ref=f2e232]: Policy snapshots
+              - paragraph [ref=f2e233]: Compiled per organization, versioned, and immutable for the life of a request.
+            - list [ref=f2e234]:
+              - listitem [ref=f2e235]: versioned
+              - listitem [ref=f2e236]: immutable
+              - listitem [ref=f2e237]: cached in hot path
+            - paragraph [ref=f2e238]: gatewayv2.PolicySnapshot
+          - generic [ref=f2e239]:
+            - generic [ref=f2e240]:
+              - paragraph [ref=f2e241]: Usage ledger
+              - paragraph [ref=f2e242]: Schema and repository ship today, with a database-level unique key on (organization, request_id, event_type) that makes ingest idempotent. The gateway does not write events on the request path yet.
+            - list [ref=f2e243]:
+              - listitem [ref=f2e244]: append-only table
+              - listitem [ref=f2e245]: idempotent by constraint
+              - listitem [ref=f2e246]: not on hot path yet
+            - paragraph [ref=f2e247]: migrations/00007_usage.sql
+          - generic [ref=f2e248]:
+            - generic [ref=f2e249]:
+              - paragraph [ref=f2e250]: Usage rollups
+              - paragraph [ref=f2e251]: Hourly, daily, and monthly aggregate tables exist. The async worker currently serves only health probes, so nothing populates them yet.
+            - list [ref=f2e252]:
+              - listitem [ref=f2e253]: hourly
+              - listitem [ref=f2e254]: daily
+              - listitem [ref=f2e255]: monthly
+              - listitem [ref=f2e256]: not computed yet
+            - paragraph [ref=f2e257]: migrations/00007_usage.sql
+          - generic [ref=f2e258]:
+            - generic [ref=f2e259]:
+              - paragraph [ref=f2e260]: Request timeouts
+              - paragraph [ref=f2e261]: Client, upstream, and idle deadlines for proxied traffic.
+            - list [ref=f2e262]:
+              - listitem [ref=f2e263]: 30s request
+              - listitem [ref=f2e264]: 5m upstream
+              - listitem [ref=f2e265]: 90s idle
+            - paragraph [ref=f2e266]: DefaultGatewayConfig
+          - generic [ref=f2e267]:
+            - generic [ref=f2e268]:
+              - paragraph [ref=f2e269]: Concurrency
+              - paragraph [ref=f2e270]: Bounded so a burst queues instead of exhausting the process.
+            - list [ref=f2e271]:
+              - listitem [ref=f2e272]: 10000 queued
+              - listitem [ref=f2e273]: 200 per host
+              - listitem [ref=f2e274]: HTTP/2 on
+            - paragraph [ref=f2e275]: DefaultGatewayConfig
+          - generic [ref=f2e276]:
+            - generic [ref=f2e277]:
+              - paragraph [ref=f2e278]: Payload fidelity
+              - paragraph [ref=f2e279]: Compression is off so the proxy stays byte-exact. Provider payloads are never rewritten.
+            - list [ref=f2e280]:
+              - listitem [ref=f2e281]: byte-exact
+              - listitem [ref=f2e282]: compression off
+            - paragraph [ref=f2e283]: DefaultGatewayConfig
+        - generic [ref=f2e284]:
+          - article [ref=f2e285]:
+            - generic [ref=f2e286]:
+              - paragraph [ref=f2e287]: Hosted
+              - paragraph [ref=f2e288]: Not yet available
+            - paragraph [ref=f2e289]: Hosted plans are designed but not built. The plan, subscription, and billing event tables exist in the schema and carry no seeded plans, prices, or entitlements, so there is nothing to quote yet. Self-hosting is the supported path today.
+            - link "Deploy it yourself" [ref=f2e290] [cursor=pointer]:
+              - /url: /docs/deployment
+          - article [ref=f2e293]:
+            - generic [ref=f2e294]:
+              - paragraph [ref=f2e295]: Self-hosted
+              - paragraph [ref=f2e296]: Your infrastructure
+            - paragraph [ref=f2e297]: "The whole stack runs on hardware you control: data plane, control plane, async worker, and dashboard. The gateway makes no telemetry calls and has no hosted dependency, and traffic leaves your network only for the provider endpoints you configure."
+            - list [ref=f2e298]:
+              - listitem [ref=f2e299]:
+                - generic [ref=f2e302]: gateway, gateway-v2, control-api, worker, and web in one stack
+              - listitem [ref=f2e303]:
+                - generic [ref=f2e306]: Postgres, Redis, and NATS wired together by the compose file
+              - listitem [ref=f2e307]:
+                - generic [ref=f2e310]: Compiled policy snapshots evaluated on your own CPUs
+              - listitem [ref=f2e311]:
+                - generic [ref=f2e314]: Usage and audit rows stay in your database
+              - listitem [ref=f2e315]:
+                - generic [ref=f2e318]: Docker Compose, Kubernetes, and Terraform manifests in the repository
+              - listitem [ref=f2e319]:
+                - generic [ref=f2e322]: Every row in the table above is gateway behavior, not a plan feature
+            - link "Read the deployment guide" [ref=f2e323] [cursor=pointer]:
+              - /url: /docs/deployment
+      - generic [ref=f2e327]:
+        - generic [ref=f2e328]:
+          - heading "Docs grounded in the repository" [level=2] [ref=f2e329]
+          - paragraph [ref=f2e330]: Architecture decisions live in ADRs, the roadmap in milestones, and the working system in the repo. These pages point at what is real.
+        - generic [ref=f2e331]:
+          - article [ref=f2e332]:
+            - generic [ref=f2e333]: Start here
+            - heading "Getting started" [level=3] [ref=f2e334]
+            - paragraph [ref=f2e335]: Run the full stack with Docker Compose, then create an organization, add a provider, and issue a first governed request.
+            - link "Read the docs" [ref=f2e336] [cursor=pointer]:
+              - /url: /docs/getting-started
+          - article [ref=f2e339]:
+            - generic [ref=f2e340]: Reference
+            - heading "Architecture" [level=3] [ref=f2e341]
+            - paragraph [ref=f2e342]: Data plane and control plane separation, the hot path order, and the repo layout across backend, apps, and packages.
+            - link "Read the docs" [ref=f2e343] [cursor=pointer]:
+              - /url: /docs/architecture
+          - article [ref=f2e346]:
+            - generic [ref=f2e347]: API
+            - heading "Control plane API" [level=3] [ref=f2e348]
+            - paragraph [ref=f2e349]: REST endpoints under /v1, authentication with JWTs and service credentials, idempotency, and the shared OpenAPI contract.
+            - link "Read the docs" [ref=f2e350] [cursor=pointer]:
+              - /url: /docs/api
+          - article [ref=f2e353]:
+            - generic [ref=f2e354]: Ops
+            - heading "Deployment" [level=3] [ref=f2e355]
+            - paragraph [ref=f2e356]: Docker Compose, Kubernetes, and Terraform targets, environment variables, health probes, and upgrade notes.
+            - link "Read the docs" [ref=f2e357] [cursor=pointer]:
+              - /url: /docs/deployment
+      - generic [ref=f2e361]:
+        - heading "Route your AI traffic through one gateway" [level=2] [ref=f2e362]
+        - paragraph [ref=f2e363]: Create an organization, attach a provider, and issue your first governed request in minutes.
+        - generic [ref=f2e364]:
+          - link "Get started free" [ref=f2e365] [cursor=pointer]:
+            - /url: /signup
+          - link "Explore the docs" [ref=f2e366] [cursor=pointer]:
+            - /url: /docs
+    - contentinfo [ref=f2e367]:
+      - generic [ref=f2e368]:
+        - generic [ref=f2e369]:
+          - generic [ref=f2e370]:
+            - generic [ref=f2e371]: AI Governance
+            - paragraph [ref=f2e375]: One gateway for governed AI access. Scoped credentials, compiled policies, and budgets enforced before each request is forwarded.
+          - generic [ref=f2e376]:
+            - heading "Product" [level=3] [ref=f2e377]
+            - list [ref=f2e378]:
+              - listitem [ref=f2e379]:
+                - link "Features" [ref=f2e380] [cursor=pointer]:
+                  - /url: /#product
+              - listitem [ref=f2e381]:
+                - link "Architecture" [ref=f2e382] [cursor=pointer]:
+                  - /url: /#architecture
+              - listitem [ref=f2e383]:
+                - link "Pricing" [ref=f2e384] [cursor=pointer]:
+                  - /url: /#pricing
+          - generic [ref=f2e385]:
+            - heading "Docs" [level=3] [ref=f2e386]
+            - list [ref=f2e387]:
+              - listitem [ref=f2e388]:
+                - link "Overview" [ref=f2e389] [cursor=pointer]:
+                  - /url: /docs
+              - listitem [ref=f2e390]:
+                - link "Getting started" [ref=f2e391] [cursor=pointer]:
+                  - /url: /docs/getting-started
+              - listitem [ref=f2e392]:
+                - link "API reference" [ref=f2e393] [cursor=pointer]:
+                  - /url: /docs/api
+              - listitem [ref=f2e394]:
+                - link "Deployment" [ref=f2e395] [cursor=pointer]:
+                  - /url: /docs/deployment
+          - generic [ref=f2e396]:
+            - heading "Organization" [level=3] [ref=f2e397]
+            - list [ref=f2e398]:
+              - listitem [ref=f2e399]:
+                - link "Get started" [ref=f2e400] [cursor=pointer]:
+                  - /url: /signup
+              - listitem [ref=f2e401]:
+                - link "Sign in" [ref=f2e402] [cursor=pointer]:
+                  - /url: /login
+              - listitem [ref=f2e403]:
+                - link "Architecture docs" [ref=f2e404] [cursor=pointer]:
+                  - /url: /docs/architecture
+        - generic [ref=f2e405]:
+          - generic [ref=f2e406]: © 2026 AI Governance
+          - generic [ref=f2e407]: Self-hostable. Open source on GitHub.
+  - alert [ref=f2e408]

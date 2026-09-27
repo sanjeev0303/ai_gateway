@@ -127,6 +127,155 @@ func (r *userRepo) ListOrganizationsForUser(ctx context.Context, userID uuid.UUI
 	return orgs, err
 }
 
+type authRepo struct {
+	store *postgres.Store
+}
+
+// NewAuthRepository returns an AuthRepository backed by the store. Users are a
+// global identity registry, so credential reads run without a tenant binding.
+func NewAuthRepository(store *postgres.Store) ports.AuthRepository {
+	return &authRepo{store: store}
+}
+
+func (r *authRepo) Register(ctx context.Context, reg domain.Registration) (domain.User, domain.Organization, error) {
+	var (
+		user domain.User
+		org  domain.Organization
+	)
+	// The org ID is supplied by the caller, so the tenant context is bound
+	// before any row exists. organization_members is FORCE RLS and compares
+	// organization_id to app.current_org_id(), so the binding must be in
+	// place for the membership insert; users and organizations are global
+	// tables and ignore it.
+	hash := reg.PasswordHash
+	err := r.store.WithTenantTx(ctx, reg.OrganizationID, func(q *db.Queries) error {
+		u, err := q.CreateUserWithPassword(ctx, db.CreateUserWithPasswordParams{
+			Email:        reg.User.Email,
+			DisplayName:  reg.User.DisplayName,
+			PasswordHash: &hash,
+		})
+		if err != nil {
+			return err
+		}
+		o, err := q.CreateOrganizationWithID(ctx, db.CreateOrganizationWithIDParams{
+			ID:   reg.OrganizationID,
+			Name: reg.OrganizationName,
+			Slug: reg.OrganizationSlug,
+		})
+		if err != nil {
+			return err
+		}
+		if _, err := q.AddOrgMember(ctx, db.AddOrgMemberParams{
+			OrganizationID: o.ID,
+			UserID:         u.ID,
+			Role:           domain.RoleOwner,
+		}); err != nil {
+			return err
+		}
+		if _, err := q.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
+			UserID:    u.ID,
+			TokenHash: reg.RefreshTokenHash,
+			ExpiresAt: reg.RefreshTokenExpiresAt,
+		}); err != nil {
+			return err
+		}
+		user, org = toUser(u), toOrganization(o)
+		return nil
+	})
+	if err != nil {
+		return domain.User{}, domain.Organization{}, mapUniqueViolation(err)
+	}
+	return user, org, nil
+}
+
+func (r *authRepo) GetCredentialByEmail(ctx context.Context, email string) (domain.UserCredential, error) {
+	var cred domain.UserCredential
+	err := r.store.WithTx(ctx, func(q *db.Queries) error {
+		row, err := q.GetUserAuthByEmail(ctx, email)
+		if err != nil {
+			return err
+		}
+		cred = domain.UserCredential{User: toUser(row), PasswordHash: row.PasswordHash}
+		return nil
+	})
+	return cred, mapNotFound(err)
+}
+
+func (r *authRepo) SetPasswordHash(ctx context.Context, userID uuid.UUID, encoded string) error {
+	return r.store.WithTx(ctx, func(q *db.Queries) error {
+		return q.SetUserPasswordHash(ctx, db.SetUserPasswordHashParams{ID: userID, PasswordHash: &encoded})
+	})
+}
+
+func (r *authRepo) TouchLastLogin(ctx context.Context, userID uuid.UUID) error {
+	return r.store.WithTx(ctx, func(q *db.Queries) error {
+		return q.TouchUserLastLogin(ctx, userID)
+	})
+}
+
+type refreshTokenRepo struct {
+	store *postgres.Store
+}
+
+// NewRefreshTokenRepository returns a RefreshTokenRepository backed by the
+// store. The table carries no org RLS: refresh runs before any tenant context
+// exists, and a row is reachable only by its high-entropy digest.
+func NewRefreshTokenRepository(store *postgres.Store) ports.RefreshTokenRepository {
+	return &refreshTokenRepo{store: store}
+}
+
+func (r *refreshTokenRepo) Create(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) (domain.RefreshToken, error) {
+	var token domain.RefreshToken
+	err := r.store.WithTx(ctx, func(q *db.Queries) error {
+		row, err := q.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
+			UserID:    userID,
+			TokenHash: tokenHash,
+			ExpiresAt: expiresAt,
+		})
+		if err != nil {
+			return err
+		}
+		token = toRefreshToken(row)
+		return nil
+	})
+	return token, err
+}
+
+func (r *refreshTokenRepo) GetByHash(ctx context.Context, tokenHash string) (domain.RefreshToken, error) {
+	var token domain.RefreshToken
+	err := r.store.WithTx(ctx, func(q *db.Queries) error {
+		row, err := q.GetRefreshTokenByHash(ctx, tokenHash)
+		if err != nil {
+			return err
+		}
+		token = toRefreshToken(row)
+		return nil
+	})
+	return token, mapNotFound(err)
+}
+
+func (r *refreshTokenRepo) Revoke(ctx context.Context, tokenHash string) error {
+	return r.store.WithTx(ctx, func(q *db.Queries) error {
+		n, err := q.RevokeRefreshToken(ctx, tokenHash)
+		if err != nil {
+			return err
+		}
+		// Single-use rotation: 0 rows means the row was already retired, so the
+		// caller is looking at a replayed token rather than a live one.
+		if n == 0 {
+			return ports.ErrNotFound
+		}
+		return nil
+	})
+}
+
+func (r *refreshTokenRepo) RevokeAllForUser(ctx context.Context, userID uuid.UUID) error {
+	return r.store.WithTx(ctx, func(q *db.Queries) error {
+		_, err := q.RevokeAllRefreshTokensForUser(ctx, userID)
+		return err
+	})
+}
+
 type orgMemberRepo struct {
 	store *postgres.Store
 }
@@ -242,6 +391,18 @@ func toUser(u db.User) domain.User {
 		CreatedAt:   u.CreatedAt,
 		UpdatedAt:   u.UpdatedAt,
 		LastLoginAt: u.LastLoginAt,
+	}
+}
+
+func toRefreshToken(t db.AuthRefreshToken) domain.RefreshToken {
+	return domain.RefreshToken{
+		ID:         t.ID,
+		UserID:     t.UserID,
+		TokenHash:  t.TokenHash,
+		ExpiresAt:  t.ExpiresAt,
+		RevokedAt:  t.RevokedAt,
+		CreatedAt:  t.CreatedAt,
+		LastUsedAt: t.LastUsedAt,
 	}
 }
 

@@ -28,6 +28,8 @@ type api struct {
 	sessionCookieName   string
 	sessionCookieSecure bool
 	csrfEnabled         bool
+
+	signInLimiter *signInThrottle
 }
 
 func newAPI(deps Deps) *api {
@@ -37,6 +39,7 @@ func newAPI(deps Deps) *api {
 		sessionCookieName:   deps.SessionCookieName,
 		sessionCookieSecure: deps.SessionCookieSecure,
 		csrfEnabled:         deps.CSRFEnabled,
+		signInLimiter:       newSignInThrottle(),
 	}
 }
 
@@ -148,8 +151,11 @@ type claimsDTO struct {
 	ExpiresAt      string `json:"expires_at"`
 }
 
+// sessionDTO reports who the caller is, never how to authenticate as them. The
+// access and refresh tokens travel only in HttpOnly cookies; CSRFToken is
+// returned because the browser must echo it in a header, which requires
+// JavaScript to be able to read that one value.
 type sessionDTO struct {
-	Token     string    `json:"token"`
 	Claims    claimsDTO `json:"claims"`
 	CSRFToken string    `json:"csrf_token,omitempty"`
 }
@@ -440,18 +446,26 @@ func (a *api) devLogin(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, r, err)
 		return
 	}
-	dto := sessionDTO{Token: session.Token, Claims: toClaimsDTO(session.Claims)}
+	dto := sessionDTO{Claims: toClaimsDTO(session.Claims)}
 	if a.sessionCookieName != "" {
 		csrf := newCSRFToken()
-		a.setSessionCookies(w, session.Token, csrf)
+		a.setSessionCookies(w, session, csrf)
 		dto.CSRFToken = csrf
 	}
 	httpx.WriteJSON(w, http.StatusOK, dto)
 }
 
-// logout clears the session and CSRF cookies. Cookie sessions carry no
-// server-side state, so clearing the cookies is the whole invalidation.
-func (a *api) logout(w http.ResponseWriter, _ *http.Request) {
+// logout retires the refresh token and clears every session cookie. Retiring
+// the token is what makes logout server-side: clearing the cookies alone only
+// removes the browser's copy, leaving a stolen refresh token usable until it
+// expires.
+func (a *api) logout(w http.ResponseWriter, r *http.Request) {
+	if c, err := r.Cookie(a.refreshCookieName()); err == nil {
+		if err := a.svc.RevokeRefresh(r.Context(), c.Value); err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+	}
 	a.clearSessionCookies(w)
 	w.WriteHeader(http.StatusNoContent)
 }

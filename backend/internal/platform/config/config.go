@@ -124,11 +124,18 @@ type AuthConfig struct {
 	JWTTTL         time.Duration `env:"JWT_TTL" envDefault:"24h"`
 	SessionTTL     time.Duration `env:"SESSION_TTL" envDefault:"12h"`
 	HMACSigningKey string        `env:"HMAC_SIGNING_KEY"` // secret; no default
+	// RefreshTokenTTL bounds how long a rotating refresh cookie stays usable.
+	// It is deliberately far longer than JWTTTL: the access token is short-
+	// lived and re-minted, while the refresh token is only presented when it
+	// has already expired.
+	RefreshTokenTTL time.Duration `env:"REFRESH_TOKEN_TTL" envDefault:"720h"`
 	// HMACPreviousKeys are retired signing keys still accepted for
 	// verification until active tokens expire (JWT rotation). Comma-separated.
 	HMACPreviousKeys []string `env:"HMAC_PREVIOUS_KEYS" envSeparator:","`
 	// SessionCookieName names the HttpOnly auth cookie used by the web UI
 	// session flow; empty disables cookie auth and logout on the control API.
+	// The refresh and CSRF cookie names derive from it, so a deployment only
+	// ever has to pick one prefix.
 	SessionCookieName   string `env:"SESSION_COOKIE_NAME" envDefault:"session"`
 	SessionCookieSecure bool   `env:"SESSION_COOKIE_SECURE" envDefault:"false"`
 	CSRFEnabled         bool   `env:"CSRF_ENABLED" envDefault:"false"`
@@ -234,6 +241,12 @@ func (c Config) Validate() error {
 
 	if c.Auth.JWTTTL <= 0 || c.Auth.SessionTTL <= 0 {
 		add(errors.New("AUTH JWT_TTL and SESSION_TTL must be > 0"))
+	}
+	if c.Auth.RefreshTokenTTL <= 0 {
+		add(errors.New("AUTH REFRESH_TOKEN_TTL must be > 0"))
+	}
+	if c.Auth.RefreshTokenTTL > 0 && c.Auth.JWTTTL > 0 && c.Auth.RefreshTokenTTL <= c.Auth.JWTTTL {
+		add(errors.New("AUTH REFRESH_TOKEN_TTL must exceed AUTH JWT_TTL"))
 	}
 	if c.Auth.HMACSigningKey != "" && len(c.Auth.HMACSigningKey) < 32 {
 		add(errors.New("AUTH_HMAC_SIGNING_KEY must be at least 32 bytes when set"))

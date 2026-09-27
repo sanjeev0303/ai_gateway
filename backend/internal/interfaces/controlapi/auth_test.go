@@ -2,6 +2,8 @@ package controlapi
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"testing"
 
@@ -165,7 +167,7 @@ func TestAuthenticateAPIKeyRejectsRevokedServiceAccount(t *testing.T) {
 
 // ---- developer login -----------------------------------------------------
 
-func TestDevLoginReturnsSessionToken(t *testing.T) {
+func TestDevLoginReturnsClaimsWithoutCredentials(t *testing.T) {
 	srv, st := newTestServer(t)
 	st.users.getByEmail = func(_ context.Context, email string) (domain.User, error) {
 		return testUser, nil
@@ -183,10 +185,21 @@ func TestDevLoginReturnsSessionToken(t *testing.T) {
 		map[string]any{"email": "alice@example.com"}, nil)
 
 	requireEqual(t, resp.StatusCode, http.StatusOK)
-	var out sessionDTO
-	decodeBody(t, resp, &out)
+	raw, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	requireNoErr(t, err)
 
-	requireEqual(t, out.Token, "token-1")
+	// The issued token must not reach the body: any script that can read this
+	// response could otherwise impersonate the user.
+	var fields map[string]json.RawMessage
+	requireNoErr(t, json.Unmarshal(raw, &fields))
+	if _, leaked := fields["token"]; leaked {
+		t.Fatal("dev-login leaked the access token in the response body")
+	}
+
+	var out sessionDTO
+	requireNoErr(t, json.Unmarshal(raw, &out))
+
 	requireEqual(t, out.Claims.Subject, testUserID.String())
 	requireEqual(t, out.Claims.Email, testUser.Email)
 	requireEqual(t, out.Claims.DisplayName, testUser.DisplayName)
@@ -417,14 +430,19 @@ func TestSessionCookieStateChangeWithoutCSRFEnabled(t *testing.T) {
 func TestLogoutClearsSessionCookies(t *testing.T) {
 	srv, _ := newSessionServer(t, true, false)
 
-	resp := doJSON(t, srv, http.MethodPost, "/v1/auth/logout", nil, nil)
+	// Logout authenticates on the refresh cookie rather than the access token,
+	// so the double-submit pair is the only thing authorizing the call.
+	resp := doJSON(t, srv, http.MethodPost, "/v1/auth/logout", nil, map[string]string{
+		"Cookie":       "session_csrf=csrf-1",
+		"X-CSRF-Token": "csrf-1",
+	})
 
 	requireEqual(t, resp.StatusCode, http.StatusNoContent)
 	cookies := map[string]*http.Cookie{}
 	for _, c := range resp.Cookies() {
 		cookies[c.Name] = c
 	}
-	for _, name := range []string{"session", "session_csrf"} {
+	for _, name := range []string{"session", "session_refresh", "session_csrf"} {
 		c, ok := cookies[name]
 		if !ok {
 			t.Fatalf("logout must clear %q cookie, got %v", name, resp.Cookies())
@@ -433,6 +451,20 @@ func TestLogoutClearsSessionCookies(t *testing.T) {
 			t.Fatalf("cleared %q cookie has MaxAge %d, want expired", name, c.MaxAge)
 		}
 	}
+}
+
+func TestLogoutWithoutCSRFIsRejected(t *testing.T) {
+	srv, _ := newSessionServer(t, true, false)
+
+	// A cross-site POST carries the refresh cookie automatically, so without the
+	// CSRF check an attacker could invalidate a victim's session at will.
+	resp := doJSON(t, srv, http.MethodPost, "/v1/auth/logout", nil, map[string]string{
+		"Cookie": "session_refresh=refresh-1",
+	})
+
+	code, msg := decodeError(t, resp)
+	requireEqual(t, code, http.StatusForbidden)
+	requireEqual(t, msg, "csrf_token_invalid")
 }
 
 func TestSecureSessionCookiesWhenConfigured(t *testing.T) {

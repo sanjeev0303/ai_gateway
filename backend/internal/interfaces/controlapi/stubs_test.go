@@ -3,10 +3,12 @@ package controlapi
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
 	"ai-governance-saas/backend/internal/domain"
+	"ai-governance-saas/backend/internal/infrastructure/auth"
 	"ai-governance-saas/backend/internal/ports"
 	providerclient "ai-governance-saas/backend/internal/ports/provider"
 	repositories "ai-governance-saas/backend/internal/ports/repositories"
@@ -603,4 +605,130 @@ func requireAudit(t *testing.T, st *controlStubs, action string) {
 		}
 	}
 	t.Fatalf("audit actions = %v, missing %q", st.audits.actions, action)
+}
+
+// ---- auth, refresh token, and password stubs -----------------------------
+//
+// Signup, signin, and refresh need the credential repositories that the
+// bearer/dev-login tests never touch, so they get their own stubs here. Each
+// embeds its port so an unconfigured method fails loudly instead of silently
+// returning a zero value.
+
+type stubAuth struct {
+	repositories.AuthRepository
+	registerFn           func(context.Context, domain.Registration) (domain.User, domain.Organization, error)
+	credentialByEmail    func(context.Context, string) (domain.UserCredential, error)
+	setPasswordHashFn    func(context.Context, uuid.UUID, string) error
+	touchLastLoginFn     func(context.Context, uuid.UUID) error
+	capturedRegistration domain.Registration
+}
+
+func (s *stubAuth) Register(ctx context.Context, reg domain.Registration) (domain.User, domain.Organization, error) {
+	s.capturedRegistration = reg
+	if s.registerFn != nil {
+		return s.registerFn(ctx, reg)
+	}
+	return testUser, testOrg, nil
+}
+
+func (s *stubAuth) GetCredentialByEmail(ctx context.Context, email string) (domain.UserCredential, error) {
+	if s.credentialByEmail != nil {
+		return s.credentialByEmail(ctx, email)
+	}
+	notConfigured("stubAuth.GetCredentialByEmail")
+	return domain.UserCredential{}, nil
+}
+
+func (s *stubAuth) SetPasswordHash(ctx context.Context, userID uuid.UUID, encoded string) error {
+	if s.setPasswordHashFn != nil {
+		return s.setPasswordHashFn(ctx, userID, encoded)
+	}
+	return nil
+}
+
+func (s *stubAuth) TouchLastLogin(ctx context.Context, userID uuid.UUID) error {
+	if s.touchLastLoginFn != nil {
+		return s.touchLastLoginFn(ctx, userID)
+	}
+	return nil
+}
+
+type stubRefreshTokens struct {
+	repositories.RefreshTokenRepository
+	createFn     func(context.Context, uuid.UUID, string, time.Time) (domain.RefreshToken, error)
+	getByHashFn  func(context.Context, string) (domain.RefreshToken, error)
+	revokeFn     func(context.Context, string) error
+	revokeAllFn  func(context.Context, uuid.UUID) error
+	createdHash  string
+	revokedHash  string
+	revokeCalls  int
+	revokeAllAny int
+}
+
+func (s *stubRefreshTokens) Create(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) (domain.RefreshToken, error) {
+	s.createdHash = tokenHash
+	if s.createFn != nil {
+		return s.createFn(ctx, userID, tokenHash, expiresAt)
+	}
+	return domain.RefreshToken{UserID: userID, TokenHash: tokenHash, ExpiresAt: expiresAt}, nil
+}
+
+func (s *stubRefreshTokens) GetByHash(ctx context.Context, tokenHash string) (domain.RefreshToken, error) {
+	if s.getByHashFn != nil {
+		return s.getByHashFn(ctx, tokenHash)
+	}
+	notConfigured("stubRefreshTokens.GetByHash")
+	return domain.RefreshToken{}, nil
+}
+
+func (s *stubRefreshTokens) Revoke(ctx context.Context, tokenHash string) error {
+	s.revokeCalls++
+	s.revokedHash = tokenHash
+	if s.revokeFn != nil {
+		return s.revokeFn(ctx, tokenHash)
+	}
+	return nil
+}
+
+func (s *stubRefreshTokens) RevokeAllForUser(ctx context.Context, userID uuid.UUID) error {
+	s.revokeAllAny++
+	if s.revokeAllFn != nil {
+		return s.revokeAllFn(ctx, userID)
+	}
+	return nil
+}
+
+// stubPasswords stands in for the PBKDF2 hasher: the control API tests assert
+// HTTP behaviour, and the real KDF is already covered by the identity package's
+// own tests. Verify accepts only testPassword so both the success and the
+// uniform-failure paths stay reachable.
+type stubPasswords struct {
+	ports.PasswordHasher
+	hashFn    func(context.Context, string) (string, error)
+	verifyFn  func(context.Context, string, string) error
+	verified  string
+	decoyHits int
+}
+
+func (s *stubPasswords) Hash(ctx context.Context, password string) (string, error) {
+	if s.hashFn != nil {
+		return s.hashFn(ctx, password)
+	}
+	return testPasswordDigest, nil
+}
+
+func (s *stubPasswords) Verify(ctx context.Context, encoded, password string) error {
+	s.verified = password
+	if s.verifyFn != nil {
+		return s.verifyFn(ctx, encoded, password)
+	}
+	if password == testPassword {
+		return nil
+	}
+	return auth.ErrPasswordMismatch
+}
+
+func (s *stubPasswords) DecoyDigest() string {
+	s.decoyHits++
+	return testPasswordDigest
 }

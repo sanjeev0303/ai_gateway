@@ -118,13 +118,13 @@ func RunGatewayV2(ctx context.Context) error {
 			Config: gatewayv2.DefaultGatewayConfig(),
 			Logger: log,
 
-			Hasher:            auth.NewSHA256TokenHasher(),
-			GatewayCredRepo:   repositories.NewGatewayCredentialRepository(store),
-			ProviderAccounts:  repositories.NewProviderAccountRepository(store),
+			Hasher:              auth.NewSHA256TokenHasher(),
+			GatewayCredRepo:     repositories.NewGatewayCredentialRepository(store),
+			ProviderAccounts:    repositories.NewProviderAccountRepository(store),
 			ProviderCredentials: repositories.NewProviderCredentialRepository(store),
-			Secrets:           secretStore,
-			PolicyRepo:        repositories.NewPolicyRepository(store),
-			RuleRepo:          repositories.NewPolicyRuleRepository(store),
+			Secrets:             secretStore,
+			PolicyRepo:          repositories.NewPolicyRepository(store),
+			RuleRepo:            repositories.NewPolicyRuleRepository(store),
 		})
 		if err != nil {
 			return fmt.Errorf("gateway-v2: create gateway: %w", err)
@@ -195,6 +195,11 @@ func RunControlAPI(ctx context.Context) error {
 			Accounts:    repositories.NewServiceAccountRepository(store),
 			Credentials: repositories.NewAPICredentialRepository(store),
 			Audits:      repositories.NewAuditLogRepository(store),
+
+			Auth:            repositories.NewAuthRepository(store),
+			RefreshTokens:   repositories.NewRefreshTokenRepository(store),
+			Passwords:       auth.NewPBKDF2PasswordHasher(0),
+			RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 
 			Issuer:   issuer,
 			Verifier: verifier,

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { BrandMark, MenuIcon } from "@/components/icons";
+import { BrandMark } from "@/components/icons";
+import { SessionNav } from "@/components/session-nav";
 import { site } from "@/lib/site";
 
 import "./marketing.css";
@@ -30,29 +31,7 @@ export default function MarketingLayout({ children }: { readonly children: React
               </Link>
             ))}
           </nav>
-          <div className="nav-actions">
-            <Link href="/login" className="nav-signin">
-              Sign in
-            </Link>
-            <Link href="/signup" className="btn btn-primary btn-sm">
-              Get started
-            </Link>
-            <details className="nav-more">
-              <summary className="nav-more-btn" aria-label="Open site navigation">
-                <MenuIcon width={20} height={20} />
-              </summary>
-              <nav aria-label="Site" className="nav-more-panel">
-                {navLinks.map((link) => (
-                  <Link key={link.href} href={link.href} className="nav-more-link">
-                    {link.label}
-                  </Link>
-                ))}
-                <Link href="/login" className="nav-more-link">
-                  Sign in
-                </Link>
-              </nav>
-            </details>
-          </div>
+          <SessionNav links={navLinks} />
         </div>
       </header>
       <main>{children}</main>

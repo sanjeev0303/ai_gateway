@@ -31,58 +31,70 @@ const defaultInviteTTL = 7 * 24 * time.Hour
 
 // Session is the outcome of a successful login: the signed JWT plus the
 // claims it carries, so callers can derive the actor without re-parsing.
+// RefreshToken is the raw rotating credential and is non-empty only on the
+// paths that mint a session; it is returned exactly once, for the caller to
+// place in an HttpOnly cookie.
 type Session struct {
-	Token  string
-	Claims domain.TokenClaims
+	Token        string
+	RefreshToken string
+	Claims       domain.TokenClaims
 }
 
 // ServiceDeps carries the dependencies of the identity service. Log, Now, and
 // InviteTTL are optional (sane defaults apply); the rest are required.
 type ServiceDeps struct {
-	Orgs                 repositories.OrganizationRepository
-	Users                repositories.UserRepository
-	Members              repositories.OrgMemberRepository
-	Invitations          repositories.InvitationRepository
-	Projects             repositories.ProjectRepository
-	Teams                repositories.TeamRepository
-	TeamMembers          repositories.TeamMemberRepository
-	ProjMembers          repositories.ProjectMemberRepository
-	Accounts             repositories.ServiceAccountRepository
-	Credentials          repositories.APICredentialRepository
-	GatewayCredentials   repositories.GatewayCredentialRepository
-	Audits               repositories.AuditLogRepository
+	Orgs               repositories.OrganizationRepository
+	Users              repositories.UserRepository
+	Members            repositories.OrgMemberRepository
+	Invitations        repositories.InvitationRepository
+	Projects           repositories.ProjectRepository
+	Teams              repositories.TeamRepository
+	TeamMembers        repositories.TeamMemberRepository
+	ProjMembers        repositories.ProjectMemberRepository
+	Accounts           repositories.ServiceAccountRepository
+	Credentials        repositories.APICredentialRepository
+	GatewayCredentials repositories.GatewayCredentialRepository
+	Audits             repositories.AuditLogRepository
+	Auth               repositories.AuthRepository
+	RefreshTokens      repositories.RefreshTokenRepository
 
-	Issuer                    ports.TokenIssuer
-	Verifier                  ports.TokenVerifier
-	Hasher                    ports.TokenHasher
-	GatewayCredentialCache    *credentialcache.CredentialCache
-	Log                       *slog.Logger
-	Now                       func() time.Time
-	InviteTTL                 time.Duration
+	Issuer                 ports.TokenIssuer
+	Verifier               ports.TokenVerifier
+	Hasher                 ports.TokenHasher
+	Passwords              ports.PasswordHasher
+	GatewayCredentialCache *credentialcache.CredentialCache
+	Log                    *slog.Logger
+	Now                    func() time.Time
+	InviteTTL              time.Duration
+	RefreshTokenTTL        time.Duration
 }
 
 // Service is the identity application service.
 type Service struct {
-	orgs                    repositories.OrganizationRepository
-	users                   repositories.UserRepository
-	members                 repositories.OrgMemberRepository
-	invitations             repositories.InvitationRepository
-	projects                repositories.ProjectRepository
-	teams                   repositories.TeamRepository
-	teamMembers             repositories.TeamMemberRepository
-	projMembers             repositories.ProjectMemberRepository
-	accounts                repositories.ServiceAccountRepository
-	credentials             repositories.APICredentialRepository
-	gatewayCredentials      repositories.GatewayCredentialRepository
-	audits                  repositories.AuditLogRepository
-	gatewayCredentialCache  *credentialcache.CredentialCache
+	orgs                   repositories.OrganizationRepository
+	users                  repositories.UserRepository
+	members                repositories.OrgMemberRepository
+	invitations            repositories.InvitationRepository
+	projects               repositories.ProjectRepository
+	teams                  repositories.TeamRepository
+	teamMembers            repositories.TeamMemberRepository
+	projMembers            repositories.ProjectMemberRepository
+	accounts               repositories.ServiceAccountRepository
+	credentials            repositories.APICredentialRepository
+	gatewayCredentials     repositories.GatewayCredentialRepository
+	audits                 repositories.AuditLogRepository
+	auth                   repositories.AuthRepository
+	refreshTokens          repositories.RefreshTokenRepository
+	gatewayCredentialCache *credentialcache.CredentialCache
 
-	issuer    ports.TokenIssuer
-	verifier  ports.TokenVerifier
-	hasher    ports.TokenHasher
-	log       *slog.Logger
-	now       func() time.Time
-	inviteTTL time.Duration
+	issuer     ports.TokenIssuer
+	verifier   ports.TokenVerifier
+	hasher     ports.TokenHasher
+	passwords  ports.PasswordHasher
+	log        *slog.Logger
+	now        func() time.Time
+	inviteTTL  time.Duration
+	refreshTTL time.Duration
 }
 
 // NewService wires the identity service from its dependencies. Log, Now, and
@@ -100,26 +112,34 @@ func NewService(deps ServiceDeps) *Service {
 	if ttl <= 0 {
 		ttl = defaultInviteTTL
 	}
+	refreshTTL := deps.RefreshTokenTTL
+	if refreshTTL <= 0 {
+		refreshTTL = defaultRefreshTokenTTL
+	}
 	return &Service{
-		orgs:                    deps.Orgs,
-		users:                   deps.Users,
-		members:                 deps.Members,
-		invitations:             deps.Invitations,
-		projects:                deps.Projects,
-		teams:                   deps.Teams,
-		teamMembers:             deps.TeamMembers,
-		projMembers:             deps.ProjMembers,
-		accounts:                deps.Accounts,
-		credentials:             deps.Credentials,
-		gatewayCredentials:      deps.GatewayCredentials,
-		audits:                  deps.Audits,
-		gatewayCredentialCache:  deps.GatewayCredentialCache,
-		issuer:                  deps.Issuer,
-		verifier:                deps.Verifier,
-		hasher:                  deps.Hasher,
-		log:                     log,
-		now:                     now,
-		inviteTTL:               ttl,
+		orgs:                   deps.Orgs,
+		users:                  deps.Users,
+		members:                deps.Members,
+		invitations:            deps.Invitations,
+		projects:               deps.Projects,
+		teams:                  deps.Teams,
+		teamMembers:            deps.TeamMembers,
+		projMembers:            deps.ProjMembers,
+		accounts:               deps.Accounts,
+		credentials:            deps.Credentials,
+		gatewayCredentials:     deps.GatewayCredentials,
+		audits:                 deps.Audits,
+		auth:                   deps.Auth,
+		refreshTokens:          deps.RefreshTokens,
+		gatewayCredentialCache: deps.GatewayCredentialCache,
+		issuer:                 deps.Issuer,
+		verifier:               deps.Verifier,
+		hasher:                 deps.Hasher,
+		passwords:              deps.Passwords,
+		log:                    log,
+		now:                    now,
+		inviteTTL:              ttl,
+		refreshTTL:             refreshTTL,
 	}
 }
 
@@ -163,19 +183,10 @@ func (s *Service) DevLogin(ctx context.Context, email, displayName string) (Sess
 		orgID = org.ID
 		role = domain.RoleOwner
 	}
-	claims := domain.TokenClaims{
-		Subject:        user.ID.String(),
-		Email:          user.Email,
-		DisplayName:    user.DisplayName,
-		OrganizationID: orgID,
-		Role:           role,
-		Kind:           domain.TokenKindUser,
-	}
-	token, err := s.issuer.Issue(ctx, claims)
-	if err != nil {
-		return Session{}, err
-	}
-	return Session{Token: token, Claims: claims}, nil
+	// newSession, not issueSession: a dev-login account has no password, so
+	// giving it a month-long refresh cookie would make the throwaway dev
+	// credential the longest-lived secret in the system.
+	return s.newSession(ctx, user, orgID, role)
 }
 
 // Invite issues an organization invitation and returns it together with the
@@ -619,11 +630,24 @@ func (s *Service) RevokeCredential(ctx context.Context, actor domain.Actor, cred
 // token — malformed, expired, tampered, or from a foreign issuer — maps to
 // ErrUnauthorized so callers cannot distinguish failure modes.
 func (s *Service) AuthenticateToken(ctx context.Context, rawToken string) (domain.Actor, error) {
-	claims, err := s.verifier.Verify(ctx, rawToken)
+	claims, err := s.VerifyToken(ctx, rawToken)
 	if err != nil {
-		return domain.Actor{}, ErrUnauthorized
+		return domain.Actor{}, err
 	}
 	return claims.Actor(), nil
+}
+
+// VerifyToken verifies a JWT and returns the full claim set. Authentication
+// itself only needs the actor projection, so AuthenticateToken is the narrower
+// form; callers that must report session identity (email, expiry) without a
+// second lookup use this. It performs exactly the same verification and maps
+// every rejection to ErrUnauthorized.
+func (s *Service) VerifyToken(ctx context.Context, rawToken string) (domain.TokenClaims, error) {
+	claims, err := s.verifier.Verify(ctx, rawToken)
+	if err != nil {
+		return domain.TokenClaims{}, ErrUnauthorized
+	}
+	return claims, nil
 }
 
 // AuthenticateAPIKey resolves a raw API key to a service actor. Only active,
@@ -814,15 +838,15 @@ func (s *Service) CreateGatewayCredential(ctx context.Context, actor domain.Acto
 	}
 
 	credential, err := s.gatewayCredentials.Create(ctx, actor.OrganizationID, domain.NewGatewayCredential{
-		Name:            input.Name,
-		KeyPrefix:       rawKey[:len(apiKeyPrefix)+7],
-		KeyHash:         hash,
-		SubjectType:     input.SubjectType,
-		SubjectID:       input.SubjectID,
-		TeamID:          input.TeamID,
-		ProjectID:       input.ProjectID,
-		Scopes:          input.Scopes,
-		ExpiresAt:       input.ExpiresAt,
+		Name:        input.Name,
+		KeyPrefix:   rawKey[:len(apiKeyPrefix)+7],
+		KeyHash:     hash,
+		SubjectType: input.SubjectType,
+		SubjectID:   input.SubjectID,
+		TeamID:      input.TeamID,
+		ProjectID:   input.ProjectID,
+		Scopes:      input.Scopes,
+		ExpiresAt:   input.ExpiresAt,
 	})
 	if err != nil {
 		return domain.GatewayCredential{}, "", err

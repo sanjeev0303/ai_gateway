@@ -25,6 +25,7 @@ type Querier interface {
 	CreateIdempotencyKey(ctx context.Context, arg CreateIdempotencyKeyParams) (IdempotencyKey, error)
 	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (Invitation, error)
 	CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error)
+	CreateOrganizationWithID(ctx context.Context, arg CreateOrganizationWithIDParams) (Organization, error)
 	CreatePlan(ctx context.Context, arg CreatePlanParams) (Plan, error)
 	CreatePolicy(ctx context.Context, arg CreatePolicyParams) (Policy, error)
 	CreatePolicyRule(ctx context.Context, arg CreatePolicyRuleParams) (PolicyRule, error)
@@ -32,10 +33,12 @@ type Querier interface {
 	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
 	CreateProviderAccount(ctx context.Context, arg CreateProviderAccountParams) (ProviderAccount, error)
 	CreateProviderCredential(ctx context.Context, arg CreateProviderCredentialParams) (ProviderCredential, error)
+	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (AuthRefreshToken, error)
 	CreateServiceAccount(ctx context.Context, arg CreateServiceAccountParams) (ServiceAccount, error)
 	CreateSubscription(ctx context.Context, arg CreateSubscriptionParams) (Subscription, error)
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	CreateUserWithPassword(ctx context.Context, arg CreateUserWithPasswordParams) (User, error)
 	GetBillingEvent(ctx context.Context, arg GetBillingEventParams) (BillingEvent, error)
 	GetConversation(ctx context.Context, arg GetConversationParams) (Conversation, error)
 	GetGatewayCredential(ctx context.Context, arg GetGatewayCredentialParams) (GatewayCredential, error)
@@ -51,10 +54,15 @@ type Querier interface {
 	GetProviderAccount(ctx context.Context, arg GetProviderAccountParams) (ProviderAccount, error)
 	GetProviderCredential(ctx context.Context, arg GetProviderCredentialParams) (ProviderCredential, error)
 	GetProviderHealth(ctx context.Context, providerKind string) (ProviderHealth, error)
+	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (AuthRefreshToken, error)
 	GetServiceAccount(ctx context.Context, arg GetServiceAccountParams) (ServiceAccount, error)
 	GetSubscription(ctx context.Context, arg GetSubscriptionParams) (Subscription, error)
 	GetTeam(ctx context.Context, arg GetTeamParams) (Team, error)
 	GetUsageEvent(ctx context.Context, arg GetUsageEventParams) (UsageEvent, error)
+	// The ONLY read path that returns password_hash. Ordinary user reads
+	// (GetUserByID, GetUserByEmail, ListOrgMembers) go through views that never
+	// carry the credential, so the hash cannot ride along into a user DTO.
+	GetUserAuthByEmail(ctx context.Context, lower string) (User, error)
 	GetUserByEmail(ctx context.Context, lower string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	ListAPICredentials(ctx context.Context, organizationID uuid.UUID) ([]ApiCredential, error)
@@ -98,10 +106,15 @@ type Querier interface {
 	ResolveGatewayCredentialByKeyPrefix(ctx context.Context, pPrefix string) ([]GatewayCredential, error)
 	ResolveInvitationByToken(ctx context.Context, pTokenHash string) (Invitation, error)
 	RevokeAPICredential(ctx context.Context, arg RevokeAPICredentialParams) (ApiCredential, error)
+	// Sign-out-everywhere and the response to detected token reuse.
+	RevokeAllRefreshTokensForUser(ctx context.Context, userID uuid.UUID) (int64, error)
 	RevokeGatewayCredential(ctx context.Context, arg RevokeGatewayCredentialParams) (GatewayCredential, error)
 	RevokeGatewayCredentialForRotate(ctx context.Context, arg RevokeGatewayCredentialForRotateParams) (uuid.UUID, error)
 	RevokeInvitation(ctx context.Context, arg RevokeInvitationParams) (Invitation, error)
 	RevokeProviderCredential(ctx context.Context, arg RevokeProviderCredentialParams) (ProviderCredential, error)
+	// Single-use rotation: a row is retired exactly once, and a second attempt
+	// reports 0 rows affected so the caller can treat reuse as a stolen token.
+	RevokeRefreshToken(ctx context.Context, tokenHash string) (int64, error)
 	RevokeServiceAccount(ctx context.Context, arg RevokeServiceAccountParams) (ServiceAccount, error)
 	RollupUsageDaily(ctx context.Context, arg RollupUsageDailyParams) (int64, error)
 	RollupUsageHourly(ctx context.Context, arg RollupUsageHourlyParams) (int64, error)
@@ -111,6 +124,8 @@ type Querier interface {
 	SetPolicyEnforcement(ctx context.Context, arg SetPolicyEnforcementParams) (Policy, error)
 	SetPolicyRuleEnabled(ctx context.Context, arg SetPolicyRuleEnabledParams) (PolicyRule, error)
 	SetProjectStatus(ctx context.Context, arg SetProjectStatusParams) (Project, error)
+	SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) error
+	TouchUserLastLogin(ctx context.Context, id uuid.UUID) error
 	UpdateGatewayCredentialStatus(ctx context.Context, arg UpdateGatewayCredentialStatusParams) (GatewayCredential, error)
 	UpsertPricingModel(ctx context.Context, arg UpsertPricingModelParams) (PricingModel, error)
 	UpsertProviderHealth(ctx context.Context, arg UpsertProviderHealthParams) (ProviderHealth, error)

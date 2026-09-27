@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 
 	"ai-governance-saas/backend/internal/domain"
-	repositories "ai-governance-saas/backend/internal/ports/repositories"
 	"ai-governance-saas/backend/internal/platform/httpx"
+	repositories "ai-governance-saas/backend/internal/ports/repositories"
 )
 
 // ---- gateway credential DTOs ------------------------------------------------
@@ -83,9 +83,9 @@ type createGatewayCredentialRequest struct {
 }
 
 type rotateGatewayCredentialRequest struct {
-	Name        *string  `json:"name,omitempty"`
-	Scopes      []string `json:"scopes,omitempty"`
-	ExpiresAt   *string  `json:"expires_at,omitempty"`
+	Name      *string  `json:"name,omitempty"`
+	Scopes    []string `json:"scopes,omitempty"`
+	ExpiresAt *string  `json:"expires_at,omitempty"`
 }
 
 // ---- handlers ---------------------------------------------------------------

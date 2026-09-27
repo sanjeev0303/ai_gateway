@@ -83,6 +83,15 @@ func TestValidate(t *testing.T) {
 		}, "EVENTBUS_KIND"},
 		{"bad log level fails", func(c *Config) { c.Observability.LogLevel = "verbose" }, "LOG_LEVEL"},
 		{"zero shutdown timeout fails", func(c *Config) { c.Server.ShutdownTimeout = 0 }, "SHUTDOWN_TIMEOUT"},
+		{"zero refresh ttl fails", func(c *Config) { c.Auth.RefreshTokenTTL = 0 }, "REFRESH_TOKEN_TTL must be > 0"},
+		{"refresh ttl not exceeding jwt ttl fails", func(c *Config) {
+			c.Auth.RefreshTokenTTL = c.Auth.JWTTTL
+		}, "REFRESH_TOKEN_TTL must exceed"},
+		{"short hmac signing key fails", func(c *Config) { c.Auth.HMACSigningKey = "too-short" }, "at least 32 bytes"},
+		{"dev login without signing key fails", func(c *Config) {
+			c.Auth.DevLoginEnabled = true
+			c.Auth.HMACSigningKey = ""
+		}, "AUTH_DEV_LOGIN_ENABLED"},
 	}
 
 	for _, tt := range tests {

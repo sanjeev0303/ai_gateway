@@ -135,6 +135,23 @@
   box-shadow: 0 0 0 1px var(--ink);
 }
 
+.auth-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--ink-tertiary);
+}
+
+.auth-error {
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--danger);
+  background: rgba(193, 18, 31, 0.06);
+  border-radius: var(--radius-tag);
+  box-shadow: 0 0 0 1px rgba(193, 18, 31, 0.22);
+}
+
 .auth-submit {
   height: 40px;
   margin-top: 0.375rem;

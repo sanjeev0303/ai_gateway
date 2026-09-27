@@ -3,17 +3,29 @@ package controlapi
 import "net/http"
 
 // registerV1Routes wires the v1 identity surface onto mux. Every v1 route runs
-// behind requireAuth; dev-login and logout are the exceptions, registered
-// only when their feature flags are on so a disabled deployment simply 404s
+// behind requireAuth; the auth entry points are the exceptions. They register
+// only when their feature flag is on, so a disabled deployment simply 404s
 // them.
 func registerV1Routes(mux *http.ServeMux, deps Deps) {
 	a := newAPI(deps)
 
+	if deps.SessionCookieName != "" {
+		// signup and signin gate on cookies because credentials are never
+		// returned in a response body: without cookies a caller would create an
+		// account it has no way to authenticate as. refresh and logout read the
+		// cookies directly and so need the double-submit CSRF check rather than
+		// requireAuth, which authenticates on the access token alone.
+		mux.Handle("POST /v1/auth/signup", http.HandlerFunc(a.signup))
+		mux.Handle("POST /v1/auth/signin", http.HandlerFunc(a.signin))
+		mux.Handle("POST /v1/auth/refresh", a.requireCSRF(a.refresh))
+		mux.Handle("POST /v1/auth/logout", a.requireCSRF(a.logout))
+		// session runs behind requireAuth because the caller already holds a
+		// valid access cookie; a GET needs no CSRF token, which csrfAllowed
+		// exempts for safe methods.
+		mux.Handle("GET /v1/auth/session", a.requireAuth(a.session))
+	}
 	if deps.DevLoginEnabled {
 		mux.Handle("POST /v1/auth/dev-login", http.HandlerFunc(a.devLogin))
-	}
-	if deps.SessionCookieName != "" {
-		mux.Handle("POST /v1/auth/logout", http.HandlerFunc(a.logout))
 	}
 
 	// members

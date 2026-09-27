@@ -57,7 +57,7 @@ func (q *Queries) CountOrgMembersByRole(ctx context.Context, arg CountOrgMembers
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, display_name)
 VALUES ($1, $2)
-RETURNING id, email, display_name, status, created_at, updated_at, last_login_at
+RETURNING id, email, display_name, status, created_at, updated_at, last_login_at, password_hash
 `
 
 type CreateUserParams struct {
@@ -76,6 +76,35 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastLoginAt,
+		&i.PasswordHash,
+	)
+	return i, err
+}
+
+const createUserWithPassword = `-- name: CreateUserWithPassword :one
+INSERT INTO users (email, display_name, password_hash)
+VALUES ($1, $2, $3)
+RETURNING id, email, display_name, status, created_at, updated_at, last_login_at, password_hash
+`
+
+type CreateUserWithPasswordParams struct {
+	Email        string  `json:"email"`
+	DisplayName  string  `json:"display_name"`
+	PasswordHash *string `json:"password_hash"`
+}
+
+func (q *Queries) CreateUserWithPassword(ctx context.Context, arg CreateUserWithPasswordParams) (User, error) {
+	row := q.db.QueryRow(ctx, createUserWithPassword, arg.Email, arg.DisplayName, arg.PasswordHash)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.DisplayName,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastLoginAt,
+		&i.PasswordHash,
 	)
 	return i, err
 }
@@ -123,7 +152,7 @@ func (q *Queries) GetOrgMember(ctx context.Context, arg GetOrgMemberParams) (Get
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, display_name, status, created_at, updated_at, last_login_at FROM users
+SELECT id, email, display_name, status, created_at, updated_at, last_login_at, password_hash FROM users
 WHERE lower(email) = lower($1)
 `
 
@@ -138,12 +167,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (User, error
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastLoginAt,
+		&i.PasswordHash,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, display_name, status, created_at, updated_at, last_login_at FROM users
+SELECT id, email, display_name, status, created_at, updated_at, last_login_at, password_hash FROM users
 WHERE id = $1
 `
 
@@ -158,6 +188,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastLoginAt,
+		&i.PasswordHash,
 	)
 	return i, err
 }

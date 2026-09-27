@@ -150,6 +150,9 @@ type controlStubs struct {
 	issuer      *stubIssuer
 	verifier    *stubVerifier
 	hasher      *stubHasher
+	auth        *stubAuth
+	refresh     *stubRefreshTokens
+	passwords   *stubPasswords
 
 	providerAccounts    *stubProviderAccounts
 	providerCredentials *stubProviderCredentials
@@ -174,7 +177,12 @@ func newControlStubs() *controlStubs {
 		audits:      &stubAudits{},
 		issuer:      &stubIssuer{},
 		verifier:    &stubVerifier{},
-		hasher:      &stubHasher{},
+		// hasher.hash stays nil so tests can assert a code path never reached
+		// TokenHasher.Hash; the auth helper below installs one on demand.
+		hasher:    &stubHasher{},
+		auth:      &stubAuth{},
+		refresh:   &stubRefreshTokens{},
+		passwords: &stubPasswords{},
 
 		providerAccounts:    &stubProviderAccounts{},
 		providerCredentials: &stubProviderCredentials{},
@@ -188,22 +196,26 @@ func newControlStubs() *controlStubs {
 // deps wires the stub bundle into the identity service with a fixed clock.
 func (st *controlStubs) deps() identity.ServiceDeps {
 	return identity.ServiceDeps{
-		Orgs:        st.orgs,
-		Users:       st.users,
-		Members:     st.members,
-		Invitations: st.invitations,
-		Projects:    st.projects,
-		Teams:       st.teams,
-		TeamMembers: st.teamMembers,
-		ProjMembers: st.projMembers,
-		Accounts:    st.accounts,
-		Credentials: st.credentials,
-		Audits:      st.audits,
-		Issuer:      st.issuer,
-		Verifier:    st.verifier,
-		Hasher:      st.hasher,
-		Now:         func() time.Time { return testNow },
-		InviteTTL:   testInviteTTL,
+		Orgs:            st.orgs,
+		Users:           st.users,
+		Members:         st.members,
+		Invitations:     st.invitations,
+		Projects:        st.projects,
+		Teams:           st.teams,
+		TeamMembers:     st.teamMembers,
+		ProjMembers:     st.projMembers,
+		Accounts:        st.accounts,
+		Credentials:     st.credentials,
+		Audits:          st.audits,
+		Auth:            st.auth,
+		RefreshTokens:   st.refresh,
+		Issuer:          st.issuer,
+		Verifier:        st.verifier,
+		Hasher:          st.hasher,
+		Passwords:       st.passwords,
+		RefreshTokenTTL: testRefreshTTL,
+		Now:             func() time.Time { return testNow },
+		InviteTTL:       testInviteTTL,
 	}
 }
 
@@ -258,6 +270,33 @@ func newTestServer(t *testing.T) (*httptest.Server, *controlStubs) {
 func newSessionServer(t *testing.T, csrfEnabled, secure bool) (*httptest.Server, *controlStubs) {
 	t.Helper()
 	st := newControlStubs()
+	svc := identity.NewService(st.deps())
+	psvc := provider.NewService(st.providerDeps())
+	return buildServer(t, Deps{
+		Identity:            svc,
+		Providers:           psvc,
+		DevLoginEnabled:     true,
+		SessionCookieName:   "session",
+		SessionCookieSecure: secure,
+		CSRFEnabled:         csrfEnabled,
+	}), st
+}
+
+// newAuthServer builds the browser session server with the credential
+// dependencies the signup, signin, and refresh routes need: a token hasher for
+// refresh digests, a password hasher, and the auth/refresh repositories. The
+// session cookie is named "session" and CSRF follows the flag.
+func newAuthServer(t *testing.T, csrfEnabled, secure bool) (*httptest.Server, *controlStubs) {
+	t.Helper()
+	st := newControlStubs()
+	st.hasher.hash = func(_ context.Context, secret string) (string, error) {
+		return "digest:" + secret, nil
+	}
+	// A fixed access token keeps the cookie assertions readable; cases that
+	// need a distinct value override this.
+	st.issuer.issue = func(_ context.Context, _ domain.TokenClaims) (string, error) {
+		return "access-token-1", nil
+	}
 	svc := identity.NewService(st.deps())
 	psvc := provider.NewService(st.providerDeps())
 	return buildServer(t, Deps{
@@ -373,4 +412,45 @@ func decodeError(t *testing.T, resp *http.Response) (int, string) {
 	var env errorEnvelope
 	requireNoErr(t, json.NewDecoder(resp.Body).Decode(&env))
 	return resp.StatusCode, env.Err.Code
+}
+
+// testPassword and testPasswordDigest stand in for a real credential pair in
+// the signup and signin tests.
+const (
+	testPassword       = "correct-horse-battery-staple"
+	testPasswordDigest = "$pbkdf2-sha256$600000$c3Rlcw==$a2V5"
+	testRefreshTTL     = 30 * 24 * time.Hour
+)
+
+// readBody returns the raw response bytes and closes the body, so a test can
+// inspect the exact wire shape rather than only a decoded struct.
+func readBody(t *testing.T, resp *http.Response) []byte {
+	t.Helper()
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	requireNoErr(t, err)
+	return b
+}
+
+// cookiesByName indexes the Set-Cookie headers for assertions.
+func cookiesByName(resp *http.Response) map[string]*http.Cookie {
+	out := map[string]*http.Cookie{}
+	for _, c := range resp.Cookies() {
+		out[c.Name] = c
+	}
+	return out
+}
+
+// assertNoCredentialInBody fails if the response body carries a credential.
+// Returning the access or refresh token as JSON would put it in reach of any
+// script on the page, which defeats the HttpOnly cookie.
+func assertNoCredentialInBody(t *testing.T, raw []byte) {
+	t.Helper()
+	var fields map[string]json.RawMessage
+	requireNoErr(t, json.Unmarshal(raw, &fields))
+	for _, key := range []string{"token", "access_token", "refresh_token", "password"} {
+		if _, leaked := fields[key]; leaked {
+			t.Fatalf("response body leaked %q", key)
+		}
+	}
 }

@@ -18,6 +18,13 @@ RUN npm ci --no-audit --no-fund
 
 FROM node:22-alpine AS build
 WORKDIR /app
+
+# Next.js inlines NEXT_PUBLIC_* at build time, so the browser-facing API URL
+# has to be a build arg. Setting it in `environment:` alone silently ships the
+# source fallback to the client bundle.
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/package-lock.json ./package-lock.json
 COPY package.json ./

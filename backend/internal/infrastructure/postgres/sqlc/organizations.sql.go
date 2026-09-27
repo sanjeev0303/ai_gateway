@@ -36,6 +36,32 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 	return i, err
 }
 
+const createOrganizationWithID = `-- name: CreateOrganizationWithID :one
+INSERT INTO organizations (id, name, slug)
+VALUES ($1, $2, $3)
+RETURNING id, name, slug, status, created_at, updated_at
+`
+
+type CreateOrganizationWithIDParams struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+	Slug string    `json:"slug"`
+}
+
+func (q *Queries) CreateOrganizationWithID(ctx context.Context, arg CreateOrganizationWithIDParams) (Organization, error) {
+	row := q.db.QueryRow(ctx, createOrganizationWithID, arg.ID, arg.Name, arg.Slug)
+	var i Organization
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getOrganizationByID = `-- name: GetOrganizationByID :one
 SELECT id, name, slug, status, created_at, updated_at FROM organizations
 WHERE id = $1

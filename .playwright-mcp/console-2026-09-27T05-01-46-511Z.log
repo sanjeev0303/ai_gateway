@@ -1,0 +1,40 @@
+[     197ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3130/docs?_rsc=SCJVgjZa56qhWaZb:0
+[     198ms] [ERROR] Failed to fetch RSC payload for http://localhost:3130/docs. Falling back to browser navigation. TypeError: Failed to fetch
+    at y (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:5733)
+    at async _ (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:4591)
+    at async Object.o [as task] (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:58361) @ http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:0
+[     199ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3130/login?_rsc=SCJVgjZa56qhWaZb:0
+[     199ms] [ERROR] Failed to fetch RSC payload for http://localhost:3130/login. Falling back to browser navigation. TypeError: Failed to fetch
+    at y (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:5733)
+    at async _ (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:4591)
+    at async Object.o [as task] (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:58361) @ http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:0
+[     200ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3130/signup?_rsc=SCJVgjZa56qhWaZb:0
+[     200ms] [ERROR] Failed to fetch RSC payload for http://localhost:3130/signup. Falling back to browser navigation. TypeError: Failed to fetch
+    at y (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:5733)
+    at async _ (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:4591)
+    at async Object.o [as task] (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:58361) @ http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:0
+[     200ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3130/docs/getting-started?_rsc=SCJVgjZa56qhWaZb:0
+[     200ms] [ERROR] Failed to fetch RSC payload for http://localhost:3130/docs/getting-started. Falling back to browser navigation. TypeError: Failed to fetch
+    at y (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:5733)
+    at async _ (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:4591)
+    at async Object.o [as task] (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:58361) @ http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:0
+[  874570ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3130/?_rsc=SCJVgjZa56qhWaZb#product:0
+[  874571ms] [ERROR] Failed to fetch RSC payload for http://localhost:3130/#product. Falling back to browser navigation. TypeError: Failed to fetch
+    at y (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:5733)
+    at async _ (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:4591)
+    at async Object.o [as task] (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:58361) @ http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:0
+[  875829ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3130/signup?_rsc=SCJVgjZa56qhWaZb:0
+[  875829ms] [ERROR] Failed to fetch RSC payload for http://localhost:3130/signup. Falling back to browser navigation. TypeError: Failed to fetch
+    at y (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:5733)
+    at async _ (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:4591)
+    at async Object.o [as task] (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:58361) @ http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:0
+[  875829ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3130/docs/getting-started?_rsc=SCJVgjZa56qhWaZb:0
+[  875830ms] [ERROR] Failed to fetch RSC payload for http://localhost:3130/docs/getting-started. Falling back to browser navigation. TypeError: Failed to fetch
+    at y (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:5733)
+    at async _ (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:4591)
+    at async Object.o [as task] (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:58361) @ http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:0
+[  879787ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3130/docs?_rsc=SCJVgjZa56qhWaZb:0
+[  879787ms] [ERROR] Failed to fetch RSC payload for http://localhost:3130/docs. Falling back to browser navigation. TypeError: Failed to fetch
+    at y (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:5733)
+    at async _ (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:4591)
+    at async Object.o [as task] (http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:1:58361) @ http://localhost:3130/_next/static/chunks/18-498168fb58dcd546.js:0
