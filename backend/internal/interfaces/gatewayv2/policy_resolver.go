@@ -89,7 +89,7 @@ func (p *PolicyResolverImpl) buildSnapshot(ctx context.Context, orgID uuid.UUID)
 	budgets := make(map[string]BudgetConfig)
 
 	for _, policy := range policies {
-		if policy.Enforcement != "enforced" {
+		if policy.Enforcement != "active" {
 			continue
 		}
 

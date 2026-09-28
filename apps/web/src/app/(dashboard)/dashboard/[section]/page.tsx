@@ -2,7 +2,7 @@
 
 import { use } from "react";
 
-import { EmptyNote } from "@/components/ui";
+import { EmptyState, ErrorState, PageHeader } from "@/components/ui";
 import { canRead } from "@/lib/control-api";
 import { useSession } from "@/lib/queries";
 import { sectionBySlug } from "@/lib/section-registry";
@@ -18,10 +18,10 @@ export default function DashboardSectionPage({
 
   if (!section) {
     return (
-      <section className="dash-panel">
-        <h1>Not found</h1>
-        <EmptyNote>No dashboard section named {slug}.</EmptyNote>
-      </section>
+      <div>
+        <PageHeader title="Not found" />
+        <EmptyState title={`No dashboard section named ${slug}`} />
+      </div>
     );
   }
 
@@ -29,26 +29,21 @@ export default function DashboardSectionPage({
 
   if (role !== undefined && !canRead(role, section.requires)) {
     return (
-      <section className="dash-panel">
-        <h1>{section.title}</h1>
-        <EmptyNote>
-          Your role does not include {section.requires}, so this section is not shown.
-        </EmptyNote>
-      </section>
+      <div>
+        <PageHeader title={section.title} />
+        <ErrorState title="Permission Denied" error={`Your role does not include ${section.requires}, so this section is not shown.`} />
+      </div>
     );
   }
 
   const Body = section.Body;
 
   return (
-    <>
-      <header className="dash-head">
-        <h1>{section.title}</h1>
-        <p className="dash-note">{section.blurb}</p>
-      </header>
-      <section className="dash-panel">
+    <div>
+      <PageHeader title={section.title} description={section.blurb} />
+      <div className="card">
         <Body />
-      </section>
-    </>
+      </div>
+    </div>
   );
 }

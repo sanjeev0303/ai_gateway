@@ -41,6 +41,9 @@ func (f *recordingRequests) List(context.Context, uuid.UUID, time.Time, time.Tim
 	return nil, nil
 }
 
+func (f *recordingRequests) GetRecent(context.Context, uuid.UUID) ([]domain.LlmRequest, error) { return nil, nil }
+func (f *recordingRequests) GetRequests(context.Context, uuid.UUID, time.Time, time.Time, int32, int32) ([]domain.LlmRequest, error) { return nil, nil }
+
 func (f *recordingRequests) count() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()

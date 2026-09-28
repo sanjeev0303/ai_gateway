@@ -195,6 +195,22 @@ const providerHealthSchema = z.object({
   checked_at: z.string(),
 });
 
+const activityEventSchema = z.object({
+  request_id: z.string(),
+  organization_id: z.string(),
+  user_id: z.string().optional(),
+  user_name: z.string().optional(),
+  service_account: z.string().optional(),
+  project_id: z.string().optional(),
+  project_name: z.string().optional(),
+  team_id: z.string().optional(),
+  provider: z.string(),
+  model: z.string(),
+  status: z.string(),
+  started_at: z.string(),
+  current_state: z.enum(["active", "idle", "completed", "failed"]),
+});
+
 const invitationSchema = z.object({
   id: z.string(),
   organization_id: z.string(),
@@ -237,6 +253,7 @@ export type ProviderHealth = z.infer<typeof providerHealthSchema>;
 export type Invitation = z.infer<typeof invitationSchema>;
 export type TeamMember = z.infer<typeof teamMemberSchema>;
 export type ProjectMember = z.infer<typeof projectMemberSchema>;
+export type ActivityEvent = z.infer<typeof activityEventSchema>;
 
 function items<T extends z.ZodType>(schema: T) {
   return z.object({ items: z.array(schema) });
@@ -255,6 +272,7 @@ const providerHealthList = items(providerHealthSchema);
 const invitationsList = items(invitationSchema);
 const teamMembersList = items(teamMemberSchema);
 const projectMembersList = items(projectMemberSchema);
+const activityList = z.object({ data: z.array(activityEventSchema) });
 
 const createApiCredentialSchema = z.object({
   credential: apiCredentialSchema,
@@ -506,3 +524,32 @@ export const syncProviderModels = (
 
 export const listProviderHealth = (): Promise<{ items: ProviderHealth[] }> =>
   get("/v1/provider-health", providerHealthList);
+
+export const listActivity = (): Promise<{ data: ActivityEvent[] }> =>
+  get("/v1/activity", activityList);
+
+export function subscribeToActivity(
+  onMessage: (event: ActivityEvent) => void,
+  onError: (error: any) => void
+): () => void {
+  const source = new EventSource(`${CONTROL_API}/v1/activity/stream`, {
+    withCredentials: true,
+  });
+
+  source.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      onMessage(data);
+    } catch (err) {
+      onError(err);
+    }
+  };
+
+  source.onerror = (e) => {
+    onError(e);
+  };
+
+  return () => {
+    source.close();
+  };
+}

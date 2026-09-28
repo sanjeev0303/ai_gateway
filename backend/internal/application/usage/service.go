@@ -87,3 +87,90 @@ func (s *Service) RecomputeAll(ctx context.Context, from, to time.Time) error {
 	s.log.Info("usage rollup complete", "organizations", len(orgIDs), "from", from, "to", to)
 	return nil
 }
+
+// RequirePermission authorizes actor for perm, returning
+// repositories.ErrForbidden when the actor's role does not grant it.
+func (s *Service) RequirePermission(actor domain.Actor, perm string) error {
+	if !actor.Can(perm) {
+		return repositories.ErrForbidden
+	}
+	return nil
+}
+
+// GetSummary returns the aggregated usage summary for the actor's organization.
+func (s *Service) GetSummary(ctx context.Context, actor domain.Actor, from, to time.Time, projectID *uuid.UUID, model *string) (domain.UsageSummary, error) {
+	if err := s.RequirePermission(actor, domain.PermissionUsageRead); err != nil {
+		return domain.UsageSummary{}, err
+	}
+	return s.rollups.GetSummary(ctx, actor.OrganizationID, from, to, projectID, model)
+}
+
+// GetTimeSeries returns the usage history over time.
+func (s *Service) GetTimeSeries(ctx context.Context, actor domain.Actor, from, to time.Time, projectID *uuid.UUID) ([]domain.UsageTimeSeriesPoint, error) {
+	if err := s.RequirePermission(actor, domain.PermissionUsageRead); err != nil {
+		return nil, err
+	}
+	return s.rollups.GetTimeSeries(ctx, actor.OrganizationID, from, to, projectID)
+}
+
+// GetByProject returns usage grouped by project.
+func (s *Service) GetByProject(ctx context.Context, actor domain.Actor, from, to time.Time) ([]domain.UsageByProject, error) {
+	if err := s.RequirePermission(actor, domain.PermissionUsageRead); err != nil {
+		return nil, err
+	}
+	return s.rollups.GetByProject(ctx, actor.OrganizationID, from, to)
+}
+
+// GetByModel returns usage grouped by model.
+func (s *Service) GetByModel(ctx context.Context, actor domain.Actor, from, to time.Time) ([]domain.UsageByModel, error) {
+	if err := s.RequirePermission(actor, domain.PermissionUsageRead); err != nil {
+		return nil, err
+	}
+	return s.rollups.GetByModel(ctx, actor.OrganizationID, from, to)
+}
+
+// GetByProvider returns usage grouped by provider.
+func (s *Service) GetByProvider(ctx context.Context, actor domain.Actor, from, to time.Time) ([]domain.UsageByProvider, error) {
+	if err := s.RequirePermission(actor, domain.PermissionUsageRead); err != nil {
+		return nil, err
+	}
+	return s.rollups.GetByProvider(ctx, actor.OrganizationID, from, to)
+}
+
+// GetByUser returns usage grouped by user.
+func (s *Service) GetByUser(ctx context.Context, actor domain.Actor, from, to time.Time) ([]domain.UsageByUser, error) {
+	if err := s.RequirePermission(actor, domain.PermissionUsageRead); err != nil {
+		return nil, err
+	}
+	return s.rollups.GetByUser(ctx, actor.OrganizationID, from, to)
+}
+
+// GetByTeam returns usage grouped by team.
+func (s *Service) GetByTeam(ctx context.Context, actor domain.Actor, from, to time.Time) ([]domain.UsageByTeam, error) {
+	if err := s.RequirePermission(actor, domain.PermissionUsageRead); err != nil {
+		return nil, err
+	}
+	return s.rollups.GetByTeam(ctx, actor.OrganizationID, from, to)
+}
+
+// GetRecent returns the most recent 50 requests.
+func (s *Service) GetRecent(ctx context.Context, actor domain.Actor) ([]domain.LlmRequest, error) {
+	if err := s.RequirePermission(actor, domain.PermissionUsageRead); err != nil {
+		return nil, err
+	}
+	return s.llmRequests.GetRecent(ctx, actor.OrganizationID)
+}
+
+// GetRequests returns a paginated list of requests within a time window.
+func (s *Service) GetRequests(ctx context.Context, actor domain.Actor, from, to time.Time, limit, offset int32) ([]domain.LlmRequest, error) {
+	if err := s.RequirePermission(actor, domain.PermissionUsageRead); err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return s.llmRequests.GetRequests(ctx, actor.OrganizationID, from, to, limit, offset)
+}

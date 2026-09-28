@@ -154,6 +154,11 @@ func (r *llmRequestRepo) Record(ctx context.Context, orgID uuid.UUID, input doma
 			LatencyMs:         input.LatencyMs,
 			CostMicros:        input.CostMicros,
 			CreatedAt:         createdAt,
+			RequestStartedAt:  input.RequestStartedAt,
+			FirstTokenAt:      input.FirstTokenAt,
+			CompletedAt:       input.CompletedAt,
+			TimeToFirstTokenMs: input.TimeToFirstTokenMs,
+			TotalLatencyMs:    input.TotalLatencyMs,
 		})
 		if err != nil {
 			return err
@@ -194,6 +199,80 @@ func (r *llmRequestRepo) List(ctx context.Context, orgID uuid.UUID, from, to tim
 		llmRequests = make([]domain.LlmRequest, 0, len(rows))
 		for _, row := range rows {
 			llmRequests = append(llmRequests, toLlmRequest(row))
+		}
+		return nil
+	})
+	return llmRequests, err
+}
+
+func (r *llmRequestRepo) GetRecent(ctx context.Context, orgID uuid.UUID) ([]domain.LlmRequest, error) {
+	var llmRequests []domain.LlmRequest
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		rows, err := q.GetRecentUsage(ctx, orgID)
+		if err != nil {
+			return err
+		}
+		llmRequests = make([]domain.LlmRequest, 0, len(rows))
+		for _, row := range rows {
+			llmRequests = append(llmRequests, domain.LlmRequest{
+				ID:             row.ID,
+				OrganizationID: orgID,
+				ProjectID:      row.ProjectID,
+				UserID:         row.UserID,
+				RequestID:      row.RequestID,
+				ProviderKind:   row.ProviderKind,
+				Model:          row.Model,
+				Status:         row.Status,
+				TotalTokens:    int32(row.TotalTokens),
+				LatencyMs:      int32(row.LatencyMs),
+				CostMicros:     row.CostMicros,
+				CreatedAt:      row.CreatedAt,
+				RequestStartedAt:  row.RequestStartedAt,
+				FirstTokenAt:      row.FirstTokenAt,
+				CompletedAt:       row.CompletedAt,
+				TimeToFirstTokenMs: row.TimeToFirstTokenMs,
+				TotalLatencyMs:    row.TotalLatencyMs,
+			})
+		}
+		return nil
+	})
+	return llmRequests, err
+}
+
+func (r *llmRequestRepo) GetRequests(ctx context.Context, orgID uuid.UUID, from, to time.Time, limit, offset int32) ([]domain.LlmRequest, error) {
+	var llmRequests []domain.LlmRequest
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		rows, err := q.GetUsageRequests(ctx, db.GetUsageRequestsParams{
+			OrganizationID: orgID,
+			FromTs:         from.UTC(),
+			ToTs:           to.UTC(),
+			LimitCount:     limit,
+			OffsetCount:    offset,
+		})
+		if err != nil {
+			return err
+		}
+		llmRequests = make([]domain.LlmRequest, 0, len(rows))
+		for _, row := range rows {
+			llmRequests = append(llmRequests, domain.LlmRequest{
+				ID:             row.ID,
+				OrganizationID: orgID,
+				ProjectID:      row.ProjectID,
+				UserID:         row.UserID,
+				RequestID:      row.RequestID,
+				ProviderKind:   row.ProviderKind,
+				Model:          row.Model,
+				Status:         row.Status,
+				TotalTokens:    int32(row.TotalTokens),
+				LatencyMs:      int32(row.LatencyMs),
+				CostMicros:     row.CostMicros,
+				CreatedAt:      row.CreatedAt,
+				RequestStartedAt:  row.RequestStartedAt,
+				FirstTokenAt:      row.FirstTokenAt,
+				CompletedAt:       row.CompletedAt,
+				TimeToFirstTokenMs: row.TimeToFirstTokenMs,
+				TotalLatencyMs:    row.TotalLatencyMs,
+			})
 		}
 		return nil
 	})
@@ -328,6 +407,181 @@ func (r *usageRollupRepo) Recompute(ctx context.Context, orgID uuid.UUID, from, 
 		}
 		return nil
 	})
+}
+
+func (r *usageRollupRepo) GetSummary(ctx context.Context, orgID uuid.UUID, from, to time.Time, projectID *uuid.UUID, model *string) (domain.UsageSummary, error) {
+	var summary domain.UsageSummary
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.GetUsageSummary(ctx, db.GetUsageSummaryParams{
+			OrganizationID: orgID,
+			FromTs:         from.UTC(),
+			ToTs:           to.UTC(),
+			ProjectID:      projectID,
+			Model:          model,
+		})
+		if err != nil {
+			return err
+		}
+		summary = domain.UsageSummary{
+			Requests:        row.TotalRequests,
+			InputTokens:     row.InputTokens,
+			OutputTokens:    row.OutputTokens,
+			CachedTokens:    row.CachedTokens,
+			TotalTokens:     row.TotalTokens,
+			TotalCostMicros: row.TotalCostMicros,
+		}
+		return nil
+	})
+	return summary, err
+}
+
+func (r *usageRollupRepo) GetTimeSeries(ctx context.Context, orgID uuid.UUID, from, to time.Time, projectID *uuid.UUID) ([]domain.UsageTimeSeriesPoint, error) {
+	var points []domain.UsageTimeSeriesPoint
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		rows, err := q.GetUsageTimeSeries(ctx, db.GetUsageTimeSeriesParams{
+			OrganizationID: orgID,
+			FromTs:         from.UTC(),
+			ToTs:           to.UTC(),
+			ProjectID:      projectID,
+		})
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			points = append(points, domain.UsageTimeSeriesPoint{
+				BucketStart: row.BucketStart,
+				Requests:    row.Requests,
+				TotalTokens: row.TotalTokens,
+				CostMicros:  row.CostMicros,
+			})
+		}
+		return nil
+	})
+	return points, err
+}
+
+func (r *usageRollupRepo) GetByProject(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByProject, error) {
+	var results []domain.UsageByProject
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		rows, err := q.GetUsageByProject(ctx, db.GetUsageByProjectParams{
+			OrganizationID: orgID,
+			FromTs:         from.UTC(),
+			ToTs:           to.UTC(),
+		})
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			results = append(results, domain.UsageByProject{
+				ProjectID:   row.ProjectID,
+				Requests:    row.Requests,
+				TotalTokens: row.TotalTokens,
+				CostMicros:  row.CostMicros,
+			})
+		}
+		return nil
+	})
+	return results, err
+}
+
+func (r *usageRollupRepo) GetByModel(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByModel, error) {
+	var results []domain.UsageByModel
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		rows, err := q.GetUsageByModel(ctx, db.GetUsageByModelParams{
+			OrganizationID: orgID,
+			FromTs:         from.UTC(),
+			ToTs:           to.UTC(),
+		})
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			results = append(results, domain.UsageByModel{
+				Model:       row.Model,
+				Requests:    row.Requests,
+				TotalTokens: row.TotalTokens,
+				CostMicros:  row.CostMicros,
+			})
+		}
+		return nil
+	})
+	return results, err
+}
+
+func (r *usageRollupRepo) GetByProvider(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByProvider, error) {
+	var results []domain.UsageByProvider
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		rows, err := q.GetUsageByProvider(ctx, db.GetUsageByProviderParams{
+			OrganizationID: orgID,
+			FromTs:         from.UTC(),
+			ToTs:           to.UTC(),
+		})
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			results = append(results, domain.UsageByProvider{
+				Provider:    row.Provider,
+				Requests:    row.Requests,
+				TotalTokens: row.TotalTokens,
+				CostMicros:  row.CostMicros,
+			})
+		}
+		return nil
+	})
+	return results, err
+}
+
+func (r *usageRollupRepo) GetByUser(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByUser, error) {
+	var results []domain.UsageByUser
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		rows, err := q.GetUsageByUser(ctx, db.GetUsageByUserParams{
+			OrganizationID: orgID,
+			FromTs:         from.UTC(),
+			ToTs:           to.UTC(),
+		})
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			var uid uuid.UUID
+			if row.UserID != nil {
+				uid = *row.UserID
+			}
+			results = append(results, domain.UsageByUser{
+				UserID:      uid,
+				Requests:    row.Requests,
+				TotalTokens: row.TotalTokens,
+				CostMicros:  row.CostMicros,
+			})
+		}
+		return nil
+	})
+	return results, err
+}
+
+func (r *usageRollupRepo) GetByTeam(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByTeam, error) {
+	var results []domain.UsageByTeam
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		rows, err := q.GetUsageByTeam(ctx, db.GetUsageByTeamParams{
+			OrganizationID: orgID,
+			FromTs:         from.UTC(),
+			ToTs:           to.UTC(),
+		})
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			results = append(results, domain.UsageByTeam{
+				TeamID:      row.TeamID,
+				Requests:    int64(row.Requests),
+				TotalTokens: row.TotalTokens,
+				CostMicros:  row.CostMicros,
+			})
+		}
+		return nil
+	})
+	return results, err
 }
 
 func floorHour(t time.Time) time.Time {
@@ -797,6 +1051,11 @@ func toLlmRequest(row db.LlmRequest) domain.LlmRequest {
 		LatencyMs:         row.LatencyMs,
 		CostMicros:        row.CostMicros,
 		CreatedAt:         row.CreatedAt,
+		RequestStartedAt:  row.RequestStartedAt,
+		FirstTokenAt:      row.FirstTokenAt,
+		CompletedAt:       row.CompletedAt,
+		TimeToFirstTokenMs: row.TimeToFirstTokenMs,
+		TotalLatencyMs:    row.TotalLatencyMs,
 	}
 }
 

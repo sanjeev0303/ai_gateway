@@ -11,6 +11,9 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/redis/go-redis/v9"
+
+	"ai-governance-saas/backend/internal/application/activity"
 	"ai-governance-saas/backend/internal/application/identity"
 	"ai-governance-saas/backend/internal/application/provider"
 	"ai-governance-saas/backend/internal/application/usage"
@@ -136,6 +139,20 @@ func RunGatewayV2(ctx context.Context) error {
 			log.Warn("eventbus disabled: usage events will not be recorded")
 		}
 
+		var redisClient *redis.Client
+		if cfg.Redis.Enabled {
+			redisClient = redis.NewClient(&redis.Options{
+				Addr:     cfg.Redis.Addr,
+				Password: cfg.Redis.Password,
+				DB:       cfg.Redis.DB,
+			})
+			reg.Register("redis", func(ctx context.Context) error {
+				return redisClient.Ping(ctx).Err()
+			})
+		}
+		
+		activityTracker := gatewayv2.NewActivityTracker(redisClient, log)
+		
 		// Build gateway v2 with all components
 		gatewayV2, err := gatewayv2.NewGateway(gatewayv2.GatewayDeps{
 			Config: gatewayv2.DefaultGatewayConfig(),
@@ -149,6 +166,7 @@ func RunGatewayV2(ctx context.Context) error {
 			PolicyRepo:          repositories.NewPolicyRepository(store),
 			RuleRepo:            repositories.NewPolicyRuleRepository(store),
 			EventBus:            bus.EventBus,
+			Activity:            activityTracker,
 		})
 		if err != nil {
 			return fmt.Errorf("gateway-v2: create gateway: %w", err)
@@ -272,10 +290,32 @@ func RunControlAPI(ctx context.Context) error {
 			Log:         log,
 		})
 
+		var redisClient *redis.Client
+		if cfg.Redis.Enabled {
+			redisClient = redis.NewClient(&redis.Options{
+				Addr:     cfg.Redis.Addr,
+				Password: cfg.Redis.Password,
+				DB:       cfg.Redis.DB,
+			})
+			reg.Register("redis", func(ctx context.Context) error {
+				return redisClient.Ping(ctx).Err()
+			})
+		}
+		
+		activitySvc := activity.NewService(redisClient, log)
+
+		usageSvc := usage.NewService(usage.ServiceDeps{
+			LlmRequests: repositories.NewLlmRequestRepository(store),
+			UsageEvents: repositories.NewUsageEventRepository(store),
+			Log:         log,
+		})
+
 		deps = controlapi.Deps{
 			Log:                 log,
 			Identity:            svc,
 			Providers:           providerSvc,
+			Usage:               usageSvc,
+			Activity:            activitySvc,
 			DevLoginEnabled:     cfg.Auth.DevLoginEnabled,
 			SessionCookieName:   cfg.Auth.SessionCookieName,
 			SessionCookieSecure: cfg.Auth.SessionCookieSecure,

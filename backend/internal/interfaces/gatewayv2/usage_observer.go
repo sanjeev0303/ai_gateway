@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"strings"
+	"time"
 )
 
 // StreamUsage is provider-reported token usage observed while forwarding a
@@ -17,6 +18,7 @@ type StreamUsage struct {
 	CacheReadTokens  int
 	CacheWriteTokens int
 	Reported         bool
+	FirstTokenAt     time.Time
 }
 
 const (
@@ -49,11 +51,16 @@ func newUsageObserver(contentType string) *usageObserver {
 type observingReader struct {
 	src io.Reader
 	obs *usageObserver
+	firstToken time.Time
 }
 
 func (r *observingReader) Read(p []byte) (int, error) {
 	n, err := r.src.Read(p)
 	if n > 0 {
+		if r.firstToken.IsZero() {
+			r.firstToken = time.Now().UTC()
+			r.obs.usage.FirstTokenAt = r.firstToken
+		}
 		r.obs.feed(p[:n])
 	}
 	return n, err

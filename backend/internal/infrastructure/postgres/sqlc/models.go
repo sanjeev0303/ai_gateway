@@ -279,24 +279,29 @@ type Invitation struct {
 }
 
 type LlmRequest struct {
-	ID                uuid.UUID  `json:"id"`
-	OrganizationID    uuid.UUID  `json:"organization_id"`
-	ProjectID         *uuid.UUID `json:"project_id"`
-	UserID            *uuid.UUID `json:"user_id"`
-	ApiCredentialID   *uuid.UUID `json:"api_credential_id"`
-	RequestID         string     `json:"request_id"`
-	ProviderRequestID *string    `json:"provider_request_id"`
-	ProviderKind      string     `json:"provider_kind"`
-	Model             string     `json:"model"`
-	Status            string     `json:"status"`
-	ErrorCode         *string    `json:"error_code"`
-	PromptTokens      int32      `json:"prompt_tokens"`
-	CompletionTokens  int32      `json:"completion_tokens"`
-	CachedInputTokens int32      `json:"cached_input_tokens"`
-	TotalTokens       int32      `json:"total_tokens"`
-	LatencyMs         int32      `json:"latency_ms"`
-	CostMicros        int64      `json:"cost_micros"`
-	CreatedAt         time.Time  `json:"created_at"`
+	ID                 uuid.UUID  `json:"id"`
+	OrganizationID     uuid.UUID  `json:"organization_id"`
+	ProjectID          *uuid.UUID `json:"project_id"`
+	UserID             *uuid.UUID `json:"user_id"`
+	ApiCredentialID    *uuid.UUID `json:"api_credential_id"`
+	RequestID          string     `json:"request_id"`
+	ProviderRequestID  *string    `json:"provider_request_id"`
+	ProviderKind       string     `json:"provider_kind"`
+	Model              string     `json:"model"`
+	Status             string     `json:"status"`
+	ErrorCode          *string    `json:"error_code"`
+	PromptTokens       int32      `json:"prompt_tokens"`
+	CompletionTokens   int32      `json:"completion_tokens"`
+	CachedInputTokens  int32      `json:"cached_input_tokens"`
+	TotalTokens        int32      `json:"total_tokens"`
+	LatencyMs          int32      `json:"latency_ms"`
+	CostMicros         int64      `json:"cost_micros"`
+	CreatedAt          time.Time  `json:"created_at"`
+	RequestStartedAt   *time.Time `json:"request_started_at"`
+	FirstTokenAt       *time.Time `json:"first_token_at"`
+	CompletedAt        *time.Time `json:"completed_at"`
+	TimeToFirstTokenMs *int32     `json:"time_to_first_token_ms"`
+	TotalLatencyMs     *int32     `json:"total_latency_ms"`
 }
 
 type Model struct {

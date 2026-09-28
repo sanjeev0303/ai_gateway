@@ -223,6 +223,11 @@ type UsageRecord struct {
 	LatencyMs        int64
 	StatusCode       int
 	Timestamp        time.Time
+	RequestStartedAt  time.Time
+	FirstTokenAt      *time.Time
+	CompletedAt       time.Time
+	TimeToFirstTokenMs *int32
+	TotalLatencyMs    *int32
 	ProviderMeta     map[string]any
 }
 

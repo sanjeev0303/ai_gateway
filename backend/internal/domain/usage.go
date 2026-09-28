@@ -59,6 +59,11 @@ type LlmRequest struct {
 	LatencyMs         int32
 	CostMicros        int64
 	CreatedAt         time.Time
+	RequestStartedAt  *time.Time
+	FirstTokenAt      *time.Time
+	CompletedAt       *time.Time
+	TimeToFirstTokenMs *int32
+	TotalLatencyMs    *int32
 }
 
 // UsageEvent is a granular, append-only accounting record.
@@ -86,6 +91,61 @@ type UsageRollup struct {
 	TotalTokens       int64
 	CostMicros        int64
 	UpdatedAt         time.Time
+}
+
+// UsageSummary is the aggregated output of a usage period.
+type UsageSummary struct {
+	Requests       int64
+	InputTokens    int64
+	OutputTokens   int64
+	CachedTokens   int64
+	TotalTokens    int64
+	TotalCostMicros int64
+}
+
+// UsageTimeSeriesPoint is one point in a usage graph.
+type UsageTimeSeriesPoint struct {
+	BucketStart time.Time
+	Requests    int64
+	TotalTokens int64
+	CostMicros  int64
+}
+
+// UsageByProject aggregates usage across projects.
+type UsageByProject struct {
+	ProjectID   uuid.UUID
+	Requests    int64
+	TotalTokens int64
+	CostMicros  int64
+}
+
+// UsageByModel aggregates usage by model.
+type UsageByModel struct {
+	Model       string
+	Requests    int64
+	TotalTokens int64
+	CostMicros  int64
+}
+
+type UsageByProvider struct {
+	Provider    string
+	Requests    int64
+	TotalTokens int64
+	CostMicros  int64
+}
+
+type UsageByUser struct {
+	UserID      uuid.UUID
+	Requests    int64
+	TotalTokens int64
+	CostMicros  int64
+}
+
+type UsageByTeam struct {
+	TeamID      uuid.UUID
+	Requests    int64
+	TotalTokens int64
+	CostMicros  int64
 }
 
 // Conversation is a user's persisted chat session.
@@ -149,6 +209,11 @@ type NewLlmRequest struct {
 	LatencyMs         int32
 	CostMicros        int64
 	CreatedAt         time.Time
+	RequestStartedAt  *time.Time
+	FirstTokenAt      *time.Time
+	CompletedAt       *time.Time
+	TimeToFirstTokenMs *int32
+	TotalLatencyMs    *int32
 }
 
 // NewUsageEvent carries the caller-supplied fields for recording a usage

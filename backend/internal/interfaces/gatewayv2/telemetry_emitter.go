@@ -302,6 +302,11 @@ func newLlmRequestFrom(record UsageRecord, providerKind, status string) domain.N
 		TotalTokens:       int32(record.InputTokens + record.OutputTokens),
 		LatencyMs:         int32(record.LatencyMs),
 		CreatedAt:         record.Timestamp.UTC(),
+		RequestStartedAt:  &record.RequestStartedAt,
+		FirstTokenAt:      record.FirstTokenAt,
+		CompletedAt:       &record.CompletedAt,
+		TimeToFirstTokenMs: record.TimeToFirstTokenMs,
+		TotalLatencyMs:    record.TotalLatencyMs,
 	}
 }
 

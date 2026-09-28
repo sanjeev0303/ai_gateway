@@ -19,6 +19,8 @@ import (
 	"ai-governance-saas/backend/internal/ports/secrets"
 
 	"github.com/google/uuid"
+	
+	"ai-governance-saas/backend/internal/domain"
 )
 
 var (
@@ -51,6 +53,7 @@ type Gateway struct {
 	providerRouter   ProviderRouter
 	streamProxy      StreamProxy
 	telemetry        TelemetryEmitter
+	activity         *ActivityTracker
 
 	// State
 	mu           sync.RWMutex
@@ -89,6 +92,7 @@ type GatewayDeps struct {
 	RateLimiter     RateLimiter
 	BudgetGuard     BudgetGuard
 	Telemetry       TelemetryEmitter
+	Activity        *ActivityTracker
 }
 
 // NewGateway creates a new gateway instance.
@@ -185,17 +189,32 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// upstream call, streams the response back, and writes the status itself —
 	// the gateway must never answer 200 merely because policy passed.
 	if result.Allowed && result.Context != nil {
+		userID := activityUserID(result.Context.Credential)
+		if g.activity != nil {
+			g.activity.Emit(domain.ActivityEvent{
+				RequestID:      reqID,
+				OrganizationID: result.Context.Credential.OrganizationID,
+				UserID:         userID,
+				TeamID:         result.Context.Credential.TeamID,
+				ProjectID:      result.Context.Credential.ProjectID,
+				Provider:       result.Context.Upstream.ProviderAccount.ProviderKind,
+				Model:          result.Context.InspectorHints.Model,
+				Status:         "pending",
+				StartedAt:      start,
+				CurrentState:   domain.ActivityStateActive,
+			})
+		}
+		
 		observed, err := g.streamProxy.Forward(r.Context(), w, r, result.Context.UpstreamURL, result.Context.UpstreamHeaders)
 		if err != nil {
 			g.logger.Error("stream proxy forward failed", "error", err)
 		}
-		g.emitTelemetry(r.Context(), reqID, result, time.Since(start).Milliseconds(), observed)
+		g.emitTelemetry(r.Context(), reqID, result, start, observed)
 		return
 	}
 
 	// Emit telemetry
-	latencyMs := time.Since(start).Milliseconds()
-	g.emitTelemetry(r.Context(), reqID, result, latencyMs, nil)
+	g.emitTelemetry(r.Context(), reqID, result, start, nil)
 
 	// Write response
 	g.writeResult(w, result)
@@ -442,27 +461,62 @@ func (g *Gateway) writeError(w http.ResponseWriter, status int, errType, message
 }
 
 // emitTelemetry emits usage and error telemetry.
-func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result PipelineResult, latencyMs int64, observed *StreamUsage) {
+func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result PipelineResult, start time.Time, observed *StreamUsage) {
+	completedAt := time.Now().UTC()
+	latencyMs := completedAt.Sub(start).Milliseconds()
+	startUTC := start.UTC()
+
+	var providerKind, model string
+	if result.Context != nil {
+		providerKind = result.Context.Upstream.ProviderAccount.ProviderKind
+		model = result.Context.InspectorHints.Model
+		
+		if g.activity != nil {
+			state := domain.ActivityStateCompleted
+			if result.StatusCode >= 400 {
+				state = domain.ActivityStateFailed
+			}
+			g.activity.Emit(domain.ActivityEvent{
+				RequestID:      reqID,
+				OrganizationID: result.Context.Credential.OrganizationID,
+				UserID:         activityUserID(result.Context.Credential),
+				TeamID:         result.Context.Credential.TeamID,
+				ProjectID:      result.Context.Credential.ProjectID,
+				Provider:       providerKind,
+				Model:          model,
+				Status:         result.ErrorType,
+				StartedAt:      startUTC,
+				CurrentState:   state,
+			})
+		}
+	}
+
 	if g.telemetry == nil {
 		return
 	}
 
 	if result.Allowed && result.Context != nil {
 		usage := UsageRecord{
-			RequestID:      reqID,
-			OrganizationID: result.Context.Credential.OrganizationID,
-			CredentialID:   result.Context.Credential.ID,
-			SubjectType:    result.Context.Credential.SubjectType,
-			SubjectID:      result.Context.Credential.SubjectID,
-			ProjectID:      result.Context.Credential.ProjectID,
-			TeamID:         result.Context.Credential.TeamID,
-			Model:          result.Context.InspectorHints.Model,
-			InputTokens:    result.Context.InspectorHints.EstimatedInputTokens,
-			OutputTokens:   result.Context.InspectorHints.EstimatedOutputTokens,
-			LatencyMs:      latencyMs,
-			StatusCode:     result.StatusCode,
-			Timestamp:      time.Now(),
+			RequestID:        reqID,
+			OrganizationID:   result.Context.Credential.OrganizationID,
+			CredentialID:     result.Context.Credential.ID,
+			SubjectType:      result.Context.Credential.SubjectType,
+			SubjectID:        result.Context.Credential.SubjectID,
+			ProjectID:        result.Context.Credential.ProjectID,
+			TeamID:           result.Context.Credential.TeamID,
+			Model:            result.Context.InspectorHints.Model,
+			InputTokens:      result.Context.InspectorHints.EstimatedInputTokens,
+			OutputTokens:     result.Context.InspectorHints.EstimatedOutputTokens,
+			LatencyMs:        latencyMs,
+			StatusCode:       result.StatusCode,
+			Timestamp:        completedAt,
+			RequestStartedAt: startUTC,
+			CompletedAt:      completedAt,
 		}
+		
+		totalLatencyMs := int32(latencyMs)
+		usage.TotalLatencyMs = &totalLatencyMs
+
 		// Provider-reported counts are authoritative; the inspector only
 		// estimates, so it is the fallback for responses carrying no usage.
 		if observed != nil {
@@ -471,6 +525,13 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 			usage.CacheReadTokens = observed.CacheReadTokens
 			usage.CacheWriteTokens = observed.CacheWriteTokens
 			usage.ProviderMeta = map[string]any{"provider": observed.Provider}
+			
+			if !observed.FirstTokenAt.IsZero() {
+				firstToken := observed.FirstTokenAt.UTC()
+				usage.FirstTokenAt = &firstToken
+				ttft := int32(firstToken.Sub(startUTC).Milliseconds())
+				usage.TimeToFirstTokenMs = &ttft
+			}
 		}
 		g.telemetry.EmitUsage(ctx, usage)
 	} else {
@@ -533,6 +594,13 @@ func (g *Gateway) Shutdown(gracePeriod time.Duration) error {
 	}
 
 	g.logger.Info("gateway shutdown complete")
+	return nil
+}
+
+func activityUserID(cred GatewayCredential) *uuid.UUID {
+	if cred.SubjectType == string(domain.SubjectTypeUser) {
+		return &cred.SubjectID
+	}
 	return nil
 }
 

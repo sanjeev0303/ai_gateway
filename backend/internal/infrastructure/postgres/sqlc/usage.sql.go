@@ -101,7 +101,7 @@ func (q *Queries) DeleteUsageMonthlyInWindow(ctx context.Context, arg DeleteUsag
 }
 
 const getLLMRequestByRequestID = `-- name: GetLLMRequestByRequestID :one
-SELECT id, organization_id, project_id, user_id, api_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at FROM llm_requests
+SELECT id, organization_id, project_id, user_id, api_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms FROM llm_requests
 WHERE organization_id = $1 AND request_id = $2
 `
 
@@ -132,8 +132,336 @@ func (q *Queries) GetLLMRequestByRequestID(ctx context.Context, arg GetLLMReques
 		&i.LatencyMs,
 		&i.CostMicros,
 		&i.CreatedAt,
+		&i.RequestStartedAt,
+		&i.FirstTokenAt,
+		&i.CompletedAt,
+		&i.TimeToFirstTokenMs,
+		&i.TotalLatencyMs,
 	)
 	return i, err
+}
+
+const getRecentUsage = `-- name: GetRecentUsage :many
+SELECT id, request_id, project_id, user_id, provider_kind, model, status, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms
+FROM llm_requests
+WHERE organization_id = $1
+ORDER BY created_at DESC
+LIMIT 50
+`
+
+type GetRecentUsageRow struct {
+	ID                 uuid.UUID  `json:"id"`
+	RequestID          string     `json:"request_id"`
+	ProjectID          *uuid.UUID `json:"project_id"`
+	UserID             *uuid.UUID `json:"user_id"`
+	ProviderKind       string     `json:"provider_kind"`
+	Model              string     `json:"model"`
+	Status             string     `json:"status"`
+	TotalTokens        int32      `json:"total_tokens"`
+	LatencyMs          int32      `json:"latency_ms"`
+	CostMicros         int64      `json:"cost_micros"`
+	CreatedAt          time.Time  `json:"created_at"`
+	RequestStartedAt   *time.Time `json:"request_started_at"`
+	FirstTokenAt       *time.Time `json:"first_token_at"`
+	CompletedAt        *time.Time `json:"completed_at"`
+	TimeToFirstTokenMs *int32     `json:"time_to_first_token_ms"`
+	TotalLatencyMs     *int32     `json:"total_latency_ms"`
+}
+
+func (q *Queries) GetRecentUsage(ctx context.Context, organizationID uuid.UUID) ([]GetRecentUsageRow, error) {
+	rows, err := q.db.Query(ctx, getRecentUsage, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetRecentUsageRow{}
+	for rows.Next() {
+		var i GetRecentUsageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RequestID,
+			&i.ProjectID,
+			&i.UserID,
+			&i.ProviderKind,
+			&i.Model,
+			&i.Status,
+			&i.TotalTokens,
+			&i.LatencyMs,
+			&i.CostMicros,
+			&i.CreatedAt,
+			&i.RequestStartedAt,
+			&i.FirstTokenAt,
+			&i.CompletedAt,
+			&i.TimeToFirstTokenMs,
+			&i.TotalLatencyMs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsageByModel = `-- name: GetUsageByModel :many
+SELECT model,
+       COALESCE(sum(requests), 0)::bigint as requests,
+       COALESCE(sum(total_tokens), 0)::bigint as total_tokens,
+       COALESCE(sum(cost_micros), 0)::bigint as cost_micros
+FROM usage_daily
+WHERE organization_id = $1
+  AND bucket_start >= $2
+  AND bucket_start < $3
+  AND model != ''
+GROUP BY model
+ORDER BY total_tokens DESC
+`
+
+type GetUsageByModelParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	FromTs         time.Time `json:"from_ts"`
+	ToTs           time.Time `json:"to_ts"`
+}
+
+type GetUsageByModelRow struct {
+	Model       string `json:"model"`
+	Requests    int64  `json:"requests"`
+	TotalTokens int64  `json:"total_tokens"`
+	CostMicros  int64  `json:"cost_micros"`
+}
+
+func (q *Queries) GetUsageByModel(ctx context.Context, arg GetUsageByModelParams) ([]GetUsageByModelRow, error) {
+	rows, err := q.db.Query(ctx, getUsageByModel, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUsageByModelRow{}
+	for rows.Next() {
+		var i GetUsageByModelRow
+		if err := rows.Scan(
+			&i.Model,
+			&i.Requests,
+			&i.TotalTokens,
+			&i.CostMicros,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsageByProject = `-- name: GetUsageByProject :many
+SELECT project_id,
+       COALESCE(sum(requests), 0)::bigint as requests,
+       COALESCE(sum(total_tokens), 0)::bigint as total_tokens,
+       COALESCE(sum(cost_micros), 0)::bigint as cost_micros
+FROM usage_daily
+WHERE organization_id = $1
+  AND bucket_start >= $2
+  AND bucket_start < $3
+  AND project_id IS NOT NULL
+GROUP BY project_id
+ORDER BY total_tokens DESC
+`
+
+type GetUsageByProjectParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	FromTs         time.Time `json:"from_ts"`
+	ToTs           time.Time `json:"to_ts"`
+}
+
+type GetUsageByProjectRow struct {
+	ProjectID   uuid.UUID `json:"project_id"`
+	Requests    int64     `json:"requests"`
+	TotalTokens int64     `json:"total_tokens"`
+	CostMicros  int64     `json:"cost_micros"`
+}
+
+func (q *Queries) GetUsageByProject(ctx context.Context, arg GetUsageByProjectParams) ([]GetUsageByProjectRow, error) {
+	rows, err := q.db.Query(ctx, getUsageByProject, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUsageByProjectRow{}
+	for rows.Next() {
+		var i GetUsageByProjectRow
+		if err := rows.Scan(
+			&i.ProjectID,
+			&i.Requests,
+			&i.TotalTokens,
+			&i.CostMicros,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsageByProvider = `-- name: GetUsageByProvider :many
+SELECT provider_kind as provider,
+       COUNT(*) as requests,
+       COALESCE(SUM(total_tokens), 0)::bigint as total_tokens,
+       COALESCE(SUM(cost_micros), 0)::bigint as cost_micros
+FROM llm_requests
+WHERE organization_id = $1
+  AND created_at >= $2
+  AND created_at < $3
+GROUP BY provider_kind
+ORDER BY total_tokens DESC
+`
+
+type GetUsageByProviderParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	FromTs         time.Time `json:"from_ts"`
+	ToTs           time.Time `json:"to_ts"`
+}
+
+type GetUsageByProviderRow struct {
+	Provider    string `json:"provider"`
+	Requests    int64  `json:"requests"`
+	TotalTokens int64  `json:"total_tokens"`
+	CostMicros  int64  `json:"cost_micros"`
+}
+
+func (q *Queries) GetUsageByProvider(ctx context.Context, arg GetUsageByProviderParams) ([]GetUsageByProviderRow, error) {
+	rows, err := q.db.Query(ctx, getUsageByProvider, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUsageByProviderRow{}
+	for rows.Next() {
+		var i GetUsageByProviderRow
+		if err := rows.Scan(
+			&i.Provider,
+			&i.Requests,
+			&i.TotalTokens,
+			&i.CostMicros,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsageByTeam = `-- name: GetUsageByTeam :many
+SELECT tm.team_id,
+       COUNT(r.id)::int as requests,
+       COALESCE(SUM(r.total_tokens), 0)::bigint as total_tokens,
+       COALESCE(SUM(r.cost_micros), 0)::bigint as cost_micros
+FROM llm_requests r
+JOIN team_members tm ON r.user_id = tm.user_id
+WHERE r.organization_id = $1
+  AND r.created_at >= $2
+  AND r.created_at < $3
+GROUP BY tm.team_id
+ORDER BY total_tokens DESC
+`
+
+type GetUsageByTeamParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	FromTs         time.Time `json:"from_ts"`
+	ToTs           time.Time `json:"to_ts"`
+}
+
+type GetUsageByTeamRow struct {
+	TeamID      uuid.UUID `json:"team_id"`
+	Requests    int32     `json:"requests"`
+	TotalTokens int64     `json:"total_tokens"`
+	CostMicros  int64     `json:"cost_micros"`
+}
+
+func (q *Queries) GetUsageByTeam(ctx context.Context, arg GetUsageByTeamParams) ([]GetUsageByTeamRow, error) {
+	rows, err := q.db.Query(ctx, getUsageByTeam, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUsageByTeamRow{}
+	for rows.Next() {
+		var i GetUsageByTeamRow
+		if err := rows.Scan(
+			&i.TeamID,
+			&i.Requests,
+			&i.TotalTokens,
+			&i.CostMicros,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsageByUser = `-- name: GetUsageByUser :many
+SELECT user_id,
+       COUNT(*) as requests,
+       COALESCE(SUM(total_tokens), 0)::bigint as total_tokens,
+       COALESCE(SUM(cost_micros), 0)::bigint as cost_micros
+FROM llm_requests
+WHERE organization_id = $1
+  AND created_at >= $2
+  AND created_at < $3
+  AND user_id IS NOT NULL
+GROUP BY user_id
+ORDER BY total_tokens DESC
+`
+
+type GetUsageByUserParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	FromTs         time.Time `json:"from_ts"`
+	ToTs           time.Time `json:"to_ts"`
+}
+
+type GetUsageByUserRow struct {
+	UserID      *uuid.UUID `json:"user_id"`
+	Requests    int64      `json:"requests"`
+	TotalTokens int64      `json:"total_tokens"`
+	CostMicros  int64      `json:"cost_micros"`
+}
+
+func (q *Queries) GetUsageByUser(ctx context.Context, arg GetUsageByUserParams) ([]GetUsageByUserRow, error) {
+	rows, err := q.db.Query(ctx, getUsageByUser, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUsageByUserRow{}
+	for rows.Next() {
+		var i GetUsageByUserRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Requests,
+			&i.TotalTokens,
+			&i.CostMicros,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getUsageEvent = `-- name: GetUsageEvent :one
@@ -163,8 +491,198 @@ func (q *Queries) GetUsageEvent(ctx context.Context, arg GetUsageEventParams) (U
 	return i, err
 }
 
+const getUsageRequests = `-- name: GetUsageRequests :many
+SELECT id, request_id, project_id, user_id, provider_kind, model, status, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms
+FROM llm_requests
+WHERE organization_id = $1
+  AND created_at >= $2
+  AND created_at < $3
+ORDER BY created_at DESC
+LIMIT $5 OFFSET $4
+`
+
+type GetUsageRequestsParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	FromTs         time.Time `json:"from_ts"`
+	ToTs           time.Time `json:"to_ts"`
+	OffsetCount    int32     `json:"offset_count"`
+	LimitCount     int32     `json:"limit_count"`
+}
+
+type GetUsageRequestsRow struct {
+	ID                 uuid.UUID  `json:"id"`
+	RequestID          string     `json:"request_id"`
+	ProjectID          *uuid.UUID `json:"project_id"`
+	UserID             *uuid.UUID `json:"user_id"`
+	ProviderKind       string     `json:"provider_kind"`
+	Model              string     `json:"model"`
+	Status             string     `json:"status"`
+	TotalTokens        int32      `json:"total_tokens"`
+	LatencyMs          int32      `json:"latency_ms"`
+	CostMicros         int64      `json:"cost_micros"`
+	CreatedAt          time.Time  `json:"created_at"`
+	RequestStartedAt   *time.Time `json:"request_started_at"`
+	FirstTokenAt       *time.Time `json:"first_token_at"`
+	CompletedAt        *time.Time `json:"completed_at"`
+	TimeToFirstTokenMs *int32     `json:"time_to_first_token_ms"`
+	TotalLatencyMs     *int32     `json:"total_latency_ms"`
+}
+
+func (q *Queries) GetUsageRequests(ctx context.Context, arg GetUsageRequestsParams) ([]GetUsageRequestsRow, error) {
+	rows, err := q.db.Query(ctx, getUsageRequests,
+		arg.OrganizationID,
+		arg.FromTs,
+		arg.ToTs,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUsageRequestsRow{}
+	for rows.Next() {
+		var i GetUsageRequestsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RequestID,
+			&i.ProjectID,
+			&i.UserID,
+			&i.ProviderKind,
+			&i.Model,
+			&i.Status,
+			&i.TotalTokens,
+			&i.LatencyMs,
+			&i.CostMicros,
+			&i.CreatedAt,
+			&i.RequestStartedAt,
+			&i.FirstTokenAt,
+			&i.CompletedAt,
+			&i.TimeToFirstTokenMs,
+			&i.TotalLatencyMs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsageSummary = `-- name: GetUsageSummary :one
+SELECT COALESCE(sum(requests), 0)::bigint as total_requests,
+       COALESCE(sum(prompt_tokens), 0)::bigint as input_tokens,
+       COALESCE(sum(completion_tokens), 0)::bigint as output_tokens,
+       COALESCE(sum(cached_input_tokens), 0)::bigint as cached_tokens,
+       COALESCE(sum(total_tokens), 0)::bigint as total_tokens,
+       COALESCE(sum(cost_micros), 0)::bigint as total_cost_micros
+FROM usage_daily
+WHERE organization_id = $1
+  AND bucket_start >= $2
+  AND bucket_start < $3
+  AND ($4::uuid IS NULL OR project_id = $4)
+  AND ($5::text IS NULL OR model = $5)
+`
+
+type GetUsageSummaryParams struct {
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	FromTs         time.Time  `json:"from_ts"`
+	ToTs           time.Time  `json:"to_ts"`
+	ProjectID      *uuid.UUID `json:"project_id"`
+	Model          *string    `json:"model"`
+}
+
+type GetUsageSummaryRow struct {
+	TotalRequests   int64 `json:"total_requests"`
+	InputTokens     int64 `json:"input_tokens"`
+	OutputTokens    int64 `json:"output_tokens"`
+	CachedTokens    int64 `json:"cached_tokens"`
+	TotalTokens     int64 `json:"total_tokens"`
+	TotalCostMicros int64 `json:"total_cost_micros"`
+}
+
+func (q *Queries) GetUsageSummary(ctx context.Context, arg GetUsageSummaryParams) (GetUsageSummaryRow, error) {
+	row := q.db.QueryRow(ctx, getUsageSummary,
+		arg.OrganizationID,
+		arg.FromTs,
+		arg.ToTs,
+		arg.ProjectID,
+		arg.Model,
+	)
+	var i GetUsageSummaryRow
+	err := row.Scan(
+		&i.TotalRequests,
+		&i.InputTokens,
+		&i.OutputTokens,
+		&i.CachedTokens,
+		&i.TotalTokens,
+		&i.TotalCostMicros,
+	)
+	return i, err
+}
+
+const getUsageTimeSeries = `-- name: GetUsageTimeSeries :many
+SELECT bucket_start,
+       COALESCE(sum(requests), 0)::bigint as requests,
+       COALESCE(sum(total_tokens), 0)::bigint as total_tokens,
+       COALESCE(sum(cost_micros), 0)::bigint as cost_micros
+FROM usage_daily
+WHERE organization_id = $1
+  AND bucket_start >= $2
+  AND bucket_start < $3
+  AND ($4::uuid IS NULL OR project_id = $4)
+GROUP BY bucket_start
+ORDER BY bucket_start ASC
+`
+
+type GetUsageTimeSeriesParams struct {
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	FromTs         time.Time  `json:"from_ts"`
+	ToTs           time.Time  `json:"to_ts"`
+	ProjectID      *uuid.UUID `json:"project_id"`
+}
+
+type GetUsageTimeSeriesRow struct {
+	BucketStart time.Time `json:"bucket_start"`
+	Requests    int64     `json:"requests"`
+	TotalTokens int64     `json:"total_tokens"`
+	CostMicros  int64     `json:"cost_micros"`
+}
+
+func (q *Queries) GetUsageTimeSeries(ctx context.Context, arg GetUsageTimeSeriesParams) ([]GetUsageTimeSeriesRow, error) {
+	rows, err := q.db.Query(ctx, getUsageTimeSeries,
+		arg.OrganizationID,
+		arg.FromTs,
+		arg.ToTs,
+		arg.ProjectID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUsageTimeSeriesRow{}
+	for rows.Next() {
+		var i GetUsageTimeSeriesRow
+		if err := rows.Scan(
+			&i.BucketStart,
+			&i.Requests,
+			&i.TotalTokens,
+			&i.CostMicros,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLLMRequests = `-- name: ListLLMRequests :many
-SELECT id, organization_id, project_id, user_id, api_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at FROM llm_requests
+SELECT id, organization_id, project_id, user_id, api_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms FROM llm_requests
 WHERE organization_id = $1 AND created_at >= $2 AND created_at < $3
 ORDER BY created_at DESC
 `
@@ -203,6 +721,11 @@ func (q *Queries) ListLLMRequests(ctx context.Context, arg ListLLMRequestsParams
 			&i.LatencyMs,
 			&i.CostMicros,
 			&i.CreatedAt,
+			&i.RequestStartedAt,
+			&i.FirstTokenAt,
+			&i.CompletedAt,
+			&i.TimeToFirstTokenMs,
+			&i.TotalLatencyMs,
 		); err != nil {
 			return nil, err
 		}
@@ -355,31 +878,38 @@ INSERT INTO llm_requests (
     organization_id, project_id, user_id, api_credential_id, request_id,
     provider_request_id, provider_kind, model, status, error_code,
     prompt_tokens, completion_tokens, cached_input_tokens, total_tokens,
-    latency_ms, cost_micros, created_at
+    latency_ms, cost_micros, created_at,
+    request_started_at, first_token_at, completed_at,
+    time_to_first_token_ms, total_latency_ms
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
 ON CONFLICT (organization_id, request_id) DO NOTHING
-RETURNING id, organization_id, project_id, user_id, api_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at
+RETURNING id, organization_id, project_id, user_id, api_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms
 `
 
 type RecordLLMRequestParams struct {
-	OrganizationID    uuid.UUID  `json:"organization_id"`
-	ProjectID         *uuid.UUID `json:"project_id"`
-	UserID            *uuid.UUID `json:"user_id"`
-	ApiCredentialID   *uuid.UUID `json:"api_credential_id"`
-	RequestID         string     `json:"request_id"`
-	ProviderRequestID *string    `json:"provider_request_id"`
-	ProviderKind      string     `json:"provider_kind"`
-	Model             string     `json:"model"`
-	Status            string     `json:"status"`
-	ErrorCode         *string    `json:"error_code"`
-	PromptTokens      int32      `json:"prompt_tokens"`
-	CompletionTokens  int32      `json:"completion_tokens"`
-	CachedInputTokens int32      `json:"cached_input_tokens"`
-	TotalTokens       int32      `json:"total_tokens"`
-	LatencyMs         int32      `json:"latency_ms"`
-	CostMicros        int64      `json:"cost_micros"`
-	CreatedAt         time.Time  `json:"created_at"`
+	OrganizationID     uuid.UUID  `json:"organization_id"`
+	ProjectID          *uuid.UUID `json:"project_id"`
+	UserID             *uuid.UUID `json:"user_id"`
+	ApiCredentialID    *uuid.UUID `json:"api_credential_id"`
+	RequestID          string     `json:"request_id"`
+	ProviderRequestID  *string    `json:"provider_request_id"`
+	ProviderKind       string     `json:"provider_kind"`
+	Model              string     `json:"model"`
+	Status             string     `json:"status"`
+	ErrorCode          *string    `json:"error_code"`
+	PromptTokens       int32      `json:"prompt_tokens"`
+	CompletionTokens   int32      `json:"completion_tokens"`
+	CachedInputTokens  int32      `json:"cached_input_tokens"`
+	TotalTokens        int32      `json:"total_tokens"`
+	LatencyMs          int32      `json:"latency_ms"`
+	CostMicros         int64      `json:"cost_micros"`
+	CreatedAt          time.Time  `json:"created_at"`
+	RequestStartedAt   *time.Time `json:"request_started_at"`
+	FirstTokenAt       *time.Time `json:"first_token_at"`
+	CompletedAt        *time.Time `json:"completed_at"`
+	TimeToFirstTokenMs *int32     `json:"time_to_first_token_ms"`
+	TotalLatencyMs     *int32     `json:"total_latency_ms"`
 }
 
 func (q *Queries) RecordLLMRequest(ctx context.Context, arg RecordLLMRequestParams) (LlmRequest, error) {
@@ -401,6 +931,11 @@ func (q *Queries) RecordLLMRequest(ctx context.Context, arg RecordLLMRequestPara
 		arg.LatencyMs,
 		arg.CostMicros,
 		arg.CreatedAt,
+		arg.RequestStartedAt,
+		arg.FirstTokenAt,
+		arg.CompletedAt,
+		arg.TimeToFirstTokenMs,
+		arg.TotalLatencyMs,
 	)
 	var i LlmRequest
 	err := row.Scan(
@@ -422,6 +957,11 @@ func (q *Queries) RecordLLMRequest(ctx context.Context, arg RecordLLMRequestPara
 		&i.LatencyMs,
 		&i.CostMicros,
 		&i.CreatedAt,
+		&i.RequestStartedAt,
+		&i.FirstTokenAt,
+		&i.CompletedAt,
+		&i.TimeToFirstTokenMs,
+		&i.TotalLatencyMs,
 	)
 	return i, err
 }

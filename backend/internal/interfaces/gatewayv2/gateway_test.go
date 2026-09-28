@@ -661,7 +661,8 @@ func TestEmitTelemetry_UsageOnAllowed(t *testing.T) {
 	cred := gatewayCredFixture()
 
 	res := g.executePipeline(context.Background(), pipelineRequest("key-1", "{}"), "req-1")
-	g.emitTelemetry(context.Background(), "req-1", res, 42, nil)
+	start := time.Now().Add(-42 * time.Millisecond)
+	g.emitTelemetry(context.Background(), "req-1", res, start, nil)
 
 	requireTrue(t, len(stubs.telemetry.usage) == 1, "want one usage record, got %d", len(stubs.telemetry.usage))
 	requireTrue(t, len(stubs.telemetry.errs) == 0, "no error record expected")
@@ -671,7 +672,7 @@ func TestEmitTelemetry_UsageOnAllowed(t *testing.T) {
 	requireTrue(t, u.CredentialID == cred.ID, "usage credential mismatch")
 	requireTrue(t, u.Model == "claude-sonnet-4-5", "usage model mismatch")
 	requireTrue(t, u.InputTokens == 1000 && u.OutputTokens == 2000, "usage token counts mismatch")
-	requireTrue(t, u.LatencyMs == 42, "usage latency mismatch")
+	requireTrue(t, u.LatencyMs >= 42, "usage latency mismatch")
 	requireTrue(t, u.StatusCode == http.StatusOK, "usage status mismatch")
 }
 
@@ -681,7 +682,8 @@ func TestEmitTelemetry_ErrorOnDenied(t *testing.T) {
 	stubs.rate.result = RateLimitResult{Allowed: false, Limit: 1000}
 
 	res := g.executePipeline(context.Background(), pipelineRequest("key-1", "{}"), "req-1")
-	g.emitTelemetry(context.Background(), "req-1", res, 7, nil)
+	start := time.Now().Add(-7 * time.Millisecond)
+	g.emitTelemetry(context.Background(), "req-1", res, start, nil)
 
 	requireTrue(t, len(stubs.telemetry.errs) == 1, "want one error record, got %d", len(stubs.telemetry.errs))
 	requireTrue(t, len(stubs.telemetry.usage) == 0, "no usage record expected")
@@ -697,7 +699,8 @@ func TestEmitTelemetry_NilEmitterNoPanic(t *testing.T) {
 	g, _ := newGatewayForPipeline()
 	g.telemetry = nil
 	res := g.executePipeline(context.Background(), pipelineRequest("key-1", "{}"), "req-1")
-	g.emitTelemetry(context.Background(), "req-1", res, 1, nil)
+	start := time.Now().Add(-1 * time.Millisecond)
+	g.emitTelemetry(context.Background(), "req-1", res, start, nil)
 	// No telemetry component: nothing to assert, just no panic.
 }
 

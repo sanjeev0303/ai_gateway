@@ -1,39 +1,122 @@
 import { SpecView } from "@/lib/spec";
 
+import { useEffect, useState } from "react";
+import type { ActivityEvent } from "@/lib/control-api";
+import { listActivity, subscribeToActivity } from "@/lib/control-api";
+
 export function LiveActivityBody() {
+  const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    listActivity()
+      .then((res) => {
+        if (mounted) {
+          setEvents(res.data || []);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (mounted) {
+          setError(err);
+          setLoading(false);
+        }
+      });
+
+    const unsubscribe = subscribeToActivity(
+      (event) => {
+        if (!mounted) return;
+        setEvents((prev) => {
+          if (event.current_state === "completed" || event.current_state === "failed") {
+            return prev.filter((e) => e.request_id !== event.request_id);
+          }
+          const idx = prev.findIndex((e) => e.request_id === event.request_id);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = event;
+            return next;
+          }
+          return [event, ...prev];
+        });
+      },
+      (err) => console.error("SSE Error:", err)
+    );
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, []);
+
+  if (loading) return <div className="p-8 text-center text-muted-foreground">Loading activity...</div>;
+  if (error) return <div className="p-8 text-destructive">{error.message}</div>;
+
   return (
-    <SpecView
-      blurb="Recent gateway activity, streamed over SSE. Rows appear when a request starts and settle when it completes, fails, or is blocked by policy."
-      needs={["GET /v1/requests/stream (SSE)", "GET /v1/requests"]}
-      groups={[
-        {
-          title: "Request states",
-          items: ["active", "streaming", "completed", "failed", "rate-limited", "blocked"],
-        },
-        {
-          title: "Filters",
-          items: ["user", "team", "project", "provider", "model", "status"],
-        },
-        {
-          title: "Request inspector",
-          items: [
-            "request ID",
-            "provider request ID",
-            "user",
-            "credential",
-            "project",
-            "provider",
-            "model",
-            "TTFT",
-            "total latency",
-            "usage",
-            "cost",
-            "policy decision",
-          ],
-        },
-      ]}
-      note="Privacy mode is not implemented, so no prompt or completion content is rendered here or in the request inspector. Only metadata is in scope for this view."
-    />
+    <div className="flex flex-col gap-6">
+      <div className="grid gap-6 md:grid-cols-4">
+        <div className="border border-line rounded-lg p-4 bg-surface shadow-sm">
+          <h3 className="text-sm font-medium text-muted-foreground mb-1">Active Requests</h3>
+          <p className="text-3xl font-bold">{events.length}</p>
+        </div>
+        <div className="border border-line rounded-lg p-4 bg-surface shadow-sm">
+          <h3 className="text-sm font-medium text-muted-foreground mb-1">Active Users</h3>
+          <p className="text-3xl font-bold">
+            {new Set(events.map((e) => e.user_id).filter(Boolean)).size}
+          </p>
+        </div>
+        <div className="border border-line rounded-lg p-4 bg-surface shadow-sm">
+          <h3 className="text-sm font-medium text-muted-foreground mb-1">Current Models</h3>
+          <p className="text-3xl font-bold">
+            {new Set(events.map((e) => e.model).filter(Boolean)).size}
+          </p>
+        </div>
+        <div className="border border-line rounded-lg p-4 bg-surface shadow-sm">
+          <h3 className="text-sm font-medium text-muted-foreground mb-1">Current Projects</h3>
+          <p className="text-3xl font-bold">
+            {new Set(events.map((e) => e.project_id).filter(Boolean)).size}
+          </p>
+        </div>
+      </div>
+
+      <div className="border border-line rounded-lg overflow-hidden">
+        {events.length === 0 ? (
+          <div className="p-12 text-center text-muted-foreground">
+            No active requests. The gateway is currently idle.
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-left">
+              <tr>
+                <th className="p-3 border-b border-line font-medium">Request ID</th>
+                <th className="p-3 border-b border-line font-medium">User</th>
+                <th className="p-3 border-b border-line font-medium">Provider</th>
+                <th className="p-3 border-b border-line font-medium">Model</th>
+                <th className="p-3 border-b border-line font-medium">Started</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {events.map((event) => (
+                <tr key={event.request_id} className="hover:bg-muted/30 transition-colors">
+                  <td className="p-3 font-mono text-xs">{event.request_id.split("-")[0]}...</td>
+                  <td className="p-3">{event.user_name || event.user_id || "Unknown"}</td>
+                  <td className="p-3">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                      {event.provider}
+                    </span>
+                  </td>
+                  <td className="p-3">{event.model}</td>
+                  <td className="p-3 tabular-nums text-muted-foreground">
+                    {new Date(event.started_at).toLocaleTimeString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
   );
 }
 

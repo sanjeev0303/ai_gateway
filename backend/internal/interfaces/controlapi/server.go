@@ -10,8 +10,10 @@ import (
 	"log/slog"
 	"net/http"
 
+	"ai-governance-saas/backend/internal/application/activity"
 	"ai-governance-saas/backend/internal/application/identity"
 	"ai-governance-saas/backend/internal/application/provider"
+	"ai-governance-saas/backend/internal/application/usage"
 	"ai-governance-saas/backend/internal/platform/health"
 	"ai-governance-saas/backend/internal/platform/httpx"
 )
@@ -23,6 +25,8 @@ type Deps struct {
 	Log             *slog.Logger
 	Identity        *identity.Service
 	Providers       *provider.Service
+	Usage           *usage.Service
+	Activity        *activity.Service
 	DevLoginEnabled bool
 
 	// SessionCookieName names the HttpOnly auth cookie for the web UI
@@ -43,6 +47,12 @@ func NewHandler(log *slog.Logger, mw *httpx.Middleware, reg *health.Registry, de
 		registerV1Routes(mux, deps)
 		if deps.Providers != nil {
 			registerProviderRoutes(mux, deps)
+		}
+		if deps.Usage != nil {
+			registerUsageRoutes(mux, deps)
+		}
+		if deps.Activity != nil {
+			registerActivityRoutes(mux, deps)
 		}
 	}
 	return mw.Chain(mux)

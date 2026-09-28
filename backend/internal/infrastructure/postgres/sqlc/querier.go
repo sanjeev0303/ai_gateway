@@ -58,11 +58,20 @@ type Querier interface {
 	GetProviderAccount(ctx context.Context, arg GetProviderAccountParams) (ProviderAccount, error)
 	GetProviderCredential(ctx context.Context, arg GetProviderCredentialParams) (ProviderCredential, error)
 	GetProviderHealth(ctx context.Context, providerKind string) (ProviderHealth, error)
+	GetRecentUsage(ctx context.Context, organizationID uuid.UUID) ([]GetRecentUsageRow, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (AuthRefreshToken, error)
 	GetServiceAccount(ctx context.Context, arg GetServiceAccountParams) (ServiceAccount, error)
 	GetSubscription(ctx context.Context, arg GetSubscriptionParams) (Subscription, error)
 	GetTeam(ctx context.Context, arg GetTeamParams) (Team, error)
+	GetUsageByModel(ctx context.Context, arg GetUsageByModelParams) ([]GetUsageByModelRow, error)
+	GetUsageByProject(ctx context.Context, arg GetUsageByProjectParams) ([]GetUsageByProjectRow, error)
+	GetUsageByProvider(ctx context.Context, arg GetUsageByProviderParams) ([]GetUsageByProviderRow, error)
+	GetUsageByTeam(ctx context.Context, arg GetUsageByTeamParams) ([]GetUsageByTeamRow, error)
+	GetUsageByUser(ctx context.Context, arg GetUsageByUserParams) ([]GetUsageByUserRow, error)
 	GetUsageEvent(ctx context.Context, arg GetUsageEventParams) (UsageEvent, error)
+	GetUsageRequests(ctx context.Context, arg GetUsageRequestsParams) ([]GetUsageRequestsRow, error)
+	GetUsageSummary(ctx context.Context, arg GetUsageSummaryParams) (GetUsageSummaryRow, error)
+	GetUsageTimeSeries(ctx context.Context, arg GetUsageTimeSeriesParams) ([]GetUsageTimeSeriesRow, error)
 	// The only read path that projects password_hash into a credential. Ordinary
 	// user reads may still select the column, but toUser maps them into
 	// domain.User, which has no digest field, so the hash cannot reach a DTO.

@@ -121,7 +121,7 @@ func TestEmitTelemetry_PrefersReportedOverEstimates(t *testing.T) {
 	g, stubs := newGatewayForPipeline()
 	res := g.executePipeline(context.Background(), pipelineRequest("key-1", "{}"), "req-1")
 
-	g.emitTelemetry(context.Background(), "req-1", res, 42, &StreamUsage{
+	g.emitTelemetry(context.Background(), "req-1", res, time.Now(), &StreamUsage{
 		Provider:         "anthropic",
 		InputTokens:      1200,
 		OutputTokens:     450,
@@ -141,7 +141,7 @@ func TestEmitTelemetry_FallsBackToEstimates(t *testing.T) {
 	g, stubs := newGatewayForPipeline()
 	res := g.executePipeline(context.Background(), pipelineRequest("key-1", "{}"), "req-1")
 
-	g.emitTelemetry(context.Background(), "req-1", res, 42, nil)
+	g.emitTelemetry(context.Background(), "req-1", res, time.Now(), nil)
 
 	u := stubs.telemetry.usage[0]
 	requireTrue(t, u.InputTokens == 1000 && u.OutputTokens == 2000, "estimates must be the fallback")

@@ -17,7 +17,7 @@ func enforcedPolicy(id string) domain.Policy {
 		ID:             mustUUIDs[0],
 		OrganizationID: mustUUIDs[0],
 		Name:           id,
-		Enforcement:    "enforced",
+		Enforcement:    domain.EnforcementActive, // "active" — matches DB CHECK constraint
 		Priority:       10,
 	}
 }
@@ -101,30 +101,30 @@ func TestPolicyResolver_HappyPath(t *testing.T) {
 	}
 }
 
-func TestPolicyResolver_NonEnforcedPolicyExcluded(t *testing.T) {
-	enforced := enforcedPolicy("enforced")
-	passive := enforcedPolicy("passive")
-	passive.Enforcement = "permissive"
+func TestPolicyResolver_NonActivePolicyExcluded(t *testing.T) {
+	active := enforcedPolicy("active-policy")
+	passive := enforcedPolicy("passive-policy")
+	passive.Enforcement = domain.EnforcementPermissive
 	passive.ID = mustUUIDs[1]
 	rules := map[uuid.UUID][]domain.PolicyRule{
-		enforced.ID: {rateLimitRule()},
-		passive.ID:  {budgetRule()},
+		active.ID:  {rateLimitRule()},
+		passive.ID: {budgetRule()},
 	}
-	tr := makePolicyResolver(t, []domain.Policy{enforced, passive}, rules)
+	tr := makePolicyResolver(t, []domain.Policy{active, passive}, rules)
 
 	snapshot, err := tr.GetSnapshot(context.Background(), mustUUIDs[0])
 	requireNoErr(t, err)
 
 	if len(snapshot.Rules) != 1 {
-		t.Fatalf("expected only enforced policy rules, got %d", len(snapshot.Rules))
+		t.Fatalf("expected only active-enforcement policy rules, got %d", len(snapshot.Rules))
 	}
 	if _, ok := snapshot.Budgets["org:budget"]; ok {
-		t.Fatal("expected budget rule of non-enforced policy to be excluded")
+		t.Fatal("expected budget rule of permissive policy to be excluded")
 	}
 }
 
 func TestPolicyResolver_DisabledRuleExcluded(t *testing.T) {
-	policy := enforcedPolicy("infer")
+	policy := enforcedPolicy("infer") // enforcement = "active"
 	disabled := rateLimitRule()
 	disabled.Enabled = false
 	rules := map[uuid.UUID][]domain.PolicyRule{
@@ -155,7 +155,7 @@ func TestPolicyResolver_EmptyOrg(t *testing.T) {
 }
 
 func TestPolicyResolver_CachesAndInvalidates(t *testing.T) {
-	policy := enforcedPolicy("infer")
+	policy := enforcedPolicy("infer") // enforcement = "active"
 	rulesByPolicy := map[uuid.UUID][]domain.PolicyRule{policy.ID: {rateLimitRule()}}
 
 	policyCalls := 0
@@ -194,7 +194,7 @@ func TestPolicyResolver_CachesAndInvalidates(t *testing.T) {
 }
 
 func TestPolicyResolver_MalformedRuleJSONNoPanic(t *testing.T) {
-	policy := enforcedPolicy("infer")
+	policy := enforcedPolicy("infer") // enforcement = "active"
 	rule := domain.PolicyRule{
 		ID:         mustUUIDs[1],
 		PolicyID:   mustUUIDs[0],
@@ -234,7 +234,7 @@ func TestPolicyResolver_RepoErrorPropagates(t *testing.T) {
 func TestPolicyResolver_RuleRepoErrorPropagates(t *testing.T) {
 	tr := NewPolicyResolver(
 		&stubPolicyRepo{listFn: func(context.Context, uuid.UUID) ([]domain.Policy, error) {
-			return []domain.Policy{enforcedPolicy("infer")}, nil
+			return []domain.Policy{enforcedPolicy("infer")}, nil // enforcement = "active"
 		}},
 		&stubPolicyRuleRepo{listFn: func(context.Context, uuid.UUID, uuid.UUID) ([]domain.PolicyRule, error) {
 			return nil, errStub

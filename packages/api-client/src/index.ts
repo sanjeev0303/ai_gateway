@@ -1,33 +1,32 @@
-import type { components } from "@ai-governance/contracts";
 
-export type HealthStatus = components["schemas"]["HealthStatus"];
-
-export interface ApiClient {
-  readonly livez: () => Promise<HealthStatus>;
-  readonly readyz: () => Promise<HealthStatus>;
-  readonly healthz: () => Promise<HealthStatus>;
-}
 
 export interface CreateApiClientOptions {
   readonly baseUrl: string;
 }
 
-const HEALTH_PATHS = ["/livez", "/readyz", "/healthz"] as const;
-
-export function createApiClient(options: CreateApiClientOptions): ApiClient {
-  const requestJson = async (path: (typeof HEALTH_PATHS)[number]): Promise<HealthStatus> => {
-    const response = await fetch(new URL(path, options.baseUrl));
-    if (!response.ok) {
-      throw new Error(`Health probe ${path} failed with HTTP ${response.status}`);
+export function createApiClient(options: CreateApiClientOptions) {
+  const requestJson = async (path: string, method: string = "GET", body?: any) => {
+    const init: RequestInit = {
+      method,
+    };
+    if (body) {
+      init.headers = { "Content-Type": "application/json" };
+      init.body = JSON.stringify(body);
     }
-    // Trusted boundary: the Go backend is the only producer of this JSON,
-    // and its shape is enforced by the generated OpenAPI types above.
-    return (await response.json()) as HealthStatus;
+    const response = await fetch(new URL(path, options.baseUrl), init);
+    if (!response.ok) {
+      throw new Error(`API ${method} ${path} failed with HTTP ${response.status}`);
+    }
+    if (response.status === 204) {
+        return undefined;
+    }
+    return await response.json();
   };
 
   return {
     livez: () => requestJson("/livez"),
     readyz: () => requestJson("/readyz"),
     healthz: () => requestJson("/healthz"),
+    request: requestJson,
   };
 }

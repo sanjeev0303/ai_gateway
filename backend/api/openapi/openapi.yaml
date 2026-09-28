@@ -1,110 +1,809 @@
 openapi: 3.0.3
 info:
   title: AI Governance API
-  description: |
-    Contract for the AI Governance control plane and data plane APIs.
-
-    This file is the source of truth for wire types: package :contracts
-    generates TypeScript types from it (packages/contracts), and the Go
-    backend implements these endpoints manually with the standard library
-    (docs/adr/0002-foundation-conventions.md). The contract currently
-    covers system/health endpoints only; business endpoints (tenants,
-    policies, credentials, audit, billing) are added as they are designed,
-    milestone by milestone — never speculatively.
+  description: Contract for the AI Governance control plane and data plane APIs.
   version: 0.1.0
-  contact:
-    name: AI Governance Platform Team
 servers:
-  - url: http://localhost:8080
-    description: Local control API / gateway
-tags:
-  - name: system
-    description: Liveness, readiness and health of a service instance
+- url: http://localhost:8080
 paths:
   /livez:
     get:
-      operationId: getLiveness
-      tags: [system]
-      summary: Liveness probe — true if the process is up
+      operationId: getLivez
       responses:
-        "200":
-          description: Process is alive
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HealthStatus"
+        '200':
+          description: ok
   /readyz:
     get:
-      operationId: getReadiness
-      tags: [system]
-      summary: Readiness probe — true if all registered dependency checks pass
+      operationId: getReadyz
       responses:
-        "200":
-          description: Service is ready to serve traffic
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HealthStatus"
-        "503":
-          description: One or more dependency checks failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HealthStatus"
+        '200':
+          description: ok
   /healthz:
     get:
-      operationId: getHealth
-      tags: [system]
-      summary: Aggregate health — current readiness plus per-check detail
+      operationId: getHealthz
       responses:
-        "200":
-          description: All checks passed
+        '200':
+          description: ok
+  /v1/activity:
+    get:
+      operationId: getv1activity
+      responses:
+        '200':
+          description: Success
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HealthStatus"
-        "503":
-          description: One or more checks failed
+                type: object
+  /v1/activity/active-users:
+    get:
+      operationId: getv1activityactiveusers
+      responses:
+        '200':
+          description: Success
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HealthStatus"
+                type: object
+  /v1/activity/active-requests:
+    get:
+      operationId: getv1activityactiverequests
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/activity/stream:
+    get:
+      operationId: getv1activitystream
+      responses:
+        '200':
+          description: Success
+          content:
+            text/event-stream:
+              schema:
+                type: string
+  /v1/auth/signup:
+    post:
+      operationId: postv1authsignup
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/auth/signin:
+    post:
+      operationId: postv1authsignin
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/auth/refresh:
+    post:
+      operationId: postv1authrefresh
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/auth/logout:
+    post:
+      operationId: postv1authlogout
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/auth/session:
+    get:
+      operationId: getv1authsession
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/auth/dev-login:
+    post:
+      operationId: postv1authdevlogin
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/members:
+    get:
+      operationId: getv1members
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/members/{userID}/role:
+    patch:
+      operationId: patchv1membersuserIDrole
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: userID
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/members/{userID}:
+    delete:
+      operationId: deletev1membersuserID
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: userID
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/invitations:
+    post:
+      operationId: postv1invitations
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+    get:
+      operationId: getv1invitations
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/invitations/accept:
+    post:
+      operationId: postv1invitationsaccept
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/invitations/{id}:
+    delete:
+      operationId: deletev1invitationsid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/projects:
+    post:
+      operationId: postv1projects
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+    get:
+      operationId: getv1projects
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/projects/{id}:
+    get:
+      operationId: getv1projectsid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/projects/{id}/members:
+    post:
+      operationId: postv1projectsidmembers
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getv1projectsidmembers
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/projects/{id}/members/{userID}:
+    delete:
+      operationId: deletev1projectsidmembersuserID
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: userID
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/teams:
+    post:
+      operationId: postv1teams
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+    get:
+      operationId: getv1teams
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/teams/{id}:
+    get:
+      operationId: getv1teamsid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/teams/{id}/members:
+    post:
+      operationId: postv1teamsidmembers
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getv1teamsidmembers
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/teams/{id}/members/{userID}:
+    delete:
+      operationId: deletev1teamsidmembersuserID
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: userID
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/service-accounts:
+    post:
+      operationId: postv1serviceaccounts
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+    get:
+      operationId: getv1serviceaccounts
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/service-accounts/{id}:
+    delete:
+      operationId: deletev1serviceaccountsid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/credentials:
+    post:
+      operationId: postv1credentials
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+    get:
+      operationId: getv1credentials
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/credentials/{id}:
+    delete:
+      operationId: deletev1credentialsid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/gateway-credentials:
+    post:
+      operationId: postv1gatewaycredentials
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+    get:
+      operationId: getv1gatewaycredentials
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/gateway-credentials/{id}:
+    get:
+      operationId: getv1gatewaycredentialsid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      operationId: deletev1gatewaycredentialsid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/gateway-credentials/{id}/rotate:
+    post:
+      operationId: postv1gatewaycredentialsidrotate
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/gateway-credentials/{id}/expire:
+    post:
+      operationId: postv1gatewaycredentialsidexpire
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/gateway-credentials/{id}/restore:
+    post:
+      operationId: postv1gatewaycredentialsidrestore
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/provider-accounts:
+    post:
+      operationId: postv1provideraccounts
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+    get:
+      operationId: getv1provideraccounts
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/provider-accounts/{id}:
+    get:
+      operationId: getv1provideraccountsid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/provider-accounts/{id}/credentials:
+    post:
+      operationId: postv1provideraccountsidcredentials
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/provider-credentials:
+    get:
+      operationId: getv1providercredentials
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/provider-credentials/{id}:
+    get:
+      operationId: getv1providercredentialsid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      operationId: deletev1providercredentialsid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/provider-credentials/{id}/rotate:
+    post:
+      operationId: postv1providercredentialsidrotate
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+  /v1/models:
+    get:
+      operationId: getv1models
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/models/sync:
+    post:
+      operationId: postv1modelssync
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/provider-credentials/validate:
+    post:
+      operationId: postv1providercredentialsvalidate
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/provider-health/check:
+    post:
+      operationId: postv1providerhealthcheck
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/provider-health:
+    get:
+      operationId: getv1providerhealth
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/usage/summary:
+    get:
+      operationId: getv1usagesummary
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/usage/timeseries:
+    get:
+      operationId: getv1usagetimeseries
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/usage/by-project:
+    get:
+      operationId: getv1usagebyproject
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/usage/by-model:
+    get:
+      operationId: getv1usagebymodel
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/usage/by-provider:
+    get:
+      operationId: getv1usagebyprovider
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/usage/by-user:
+    get:
+      operationId: getv1usagebyuser
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/usage/by-team:
+    get:
+      operationId: getv1usagebyteam
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/usage/recent:
+    get:
+      operationId: getv1usagerecent
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/usage/requests:
+    get:
+      operationId: getv1usagerequests
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
 components:
   schemas:
-    HealthStatus:
+    EmptyResponse:
       type: object
-      required: [status]
-      properties:
-        status:
-          type: string
-          enum: [ok, degraded]
-        checks:
-          type: object
-          additionalProperties:
-            type: string
-          description: Per-check name to outcome ("ok" or an error description)
-          example:
-            postgres: ok
-            redis: ok
-    ErrorEnvelope:
+    PaginatedResponse:
       type: object
-      description: Structured error returned by every API endpoint
-      required: [error]
-      properties:
-        error:
-          type: object
-          required: [code, message]
-          properties:
-            code:
-              type: string
-              description: Stable machine-readable error code, e.g. invalid_argument
-            message:
-              type: string
-              description: Human-readable description safe for end users
-            request_id:
-              type: string
-              description: Request ID echoed back for correlation with logs
-            details:
-              type: object
-              additionalProperties: true
-              description: Optional structured context (never secrets)

@@ -30,6 +30,8 @@ type LlmRequestRepository interface {
 	GetByRequestID(ctx context.Context, orgID uuid.UUID, requestID string) (domain.LlmRequest, error)
 	// List returns requests within the [from, to) window.
 	List(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.LlmRequest, error)
+	GetRecent(ctx context.Context, orgID uuid.UUID) ([]domain.LlmRequest, error)
+	GetRequests(ctx context.Context, orgID uuid.UUID, from, to time.Time, limit, offset int32) ([]domain.LlmRequest, error)
 }
 
 // UsageEventRepository records and reads the append-only usage ledger.
@@ -45,6 +47,13 @@ type UsageEventRepository interface {
 // organization from llm_requests over the half-open window [from, to).
 type UsageRollupRepository interface {
 	Recompute(ctx context.Context, orgID uuid.UUID, from, to time.Time) error
+	GetSummary(ctx context.Context, orgID uuid.UUID, from, to time.Time, projectID *uuid.UUID, model *string) (domain.UsageSummary, error)
+	GetTimeSeries(ctx context.Context, orgID uuid.UUID, from, to time.Time, projectID *uuid.UUID) ([]domain.UsageTimeSeriesPoint, error)
+	GetByProject(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByProject, error)
+	GetByModel(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByModel, error)
+	GetByProvider(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByProvider, error)
+	GetByUser(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByUser, error)
+	GetByTeam(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByTeam, error)
 }
 
 // IdempotencyRepository protects request deduplication.

@@ -8,8 +8,10 @@ import (
 
 	"github.com/google/uuid"
 
+	"ai-governance-saas/backend/internal/application/activity"
 	"ai-governance-saas/backend/internal/application/identity"
 	"ai-governance-saas/backend/internal/application/provider"
+	"ai-governance-saas/backend/internal/application/usage"
 	"ai-governance-saas/backend/internal/domain"
 	perrors "ai-governance-saas/backend/internal/platform/errors"
 	"ai-governance-saas/backend/internal/platform/httpx"
@@ -24,6 +26,8 @@ const maxBodyBytes = 1 << 20
 type api struct {
 	svc       *identity.Service
 	providers *provider.Service
+	usage     *usage.Service
+	activity  *activity.Service
 
 	sessionCookieName   string
 	sessionCookieSecure bool
@@ -36,6 +40,8 @@ func newAPI(deps Deps) *api {
 	return &api{
 		svc:                 deps.Identity,
 		providers:           deps.Providers,
+		usage:               deps.Usage,
+		activity:            deps.Activity,
 		sessionCookieName:   deps.SessionCookieName,
 		sessionCookieSecure: deps.SessionCookieSecure,
 		csrfEnabled:         deps.CSRFEnabled,

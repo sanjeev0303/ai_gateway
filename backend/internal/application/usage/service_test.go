@@ -46,6 +46,14 @@ func (f *fakeRollups) Recompute(_ context.Context, orgID uuid.UUID, from, to tim
 	return f.fail[orgID]
 }
 
+func (f *fakeRollups) GetByProvider(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByProvider, error) { return nil, nil }
+func (f *fakeRollups) GetByUser(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByUser, error) { return nil, nil }
+func (f *fakeRollups) GetByTeam(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByTeam, error) { return nil, nil }
+func (f *fakeRollups) GetByModel(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByModel, error) { return nil, nil }
+func (f *fakeRollups) GetByProject(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByProject, error) { return nil, nil }
+func (f *fakeRollups) GetTimeSeries(context.Context, uuid.UUID, time.Time, time.Time, *uuid.UUID) ([]domain.UsageTimeSeriesPoint, error) { return nil, nil }
+func (f *fakeRollups) GetSummary(context.Context, uuid.UUID, time.Time, time.Time, *uuid.UUID, *string) (domain.UsageSummary, error) { return domain.UsageSummary{}, nil }
+
 func TestRecomputeAll(t *testing.T) {
 	orgA, orgB, orgC := uuid.New(), uuid.New(), uuid.New()
 	from := time.Now().UTC().Add(-time.Hour)
@@ -124,6 +132,9 @@ func (f *fakeLlmRequests) GetByRequestID(context.Context, uuid.UUID, string) (do
 func (f *fakeLlmRequests) List(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.LlmRequest, error) {
 	return nil, nil
 }
+
+func (f *fakeLlmRequests) GetRecent(context.Context, uuid.UUID) ([]domain.LlmRequest, error) { return nil, nil }
+func (f *fakeLlmRequests) GetRequests(context.Context, uuid.UUID, time.Time, time.Time, int32, int32) ([]domain.LlmRequest, error) { return nil, nil }
 
 type fakeUsageEvents struct {
 	err    error

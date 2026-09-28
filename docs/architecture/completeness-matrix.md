@@ -10,6 +10,9 @@ working behavior · `absent` — not started
 **Baseline at time of writing:** `go build ./...` and `go vet ./...` clean;
 `go test -race -count=1 ./...` green across all 19 backend packages.
 
+**Post Prompt 01:** Policy enforcement bug fixed (`"enforced"` → `"active"` in `buildSnapshot`);
+`current-state.md` created; completeness matrix updated.
+
 ---
 
 ## 1. Platform foundations
@@ -75,7 +78,7 @@ working behavior · `absent` — not started
 | Tenant resolution | `done` | `tenant_resolver.go` |
 | Gateway-credential authentication | `done` | `authenticator.go` |
 | Credential cache | `done` | `credential_cache.go` |
-| Policy resolution | `partial` | `policy_resolver.go`, but no policy engine behind it (see §7) |
+| Policy resolution | `partial` | `policy_resolver.go`, `buildSnapshot` now correctly loads rules from policies with `enforcement='active'`. **Bug fixed in Prompt 01**: was filtering on `"enforced"` (never matched the DB CHECK constraint); no rules were ever loaded before this fix. Policy *engine* (CRUD authoring surface, hierarchy, compiler) still absent — see §7 |
 | Rate limiting | `partial` | `rate_limiter.go` in-process; no atomic/distributed backing |
 | Budget guard | `partial` | `budget_guard.go`; no ledger/settlement behind it |
 | Request inspection | `done` | `request_inspector.go`; 8 MiB bounded, rejects oversize |
