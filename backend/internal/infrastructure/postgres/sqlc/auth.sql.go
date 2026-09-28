@@ -64,9 +64,9 @@ SELECT id, email, display_name, status, created_at, updated_at, last_login_at, p
 WHERE lower(email) = lower($1)
 `
 
-// The ONLY read path that returns password_hash. Ordinary user reads
-// (GetUserByID, GetUserByEmail, ListOrgMembers) go through views that never
-// carry the credential, so the hash cannot ride along into a user DTO.
+// The only read path that projects password_hash into a credential. Ordinary
+// user reads may still select the column, but toUser maps them into
+// domain.User, which has no digest field, so the hash cannot reach a DTO.
 func (q *Queries) GetUserAuthByEmail(ctx context.Context, lower string) (User, error) {
 	row := q.db.QueryRow(ctx, getUserAuthByEmail, lower)
 	var i User

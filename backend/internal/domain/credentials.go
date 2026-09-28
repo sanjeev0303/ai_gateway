@@ -54,9 +54,9 @@ const (
 type GatewayCredentialStatus string
 
 const (
-	GatewayCredentialStatusActive   GatewayCredentialStatus = "active"
-	GatewayCredentialStatusRevoked  GatewayCredentialStatus = "revoked"
-	GatewayCredentialStatusExpired  GatewayCredentialStatus = "expired"
+	GatewayCredentialStatusActive  GatewayCredentialStatus = "active"
+	GatewayCredentialStatusRevoked GatewayCredentialStatus = "revoked"
+	GatewayCredentialStatusExpired GatewayCredentialStatus = "expired"
 )
 
 // APICredentialScope defines the permission scope for API credentials.
@@ -112,21 +112,21 @@ func IsValidGatewayCredentialScope(s GatewayCredentialScope) bool {
 // KeyPrefix is the first 7 chars after the "aigw_" prefix for identification.
 // KeyHash is the argon2id hash of the full raw key.
 type GatewayCredential struct {
-	ID              uuid.UUID
-	OrganizationID  uuid.UUID
-	Name            string
-	KeyPrefix       string
-	KeyHash         string
-	SubjectType     SubjectType
-	SubjectID       uuid.UUID
-	TeamID          *uuid.UUID
-	ProjectID       *uuid.UUID
-	Scopes          []GatewayCredentialScope
-	Status          GatewayCredentialStatus
-	ExpiresAt       *time.Time
-	LastUsedAt      *time.Time
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	Name           string
+	KeyPrefix      string
+	KeyHash        string
+	SubjectType    SubjectType
+	SubjectID      uuid.UUID
+	TeamID         *uuid.UUID
+	ProjectID      *uuid.UUID
+	Scopes         []GatewayCredentialScope
+	Status         GatewayCredentialStatus
+	ExpiresAt      *time.Time
+	LastUsedAt     *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 const (

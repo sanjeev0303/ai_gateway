@@ -9,21 +9,21 @@ import (
 
 // RateLimiterImpl implements a token bucket rate limiter with sliding window.
 type RateLimiterImpl struct {
-	mu      sync.RWMutex
-	buckets map[string]*tokenBucket
-	clock   func() time.Time
+	mu              sync.RWMutex
+	buckets         map[string]*tokenBucket
+	clock           func() time.Time
 	cleanupInterval time.Duration
-	stopCh  chan struct{}
+	stopCh          chan struct{}
 }
 
 type tokenBucket struct {
-	key           string
-	limit         int
-	window        time.Duration
-	tokens        float64
-	lastRefill    time.Time
-	refillRate    float64 // tokens per second
-	mu            sync.Mutex
+	key        string
+	limit      int
+	window     time.Duration
+	tokens     float64
+	lastRefill time.Time
+	refillRate float64 // tokens per second
+	mu         sync.Mutex
 }
 
 // NewRateLimiter creates a new rate limiter.
@@ -160,11 +160,11 @@ type SlidingWindowRateLimiter struct {
 }
 
 type slidingWindow struct {
-	key     string
-	limit   int
-	window  time.Duration
+	key      string
+	limit    int
+	window   time.Duration
 	requests []time.Time
-	mu      sync.Mutex
+	mu       sync.Mutex
 }
 
 // NewSlidingWindowRateLimiter creates a new sliding window rate limiter.

@@ -15,3 +15,7 @@ WHERE id = $1;
 -- name: GetOrganizationBySlug :one
 SELECT * FROM organizations
 WHERE slug = $1;
+
+-- name: ListAllOrganizationIDs :many
+SELECT id FROM organizations
+ORDER BY created_at;

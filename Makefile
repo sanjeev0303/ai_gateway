@@ -1,4 +1,4 @@
-.PHONY: build test vet lint tidy format generate db-migrate db-seed dev-up dev-down dev-seed dev-logs dev-gateway dev-control-api dev-worker check-boundaries
+.PHONY: build test vet lint tidy format generate db-migrate db-seed dev-up dev-down dev-seed dev-logs dev-gateway dev-gateway-v1 dev-control-api dev-worker check-boundaries
 
 # --- Go backend ---
 build:
@@ -50,7 +50,13 @@ dev-logs:
 	docker compose -f deploy/compose/docker-compose.yml logs -f
 
 # --- Run each process with its own listen port ---
+# gateway-v2 is the canonical data plane (ADR-5); dev-gateway starts it.
 dev-gateway:
+	cd backend && AIGW_SERVER_ADDR=:8080 go run ./cmd/gateway-v2
+
+# Deprecated: v1 data plane, frozen and not deployed (ADR-5). Kept for one
+# release as a rollback path; remove once no deployment references it.
+dev-gateway-v1:
 	cd backend && AIGW_SERVER_ADDR=:8080 go run ./cmd/gateway
 
 dev-control-api:

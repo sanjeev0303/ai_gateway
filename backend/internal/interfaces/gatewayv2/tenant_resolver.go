@@ -25,17 +25,17 @@ type TenantResolverImpl struct {
 
 // UpstreamCache caches resolved upstream connections.
 type UpstreamCache struct {
-	mu       sync.RWMutex
-	entries  map[uuid.UUID]*CachedUpstream
-	maxSize  int
-	ttl      time.Duration
-	clock    func() time.Time
+	mu      sync.RWMutex
+	entries map[uuid.UUID]*CachedUpstream
+	maxSize int
+	ttl     time.Duration
+	clock   func() time.Time
 }
 
 type CachedUpstream struct {
-	Upstream   ResolvedUpstream
-	ExpiresAt  time.Time
-	CreatedAt  time.Time
+	Upstream  ResolvedUpstream
+	ExpiresAt time.Time
+	CreatedAt time.Time
 }
 
 // NewTenantResolver creates a new tenant resolver.
@@ -76,7 +76,7 @@ func (t *TenantResolverImpl) ResolveUpstream(ctx context.Context, orgID uuid.UUI
 		return ResolvedUpstream{}, err
 	}
 
-// Cache the result
+	// Cache the result
 	t.cache.Set(orgID, upstream)
 
 	return upstream, nil
@@ -138,15 +138,15 @@ func (t *TenantResolverImpl) resolveFromDB(ctx context.Context, orgID uuid.UUID)
 			UpdatedAt:      account.UpdatedAt,
 		},
 		Credential: ProviderCredential{
-			ID:                 creds[0].ID,
-			OrganizationID:     creds[0].OrganizationID,
-			ProviderAccountID:  creds[0].ProviderAccountID,
-			SecretRef:          creds[0].SecretRef,
-			Fingerprint:        creds[0].Fingerprint,
-			Tail:               creds[0].Tail,
-			Status:             creds[0].Status,
-			CreatedAt:          creds[0].CreatedAt,
-			UpdatedAt:          creds[0].UpdatedAt,
+			ID:                creds[0].ID,
+			OrganizationID:    creds[0].OrganizationID,
+			ProviderAccountID: creds[0].ProviderAccountID,
+			SecretRef:         creds[0].SecretRef,
+			Fingerprint:       creds[0].Fingerprint,
+			Tail:              creds[0].Tail,
+			Status:            creds[0].Status,
+			CreatedAt:         creds[0].CreatedAt,
+			UpdatedAt:         creds[0].UpdatedAt,
 		},
 		UpstreamKey: upstreamKey,
 		BaseURL:     baseURL,

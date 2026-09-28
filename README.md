@@ -15,9 +15,14 @@ provider/models and enforces budgets and rate limits in the request path.
   force a universal schema on the wire.
 - **Usage accounting, schema first**: `usage_events` carries a unit, a quantity,
   and a unique key on `(organization_id, request_id, event_type)` that makes
-  ingest idempotent, plus hourly/daily/monthly rollup tables. Not wired up yet:
-  neither data plane writes usage events, and the async worker runs only health
-  probes. Retention windows and privacy modes are not implemented.
+  ingest idempotent, plus hourly/daily/monthly rollup tables. `gateway-v2`
+  parses provider-reported usage (Anthropic, OpenAI, Gemini) and persists
+  `llm_requests` + `usage_events` off the request path; re-ingesting a request
+  is idempotent. The async worker prices `llm_requests` from the price sheet
+  effective at request time, then rolls it up into hourly/daily/monthly buckets.
+  Not wired up yet: `gateway` (v1) still writes no usage events, there is no
+  control API for price sheets and no invoice settlement, and retention windows
+  and privacy modes are not implemented.
 - **Self-serve control plane**: a web app and REST API to manage tenants,
   policies, credentials, audit, and billing.
 
@@ -27,10 +32,10 @@ Six Go processes plus a web app, in one monorepo:
 
 | Process | Role |
 |---|---|
-| `backend/cmd/gateway` | Data plane: the hot-path proxy (auth → policy snapshot → rate/budget → forward → stream) |
-| `backend/cmd/gateway-v2` | Data plane v2: next-gen hot-path proxy (currently serves provider passthrough) |
-| `backend/cmd/control-api` | Control plane API: tenants, policies, credentials, audit, billing |
-| `backend/cmd/worker` | Async worker: health probes only, no jobs wired up yet |
+| `backend/cmd/gateway-v2` | **Canonical data plane**: the hot-path proxy (auth → policy snapshot → rate/budget → forward → stream) + usage accounting |
+| `backend/cmd/control-api` | Control plane API: tenants, providers, credentials, audit, billing |
+| `backend/cmd/worker` | Async worker: usage rollups, plus health probes |
+| `backend/cmd/gateway` | Data plane v1 — **frozen and not deployed** ([ADR-5](docs/adr/0005-gateway-v2-canonical.md)); kept one release as a rollback path |
 | `backend/cmd/migrate` | One-shot: applies DB migrations |
 | `backend/cmd/seed` | One-shot: applies migrations + seeds demo data |
 | `apps/web` | Next.js dashboard over the control API |
@@ -51,8 +56,18 @@ scripts/    Dev and ops helpers
 
 ## Status
 
-Scaffolded (M0). See [`docs/plan/milestones.md`](docs/plan/milestones.md) for
-the phased implementation plan and current milestone.
+Platform foundations, persistence, identity/tenants, the provider layer, and the
+gateway-v2 hot path are implemented and covered by a green `-race` suite.
+
+Not yet functional as a product: the async worker now prices and rolls up usage,
+but there is no control API for price sheets and nothing settles an invoice, so
+derived cost cannot actually be reached or billed yet; policy types and queries
+exist but there is no policy engine or API; and the OpenAPI spec documents only
+the health endpoints, not the 51 implemented `/v1` routes.
+
+[`docs/architecture/completeness-matrix.md`](docs/architecture/completeness-matrix.md)
+is the item-by-item inventory with evidence. See
+[`docs/plan/milestones.md`](docs/plan/milestones.md) for the phased plan.
 
 ## Development
 
@@ -81,8 +96,8 @@ profile, so it only runs when you explicitly ask (`make dev-seed`).
 | `postgres` | 5432 | control-plane DB (`ai_gateway`) |
 | `redis` | 6379 | reserved; consume once the Redis milestone lands |
 | `nats` | 4222 / 8222 | event bus; reserve until the eventbus milestone lands |
-| `gateway` | 8080 | data plane proxy |
-| `gateway-v2` | 8084 | data plane v2 |
+| `gateway` | 8080 | data plane v1 — **not started by default** (profile `legacy-v1`; [ADR-5](docs/adr/0005-gateway-v2-canonical.md)) |
+| `gateway-v2` | 8084 | **canonical data plane** — the provider gateway |
 | `control-api` | 8081 | control plane API |
 | `worker` | 8082 | async worker |
 | `web` | 3000 | Next.js dashboard |
@@ -100,7 +115,7 @@ Usage guide:
 - Dashboard: http://localhost:3000 (web talks to `control-api` on :8081).
 - Control plane API: http://localhost:8081 (OpenAPI under `/docs`; dev login
   enabled for local use).
-- Provider gateway: http://localhost:8080 (route provider traffic through it).
+- Provider gateway: http://localhost:8084 (`gateway-v2`; route provider traffic through it).
 - Remote envs / local runs can read [`backend/.env.example`](backend/.env.example)
   and export the same `AIGW_*` variables.
 

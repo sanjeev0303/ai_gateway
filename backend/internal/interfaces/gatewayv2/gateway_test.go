@@ -122,13 +122,15 @@ func (s *stubGatewayProviderRouter) Route(_ context.Context, _ ResolvedUpstream,
 type stubGatewayStreamProxy struct {
 	forwardCalled bool
 	closeCalled   bool
+	usage         *StreamUsage
+	err           error
 }
 
 var _ StreamProxy = (*stubGatewayStreamProxy)(nil)
 
-func (s *stubGatewayStreamProxy) Forward(context.Context, http.ResponseWriter, *http.Request, string, http.Header) error {
+func (s *stubGatewayStreamProxy) Forward(context.Context, http.ResponseWriter, *http.Request, string, http.Header) (*StreamUsage, error) {
 	s.forwardCalled = true
-	return nil
+	return s.usage, s.err
 }
 func (s *stubGatewayStreamProxy) Close(time.Duration) error {
 	s.closeCalled = true
@@ -161,14 +163,14 @@ func (s *stubGatewayTelemetry) Close() error {
 
 // gatewayStubs bundles the pipeline stubs for a test gateway.
 type gatewayStubs struct {
-	auth     *stubGatewayAuthenticator
-	tenant   *stubGatewayTenantResolver
-	policy   *stubGatewayPolicyResolver
-	rate     *stubGatewayRateLimiter
-	budget   *stubGatewayBudgetGuard
-	inspect  *stubGatewayRequestInspector
-	router   *stubGatewayProviderRouter
-	proxy    *stubGatewayStreamProxy
+	auth      *stubGatewayAuthenticator
+	tenant    *stubGatewayTenantResolver
+	policy    *stubGatewayPolicyResolver
+	rate      *stubGatewayRateLimiter
+	budget    *stubGatewayBudgetGuard
+	inspect   *stubGatewayRequestInspector
+	router    *stubGatewayProviderRouter
+	proxy     *stubGatewayStreamProxy
 	telemetry *stubGatewayTelemetry
 }
 
@@ -580,16 +582,17 @@ func TestServeHTTP_UnauthorizedWritesErrorJSON(t *testing.T) {
 	requireTrue(t, body.Error.Message == errStub.Error(), "error message mismatch")
 }
 
-// TestServeHTTP_AllowedWritesOK verifies the allowed path writes 200 with the
-// request id header.
-func TestServeHTTP_AllowedWritesOK(t *testing.T) {
-	g, _ := newGatewayForPipeline()
+// TestServeHTTP_AllowedForwardsUpstream verifies the allowed path actually hands
+// the request to the stream proxy using the routed upstream. Before the fix the
+// gateway wrote a bare 200 and never called Forward at all.
+func TestServeHTTP_AllowedForwardsUpstream(t *testing.T) {
+	g, stubs := newGatewayForPipeline()
 	req := pipelineRequest("key-1", `{"model":"claude-sonnet-4-5"}`)
 	rec := httptest.NewRecorder()
 
 	g.ServeHTTP(rec, req)
 
-	requireTrue(t, rec.Code == http.StatusOK, "want 200, got %d", rec.Code)
+	requireTrue(t, stubs.proxy.forwardCalled, "allowed request was never forwarded upstream")
 	requireTrue(t, rec.Header().Get("x-request-id") != "", "x-request-id not set")
 }
 
@@ -658,7 +661,7 @@ func TestEmitTelemetry_UsageOnAllowed(t *testing.T) {
 	cred := gatewayCredFixture()
 
 	res := g.executePipeline(context.Background(), pipelineRequest("key-1", "{}"), "req-1")
-	g.emitTelemetry(context.Background(), res, 42)
+	g.emitTelemetry(context.Background(), "req-1", res, 42, nil)
 
 	requireTrue(t, len(stubs.telemetry.usage) == 1, "want one usage record, got %d", len(stubs.telemetry.usage))
 	requireTrue(t, len(stubs.telemetry.errs) == 0, "no error record expected")
@@ -678,7 +681,7 @@ func TestEmitTelemetry_ErrorOnDenied(t *testing.T) {
 	stubs.rate.result = RateLimitResult{Allowed: false, Limit: 1000}
 
 	res := g.executePipeline(context.Background(), pipelineRequest("key-1", "{}"), "req-1")
-	g.emitTelemetry(context.Background(), res, 7)
+	g.emitTelemetry(context.Background(), "req-1", res, 7, nil)
 
 	requireTrue(t, len(stubs.telemetry.errs) == 1, "want one error record, got %d", len(stubs.telemetry.errs))
 	requireTrue(t, len(stubs.telemetry.usage) == 0, "no usage record expected")
@@ -694,7 +697,7 @@ func TestEmitTelemetry_NilEmitterNoPanic(t *testing.T) {
 	g, _ := newGatewayForPipeline()
 	g.telemetry = nil
 	res := g.executePipeline(context.Background(), pipelineRequest("key-1", "{}"), "req-1")
-	g.emitTelemetry(context.Background(), res, 1)
+	g.emitTelemetry(context.Background(), "req-1", res, 1, nil)
 	// No telemetry component: nothing to assert, just no panic.
 }
 

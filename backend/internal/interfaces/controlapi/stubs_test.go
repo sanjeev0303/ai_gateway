@@ -440,7 +440,8 @@ func (s *stubProviderCredentials) Revoke(ctx context.Context, orgID, id uuid.UUI
 
 type stubModels struct {
 	repositories.ModelRepository
-	list func(context.Context) ([]domain.Model, error)
+	list   func(context.Context) ([]domain.Model, error)
+	upsert func(context.Context, string, string, string) (domain.Model, error)
 }
 
 func (s *stubModels) List(ctx context.Context) ([]domain.Model, error) {
@@ -448,6 +449,13 @@ func (s *stubModels) List(ctx context.Context) ([]domain.Model, error) {
 		notConfigured("stubModels.List")
 	}
 	return s.list(ctx)
+}
+
+func (s *stubModels) Upsert(ctx context.Context, providerKind, modelSlug, displayName string) (domain.Model, error) {
+	if s.upsert == nil {
+		notConfigured("stubModels.Upsert")
+	}
+	return s.upsert(ctx, providerKind, modelSlug, displayName)
 }
 
 type stubProviderHealth struct {
@@ -511,6 +519,7 @@ type stubProvider struct {
 	providerclient.Provider
 	validateErr error
 	healthErr   error
+	listModels  func(context.Context, string) ([]providerclient.Model, error)
 }
 
 func (s *stubProvider) ValidateCredentials(_ context.Context, _ string) error {
@@ -519,6 +528,13 @@ func (s *stubProvider) ValidateCredentials(_ context.Context, _ string) error {
 
 func (s *stubProvider) HealthCheck(_ context.Context, _ string) error {
 	return s.healthErr
+}
+
+func (s *stubProvider) ListModels(ctx context.Context, apiKey string) ([]providerclient.Model, error) {
+	if s.listModels == nil {
+		notConfigured("stubProvider.ListModels")
+	}
+	return s.listModels(ctx, apiKey)
 }
 
 type stubIssuer struct {

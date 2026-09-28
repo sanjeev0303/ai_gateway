@@ -131,6 +131,10 @@ func NewLlmRequestRepository(store *postgres.Store) ports.LlmRequestRepository {
 
 func (r *llmRequestRepo) Record(ctx context.Context, orgID uuid.UUID, input domain.NewLlmRequest) (domain.LlmRequest, error) {
 	var llmRequest domain.LlmRequest
+	createdAt := input.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
 	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
 		row, err := q.RecordLLMRequest(ctx, db.RecordLLMRequestParams{
 			OrganizationID:    orgID,
@@ -149,6 +153,7 @@ func (r *llmRequestRepo) Record(ctx context.Context, orgID uuid.UUID, input doma
 			TotalTokens:       input.TotalTokens,
 			LatencyMs:         input.LatencyMs,
 			CostMicros:        input.CostMicros,
+			CreatedAt:         createdAt,
 		})
 		if err != nil {
 			return err
@@ -266,64 +271,87 @@ type usageRollupRepo struct {
 }
 
 // NewUsageRollupRepository returns a UsageRollupRepository backed by the
-// store. The tenant is taken from the rollup input so the bucket rows land in
-// the org-scoped tables.
+// store. Every rebuild runs in one tenant transaction, so a failure cannot
+// leave a window cleared but not refilled.
 func NewUsageRollupRepository(store *postgres.Store) ports.UsageRollupRepository {
 	return &usageRollupRepo{store: store}
 }
 
-func (r *usageRollupRepo) RollupHourly(ctx context.Context, input domain.NewUsageRollup) error {
-	return r.store.WithTenantTx(ctx, input.OrganizationID, func(q *db.Queries) error {
-		_, err := q.RollupUsageHourly(ctx, db.RollupUsageHourlyParams{
-			OrganizationID:    input.OrganizationID,
-			ProjectID:         input.ProjectID,
-			Model:             input.Model,
-			BucketStart:       input.BucketStart,
-			Requests:          input.Requests,
-			PromptTokens:      input.PromptTokens,
-			CompletionTokens:  input.CompletionTokens,
-			CachedInputTokens: input.CachedInputTokens,
-			TotalTokens:       input.TotalTokens,
-			CostMicros:        input.CostMicros,
-		})
-		return err
+func (r *usageRollupRepo) Recompute(ctx context.Context, orgID uuid.UUID, from, to time.Time) error {
+	from, to = from.UTC(), to.UTC()
+	hourFrom, hourTo := floorHour(from), nextHour(to)
+	dayFrom, dayTo := floorDay(from), nextDay(to)
+	monthFrom, monthTo := floorMonth(from), nextMonth(to)
+
+	return r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		steps := []func(context.Context) error{
+			func(c context.Context) error {
+				return q.BackfillLLMRequestCost(c, db.BackfillLLMRequestCostParams{
+					OrganizationID: orgID, FromTs: monthFrom, ToTs: monthTo,
+				})
+			},
+			func(c context.Context) error {
+				return q.DeleteUsageHourlyInWindow(c, db.DeleteUsageHourlyInWindowParams{
+					OrganizationID: orgID, FromTs: hourFrom, ToTs: hourTo,
+				})
+			},
+			func(c context.Context) error {
+				return q.DeleteUsageDailyInWindow(c, db.DeleteUsageDailyInWindowParams{
+					OrganizationID: orgID, FromTs: dayFrom, ToTs: dayTo,
+				})
+			},
+			func(c context.Context) error {
+				return q.DeleteUsageMonthlyInWindow(c, db.DeleteUsageMonthlyInWindowParams{
+					OrganizationID: orgID, FromTs: monthFrom, ToTs: monthTo,
+				})
+			},
+			func(c context.Context) error {
+				return q.RecomputeUsageHourly(c, db.RecomputeUsageHourlyParams{
+					OrganizationID: orgID, FromTs: hourFrom, ToTs: hourTo,
+				})
+			},
+			func(c context.Context) error {
+				return q.RecomputeUsageDaily(c, db.RecomputeUsageDailyParams{
+					OrganizationID: orgID, FromTs: dayFrom, ToTs: dayTo,
+				})
+			},
+			func(c context.Context) error {
+				return q.RecomputeUsageMonthly(c, db.RecomputeUsageMonthlyParams{
+					OrganizationID: orgID, FromTs: monthFrom, ToTs: monthTo,
+				})
+			},
+		}
+		for _, step := range steps {
+			if err := step(ctx); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
-func (r *usageRollupRepo) RollupDaily(ctx context.Context, input domain.NewUsageRollup) error {
-	return r.store.WithTenantTx(ctx, input.OrganizationID, func(q *db.Queries) error {
-		_, err := q.RollupUsageDaily(ctx, db.RollupUsageDailyParams{
-			OrganizationID:    input.OrganizationID,
-			ProjectID:         input.ProjectID,
-			Model:             input.Model,
-			BucketStart:       input.BucketStart,
-			Requests:          input.Requests,
-			PromptTokens:      input.PromptTokens,
-			CompletionTokens:  input.CompletionTokens,
-			CachedInputTokens: input.CachedInputTokens,
-			TotalTokens:       input.TotalTokens,
-			CostMicros:        input.CostMicros,
-		})
-		return err
-	})
+func floorHour(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, time.UTC)
 }
 
-func (r *usageRollupRepo) RollupMonthly(ctx context.Context, input domain.NewUsageRollup) error {
-	return r.store.WithTenantTx(ctx, input.OrganizationID, func(q *db.Queries) error {
-		_, err := q.RollupUsageMonthly(ctx, db.RollupUsageMonthlyParams{
-			OrganizationID:    input.OrganizationID,
-			ProjectID:         input.ProjectID,
-			Model:             input.Model,
-			BucketStart:       input.BucketStart,
-			Requests:          input.Requests,
-			PromptTokens:      input.PromptTokens,
-			CompletionTokens:  input.CompletionTokens,
-			CachedInputTokens: input.CachedInputTokens,
-			TotalTokens:       input.TotalTokens,
-			CostMicros:        input.CostMicros,
-		})
-		return err
-	})
+func nextHour(t time.Time) time.Time {
+	return floorHour(t).Add(time.Hour)
+}
+
+func floorDay(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+func nextDay(t time.Time) time.Time {
+	return floorDay(t).AddDate(0, 0, 1)
+}
+
+func floorMonth(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+}
+
+func nextMonth(t time.Time) time.Time {
+	return floorMonth(t).AddDate(0, 1, 0)
 }
 
 type idempotencyRepo struct {

@@ -9,11 +9,18 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 
 	"ai-governance-saas/backend/internal/application/identity"
+	"ai-governance-saas/backend/internal/application/provider"
+	"ai-governance-saas/backend/internal/application/usage"
+	"ai-governance-saas/backend/internal/domain"
 	"ai-governance-saas/backend/internal/infrastructure/auth"
 	"ai-governance-saas/backend/internal/infrastructure/postgres"
 	"ai-governance-saas/backend/internal/infrastructure/postgres/repositories"
+	"ai-governance-saas/backend/internal/infrastructure/provider/anthropic"
+	"ai-governance-saas/backend/internal/infrastructure/provider/gemini"
+	"ai-governance-saas/backend/internal/infrastructure/provider/openai"
 	"ai-governance-saas/backend/internal/infrastructure/secrets"
 	"ai-governance-saas/backend/internal/interfaces/controlapi"
 	"ai-governance-saas/backend/internal/interfaces/gateway"
@@ -23,6 +30,7 @@ import (
 	"ai-governance-saas/backend/internal/platform/health"
 	"ai-governance-saas/backend/internal/platform/httpx"
 	"ai-governance-saas/backend/internal/platform/logging"
+	providerclient "ai-governance-saas/backend/internal/ports/provider"
 )
 
 // RunGateway starts the data-plane HTTP server and blocks until ctx is
@@ -83,6 +91,9 @@ func RunGateway(ctx context.Context) error {
 // RunGatewayV2 starts the latency-sensitive data-plane HTTP server (v2) and blocks
 // until ctx is cancelled (graceful shutdown) or the server fails.
 func RunGatewayV2(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("gateway-v2: %w", err)
@@ -90,6 +101,7 @@ func RunGatewayV2(ctx context.Context) error {
 	log := logging.New(cfg.Observability)
 	log.Info("starting process", "process", "gateway-v2", "addr", cfg.Server.Addr)
 
+	var jobs sync.WaitGroup
 	reg := health.NewRegistry()
 
 	var deps gatewayv2.Deps
@@ -113,6 +125,17 @@ func RunGatewayV2(ctx context.Context) error {
 			return fmt.Errorf("gateway-v2: secrets store: %w", err)
 		}
 
+		var bus usageBus
+		if cfg.Eventbus.Enabled {
+			bus, err = newUsageBus(ctx, &cfg.Eventbus, log)
+			if err != nil {
+				return fmt.Errorf("gateway-v2: %w", err)
+			}
+			defer bus.Close()
+		} else {
+			log.Warn("eventbus disabled: usage events will not be recorded")
+		}
+
 		// Build gateway v2 with all components
 		gatewayV2, err := gatewayv2.NewGateway(gatewayv2.GatewayDeps{
 			Config: gatewayv2.DefaultGatewayConfig(),
@@ -125,9 +148,23 @@ func RunGatewayV2(ctx context.Context) error {
 			Secrets:             secretStore,
 			PolicyRepo:          repositories.NewPolicyRepository(store),
 			RuleRepo:            repositories.NewPolicyRuleRepository(store),
+			EventBus:            bus.EventBus,
 		})
 		if err != nil {
 			return fmt.Errorf("gateway-v2: create gateway: %w", err)
+		}
+
+		if bus.inProcess {
+			usageSvc := usage.NewService(usage.ServiceDeps{
+				LlmRequests: repositories.NewLlmRequestRepository(store),
+				UsageEvents: repositories.NewUsageEventRepository(store),
+				Log:         log,
+			})
+			jobs.Add(1)
+			go func() {
+				defer jobs.Done()
+				worker.RunUsageConsumer(ctx, bus.EventBus, usageSvc, log)
+			}()
 		}
 
 		if err := gatewayV2.Start(); err != nil {
@@ -143,7 +180,10 @@ func RunGatewayV2(ctx context.Context) error {
 
 	// The gateway is the streaming data plane: no per-request deadline.
 	h := gatewayv2.NewHandler(log, newGatewayMiddleware(log, cfg), reg, deps)
-	return serveHTTP(ctx, cfg, h, "gateway-v2")
+	err = serveHTTP(ctx, cfg, h, "gateway-v2")
+	cancel()
+	jobs.Wait()
+	return err
 }
 
 // RunControlAPI starts the control-plane API server and blocks until ctx is
@@ -196,6 +236,8 @@ func RunControlAPI(ctx context.Context) error {
 			Credentials: repositories.NewAPICredentialRepository(store),
 			Audits:      repositories.NewAuditLogRepository(store),
 
+			GatewayCredentials: repositories.NewGatewayCredentialRepository(store),
+
 			Auth:            repositories.NewAuthRepository(store),
 			RefreshTokens:   repositories.NewRefreshTokenRepository(store),
 			Passwords:       auth.NewPBKDF2PasswordHasher(0),
@@ -207,9 +249,33 @@ func RunControlAPI(ctx context.Context) error {
 			Log:      log,
 		})
 
+		secretStore, err := secrets.New(secrets.Options{
+			Provider:  cfg.Secrets.Provider,
+			File:      cfg.Secrets.File,
+			Key:       cfg.Secrets.Key,
+			URL:       cfg.Secrets.URL,
+			Token:     cfg.Secrets.Token,
+			MountPath: cfg.Secrets.MountPath,
+		})
+		if err != nil {
+			return fmt.Errorf("control-api: secrets store: %w", err)
+		}
+
+		providerSvc := provider.NewService(provider.ServiceDeps{
+			Accounts:    repositories.NewProviderAccountRepository(store),
+			Credentials: repositories.NewProviderCredentialRepository(store),
+			Models:      repositories.NewModelRepository(store),
+			Health:      repositories.NewProviderHealthRepository(store),
+			Audits:      repositories.NewAuditLogRepository(store),
+			Secrets:     secretStore,
+			Providers:   providerAdapters(),
+			Log:         log,
+		})
+
 		deps = controlapi.Deps{
 			Log:                 log,
 			Identity:            svc,
+			Providers:           providerSvc,
 			DevLoginEnabled:     cfg.Auth.DevLoginEnabled,
 			SessionCookieName:   cfg.Auth.SessionCookieName,
 			SessionCookieSecure: cfg.Auth.SessionCookieSecure,
@@ -221,9 +287,25 @@ func RunControlAPI(ctx context.Context) error {
 	return serveHTTP(ctx, cfg, h, "control-api")
 }
 
+// providerAdapters returns the upstream client for every provider kind the
+// control plane can validate credentials and health-check against. Keys must be
+// domain.ProviderKind* values because Service.CreateCredential dispatches on
+// that same key. Kinds absent here are rejected at credential-create time
+// rather than validated against the wrong upstream.
+func providerAdapters() map[string]providerclient.Provider {
+	return map[string]providerclient.Provider{
+		domain.ProviderKindAnthropic: anthropic.NewProviderAdapter(),
+		domain.ProviderKindOpenAI:    openai.NewProviderAdapter(),
+		domain.ProviderKindGemini:    gemini.NewProviderAdapter(),
+	}
+}
+
 // RunWorker starts the async worker (health listener only for now) and blocks
 // until ctx is cancelled (graceful shutdown) or the server fails.
 func RunWorker(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("worker: %w", err)
@@ -231,9 +313,53 @@ func RunWorker(ctx context.Context) error {
 	log := logging.New(cfg.Observability)
 	log.Info("starting process", "process", "worker", "addr", cfg.Server.Addr)
 
+	var jobs sync.WaitGroup
 	reg := health.NewRegistry()
+	if cfg.Database.Enabled {
+		store, err := postgres.NewStore(ctx, cfg.Database.URL)
+		if err != nil {
+			return fmt.Errorf("worker: connect database: %w", err)
+		}
+		defer store.Close()
+
+		reg.Register("postgres", store.Pool().Ping)
+
+		rollups := usage.NewService(usage.ServiceDeps{
+			Orgs:        repositories.NewOrganizationRepository(store),
+			Rollups:     repositories.NewUsageRollupRepository(store),
+			LlmRequests: repositories.NewLlmRequestRepository(store),
+			UsageEvents: repositories.NewUsageEventRepository(store),
+			Log:         log,
+		})
+		jobs.Add(1)
+		go func() {
+			defer jobs.Done()
+			worker.RunRollup(ctx, rollups, log)
+		}()
+
+		// A single-process bus is already consumed beside its publisher in the
+		// data plane, so the worker only subscribes on a shared transport.
+		if cfg.Eventbus.Enabled {
+			bus, err := newUsageBus(ctx, &cfg.Eventbus, log)
+			if err != nil {
+				return fmt.Errorf("worker: %w", err)
+			}
+			defer bus.Close()
+			if !bus.inProcess {
+				jobs.Add(1)
+				go func() {
+					defer jobs.Done()
+					worker.RunUsageConsumer(ctx, bus.EventBus, rollups, log)
+				}()
+			}
+		}
+	}
+
 	h := worker.NewHandler(log, newMiddleware(log, cfg), reg)
-	return serveHTTP(ctx, cfg, h, "worker")
+	err = serveHTTP(ctx, cfg, h, "worker")
+	cancel()
+	jobs.Wait()
+	return err
 }
 
 func newMiddleware(log *slog.Logger, cfg *config.Config) *httpx.Middleware {

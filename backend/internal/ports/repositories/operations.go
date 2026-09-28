@@ -41,12 +41,10 @@ type UsageEventRepository interface {
 	ListByRequest(ctx context.Context, orgID uuid.UUID, requestID string) ([]domain.UsageEvent, error)
 }
 
-// UsageRollupRepository accumulates deltas into the hourly/daily/monthly
-// bucket tables. Writes never conflict; errors report failures only.
+// UsageRollupRepository rebuilds the hourly/daily/monthly bucket tables for one
+// organization from llm_requests over the half-open window [from, to).
 type UsageRollupRepository interface {
-	RollupHourly(ctx context.Context, input domain.NewUsageRollup) error
-	RollupDaily(ctx context.Context, input domain.NewUsageRollup) error
-	RollupMonthly(ctx context.Context, input domain.NewUsageRollup) error
+	Recompute(ctx context.Context, orgID uuid.UUID, from, to time.Time) error
 }
 
 // IdempotencyRepository protects request deduplication.

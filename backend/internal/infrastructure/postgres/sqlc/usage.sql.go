@@ -12,6 +12,94 @@ import (
 	uuid "github.com/google/uuid"
 )
 
+const backfillLLMRequestCost = `-- name: BackfillLLMRequestCost :exec
+WITH resolvable AS (
+    SELECT r.id,
+           r.prompt_tokens::bigint * p.input_unit_price_micros
+         + r.completion_tokens::bigint * p.output_unit_price_micros AS cost
+    FROM llm_requests r
+    JOIN pricing_models pm
+      ON pm.organization_id = r.organization_id
+     AND pm.model_slug = r.model
+    CROSS JOIN LATERAL (
+        SELECT v.input_unit_price_micros, v.output_unit_price_micros
+        FROM pricing_versions v
+        WHERE v.pricing_model_id = pm.id
+          AND v.organization_id = r.organization_id
+          AND v.effective_from <= r.created_at
+        ORDER BY v.effective_from DESC, v.version DESC
+        LIMIT 1
+    ) p
+    WHERE r.organization_id = $1
+      AND r.created_at >= $2
+      AND r.created_at < $3
+)
+UPDATE llm_requests r
+SET cost_micros = resolvable.cost
+FROM resolvable
+WHERE r.id = resolvable.id
+  AND r.cost_micros IS DISTINCT FROM resolvable.cost
+`
+
+type BackfillLLMRequestCostParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	FromTs         time.Time `json:"from_ts"`
+	ToTs           time.Time `json:"to_ts"`
+}
+
+func (q *Queries) BackfillLLMRequestCost(ctx context.Context, arg BackfillLLMRequestCostParams) error {
+	_, err := q.db.Exec(ctx, backfillLLMRequestCost, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	return err
+}
+
+const deleteUsageDailyInWindow = `-- name: DeleteUsageDailyInWindow :exec
+DELETE FROM usage_daily
+WHERE organization_id = $1 AND bucket_start >= $2 AND bucket_start < $3
+`
+
+type DeleteUsageDailyInWindowParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	FromTs         time.Time `json:"from_ts"`
+	ToTs           time.Time `json:"to_ts"`
+}
+
+func (q *Queries) DeleteUsageDailyInWindow(ctx context.Context, arg DeleteUsageDailyInWindowParams) error {
+	_, err := q.db.Exec(ctx, deleteUsageDailyInWindow, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	return err
+}
+
+const deleteUsageHourlyInWindow = `-- name: DeleteUsageHourlyInWindow :exec
+DELETE FROM usage_hourly
+WHERE organization_id = $1 AND bucket_start >= $2 AND bucket_start < $3
+`
+
+type DeleteUsageHourlyInWindowParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	FromTs         time.Time `json:"from_ts"`
+	ToTs           time.Time `json:"to_ts"`
+}
+
+func (q *Queries) DeleteUsageHourlyInWindow(ctx context.Context, arg DeleteUsageHourlyInWindowParams) error {
+	_, err := q.db.Exec(ctx, deleteUsageHourlyInWindow, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	return err
+}
+
+const deleteUsageMonthlyInWindow = `-- name: DeleteUsageMonthlyInWindow :exec
+DELETE FROM usage_monthly
+WHERE organization_id = $1 AND bucket_start >= $2 AND bucket_start < $3
+`
+
+type DeleteUsageMonthlyInWindowParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	FromTs         time.Time `json:"from_ts"`
+	ToTs           time.Time `json:"to_ts"`
+}
+
+func (q *Queries) DeleteUsageMonthlyInWindow(ctx context.Context, arg DeleteUsageMonthlyInWindowParams) error {
+	_, err := q.db.Exec(ctx, deleteUsageMonthlyInWindow, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	return err
+}
+
 const getLLMRequestByRequestID = `-- name: GetLLMRequestByRequestID :one
 SELECT id, organization_id, project_id, user_id, api_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at FROM llm_requests
 WHERE organization_id = $1 AND request_id = $2
@@ -166,14 +254,110 @@ func (q *Queries) ListUsageEventsByRequest(ctx context.Context, arg ListUsageEve
 	return items, nil
 }
 
+const recomputeUsageDaily = `-- name: RecomputeUsageDaily :exec
+INSERT INTO usage_daily (organization_id, project_id, model, bucket_start, requests, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, cost_micros, updated_at)
+SELECT r.organization_id, r.project_id, r.model,
+       date_trunc('day', r.created_at, 'UTC') AS bucket_start,
+       count(*)::int,
+       sum(r.prompt_tokens)::bigint,
+       sum(r.completion_tokens)::bigint,
+       sum(r.cached_input_tokens)::bigint,
+       sum(r.total_tokens)::bigint,
+       sum(r.cost_micros)::bigint,
+       now()
+FROM llm_requests r
+WHERE r.organization_id = $1 AND r.project_id IS NOT NULL
+  AND r.created_at >= $2 AND r.created_at < $3
+GROUP BY r.organization_id, r.project_id, r.model, date_trunc('day', r.created_at, 'UTC')
+ON CONFLICT (organization_id, project_id, model, bucket_start) DO UPDATE SET
+    requests = EXCLUDED.requests, prompt_tokens = EXCLUDED.prompt_tokens,
+    completion_tokens = EXCLUDED.completion_tokens, cached_input_tokens = EXCLUDED.cached_input_tokens,
+    total_tokens = EXCLUDED.total_tokens, cost_micros = EXCLUDED.cost_micros, updated_at = now()
+`
+
+type RecomputeUsageDailyParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	FromTs         time.Time `json:"from_ts"`
+	ToTs           time.Time `json:"to_ts"`
+}
+
+func (q *Queries) RecomputeUsageDaily(ctx context.Context, arg RecomputeUsageDailyParams) error {
+	_, err := q.db.Exec(ctx, recomputeUsageDaily, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	return err
+}
+
+const recomputeUsageHourly = `-- name: RecomputeUsageHourly :exec
+INSERT INTO usage_hourly (organization_id, project_id, model, bucket_start, requests, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, cost_micros, updated_at)
+SELECT r.organization_id, r.project_id, r.model,
+       date_trunc('hour', r.created_at, 'UTC') AS bucket_start,
+       count(*)::int,
+       sum(r.prompt_tokens)::bigint,
+       sum(r.completion_tokens)::bigint,
+       sum(r.cached_input_tokens)::bigint,
+       sum(r.total_tokens)::bigint,
+       sum(r.cost_micros)::bigint,
+       now()
+FROM llm_requests r
+WHERE r.organization_id = $1 AND r.project_id IS NOT NULL
+  AND r.created_at >= $2 AND r.created_at < $3
+GROUP BY r.organization_id, r.project_id, r.model, date_trunc('hour', r.created_at, 'UTC')
+ON CONFLICT (organization_id, project_id, model, bucket_start) DO UPDATE SET
+    requests = EXCLUDED.requests, prompt_tokens = EXCLUDED.prompt_tokens,
+    completion_tokens = EXCLUDED.completion_tokens, cached_input_tokens = EXCLUDED.cached_input_tokens,
+    total_tokens = EXCLUDED.total_tokens, cost_micros = EXCLUDED.cost_micros, updated_at = now()
+`
+
+type RecomputeUsageHourlyParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	FromTs         time.Time `json:"from_ts"`
+	ToTs           time.Time `json:"to_ts"`
+}
+
+func (q *Queries) RecomputeUsageHourly(ctx context.Context, arg RecomputeUsageHourlyParams) error {
+	_, err := q.db.Exec(ctx, recomputeUsageHourly, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	return err
+}
+
+const recomputeUsageMonthly = `-- name: RecomputeUsageMonthly :exec
+INSERT INTO usage_monthly (organization_id, project_id, model, bucket_start, requests, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, cost_micros, updated_at)
+SELECT r.organization_id, r.project_id, r.model,
+       date_trunc('month', r.created_at, 'UTC') AS bucket_start,
+       count(*)::int,
+       sum(r.prompt_tokens)::bigint,
+       sum(r.completion_tokens)::bigint,
+       sum(r.cached_input_tokens)::bigint,
+       sum(r.total_tokens)::bigint,
+       sum(r.cost_micros)::bigint,
+       now()
+FROM llm_requests r
+WHERE r.organization_id = $1 AND r.project_id IS NOT NULL
+  AND r.created_at >= $2 AND r.created_at < $3
+GROUP BY r.organization_id, r.project_id, r.model, date_trunc('month', r.created_at, 'UTC')
+ON CONFLICT (organization_id, project_id, model, bucket_start) DO UPDATE SET
+    requests = EXCLUDED.requests, prompt_tokens = EXCLUDED.prompt_tokens,
+    completion_tokens = EXCLUDED.completion_tokens, cached_input_tokens = EXCLUDED.cached_input_tokens,
+    total_tokens = EXCLUDED.total_tokens, cost_micros = EXCLUDED.cost_micros, updated_at = now()
+`
+
+type RecomputeUsageMonthlyParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	FromTs         time.Time `json:"from_ts"`
+	ToTs           time.Time `json:"to_ts"`
+}
+
+func (q *Queries) RecomputeUsageMonthly(ctx context.Context, arg RecomputeUsageMonthlyParams) error {
+	_, err := q.db.Exec(ctx, recomputeUsageMonthly, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	return err
+}
+
 const recordLLMRequest = `-- name: RecordLLMRequest :one
 INSERT INTO llm_requests (
     organization_id, project_id, user_id, api_credential_id, request_id,
     provider_request_id, provider_kind, model, status, error_code,
     prompt_tokens, completion_tokens, cached_input_tokens, total_tokens,
-    latency_ms, cost_micros
+    latency_ms, cost_micros, created_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 ON CONFLICT (organization_id, request_id) DO NOTHING
 RETURNING id, organization_id, project_id, user_id, api_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at
 `
@@ -195,6 +379,7 @@ type RecordLLMRequestParams struct {
 	TotalTokens       int32      `json:"total_tokens"`
 	LatencyMs         int32      `json:"latency_ms"`
 	CostMicros        int64      `json:"cost_micros"`
+	CreatedAt         time.Time  `json:"created_at"`
 }
 
 func (q *Queries) RecordLLMRequest(ctx context.Context, arg RecordLLMRequestParams) (LlmRequest, error) {
@@ -215,6 +400,7 @@ func (q *Queries) RecordLLMRequest(ctx context.Context, arg RecordLLMRequestPara
 		arg.TotalTokens,
 		arg.LatencyMs,
 		arg.CostMicros,
+		arg.CreatedAt,
 	)
 	var i LlmRequest
 	err := row.Scan(
@@ -277,139 +463,4 @@ func (q *Queries) RecordUsageEvent(ctx context.Context, arg RecordUsageEventPara
 		&i.CreatedAt,
 	)
 	return i, err
-}
-
-const rollupUsageDaily = `-- name: RollupUsageDaily :execrows
-INSERT INTO usage_daily (organization_id, project_id, model, bucket_start, requests, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, cost_micros, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
-ON CONFLICT (organization_id, project_id, model, bucket_start) DO UPDATE SET
-    requests            = usage_daily.requests + EXCLUDED.requests,
-    prompt_tokens       = usage_daily.prompt_tokens + EXCLUDED.prompt_tokens,
-    completion_tokens   = usage_daily.completion_tokens + EXCLUDED.completion_tokens,
-    cached_input_tokens = usage_daily.cached_input_tokens + EXCLUDED.cached_input_tokens,
-    total_tokens        = usage_daily.total_tokens + EXCLUDED.total_tokens,
-    cost_micros         = usage_daily.cost_micros + EXCLUDED.cost_micros,
-    updated_at          = now()
-`
-
-type RollupUsageDailyParams struct {
-	OrganizationID    uuid.UUID `json:"organization_id"`
-	ProjectID         uuid.UUID `json:"project_id"`
-	Model             string    `json:"model"`
-	BucketStart       time.Time `json:"bucket_start"`
-	Requests          int32     `json:"requests"`
-	PromptTokens      int64     `json:"prompt_tokens"`
-	CompletionTokens  int64     `json:"completion_tokens"`
-	CachedInputTokens int64     `json:"cached_input_tokens"`
-	TotalTokens       int64     `json:"total_tokens"`
-	CostMicros        int64     `json:"cost_micros"`
-}
-
-func (q *Queries) RollupUsageDaily(ctx context.Context, arg RollupUsageDailyParams) (int64, error) {
-	result, err := q.db.Exec(ctx, rollupUsageDaily,
-		arg.OrganizationID,
-		arg.ProjectID,
-		arg.Model,
-		arg.BucketStart,
-		arg.Requests,
-		arg.PromptTokens,
-		arg.CompletionTokens,
-		arg.CachedInputTokens,
-		arg.TotalTokens,
-		arg.CostMicros,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rollupUsageHourly = `-- name: RollupUsageHourly :execrows
-INSERT INTO usage_hourly (organization_id, project_id, model, bucket_start, requests, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, cost_micros, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
-ON CONFLICT (organization_id, project_id, model, bucket_start) DO UPDATE SET
-    requests            = usage_hourly.requests + EXCLUDED.requests,
-    prompt_tokens       = usage_hourly.prompt_tokens + EXCLUDED.prompt_tokens,
-    completion_tokens   = usage_hourly.completion_tokens + EXCLUDED.completion_tokens,
-    cached_input_tokens = usage_hourly.cached_input_tokens + EXCLUDED.cached_input_tokens,
-    total_tokens        = usage_hourly.total_tokens + EXCLUDED.total_tokens,
-    cost_micros         = usage_hourly.cost_micros + EXCLUDED.cost_micros,
-    updated_at          = now()
-`
-
-type RollupUsageHourlyParams struct {
-	OrganizationID    uuid.UUID `json:"organization_id"`
-	ProjectID         uuid.UUID `json:"project_id"`
-	Model             string    `json:"model"`
-	BucketStart       time.Time `json:"bucket_start"`
-	Requests          int32     `json:"requests"`
-	PromptTokens      int64     `json:"prompt_tokens"`
-	CompletionTokens  int64     `json:"completion_tokens"`
-	CachedInputTokens int64     `json:"cached_input_tokens"`
-	TotalTokens       int64     `json:"total_tokens"`
-	CostMicros        int64     `json:"cost_micros"`
-}
-
-func (q *Queries) RollupUsageHourly(ctx context.Context, arg RollupUsageHourlyParams) (int64, error) {
-	result, err := q.db.Exec(ctx, rollupUsageHourly,
-		arg.OrganizationID,
-		arg.ProjectID,
-		arg.Model,
-		arg.BucketStart,
-		arg.Requests,
-		arg.PromptTokens,
-		arg.CompletionTokens,
-		arg.CachedInputTokens,
-		arg.TotalTokens,
-		arg.CostMicros,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const rollupUsageMonthly = `-- name: RollupUsageMonthly :execrows
-INSERT INTO usage_monthly (organization_id, project_id, model, bucket_start, requests, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, cost_micros, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
-ON CONFLICT (organization_id, project_id, model, bucket_start) DO UPDATE SET
-    requests            = usage_monthly.requests + EXCLUDED.requests,
-    prompt_tokens       = usage_monthly.prompt_tokens + EXCLUDED.prompt_tokens,
-    completion_tokens   = usage_monthly.completion_tokens + EXCLUDED.completion_tokens,
-    cached_input_tokens = usage_monthly.cached_input_tokens + EXCLUDED.cached_input_tokens,
-    total_tokens        = usage_monthly.total_tokens + EXCLUDED.total_tokens,
-    cost_micros         = usage_monthly.cost_micros + EXCLUDED.cost_micros,
-    updated_at          = now()
-`
-
-type RollupUsageMonthlyParams struct {
-	OrganizationID    uuid.UUID `json:"organization_id"`
-	ProjectID         uuid.UUID `json:"project_id"`
-	Model             string    `json:"model"`
-	BucketStart       time.Time `json:"bucket_start"`
-	Requests          int32     `json:"requests"`
-	PromptTokens      int64     `json:"prompt_tokens"`
-	CompletionTokens  int64     `json:"completion_tokens"`
-	CachedInputTokens int64     `json:"cached_input_tokens"`
-	TotalTokens       int64     `json:"total_tokens"`
-	CostMicros        int64     `json:"cost_micros"`
-}
-
-func (q *Queries) RollupUsageMonthly(ctx context.Context, arg RollupUsageMonthlyParams) (int64, error) {
-	result, err := q.db.Exec(ctx, rollupUsageMonthly,
-		arg.OrganizationID,
-		arg.ProjectID,
-		arg.Model,
-		arg.BucketStart,
-		arg.Requests,
-		arg.PromptTokens,
-		arg.CompletionTokens,
-		arg.CachedInputTokens,
-		arg.TotalTokens,
-		arg.CostMicros,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }

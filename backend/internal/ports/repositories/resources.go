@@ -53,6 +53,7 @@ type ProviderCredentialRepository interface {
 // design (models are not tenant-owned), so operations are never org-scoped.
 type ModelRepository interface {
 	List(ctx context.Context) ([]domain.Model, error)
+	Upsert(ctx context.Context, providerKind, modelSlug, displayName string) (domain.Model, error)
 }
 
 // ProviderHealthRepository records the last observed connectivity state of

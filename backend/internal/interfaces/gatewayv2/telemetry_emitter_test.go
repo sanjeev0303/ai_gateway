@@ -6,10 +6,12 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func TestNewTelemetryEmitter_DefaultsAndClose(t *testing.T) {
-	e := NewTelemetryEmitter(0, 0, nil)
+	e := NewTelemetryEmitter(0, 0, nil, nil)
 	requireTrue(t, e.bufferSize == 10000, "buffer size default not applied")
 	requireTrue(t, e.flushPeriod == 5*time.Second, "flush period default not applied")
 	requireTrue(t, e.logger != nil, "logger default not applied")
@@ -17,7 +19,7 @@ func TestNewTelemetryEmitter_DefaultsAndClose(t *testing.T) {
 }
 
 func TestTelemetryEmitter_StatsStartZero(t *testing.T) {
-	e := NewTelemetryEmitter(8, time.Hour, discardLogger())
+	e := NewTelemetryEmitter(8, time.Hour, newRecordingBus(), discardLogger())
 	s := e.Stats()
 	requireTrue(t, s.UsageEmitted == 0 && s.UsageDropped == 0 && s.ErrorsEmitted == 0 && s.ErrorsDropped == 0, "new emitter must have zero stats")
 	requireTrue(t, s.FlushCount == 0, "flush count should start zero")
@@ -25,7 +27,7 @@ func TestTelemetryEmitter_StatsStartZero(t *testing.T) {
 }
 
 func TestTelemetryEmitter_EmitThenClose(t *testing.T) {
-	e := NewTelemetryEmitter(8, time.Hour, discardLogger())
+	e := NewTelemetryEmitter(8, time.Hour, newRecordingBus(), discardLogger())
 	e.EmitUsage(context.Background(), UsageRecord{Model: "claude-sonnet-4-5"})
 	e.EmitError(context.Background(), ErrorRecord{ErrorType: "rate_limit_exceeded"})
 
@@ -35,7 +37,7 @@ func TestTelemetryEmitter_EmitThenClose(t *testing.T) {
 }
 
 func TestTelemetryEmitter_Flush(t *testing.T) {
-	e := NewTelemetryEmitter(8, time.Hour, discardLogger())
+	e := NewTelemetryEmitter(8, time.Hour, newRecordingBus(), discardLogger())
 	requireNoErr(t, e.Flush(context.Background()), "Flush")
 	requireNoErr(t, e.Close(), "Close")
 }
@@ -84,4 +86,33 @@ func TestNullTelemetryEmitter_Noop(t *testing.T) {
 	e.EmitError(context.Background(), ErrorRecord{})
 	requireNoErr(t, e.Flush(context.Background()), "Flush")
 	requireNoErr(t, e.Close(), "Close")
+}
+
+func TestNewLlmRequestFrom_PreservesRequestTime(t *testing.T) {
+	observedAt := time.Date(2026, 3, 4, 5, 6, 7, 0, time.FixedZone("plus-two", 2*3600))
+	got := newLlmRequestFrom(UsageRecord{
+		RequestID:   "req-1",
+		SubjectID:   uuid.New(),
+		Timestamp:   observedAt,
+		LatencyMs:   12,
+		InputTokens: 3, OutputTokens: 4, CacheReadTokens: 1,
+	}, "openai", "succeeded")
+
+	requireTrue(t, got.CreatedAt.Equal(observedAt), "request time must survive the async hop, got %s want %s", got.CreatedAt, observedAt)
+	requireTrue(t, got.CreatedAt.Location() == time.UTC, "created_at must be normalized to UTC")
+	requireTrue(t, got.TotalTokens == 7, "total tokens = %d, want 7", got.TotalTokens)
+}
+
+func TestNewLlmRequestFrom_AttributionOnlyForUserSubjects(t *testing.T) {
+	subjectID := uuid.New()
+
+	user := newLlmRequestFrom(UsageRecord{
+		RequestID: "req-user", SubjectType: "user", SubjectID: subjectID,
+	}, "openai", "succeeded")
+	requireTrue(t, user.UserID != nil && *user.UserID == subjectID, "user subject must populate user_id")
+
+	service := newLlmRequestFrom(UsageRecord{
+		RequestID: "req-sa", SubjectType: "service_account", SubjectID: subjectID,
+	}, "openai", "succeeded")
+	requireTrue(t, service.UserID == nil, "service_account must not be written to user_id")
 }

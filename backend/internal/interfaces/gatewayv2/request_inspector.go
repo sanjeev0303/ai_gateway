@@ -19,12 +19,17 @@ func NewRequestInspector() *RequestInspectorImpl {
 	return &RequestInspectorImpl{}
 }
 
-// Inspect reads and parses the request body to extract routing hints.
-// The body is consumed but can be re-read if needed by the caller.
+// Inspect extracts routing hints, consuming the reader it is given: callers that
+// still need the payload must restore it (see readAndRestoreBody). The read is
+// bounded, and an oversized body returns ErrRequestTooLarge rather than being
+// inspected as if it were valid.
 func (i *RequestInspectorImpl) Inspect(ctx context.Context, body io.Reader) (InspectorHints, error) {
-	data, err := io.ReadAll(body)
+	data, err := io.ReadAll(io.LimitReader(body, maxRequestBodyBytes+1))
 	if err != nil {
 		return InspectorHints{}, err
+	}
+	if len(data) > maxRequestBodyBytes {
+		return InspectorHints{}, ErrRequestTooLarge
 	}
 
 	var req map[string]any
@@ -138,127 +143,4 @@ func boolToString(b bool) string {
 		return "true"
 	}
 	return "false"
-}
-
-// StreamingInspector wraps a reader to allow inspection while streaming.
-// This allows the body to be consumed once while still being available for forwarding.
-type StreamingInspector struct {
-	reader    io.Reader
-	buffer    []byte
-	inspected bool
-	hints     InspectorHints
-	err       error
-}
-
-func NewStreamingInspector(r io.Reader) *StreamingInspector {
-	return &StreamingInspector{reader: r}
-}
-
-// Read implements io.Reader, buffering data for inspection.
-func (s *StreamingInspector) Read(p []byte) (int, error) {
-	n, err := s.reader.Read(p)
-	if n > 0 {
-		s.buffer = append(s.buffer, p[:n]...)
-	}
-
-	// Try to inspect once we have enough data
-	if !s.inspected && len(s.buffer) > 1024 {
-		s.inspect()
-	}
-
-	return n, err
-}
-
-// Hints returns the inspection hints (blocking until inspected).
-func (s *StreamingInspector) Hints(ctx context.Context) (InspectorHints, error) {
-	if !s.inspected {
-		s.inspect()
-	}
-	return s.hints, s.err
-}
-
-// inspect parses the buffered data for hints.
-func (s *StreamingInspector) inspect() {
-	s.inspected = true
-	if len(s.buffer) == 0 {
-		return
-	}
-
-	var req map[string]any
-	if err := json.Unmarshal(s.buffer, &req); err != nil {
-		s.err = err
-		return
-	}
-
-	hints := InspectorHints{
-		RoutingTags: make(map[string]string),
-	}
-
-	if model, ok := req["model"].(string); ok {
-		hints.Model = model
-		hints.RoutingTags["model"] = model
-	}
-
-	if messages, ok := req["messages"].([]any); ok {
-		hints.EstimatedInputTokens = estimateInputTokens(messages)
-		hints.EstimatedOutputTokens = estimateOutputTokens(req)
-	}
-
-	if stream, ok := req["stream"].(bool); ok {
-		hints.Stream = stream
-		hints.RoutingTags["stream"] = boolToString(stream)
-	}
-
-	if tools, ok := req["tools"].([]any); ok {
-		for _, t := range tools {
-			if toolMap, ok := t.(map[string]any); ok {
-				if name, ok := toolMap["name"].(string); ok {
-					hints.Tools = append(hints.Tools, name)
-				}
-			}
-		}
-	}
-
-	if convID, ok := req["conversation_id"].(string); ok {
-		if id, err := uuid.Parse(convID); err == nil {
-			hints.ConversationID = &id
-		}
-	}
-
-	if projID, ok := req["project_id"].(string); ok {
-		if id, err := uuid.Parse(projID); err == nil {
-			hints.ProjectID = &id
-			hints.RoutingTags["project_id"] = projID
-		}
-	}
-
-	if tags, ok := req["routing_tags"].(map[string]any); ok {
-		for k, v := range tags {
-			if str, ok := v.(string); ok {
-				hints.RoutingTags[k] = str
-			}
-		}
-	}
-
-	if hints.Model == "" {
-		hints.Warnings = append(hints.Warnings, "model field is missing")
-	}
-
-	s.hints = hints
-}
-
-// PeekReader returns a reader that allows peeking at the stream.
-// The original body is replaced with a tee reader.
-func PeekReader(body io.ReadCloser) (*StreamingInspector, io.ReadCloser) {
-	inspector := NewStreamingInspector(body)
-	return inspector, &peekReadCloser{Reader: inspector, closer: body}
-}
-
-type peekReadCloser struct {
-	io.Reader
-	closer io.Closer
-}
-
-func (p *peekReadCloser) Close() error {
-	return p.closer.Close()
 }

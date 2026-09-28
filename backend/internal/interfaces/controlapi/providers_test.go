@@ -3,6 +3,7 @@ package controlapi
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -474,5 +475,192 @@ func credentialFromNew(id uuid.UUID, in domain.NewProviderCredential) domain.Pro
 		Status:            domain.ProviderCredentialStatusActive,
 		CreatedAt:         testNow,
 		UpdatedAt:         testNow,
+	}
+}
+
+// TestProviderOnboardingEndToEnd walks the full provider path a real customer
+// follows: create the account, store a credential, prove the secret is
+// accepted, probe connectivity, sync the live model catalog, and read it back.
+func TestProviderOnboardingEndToEnd(t *testing.T) {
+	srv, st := newTestServer(t)
+	hdr := bearerHeader(st, domain.RoleAdmin)
+
+	st.providerAccounts.create = func(_ context.Context, orgID uuid.UUID, in domain.NewProviderAccount) (domain.ProviderAccount, error) {
+		requireEqual(t, orgID, testOrgID)
+		requireEqual(t, in.ProviderKind, domain.ProviderKindAnthropic)
+		return testProviderAccount, nil
+	}
+	st.providerAccounts.get = func(_ context.Context, orgID, id uuid.UUID) (domain.ProviderAccount, error) {
+		requireEqual(t, orgID, testOrgID)
+		requireEqual(t, id, testProvAcct)
+		return testProviderAccount, nil
+	}
+
+	var stored domain.NewProviderCredential
+	st.providerCredentials.create = func(_ context.Context, orgID uuid.UUID, in domain.NewProviderCredential) (domain.ProviderCredential, error) {
+		requireEqual(t, orgID, testOrgID)
+		stored = in
+		// Echo back what the service derived so the DTO reflects real
+		// service behavior rather than stub-supplied constants.
+		return domain.ProviderCredential{
+			ID: testProvCred, OrganizationID: testOrgID, ProviderAccountID: testProvAcct,
+			Kind: in.Kind, SecretRef: in.SecretRef, Fingerprint: in.Fingerprint,
+			Tail: in.Tail, Status: domain.ProviderCredentialStatusActive,
+		}, nil
+	}
+
+	st.providerClient.validateErr = nil
+	st.providerClient.healthErr = nil
+	st.providerClient.listModels = func(_ context.Context, apiKey string) ([]providerclient.Model, error) {
+		requireEqual(t, apiKey, "sk-ant-e2e")
+		return []providerclient.Model{{ID: "claude-sonnet-4-5"}, {ID: "claude-haiku-4-5"}}, nil
+	}
+	// upsertedIDs records every row the service persists, and the stub returns a
+	// fresh non-zero ID per call. Asserting on both makes the test fail if the
+	// service ever builds a model in memory instead of persisting it.
+	var upsertedIDs []uuid.UUID
+	st.providerModels.upsert = func(_ context.Context, kind, slug, display string) (domain.Model, error) {
+		requireEqual(t, kind, domain.ProviderKindAnthropic)
+		id := uuid.New()
+		upsertedIDs = append(upsertedIDs, id)
+		return domain.Model{
+			ID: id, ProviderKind: kind, ModelSlug: slug, DisplayName: display, IsActive: true,
+		}, nil
+	}
+	catalog := []domain.Model{
+		{ID: uuid.New(), ProviderKind: domain.ProviderKindAnthropic, ModelSlug: "claude-sonnet-4-5", DisplayName: "claude-sonnet-4-5", IsActive: true},
+		{ID: uuid.New(), ProviderKind: domain.ProviderKindAnthropic, ModelSlug: "claude-haiku-4-5", DisplayName: "claude-haiku-4-5", IsActive: true},
+	}
+	st.providerModels.list = func(context.Context) ([]domain.Model, error) { return catalog, nil }
+
+	// 1. create the provider account
+	resp := doJSON(t, srv, http.MethodPost, "/v1/provider-accounts", map[string]any{
+		"provider_kind": domain.ProviderKindAnthropic,
+		"name":          "prod",
+	}, hdr)
+	requireEqual(t, resp.StatusCode, http.StatusCreated)
+	var account providerAccountDTO
+	decodeBody(t, resp, &account)
+	requireEqual(t, account.ID, testProvAcct.String())
+
+	// 2. store a credential; the secret reaches the secret store, not the DTO
+	resp = doJSON(t, srv, http.MethodPost, "/v1/provider-accounts/"+testProvAcct.String()+"/credentials", map[string]any{
+		"name":   "primary",
+		"kind":   domain.CredentialKindAPIKey,
+		"secret": "sk-ant-e2e",
+	}, hdr)
+	requireEqual(t, resp.StatusCode, http.StatusCreated)
+	var cred providerCredentialDTO
+	decodeBody(t, resp, &cred)
+	requireEqual(t, cred.ID, testProvCred.String())
+	// The service derives the tail and a SHA-256 fingerprint from the secret;
+	// the DTO carries those, never the secret or the secret-store ref.
+	requireEqual(t, cred.Tail, "-e2e")
+	if stored.Fingerprint == "" || cred.Fingerprint != stored.Fingerprint {
+		t.Fatalf("credential DTO must carry the derived fingerprint, got %q", cred.Fingerprint)
+	}
+	// "sha256:" + 64 hex chars, and it must not embed the secret itself.
+	requireEqual(t, len(cred.Fingerprint), len("sha256:")+64)
+	if !strings.HasPrefix(cred.Fingerprint, "sha256:") {
+		t.Fatalf("fingerprint must be sha256-prefixed, got %q", cred.Fingerprint)
+	}
+	if strings.Contains(cred.Fingerprint, "sk-ant") {
+		t.Fatal("fingerprint must not contain the secret")
+	}
+	if stored.SecretRef == "" {
+		t.Fatal("service must persist the secret behind a SecretRef")
+	}
+	if len(st.providerSecrets.values) != 1 {
+		t.Fatalf("expected exactly 1 secret stored, got %d", len(st.providerSecrets.values))
+	}
+	for _, v := range st.providerSecrets.values {
+		requireEqual(t, v, "sk-ant-e2e")
+	}
+
+	// 3. validate the secret against the live provider
+	resp = doJSON(t, srv, http.MethodPost, "/v1/provider-credentials/validate", map[string]any{
+		"provider_kind": domain.ProviderKindAnthropic,
+		"api_key":       "sk-ant-e2e",
+	}, hdr)
+	requireEqual(t, resp.StatusCode, http.StatusOK)
+	var valid struct {
+		Valid bool `json:"valid"`
+	}
+	decodeBody(t, resp, &valid)
+	if !valid.Valid {
+		t.Fatal("expected valid=true for an accepted secret")
+	}
+
+	// 4. probe connectivity and persist the observed state
+	resp = doJSON(t, srv, http.MethodPost, "/v1/provider-health/check", map[string]any{
+		"provider_kind": domain.ProviderKindAnthropic,
+		"api_key":       "sk-ant-e2e",
+	}, hdr)
+	requireEqual(t, resp.StatusCode, http.StatusOK)
+	var health providerHealthDTO
+	decodeBody(t, resp, &health)
+	requireEqual(t, health.ProviderKind, domain.ProviderKindAnthropic)
+	requireEqual(t, health.Status, domain.ProviderHealthHealthy)
+
+	// 5. read the recorded health back
+	resp = doJSON(t, srv, http.MethodGet, "/v1/provider-health", nil, hdr)
+	requireEqual(t, resp.StatusCode, http.StatusOK)
+	var healthList struct {
+		Items []providerHealthDTO `json:"items"`
+	}
+	decodeBody(t, resp, &healthList)
+	requireEqual(t, len(healthList.Items), 1)
+	requireEqual(t, healthList.Items[0].Status, domain.ProviderHealthHealthy)
+
+	// 6. sync the live model catalog
+	resp = doJSON(t, srv, http.MethodPost, "/v1/models/sync", map[string]any{
+		"provider_kind": domain.ProviderKindAnthropic,
+		"api_key":       "sk-ant-e2e",
+	}, hdr)
+	requireEqual(t, resp.StatusCode, http.StatusOK)
+	var synced struct {
+		Items []modelDTO `json:"items"`
+	}
+	decodeBody(t, resp, &synced)
+	requireEqual(t, len(synced.Items), 2)
+	requireEqual(t, synced.Items[0].ModelSlug, "claude-sonnet-4-5")
+	requireEqual(t, synced.Items[0].IsActive, true)
+	// Every synced row must have come back from the model repository.
+	requireEqual(t, len(upsertedIDs), 2)
+	requireEqual(t, synced.Items[0].ID, upsertedIDs[0].String())
+	requireEqual(t, synced.Items[1].ID, upsertedIDs[1].String())
+
+	// 7. the catalog is what GET /v1/models serves
+	resp = doJSON(t, srv, http.MethodGet, "/v1/models", nil, hdr)
+	requireEqual(t, resp.StatusCode, http.StatusOK)
+	var listed struct {
+		Items []modelDTO `json:"items"`
+	}
+	decodeBody(t, resp, &listed)
+	requireEqual(t, len(listed.Items), 2)
+	requireEqual(t, listed.Items[1].ModelSlug, "claude-haiku-4-5")
+
+	requireAudit(t, st, "provider_account.create")
+	requireAudit(t, st, "provider.models.sync")
+}
+
+// TestValidateProviderCredentialRejected covers the upstream-rejection path:
+// a bad key is a 200 with valid=false, not a gateway error.
+func TestValidateProviderCredentialRejected(t *testing.T) {
+	srv, st := newTestServer(t)
+	st.providerClient.validateErr = providerclient.ErrInvalidCredentials
+
+	resp := doJSON(t, srv, http.MethodPost, "/v1/provider-credentials/validate", map[string]any{
+		"provider_kind": domain.ProviderKindAnthropic,
+		"api_key":       "sk-ant-bad",
+	}, bearerHeader(st, domain.RoleAdmin))
+
+	requireEqual(t, resp.StatusCode, http.StatusOK)
+	var body struct {
+		Valid bool `json:"valid"`
+	}
+	decodeBody(t, resp, &body)
+	if body.Valid {
+		t.Fatal("expected valid=false for a rejected secret")
 	}
 }

@@ -62,6 +62,16 @@ func (r *organizationRepo) GetBySlug(ctx context.Context, slug string) (domain.O
 	return org, mapNotFound(err)
 }
 
+func (r *organizationRepo) ListAllIDs(ctx context.Context) ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := r.store.WithTx(ctx, func(q *db.Queries) error {
+		var err error
+		ids, err = q.ListAllOrganizationIDs(ctx)
+		return err
+	})
+	return ids, err
+}
+
 type userRepo struct {
 	store *postgres.Store
 }

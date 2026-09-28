@@ -88,20 +88,6 @@ type UsageRollup struct {
 	UpdatedAt         time.Time
 }
 
-// NewUsageRollup carries the fields for upserting one bucket row.
-type NewUsageRollup struct {
-	OrganizationID    uuid.UUID
-	ProjectID         uuid.UUID
-	Model             string
-	BucketStart       time.Time
-	Requests          int32
-	PromptTokens      int64
-	CompletionTokens  int64
-	CachedInputTokens int64
-	TotalTokens       int64
-	CostMicros        int64
-}
-
 // Conversation is a user's persisted chat session.
 type Conversation struct {
 	ID             uuid.UUID
@@ -162,6 +148,7 @@ type NewLlmRequest struct {
 	TotalTokens       int32
 	LatencyMs         int32
 	CostMicros        int64
+	CreatedAt         time.Time
 }
 
 // NewUsageEvent carries the caller-supplied fields for recording a usage

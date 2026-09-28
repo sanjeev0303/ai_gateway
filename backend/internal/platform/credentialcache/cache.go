@@ -5,28 +5,28 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
 // CachedCredential is a minimal credential representation for caching.
 // Platform package must not depend on domain; service layer converts.
 type CachedCredential struct {
-	ID              uuid.UUID `json:"id"`
-	OrganizationID  uuid.UUID `json:"organization_id"`
-	Name            string    `json:"name"`
-	KeyPrefix       string    `json:"key_prefix"`
-	KeyHash         string    `json:"key_hash"`
-	SubjectType     string    `json:"subject_type"`
-	SubjectID       uuid.UUID `json:"subject_id"`
-	TeamID          *uuid.UUID `json:"team_id,omitempty"`
-	ProjectID       *uuid.UUID `json:"project_id,omitempty"`
-	Scopes          []string  `json:"scopes"`
-	Status          string    `json:"status"`
-	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
-	LastUsedAt      *time.Time `json:"last_used_at,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	Name           string     `json:"name"`
+	KeyPrefix      string     `json:"key_prefix"`
+	KeyHash        string     `json:"key_hash"`
+	SubjectType    string     `json:"subject_type"`
+	SubjectID      uuid.UUID  `json:"subject_id"`
+	TeamID         *uuid.UUID `json:"team_id,omitempty"`
+	ProjectID      *uuid.UUID `json:"project_id,omitempty"`
+	Scopes         []string   `json:"scopes"`
+	Status         string     `json:"status"`
+	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
+	LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // CredentialCache is a thread-safe, TTL cache for gateway credential resolution.

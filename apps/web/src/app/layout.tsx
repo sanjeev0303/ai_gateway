@@ -6,6 +6,7 @@ import { GeistSans } from "geist/font/sans";
 
 import { site } from "@/lib/site";
 
+import { Providers } from "./providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -27,7 +28,7 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
     >
       <body>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

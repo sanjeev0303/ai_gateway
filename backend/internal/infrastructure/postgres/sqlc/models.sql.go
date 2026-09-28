@@ -90,3 +90,46 @@ func (q *Queries) ListModelsByProvider(ctx context.Context, providerKind string)
 	}
 	return items, nil
 }
+
+const upsertModel = `-- name: UpsertModel :one
+INSERT INTO models (provider_kind, model_slug, display_name, is_active)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (provider_kind, model_slug) DO UPDATE
+SET display_name = EXCLUDED.display_name,
+    is_active    = EXCLUDED.is_active
+RETURNING id, provider_kind, model_slug, display_name, is_active, created_at, updated_at, capabilities, context_limit, supports_streaming, supports_tools, supports_reasoning, status, pricing_version
+`
+
+type UpsertModelParams struct {
+	ProviderKind string `json:"provider_kind"`
+	ModelSlug    string `json:"model_slug"`
+	DisplayName  string `json:"display_name"`
+	IsActive     bool   `json:"is_active"`
+}
+
+func (q *Queries) UpsertModel(ctx context.Context, arg UpsertModelParams) (Model, error) {
+	row := q.db.QueryRow(ctx, upsertModel,
+		arg.ProviderKind,
+		arg.ModelSlug,
+		arg.DisplayName,
+		arg.IsActive,
+	)
+	var i Model
+	err := row.Scan(
+		&i.ID,
+		&i.ProviderKind,
+		&i.ModelSlug,
+		&i.DisplayName,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Capabilities,
+		&i.ContextLimit,
+		&i.SupportsStreaming,
+		&i.SupportsTools,
+		&i.SupportsReasoning,
+		&i.Status,
+		&i.PricingVersion,
+	)
+	return i, err
+}

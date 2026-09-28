@@ -31,7 +31,7 @@ execution processes**, plus a web app:
 
 | Process | Binary / app | Responsibility |
 |---|---|---|
-| Gateway (data plane) | `backend/cmd/gateway` | Hot path only: authn, cached policy snapshot, model authz, rate/budget, forwarding, streaming, async usage events |
+| Gateway (data plane) | `backend/cmd/gateway-v2` | Hot path only: authn, cached policy snapshot, model authz, rate/budget, forwarding, streaming, async usage events. `backend/cmd/gateway` is v1, frozen and superseded — see [ADR-5](0005-gateway-v2-canonical.md) |
 | Control API | `backend/cmd/control-api` | Control plane REST API: tenants, policies, credentials, audit, billing. The only writer of governance state |
 | Worker | `backend/cmd/worker` | Async: consume usage events, rollups, retention, alerts |
 | Web app | `apps/web` (Next.js) | Dashboard over the control API, via `packages/api-client` |

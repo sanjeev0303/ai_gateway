@@ -15,10 +15,10 @@ import (
 
 // AuthenticatorImpl implements credential authentication using the identity service.
 type AuthenticatorImpl struct {
-	hasher            ports.TokenHasher
-	credentialRepo    repositories.GatewayCredentialRepository
-	cache             CredentialCache
-	clock             func() time.Time
+	hasher         ports.TokenHasher
+	credentialRepo repositories.GatewayCredentialRepository
+	cache          CredentialCache
+	clock          func() time.Time
 }
 
 var (

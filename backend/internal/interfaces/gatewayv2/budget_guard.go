@@ -15,13 +15,13 @@ type BudgetGuardImpl struct {
 }
 
 type budgetTracker struct {
-	key       string
-	limit     float64
-	window    time.Duration
-	spent     float64
+	key         string
+	limit       float64
+	window      time.Duration
+	spent       float64
 	windowStart time.Time
-	alertAt   float64
-	mu        sync.Mutex
+	alertAt     float64
+	mu          sync.Mutex
 }
 
 // NewBudgetGuard creates a new budget guard.

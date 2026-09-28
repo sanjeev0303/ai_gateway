@@ -15,6 +15,9 @@ type OrganizationRepository interface {
 	Create(ctx context.Context, input domain.NewOrganization) (domain.Organization, error)
 	GetByID(ctx context.Context, id uuid.UUID) (domain.Organization, error)
 	GetBySlug(ctx context.Context, slug string) (domain.Organization, error)
+	// ListAllIDs returns every organization ID. organizations is a global table
+	// outside the tenant RLS set, so this crosses tenant boundaries by design.
+	ListAllIDs(ctx context.Context) ([]uuid.UUID, error)
 }
 
 // UserRepository manages the global identity registry.

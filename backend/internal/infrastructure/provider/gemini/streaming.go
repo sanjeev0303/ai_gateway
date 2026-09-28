@@ -85,10 +85,10 @@ func (c *UsageCollector) Reset() {
 
 // StreamingProxy forwards requests to Gemini and captures usage from the stream.
 type StreamingProxy struct {
-	client        *http.Client
-	baseURL       string
-	version       string
-	logger        interface {
+	client  *http.Client
+	baseURL string
+	version string
+	logger  interface {
 		Debug(msg string, args ...any)
 		Warn(msg string, args ...any)
 		Error(msg string, args ...any)
@@ -354,18 +354,18 @@ func (d *SSEDecoder) Next() (*StreamingEvent, error) {
 // and authentication headers.
 func copyForwardHeaders(dst, src http.Header) {
 	hopByHop := map[string]bool{
-		"connection":         true,
-		"keep-alive":         true,
-		"proxy-authenticate": true,
+		"connection":          true,
+		"keep-alive":          true,
+		"proxy-authenticate":  true,
 		"proxy-authorization": true,
-		"te":                 true,
-		"trailer":            true,
-		"transfer-encoding":  true,
-		"upgrade":            true,
-		"host":               true,
-		"content-length":     true,
-		"authorization":      true,
-		"x-goog-api-key":     true,
+		"te":                  true,
+		"trailer":             true,
+		"transfer-encoding":   true,
+		"upgrade":             true,
+		"host":                true,
+		"content-length":      true,
+		"authorization":       true,
+		"x-goog-api-key":      true,
 	}
 
 	for key, values := range src {
@@ -381,15 +381,15 @@ func copyForwardHeaders(dst, src http.Header) {
 // copyResponseHeaders copies end-to-end headers from upstream to client.
 func copyResponseHeaders(dst, src http.Header) {
 	hopByHop := map[string]bool{
-		"connection":         true,
-		"keep-alive":         true,
-		"proxy-authenticate": true,
+		"connection":          true,
+		"keep-alive":          true,
+		"proxy-authenticate":  true,
 		"proxy-authorization": true,
-		"te":                 true,
-		"trailer":            true,
-		"transfer-encoding":  true,
-		"upgrade":            true,
-		"content-length":     true,
+		"te":                  true,
+		"trailer":             true,
+		"transfer-encoding":   true,
+		"upgrade":             true,
+		"content-length":      true,
 	}
 
 	for key, values := range src {

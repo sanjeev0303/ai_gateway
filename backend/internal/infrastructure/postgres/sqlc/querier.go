@@ -15,6 +15,7 @@ type Querier interface {
 	AddProjectMember(ctx context.Context, arg AddProjectMemberParams) (ProjectMember, error)
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (TeamMember, error)
 	AppendAuditLog(ctx context.Context, arg AppendAuditLogParams) (AuditLog, error)
+	BackfillLLMRequestCost(ctx context.Context, arg BackfillLLMRequestCostParams) error
 	CountOrgMembersByRole(ctx context.Context, arg CountOrgMembersByRoleParams) (int64, error)
 	CreateAPICredential(ctx context.Context, arg CreateAPICredentialParams) (ApiCredential, error)
 	CreateAlert(ctx context.Context, arg CreateAlertParams) (Alert, error)
@@ -39,6 +40,9 @@ type Querier interface {
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserWithPassword(ctx context.Context, arg CreateUserWithPasswordParams) (User, error)
+	DeleteUsageDailyInWindow(ctx context.Context, arg DeleteUsageDailyInWindowParams) error
+	DeleteUsageHourlyInWindow(ctx context.Context, arg DeleteUsageHourlyInWindowParams) error
+	DeleteUsageMonthlyInWindow(ctx context.Context, arg DeleteUsageMonthlyInWindowParams) error
 	GetBillingEvent(ctx context.Context, arg GetBillingEventParams) (BillingEvent, error)
 	GetConversation(ctx context.Context, arg GetConversationParams) (Conversation, error)
 	GetGatewayCredential(ctx context.Context, arg GetGatewayCredentialParams) (GatewayCredential, error)
@@ -59,14 +63,15 @@ type Querier interface {
 	GetSubscription(ctx context.Context, arg GetSubscriptionParams) (Subscription, error)
 	GetTeam(ctx context.Context, arg GetTeamParams) (Team, error)
 	GetUsageEvent(ctx context.Context, arg GetUsageEventParams) (UsageEvent, error)
-	// The ONLY read path that returns password_hash. Ordinary user reads
-	// (GetUserByID, GetUserByEmail, ListOrgMembers) go through views that never
-	// carry the credential, so the hash cannot ride along into a user DTO.
+	// The only read path that projects password_hash into a credential. Ordinary
+	// user reads may still select the column, but toUser maps them into
+	// domain.User, which has no digest field, so the hash cannot reach a DTO.
 	GetUserAuthByEmail(ctx context.Context, lower string) (User, error)
 	GetUserByEmail(ctx context.Context, lower string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	ListAPICredentials(ctx context.Context, organizationID uuid.UUID) ([]ApiCredential, error)
 	ListAlerts(ctx context.Context, organizationID uuid.UUID) ([]Alert, error)
+	ListAllOrganizationIDs(ctx context.Context) ([]uuid.UUID, error)
 	ListConversationMessages(ctx context.Context, arg ListConversationMessagesParams) ([]ConversationMessage, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListGatewayCredentials(ctx context.Context, organizationID uuid.UUID) ([]GatewayCredential, error)
@@ -95,6 +100,9 @@ type Querier interface {
 	ListTeams(ctx context.Context, organizationID uuid.UUID) ([]Team, error)
 	ListUsageEventsByRequest(ctx context.Context, arg ListUsageEventsByRequestParams) ([]UsageEvent, error)
 	MarkInvitationAccepted(ctx context.Context, arg MarkInvitationAcceptedParams) (Invitation, error)
+	RecomputeUsageDaily(ctx context.Context, arg RecomputeUsageDailyParams) error
+	RecomputeUsageHourly(ctx context.Context, arg RecomputeUsageHourlyParams) error
+	RecomputeUsageMonthly(ctx context.Context, arg RecomputeUsageMonthlyParams) error
 	RecordBillingEvent(ctx context.Context, arg RecordBillingEventParams) (BillingEvent, error)
 	RecordLLMRequest(ctx context.Context, arg RecordLLMRequestParams) (LlmRequest, error)
 	RecordUsageEvent(ctx context.Context, arg RecordUsageEventParams) (UsageEvent, error)
@@ -116,9 +124,6 @@ type Querier interface {
 	// reports 0 rows affected so the caller can treat reuse as a stolen token.
 	RevokeRefreshToken(ctx context.Context, tokenHash string) (int64, error)
 	RevokeServiceAccount(ctx context.Context, arg RevokeServiceAccountParams) (ServiceAccount, error)
-	RollupUsageDaily(ctx context.Context, arg RollupUsageDailyParams) (int64, error)
-	RollupUsageHourly(ctx context.Context, arg RollupUsageHourlyParams) (int64, error)
-	RollupUsageMonthly(ctx context.Context, arg RollupUsageMonthlyParams) (int64, error)
 	SetAlertStatus(ctx context.Context, arg SetAlertStatusParams) (Alert, error)
 	SetOrgMemberRole(ctx context.Context, arg SetOrgMemberRoleParams) (OrganizationMember, error)
 	SetPolicyEnforcement(ctx context.Context, arg SetPolicyEnforcementParams) (Policy, error)
@@ -127,6 +132,7 @@ type Querier interface {
 	SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) error
 	TouchUserLastLogin(ctx context.Context, id uuid.UUID) error
 	UpdateGatewayCredentialStatus(ctx context.Context, arg UpdateGatewayCredentialStatusParams) (GatewayCredential, error)
+	UpsertModel(ctx context.Context, arg UpsertModelParams) (Model, error)
 	UpsertPricingModel(ctx context.Context, arg UpsertPricingModelParams) (PricingModel, error)
 	UpsertProviderHealth(ctx context.Context, arg UpsertProviderHealthParams) (ProviderHealth, error)
 }

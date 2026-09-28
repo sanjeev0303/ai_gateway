@@ -96,6 +96,13 @@ func requireErrIs(t *testing.T, err, want error) {
 	}
 }
 
+func requireErr(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+}
+
 func requireEqual[T comparable](t *testing.T, got, want T) {
 	t.Helper()
 	if got != want {
@@ -187,7 +194,8 @@ func (s *stubProviderCredentials) Revoke(ctx context.Context, orgID, id uuid.UUI
 
 type stubModels struct {
 	repositories.ModelRepository
-	list func(context.Context) ([]domain.Model, error)
+	list   func(context.Context) ([]domain.Model, error)
+	upsert func(context.Context, string, string, string) (domain.Model, error)
 }
 
 func (s *stubModels) List(ctx context.Context) ([]domain.Model, error) {
@@ -195,6 +203,13 @@ func (s *stubModels) List(ctx context.Context) ([]domain.Model, error) {
 		notConfigured("stubModels.List")
 	}
 	return s.list(ctx)
+}
+
+func (s *stubModels) Upsert(ctx context.Context, providerKind, modelSlug, displayName string) (domain.Model, error) {
+	if s.upsert == nil {
+		notConfigured("stubModels.Upsert")
+	}
+	return s.upsert(ctx, providerKind, modelSlug, displayName)
 }
 
 type stubProviderHealth struct {

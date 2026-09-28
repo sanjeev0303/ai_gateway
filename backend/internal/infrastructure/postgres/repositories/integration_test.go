@@ -962,6 +962,42 @@ func TestConversationMessageRepository(t *testing.T) {
 	}
 }
 
+func TestLlmRequestRepository_HonorsRequestTime(t *testing.T) {
+	repo := repos.NewLlmRequestRepository(testStore)
+	orgID, _, _ := newTenant(t)
+
+	requestTime := time.Date(2026, 2, 14, 3, 21, 0, 0, time.UTC)
+	recorded, err := repo.Record(testCtx, orgID, domain.NewLlmRequest{
+		RequestID:    "timed-" + uuid.NewString(),
+		ProviderKind: domain.ProviderKindOpenAI,
+		Model:        "gpt-4o",
+		Status:       domain.LlmRequestStatusSucceeded,
+		PromptTokens: 1, CompletionTokens: 1, TotalTokens: 2,
+		CreatedAt: requestTime,
+	})
+	requireNoErr(t, err)
+	if !recorded.CreatedAt.Equal(requestTime) {
+		t.Fatalf("CreatedAt = %s, want %s", recorded.CreatedAt, requestTime)
+	}
+
+	persisted, err := repo.GetByRequestID(testCtx, orgID, recorded.RequestID)
+	requireNoErr(t, err)
+	if !persisted.CreatedAt.Equal(requestTime) {
+		t.Fatalf("persisted created_at = %s, want %s", persisted.CreatedAt, requestTime)
+	}
+
+	zeroTime, err := repo.Record(testCtx, orgID, domain.NewLlmRequest{
+		RequestID:    "untimed-" + uuid.NewString(),
+		ProviderKind: domain.ProviderKindOpenAI,
+		Model:        "gpt-4o",
+		Status:       domain.LlmRequestStatusSucceeded,
+	})
+	requireNoErr(t, err)
+	if zeroTime.CreatedAt.IsZero() {
+		t.Fatal("a zero CreatedAt must fall back to now(), not a zero timestamp")
+	}
+}
+
 func TestLlmRequestRepository(t *testing.T) {
 	repo := repos.NewLlmRequestRepository(testStore)
 	orgID, userID, projectID := newTenant(t)
@@ -1073,56 +1109,226 @@ func TestUsageEventRepository(t *testing.T) {
 }
 
 func TestUsageRollupRepository(t *testing.T) {
+	llm := repos.NewLlmRequestRepository(testStore)
 	repo := repos.NewUsageRollupRepository(testStore)
 	orgID, _, projectID := newTenant(t)
 
-	bucket := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	input := domain.NewUsageRollup{
-		OrganizationID:    orgID,
-		ProjectID:         projectID,
-		Model:             "gpt-4o",
-		BucketStart:       bucket,
-		Requests:          int32(1),
-		PromptTokens:      int64(100),
-		CompletionTokens:  int64(50),
-		CachedInputTokens: int64(5),
-		TotalTokens:       int64(155),
-		CostMicros:        int64(1000),
+	record := func(project *uuid.UUID, model string, prompt, completion, cached, total int32, cost int64) {
+		t.Helper()
+		_, err := llm.Record(testCtx, orgID, domain.NewLlmRequest{
+			ProjectID:         project,
+			RequestID:         "rollup-" + uuid.NewString(),
+			ProviderKind:      "openai",
+			Model:             model,
+			Status:            domain.LlmRequestStatusSucceeded,
+			PromptTokens:      prompt,
+			CompletionTokens:  completion,
+			CachedInputTokens: cached,
+			TotalTokens:       total,
+			CostMicros:        cost,
+		})
+		requireNoErr(t, err)
 	}
 
-	// Same bucket, called twice: the upsert accumulates deltas.
-	requireNoErr(t, repo.RollupHourly(testCtx, input))
-	requireNoErr(t, repo.RollupHourly(testCtx, input))
-	requireNoErr(t, repo.RollupDaily(testCtx, input))
-	requireNoErr(t, repo.RollupMonthly(testCtx, input))
+	record(&projectID, "gpt-4o", 100, 50, 5, 155, 1000)
+	record(&projectID, "gpt-4o", 40, 10, 0, 50, 250)
+	record(nil, "gpt-4o", 999, 999, 0, 1998, 9999)
 
-	var requests int32
-	var promptTokens, completionTokens, cachedTokens, totalTokens, cost int64
-	err := testStore.Pool().QueryRow(testCtx,
-		`SELECT requests, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, cost_micros
-		 FROM usage_hourly
-		 WHERE organization_id = $1 AND project_id = $2 AND model = $3 AND bucket_start = $4`,
-		orgID, projectID, "gpt-4o", bucket).
-		Scan(&requests, &promptTokens, &completionTokens, &cachedTokens, &totalTokens, &cost)
+	from := time.Now().UTC().Add(-time.Hour)
+	to := time.Now().UTC().Add(time.Hour)
+
+	type rollup struct {
+		requests   int32
+		prompt     int64
+		completion int64
+		cached     int64
+		total      int64
+		cost       int64
+	}
+	hourly := func() rollup {
+		t.Helper()
+		var r rollup
+		err := testStore.Pool().QueryRow(testCtx,
+			`SELECT coalesce(sum(requests),0)::int, coalesce(sum(prompt_tokens),0), coalesce(sum(completion_tokens),0),
+			        coalesce(sum(cached_input_tokens),0), coalesce(sum(total_tokens),0), coalesce(sum(cost_micros),0)
+			 FROM usage_hourly
+			 WHERE organization_id = $1 AND project_id = $2 AND model = $3`,
+			orgID, projectID, "gpt-4o").
+			Scan(&r.requests, &r.prompt, &r.completion, &r.cached, &r.total, &r.cost)
+		requireNoErr(t, err)
+		return r
+	}
+	rowsIn := func(table string) int {
+		t.Helper()
+		var n int
+		err := testStore.Pool().QueryRow(testCtx,
+			`SELECT count(*)::int FROM `+table+` WHERE organization_id = $1 AND project_id = $2`,
+			orgID, projectID).Scan(&n)
+		requireNoErr(t, err)
+		return n
+	}
+
+	requireNoErr(t, repo.Recompute(testCtx, orgID, from, to))
+
+	// The projectless request cannot be represented in a project-keyed bucket,
+	// so the two scoped requests are all that may be counted.
+	want := rollup{requests: 2, prompt: 140, completion: 60, cached: 5, total: 205, cost: 1250}
+	if got := hourly(); got != want {
+		t.Fatalf("hourly rollup mismatch: got %+v want %+v", got, want)
+	}
+	for _, table := range []string{"usage_daily", "usage_monthly"} {
+		if n := rowsIn(table); n != 1 {
+			t.Fatalf("%s expected 1 bucket row, got %d", table, n)
+		}
+	}
+
+	// Recompute rebuilds its window, so a second pass must not double-count.
+	requireNoErr(t, repo.Recompute(testCtx, orgID, from, to))
+	if got := hourly(); got != want {
+		t.Fatalf("recompute was not idempotent: got %+v want %+v", got, want)
+	}
+
+	// Deleting a project nulls its llm_requests rows, which must not leave the
+	// old buckets behind: they are cleared and nothing refills them.
+	if _, err := testStore.Pool().Exec(testCtx,
+		`UPDATE llm_requests SET project_id = NULL WHERE organization_id = $1 AND project_id = $2`,
+		orgID, projectID); err != nil {
+		t.Fatalf("detach project: %v", err)
+	}
+	requireNoErr(t, repo.Recompute(testCtx, orgID, from, to))
+	for _, table := range []string{"usage_hourly", "usage_daily", "usage_monthly"} {
+		if n := rowsIn(table); n != 0 {
+			t.Fatalf("%s kept %d stale bucket rows after project detach", table, n)
+		}
+	}
+}
+
+func TestUsageRollupCostSnapshot(t *testing.T) {
+	llm := repos.NewLlmRequestRepository(testStore)
+	models := repos.NewPricingModelRepository(testStore)
+	versions := repos.NewPricingVersionRepository(testStore)
+	repo := repos.NewUsageRollupRepository(testStore)
+	orgID, _, projectID := newTenant(t)
+
+	now := time.Now().UTC()
+	pm, err := models.Upsert(testCtx, orgID, domain.NewPricingModel{
+		ModelSlug: "gpt-4o", ProviderKind: "openai", DisplayName: "GPT-4o",
+	})
 	requireNoErr(t, err)
-	if requests != 2 || promptTokens != 200 || completionTokens != 100 || cachedTokens != 10 || totalTokens != 310 || cost != 2000 {
-		t.Fatalf("hourly rollup did not accumulate: req=%d prompt=%d completions=%d cached=%d total=%d cost=%d",
-			requests, promptTokens, completionTokens, cachedTokens, totalTokens, cost)
+	for _, v := range []domain.NewPricingVersion{
+		{PricingModelID: pm.ID, Version: 1, InputUnitPriceMicros: 3, OutputUnitPriceMicros: 15, EffectiveFrom: now.Add(-2 * time.Hour)},
+		{PricingModelID: pm.ID, Version: 2, InputUnitPriceMicros: 4, OutputUnitPriceMicros: 20, EffectiveFrom: now.Add(-30 * time.Minute)},
+	} {
+		_, err := versions.Create(testCtx, orgID, v)
+		requireNoErr(t, err)
 	}
 
+	record := func(requestID, model string) {
+		t.Helper()
+		_, err := llm.Record(testCtx, orgID, domain.NewLlmRequest{
+			ProjectID: &projectID, RequestID: requestID, ProviderKind: "openai",
+			Model: model, Status: domain.LlmRequestStatusSucceeded,
+			PromptTokens: 100, CompletionTokens: 50, TotalTokens: 150,
+		})
+		requireNoErr(t, err)
+	}
+	record("priced-v2", "gpt-4o")
+	record("priced-v1", "gpt-4o")
+	record("no-price-sheet", "mystery-model")
+
+	if _, err := testStore.Pool().Exec(testCtx,
+		`UPDATE llm_requests SET created_at = $1 WHERE organization_id = $2 AND request_id = $3`,
+		now.Add(-90*time.Minute), orgID, "priced-v1"); err != nil {
+		t.Fatalf("backdate request: %v", err)
+	}
+
+	costOf := func(requestID string) int64 {
+		t.Helper()
+		var c int64
+		err := testStore.Pool().QueryRow(testCtx,
+			`SELECT cost_micros FROM llm_requests WHERE organization_id = $1 AND request_id = $2`,
+			orgID, requestID).Scan(&c)
+		requireNoErr(t, err)
+		return c
+	}
+	bucketCost := func() int64 {
+		t.Helper()
+		var c int64
+		err := testStore.Pool().QueryRow(testCtx,
+			`SELECT coalesce(sum(cost_micros),0) FROM usage_hourly
+			 WHERE organization_id = $1 AND project_id = $2 AND model = 'gpt-4o'`,
+			orgID, projectID).Scan(&c)
+		requireNoErr(t, err)
+		return c
+	}
+
+	from, to := now.Add(-3*time.Hour), now.Add(time.Hour)
+	requireNoErr(t, repo.Recompute(testCtx, orgID, from, to))
+
+	for requestID, want := range map[string]int64{"priced-v2": 1400, "priced-v1": 1050, "no-price-sheet": 0} {
+		if got := costOf(requestID); got != want {
+			t.Fatalf("%s cost_micros = %d, want %d", requestID, got, want)
+		}
+	}
+	if got, want := bucketCost(), int64(2450); got != want {
+		t.Fatalf("hourly cost = %d, want %d", got, want)
+	}
+
+	requireNoErr(t, repo.Recompute(testCtx, orgID, from, to))
+	if got, want := bucketCost(), int64(2450); got != want {
+		t.Fatalf("cost was not idempotent: %d, want %d", got, want)
+	}
+
+	_, err = versions.Create(testCtx, orgID, domain.NewPricingVersion{
+		PricingModelID: pm.ID, Version: 3, InputUnitPriceMicros: 99, OutputUnitPriceMicros: 99,
+		EffectiveFrom: now,
+	})
+	requireNoErr(t, err)
+	requireNoErr(t, repo.Recompute(testCtx, orgID, from, to))
+	if got := costOf("priced-v1"); got != 1050 {
+		t.Fatalf("historical request repriced to v3: %d", got)
+	}
+}
+
+func TestPricingVersionTieBreakOnEqualEffectiveFrom(t *testing.T) {
+	llm := repos.NewLlmRequestRepository(testStore)
+	models := repos.NewPricingModelRepository(testStore)
+	versions := repos.NewPricingVersionRepository(testStore)
+	repo := repos.NewUsageRollupRepository(testStore)
+	orgID, _, _ := newTenant(t)
+
+	now := time.Now().UTC()
+	pm, err := models.Upsert(testCtx, orgID, domain.NewPricingModel{
+		ModelSlug: "tiebreak-model", ProviderKind: "openai", DisplayName: "Tiebreak",
+	})
+	requireNoErr(t, err)
+
+	effectiveFrom := now.Add(-time.Hour)
+	highestVersionFirst := []domain.NewPricingVersion{
+		{PricingModelID: pm.ID, Version: 2, InputUnitPriceMicros: 10, OutputUnitPriceMicros: 20, EffectiveFrom: effectiveFrom},
+		{PricingModelID: pm.ID, Version: 1, InputUnitPriceMicros: 2, OutputUnitPriceMicros: 4, EffectiveFrom: effectiveFrom},
+	}
+	for _, v := range highestVersionFirst {
+		_, err := versions.Create(testCtx, orgID, v)
+		requireNoErr(t, err)
+	}
+
+	_, err = llm.Record(testCtx, orgID, domain.NewLlmRequest{
+		RequestID: "tiebreak-request", ProviderKind: "openai", Model: "tiebreak-model",
+		Status: domain.LlmRequestStatusSucceeded, PromptTokens: 100, CompletionTokens: 50, TotalTokens: 150,
+	})
+	requireNoErr(t, err)
+
+	requireNoErr(t, repo.Recompute(testCtx, orgID, now.Add(-3*time.Hour), now.Add(time.Hour)))
+
+	var cost int64
 	err = testStore.Pool().QueryRow(testCtx,
-		`SELECT requests FROM usage_daily  WHERE organization_id = $1 AND project_id = $2 AND model = $3 AND bucket_start = $4`,
-		orgID, projectID, "gpt-4o", bucket).Scan(&requests)
+		`SELECT cost_micros FROM llm_requests WHERE organization_id = $1 AND request_id = $2`,
+		orgID, "tiebreak-request").Scan(&cost)
 	requireNoErr(t, err)
-	if requests != 1 {
-		t.Fatalf("daily rollup mismatch: %d", requests)
-	}
-	err = testStore.Pool().QueryRow(testCtx,
-		`SELECT requests FROM usage_monthly WHERE organization_id = $1 AND project_id = $2 AND model = $3 AND bucket_start = $4`,
-		orgID, projectID, "gpt-4o", bucket).Scan(&requests)
-	requireNoErr(t, err)
-	if requests != 1 {
-		t.Fatalf("monthly rollup mismatch: %d", requests)
+
+	if want := int64(2000); cost != want {
+		t.Fatalf("cost_micros = %d, want %d (higher version must win an equal effective_from tie)", cost, want)
 	}
 }
 

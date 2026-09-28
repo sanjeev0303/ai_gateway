@@ -1,8 +1,11 @@
 package controlapi
 
 import (
+	"errors"
 	"net/http"
+	"time"
 
+	"ai-governance-saas/backend/internal/application/provider"
 	"ai-governance-saas/backend/internal/domain"
 	"ai-governance-saas/backend/internal/platform/httpx"
 )
@@ -102,6 +105,32 @@ type createProviderCredentialRequest struct {
 
 type rotateProviderCredentialRequest struct {
 	Secret string `json:"secret"`
+}
+
+// providerProbeRequest carries a secret for a live probe. The secret is used
+// for the upstream call only: it is never stored, never returned, and never
+// logged. A caller that wants the secret persisted should create a credential.
+type providerProbeRequest struct {
+	ProviderKind string `json:"provider_kind"`
+	APIKey       string `json:"api_key"`
+}
+
+type providerHealthDTO struct {
+	ProviderKind string `json:"provider_kind"`
+	Status       string `json:"status"`
+	StatusReason string `json:"status_reason,omitempty"`
+	LastError    string `json:"last_error,omitempty"`
+	CheckedAt    string `json:"checked_at"`
+}
+
+func toProviderHealthDTO(s domain.ProviderHealthState) providerHealthDTO {
+	return providerHealthDTO{
+		ProviderKind: s.ProviderKind,
+		Status:       s.Status,
+		StatusReason: s.StatusReason,
+		LastError:    s.LastError,
+		CheckedAt:    s.CheckedAt.UTC().Format(time.RFC3339),
+	}
 }
 
 // ---- provider account handlers -------------------------------------------
@@ -251,6 +280,81 @@ func (a *api) listModels(w http.ResponseWriter, r *http.Request) {
 	items := make([]modelDTO, 0, len(models))
 	for _, model := range models {
 		items = append(items, toModelDTO(model))
+	}
+	httpx.WriteJSON(w, http.StatusOK, listDTO{Items: items})
+}
+
+// ---- provider probe handlers ----------------------------------------------
+
+// validateProviderCredential proves a secret is accepted by the provider
+// without persisting it. An upstream rejection is reported as valid=false
+// with 200 so a caller can render the result, not treat it as a gateway fault.
+func (a *api) validateProviderCredential(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	var req providerProbeRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	err := a.providers.ValidateCredential(r.Context(), actor, req.ProviderKind, req.APIKey)
+	if err == nil {
+		httpx.WriteJSON(w, http.StatusOK, map[string]any{"valid": true})
+		return
+	}
+	if errors.Is(err, provider.ErrInvalidProviderCredential) {
+		httpx.WriteJSON(w, http.StatusOK, map[string]any{"valid": false})
+		return
+	}
+	writeServiceError(w, r, err)
+}
+
+// checkProviderHealth runs a live connectivity probe and records the result.
+func (a *api) checkProviderHealth(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	var req providerProbeRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	state, err := a.providers.CheckHealth(r.Context(), actor, req.ProviderKind, req.APIKey)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toProviderHealthDTO(state))
+}
+
+// listProviderHealth returns the last observed state for every provider kind.
+func (a *api) listProviderHealth(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	states, err := a.providers.ListHealth(r.Context(), actor)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	items := make([]providerHealthDTO, 0, len(states))
+	for _, s := range states {
+		items = append(items, toProviderHealthDTO(s))
+	}
+	httpx.WriteJSON(w, http.StatusOK, listDTO{Items: items})
+}
+
+// syncProviderModels refreshes the global model catalog from the live provider.
+func (a *api) syncProviderModels(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	var req providerProbeRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	models, err := a.providers.SyncModels(r.Context(), actor, req.ProviderKind, req.APIKey)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	items := make([]modelDTO, 0, len(models))
+	for _, m := range models {
+		items = append(items, toModelDTO(m))
 	}
 	httpx.WriteJSON(w, http.StatusOK, listDTO{Items: items})
 }

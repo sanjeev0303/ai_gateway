@@ -41,10 +41,10 @@ type Content struct {
 
 // Part is a single content part within a turn.
 type Part struct {
-	Text             string             `json:"text,omitempty"`
-	InlineData       *Blob              `json:"inlineData,omitempty"`
-	FunctionCall     *FunctionCall      `json:"functionCall,omitempty"`
-	FunctionResponse *FunctionResponse  `json:"functionResponse,omitempty"`
+	Text             string            `json:"text,omitempty"`
+	InlineData       *Blob             `json:"inlineData,omitempty"`
+	FunctionCall     *FunctionCall     `json:"functionCall,omitempty"`
+	FunctionResponse *FunctionResponse `json:"functionResponse,omitempty"`
 }
 
 // Blob represents inline binary data (base64 encoded).
@@ -55,7 +55,7 @@ type Blob struct {
 
 // FunctionCall represents a model-initiated function call.
 type FunctionCall struct {
-	Name string `json:"name"`
+	Name string                 `json:"name"`
 	Args map[string]interface{} `json:"args"`
 }
 
@@ -127,11 +127,11 @@ type UsageMetadata struct {
 
 // StreamingEvent represents a streaming chunk from streamGenerateContent.
 type StreamingEvent struct {
-	EventType     string          `json:"event_type,omitempty"` // "content.start", "content.delta", "content.stop"
-	Index         int             `json:"index,omitempty"`
-	Candidates    []Candidate     `json:"candidates,omitempty"`
-	UsageMetadata *UsageMetadata  `json:"usageMetadata,omitempty"`
-	Error         *ErrorDetail    `json:"error,omitempty"`
+	EventType     string         `json:"event_type,omitempty"` // "content.start", "content.delta", "content.stop"
+	Index         int            `json:"index,omitempty"`
+	Candidates    []Candidate    `json:"candidates,omitempty"`
+	UsageMetadata *UsageMetadata `json:"usageMetadata,omitempty"`
+	Error         *ErrorDetail   `json:"error,omitempty"`
 }
 
 // Usage represents normalized token usage information for Gemini.
@@ -164,11 +164,11 @@ type ModelsResponse struct {
 
 // ModelSummary describes a model from the models API.
 type ModelSummary struct {
-	Name                     string   `json:"name"` // "models/gemini-2.5-flash"
-	DisplayName              string   `json:"displayName"`
+	Name                       string   `json:"name"` // "models/gemini-2.5-flash"
+	DisplayName                string   `json:"displayName"`
 	SupportedGenerationMethods []string `json:"supportedGenerationMethods"`
-	InputTokenLimit          int      `json:"inputTokenLimit"`
-	OutputTokenLimit         int      `json:"outputTokenLimit"`
+	InputTokenLimit            int      `json:"inputTokenLimit"`
+	OutputTokenLimit           int      `json:"outputTokenLimit"`
 }
 
 // ---- Error --------------------------------------------------------------------

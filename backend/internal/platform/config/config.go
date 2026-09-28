@@ -85,8 +85,8 @@ type RedisConfig struct {
 
 // EventbusConfig describes the outbox/event bus used by worker-heavy flows.
 type EventbusConfig struct {
-	Enabled bool   `env:"ENABLED" envDefault:"false"`
-	Kind    string `env:"KIND" envDefault:"none"` // none | postgres | kafka | nats
+	Enabled bool   `env:"ENABLED" envDefault:"true"`
+	Kind    string `env:"KIND" envDefault:"inmemory"` // inmemory | nats | postgres | kafka
 	URL     string `env:"URL"`
 }
 
@@ -167,7 +167,7 @@ type SecurityConfig struct {
 }
 
 var (
-	validEventbusKinds   = []string{"none", "postgres", "kafka", "nats"}
+	validEventbusKinds   = []string{"inmemory", "nats", "postgres", "kafka"}
 	validSecretsProvider = []string{"env", "vault", "aws"}
 	validLogLevels       = []string{"debug", "info", "warn", "error"}
 	validLogFormats      = []string{"json", "text"}
@@ -207,9 +207,9 @@ func (c Config) Validate() error {
 
 	if c.Eventbus.Enabled {
 		if !slices.Contains(validEventbusKinds, c.Eventbus.Kind) {
-			add(errors.New("EVENTBUS_KIND must be one of none|postgres|kafka|nats"))
+			add(errors.New("EVENTBUS_KIND must be one of inmemory|nats|postgres|kafka"))
 		}
-		if c.Eventbus.Kind != "none" && c.Eventbus.URL == "" {
+		if c.Eventbus.Kind != "inmemory" && c.Eventbus.URL == "" {
 			add(errors.New("EVENTBUS_ENABLED=true requires EVENTBUS_URL"))
 		}
 	}

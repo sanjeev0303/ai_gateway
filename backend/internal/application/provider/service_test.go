@@ -452,9 +452,9 @@ func TestRotateCredential(t *testing.T) {
 		}
 		_, err := svc.RotateCredential(ctx, userActor(domain.RoleOwner), testCredID, "sk-ant-n3w")
 		requireErrIs(t, err, boom)
-		requireEqual(t, revokedNew, true)                          // new credential rolled back
-		requireEqual(t, len(st.secrets.values), 0)                 // new secret deleted
-		requireEqual(t, len(st.audits.actions), 0)                 // no rotate audit on failure
+		requireEqual(t, revokedNew, true)          // new credential rolled back
+		requireEqual(t, len(st.secrets.values), 0) // new secret deleted
+		requireEqual(t, len(st.audits.actions), 0) // no rotate audit on failure
 	})
 }
 
@@ -614,3 +614,83 @@ func svcActor() domain.Actor {
 // that the raw secret is only ever written to the secret store — never into
 // any struct field that could be marshaled into a response.
 var _ = secrets.ErrNotFound
+
+func TestSyncModels(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("upserts every model the provider reports", func(t *testing.T) {
+		svc, st := newTestService()
+		st.provider.listModels = func(_ context.Context, apiKey string) ([]providerclient.Model, error) {
+			requireEqual(t, apiKey, "sk-ant-ok")
+			return []providerclient.Model{
+				{ID: "claude-sonnet-4-5"},
+				{ID: "claude-opus-4-1", DisplayName: "Claude Opus 4.1"},
+			}, nil
+		}
+		var got []domain.Model
+		st.models.upsert = func(_ context.Context, kind, slug, display string) (domain.Model, error) {
+			got = append(got, domain.Model{ProviderKind: kind, ModelSlug: slug, DisplayName: display})
+			return domain.Model{ProviderKind: kind, ModelSlug: slug, DisplayName: display, IsActive: true}, nil
+		}
+		synced, err := svc.SyncModels(ctx, userActor(domain.RoleOwner), domain.ProviderKindAnthropic, "sk-ant-ok")
+		requireNoErr(t, err)
+		requireEqual(t, len(synced), 2)
+		requireEqual(t, got[0].ProviderKind, domain.ProviderKindAnthropic)
+		requireEqual(t, got[0].ModelSlug, "claude-sonnet-4-5")
+		// A provider that omits a display name falls back to the model ID.
+		requireEqual(t, got[0].DisplayName, "claude-sonnet-4-5")
+		requireEqual(t, got[1].DisplayName, "Claude Opus 4.1")
+		requireAudit(t, st, "provider.models.sync")
+	})
+
+	t.Run("rejects an unknown provider kind and a blank key", func(t *testing.T) {
+		svc, _ := newTestService()
+		_, err := svc.SyncModels(ctx, userActor(domain.RoleOwner), "not-a-kind", "sk-ant-ok")
+		requireErrIs(t, err, repositories.ErrInvalid)
+		_, err = svc.SyncModels(ctx, userActor(domain.RoleOwner), domain.ProviderKindAnthropic, "  ")
+		requireErrIs(t, err, repositories.ErrInvalid)
+	})
+
+	t.Run("member may not sync", func(t *testing.T) {
+		svc, _ := newTestService()
+		_, err := svc.SyncModels(ctx, userActor(domain.RoleMember), domain.ProviderKindAnthropic, "sk-ant-ok")
+		requireErrIs(t, err, repositories.ErrForbidden)
+	})
+
+	t.Run("propagates an upstream failure", func(t *testing.T) {
+		svc, st := newTestService()
+		st.provider.listModels = func(context.Context, string) ([]providerclient.Model, error) {
+			return nil, errors.New("upstream 503")
+		}
+		_, err := svc.SyncModels(ctx, userActor(domain.RoleOwner), domain.ProviderKindAnthropic, "sk-ant-ok")
+		requireErr(t, err)
+	})
+}
+
+func TestValidateCredential(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("accepted secret validates", func(t *testing.T) {
+		svc, st := newTestService()
+		st.provider.validateErr = nil
+		requireNoErr(t, svc.ValidateCredential(ctx, userActor(domain.RoleOwner), domain.ProviderKindAnthropic, "sk-ant-ok"))
+	})
+
+	t.Run("rejected secret surfaces the provider error", func(t *testing.T) {
+		svc, st := newTestService()
+		st.provider.validateErr = providerclient.ErrInvalidCredentials
+		err := svc.ValidateCredential(ctx, userActor(domain.RoleOwner), domain.ProviderKindAnthropic, "sk-ant-bad")
+		requireErrIs(t, err, ErrInvalidProviderCredential)
+	})
+
+	t.Run("rejects an unknown kind and a blank key", func(t *testing.T) {
+		svc, _ := newTestService()
+		requireErrIs(t, svc.ValidateCredential(ctx, userActor(domain.RoleOwner), "not-a-kind", "k"), repositories.ErrInvalid)
+		requireErrIs(t, svc.ValidateCredential(ctx, userActor(domain.RoleOwner), domain.ProviderKindAnthropic, ""), repositories.ErrInvalid)
+	})
+
+	t.Run("member may not validate", func(t *testing.T) {
+		svc, _ := newTestService()
+		requireErrIs(t, svc.ValidateCredential(ctx, userActor(domain.RoleMember), domain.ProviderKindAnthropic, "k"), repositories.ErrForbidden)
+	})
+}

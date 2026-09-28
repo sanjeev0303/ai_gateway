@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -21,8 +22,8 @@ import (
 	"github.com/google/uuid"
 
 	"ai-governance-saas/backend/internal/domain"
-	repositories "ai-governance-saas/backend/internal/ports/repositories"
 	providerclient "ai-governance-saas/backend/internal/ports/provider"
+	repositories "ai-governance-saas/backend/internal/ports/repositories"
 	"ai-governance-saas/backend/internal/ports/secrets"
 )
 
@@ -343,6 +344,71 @@ func (s *Service) CheckHealth(ctx context.Context, actor domain.Actor, providerK
 		return domain.ProviderHealthState{}, err
 	}
 	return state, nil
+}
+
+// ValidateCredential proves an apiKey is accepted by providerKind. The key is
+// used for the probe only and is never stored.
+func (s *Service) ValidateCredential(ctx context.Context, actor domain.Actor, providerKind, apiKey string) error {
+	if err := s.RequirePermission(actor, domain.PermissionProvidersManage); err != nil {
+		return err
+	}
+	client, err := s.clientFor(providerKind, apiKey)
+	if err != nil {
+		return err
+	}
+	if err := client.ValidateCredentials(ctx, apiKey); err != nil {
+		if errors.Is(err, providerclient.ErrInvalidCredentials) {
+			return fmt.Errorf("%w: %s", ErrInvalidProviderCredential, providerKind)
+		}
+		return err
+	}
+	return nil
+}
+
+// SyncModels upserts the live model list for providerKind into the global
+// catalog. The apiKey is used for the upstream call only and is never persisted
+// or logged.
+func (s *Service) SyncModels(ctx context.Context, actor domain.Actor, providerKind, apiKey string) ([]domain.Model, error) {
+	if err := s.RequirePermission(actor, domain.PermissionProvidersManage); err != nil {
+		return nil, err
+	}
+	client, err := s.clientFor(providerKind, apiKey)
+	if err != nil {
+		return nil, err
+	}
+	remote, err := client.ListModels(ctx, apiKey)
+	if err != nil {
+		return nil, fmt.Errorf("list models for %s: %w", providerKind, err)
+	}
+	synced := make([]domain.Model, 0, len(remote))
+	for _, m := range remote {
+		displayName := m.DisplayName
+		if displayName == "" {
+			displayName = m.ID
+		}
+		model, err := s.models.Upsert(ctx, providerKind, m.ID, displayName)
+		if err != nil {
+			return nil, fmt.Errorf("upsert model %s/%s: %w", providerKind, m.ID, err)
+		}
+		synced = append(synced, model)
+	}
+	payload, _ := json.Marshal(map[string]any{"provider_kind": providerKind, "count": len(synced)})
+	s.audit(ctx, actor, "provider.models.sync", "provider_kind", nil, nil, payload)
+	return synced, nil
+}
+
+// clientFor resolves the adapter for a storable provider kind and rejects a
+// blank apiKey, so the validation and health paths share one definition of
+// "usable provider + secret".
+func (s *Service) clientFor(providerKind, apiKey string) (providerclient.Provider, error) {
+	if !isProviderKind(providerKind) || strings.TrimSpace(apiKey) == "" {
+		return nil, repositories.ErrInvalid
+	}
+	client := s.providers[providerKind]
+	if client == nil {
+		return nil, repositories.ErrInvalid
+	}
+	return client, nil
 }
 
 // ListHealth returns the last observed connectivity state of every provider

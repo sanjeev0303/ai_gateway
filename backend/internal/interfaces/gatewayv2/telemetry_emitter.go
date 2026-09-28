@@ -4,11 +4,23 @@ package gatewayv2
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/google/uuid"
+
+	"ai-governance-saas/backend/internal/domain"
+	"ai-governance-saas/backend/internal/ports"
 )
+
+// usageFlushTimeout bounds one batch of ledger writes so a stuck database
+// cannot pin the worker goroutine indefinitely.
+const usageFlushTimeout = 5 * time.Second
+
+var errMissingRequestID = errors.New("gateway: usage record has no request id")
 
 // TelemetryEmitterImpl emits usage and error events asynchronously.
 type TelemetryEmitterImpl struct {
@@ -17,24 +29,28 @@ type TelemetryEmitterImpl struct {
 	logger      *slog.Logger
 	wg          sync.WaitGroup
 	stopCh      chan struct{}
-	flusher     *periodicFlusher
+	flushReq    chan chan struct{}
 	bufferSize  int
 	flushPeriod time.Duration
+	bus         ports.EventBus
 	stats       EmitterStats
 }
 
 // EmitterStats tracks emitter performance.
 type EmitterStats struct {
-	UsageEmitted   int64
-	UsageDropped   int64
-	ErrorsEmitted  int64
-	ErrorsDropped  int64
-	FlushCount     int64
-	LastFlushTime  int64 // unix nano
+	UsageEmitted     int64
+	UsageDropped     int64
+	UsageWriteFailed int64
+	ErrorsEmitted    int64
+	ErrorsDropped    int64
+	FlushCount       int64
+	LastFlushTime    int64 // unix nano
 }
 
-// NewTelemetryEmitter creates a new telemetry emitter.
-func NewTelemetryEmitter(bufferSize int, flushPeriod time.Duration, logger *slog.Logger) *TelemetryEmitterImpl {
+// NewTelemetryEmitter creates a telemetry emitter that publishes usage onto the
+// event bus off the request path. The data plane derives the records; the worker
+// persists them.
+func NewTelemetryEmitter(bufferSize int, flushPeriod time.Duration, bus ports.EventBus, logger *slog.Logger) *TelemetryEmitterImpl {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -46,19 +62,19 @@ func NewTelemetryEmitter(bufferSize int, flushPeriod time.Duration, logger *slog
 	}
 
 	e := &TelemetryEmitterImpl{
-		usageQueue:   make(chan UsageRecord, bufferSize),
-		errorQueue:   make(chan ErrorRecord, bufferSize),
-		logger:       logger,
-		stopCh:       make(chan struct{}),
-		bufferSize:   bufferSize,
-		flushPeriod:  flushPeriod,
-		flusher:      newPeriodicFlusher(flushPeriod),
+		usageQueue:  make(chan UsageRecord, bufferSize),
+		errorQueue:  make(chan ErrorRecord, bufferSize),
+		logger:      logger,
+		stopCh:      make(chan struct{}),
+		flushReq:    make(chan chan struct{}),
+		bufferSize:  bufferSize,
+		flushPeriod: flushPeriod,
+		bus:         bus,
 	}
 
 	e.wg.Add(2)
 	go e.usageWorker()
 	go e.errorWorker()
-	e.flusher.Start(e.flush)
 
 	return e
 }
@@ -71,8 +87,8 @@ func (e *TelemetryEmitterImpl) EmitUsage(ctx context.Context, usage UsageRecord)
 	default:
 		atomic.AddInt64(&e.stats.UsageDropped, 1)
 		e.logger.Warn("telemetry: usage queue full, dropping record",
+			"request_id", usage.RequestID,
 			"org_id", usage.OrganizationID,
-			"credential_id", usage.CredentialID,
 		)
 	}
 }
@@ -109,6 +125,20 @@ func (e *TelemetryEmitterImpl) usageWorker() {
 		atomic.StoreInt64(&e.stats.LastFlushTime, time.Now().UnixNano())
 	}
 
+	// select picks a ready case at random, so a flush or a stop can be
+	// serviced while records are still queued. Pull in everything buffered
+	// first, otherwise the flush can ack an empty batch.
+	drain := func() {
+		for {
+			select {
+			case record := <-e.usageQueue:
+				batch = append(batch, record)
+			default:
+				return
+			}
+		}
+	}
+
 	for {
 		select {
 		case record := <-e.usageQueue:
@@ -118,7 +148,12 @@ func (e *TelemetryEmitterImpl) usageWorker() {
 			}
 		case <-ticker.C:
 			flush()
+		case done := <-e.flushReq:
+			drain()
+			flush()
+			close(done)
 		case <-e.stopCh:
+			drain()
 			flush()
 			return
 		}
@@ -151,108 +186,184 @@ func (e *TelemetryEmitterImpl) errorWorker() {
 		case <-ticker.C:
 			flush()
 		case <-e.stopCh:
-			flush()
-			return
+			for {
+				select {
+				case record := <-e.errorQueue:
+					batch = append(batch, record)
+				default:
+					flush()
+					return
+				}
+			}
 		}
 	}
 }
 
-// flushUsage sends a batch of usage records to the backend.
+// flushUsage publishes a batch of usage records. The worker owns the ledger
+// write, and its idempotency absorbs a redelivered message rather than
+// double-counting it.
 func (e *TelemetryEmitterImpl) flushUsage(batch []UsageRecord) {
-	// In production, send to telemetry backend (ClickHouse, TimescaleDB, etc.)
-	// For now, log as structured JSON
-	for _, record := range batch {
-		data, _ := json.Marshal(record)
-		e.logger.Debug("telemetry: usage", "data", string(data))
+	if e.bus == nil {
+		atomic.AddInt64(&e.stats.UsageWriteFailed, int64(len(batch)))
+		e.logger.Error("telemetry: usage sink not configured, discarding records", "count", len(batch))
+		return
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), usageFlushTimeout)
+	defer cancel()
+
+	for _, record := range batch {
+		if err := e.writeUsage(ctx, record); err != nil {
+			atomic.AddInt64(&e.stats.UsageWriteFailed, 1)
+			e.logger.Error("telemetry: usage write failed",
+				"request_id", record.RequestID,
+				"org_id", record.OrganizationID,
+				"error", err,
+			)
+		}
+	}
+}
+
+// usageEventMetadata is the ledger detail carried alongside the token total.
+type usageEventMetadata struct {
+	InputTokens      int    `json:"input_tokens"`
+	OutputTokens     int    `json:"output_tokens"`
+	CacheReadTokens  int    `json:"cache_read_tokens"`
+	CacheWriteTokens int    `json:"cache_write_tokens"`
+	Provider         string `json:"provider,omitempty"`
+	Model            string `json:"model,omitempty"`
+	CredentialID     string `json:"credential_id,omitempty"`
+	StatusCode       int    `json:"status_code"`
+	LatencyMs        int64  `json:"latency_ms"`
+	UsageSource      string `json:"usage_source"`
+}
+
+func (e *TelemetryEmitterImpl) writeUsage(ctx context.Context, record UsageRecord) error {
+	if record.RequestID == "" {
+		return errMissingRequestID
+	}
+
+	providerKind := "unknown"
+	if record.ProviderMeta != nil {
+		if name, ok := record.ProviderMeta["provider"].(string); ok && name != "" {
+			providerKind = name
+		}
+	}
+	status := "success"
+	if record.StatusCode >= 400 {
+		status = "error"
+	}
+	source := "estimated"
+	if providerKind != "unknown" {
+		source = "provider_reported"
+	}
+
+	metadata, err := json.Marshal(usageEventMetadata{
+		InputTokens:      record.InputTokens,
+		OutputTokens:     record.OutputTokens,
+		CacheReadTokens:  record.CacheReadTokens,
+		CacheWriteTokens: record.CacheWriteTokens,
+		Provider:         providerKind,
+		Model:            record.Model,
+		CredentialID:     record.CredentialID.String(),
+		StatusCode:       record.StatusCode,
+		LatencyMs:        record.LatencyMs,
+		UsageSource:      source,
+	})
+	if err != nil {
+		return err
+	}
+
+	return e.bus.Publish(ctx, ports.UsageEventMessage{
+		OrganizationID: record.OrganizationID,
+		Request:        newLlmRequestFrom(record, providerKind, status),
+		Usage: domain.NewUsageEvent{
+			RequestID: record.RequestID,
+			EventType: domain.UsageEventTypeTokenUsage,
+			Quantity:  int64(record.InputTokens) + int64(record.OutputTokens),
+			Unit:      domain.UsageUnitTokens,
+			Metadata:  metadata,
+		},
+	})
+}
+
+func newLlmRequestFrom(record UsageRecord, providerKind, status string) domain.NewLlmRequest {
+	return domain.NewLlmRequest{
+		ProjectID:         record.ProjectID,
+		UserID:            subjectUserID(record),
+		APICredentialID:   &record.CredentialID,
+		RequestID:         record.RequestID,
+		ProviderKind:      providerKind,
+		Model:             record.Model,
+		Status:            status,
+		PromptTokens:      int32(record.InputTokens),
+		CompletionTokens:  int32(record.OutputTokens),
+		CachedInputTokens: int32(record.CacheReadTokens),
+		TotalTokens:       int32(record.InputTokens + record.OutputTokens),
+		LatencyMs:         int32(record.LatencyMs),
+		CreatedAt:         record.Timestamp.UTC(),
+	}
+}
+
+func subjectUserID(record UsageRecord) *uuid.UUID {
+	if domain.SubjectType(record.SubjectType) != domain.SubjectTypeUser {
+		return nil
+	}
+	return &record.SubjectID
 }
 
 // flushErrors sends a batch of error records to the backend.
 func (e *TelemetryEmitterImpl) flushErrors(batch []ErrorRecord) {
 	for _, record := range batch {
-		data, _ := json.Marshal(record)
-		e.logger.Debug("telemetry: error", "data", string(data))
+		e.logger.Warn("telemetry: error", "org_id", record.OrganizationID, "error_type", record.ErrorType, "status", record.StatusCode)
 	}
 }
 
-// flush is called by the periodic flusher.
-func (e *TelemetryEmitterImpl) flush() {
-	// The workers handle periodic flushing via their ticker
-}
-
-// Flush forces an immediate flush of all queues.
+// Flush blocks until the usage worker has persisted everything queued so far.
+// The worker owns the batch, so the request has to be serviced by it rather
+// than raced for from here.
 func (e *TelemetryEmitterImpl) Flush(ctx context.Context) error {
-	// The workers flush periodically; this is a no-op for now
-	return nil
+	done := make(chan struct{})
+	select {
+	case e.flushReq <- done:
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-e.stopCh:
+		return errors.New("gateway: telemetry emitter closed")
+	}
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // Close stops the emitter and drains queues.
 func (e *TelemetryEmitterImpl) Close() error {
 	close(e.stopCh)
 	e.wg.Wait()
-	e.flusher.Stop()
 	return nil
 }
 
 // Stats returns emitter statistics.
 func (e *TelemetryEmitterImpl) Stats() EmitterStats {
 	return EmitterStats{
-		UsageEmitted:  atomic.LoadInt64(&e.stats.UsageEmitted),
-		UsageDropped:  atomic.LoadInt64(&e.stats.UsageDropped),
-		ErrorsEmitted: atomic.LoadInt64(&e.stats.ErrorsEmitted),
-		ErrorsDropped: atomic.LoadInt64(&e.stats.ErrorsDropped),
-		FlushCount:    atomic.LoadInt64(&e.stats.FlushCount),
-		LastFlushTime: atomic.LoadInt64(&e.stats.LastFlushTime),
+		UsageEmitted:     atomic.LoadInt64(&e.stats.UsageEmitted),
+		UsageDropped:     atomic.LoadInt64(&e.stats.UsageDropped),
+		UsageWriteFailed: atomic.LoadInt64(&e.stats.UsageWriteFailed),
+		ErrorsEmitted:    atomic.LoadInt64(&e.stats.ErrorsEmitted),
+		ErrorsDropped:    atomic.LoadInt64(&e.stats.ErrorsDropped),
+		FlushCount:       atomic.LoadInt64(&e.stats.FlushCount),
+		LastFlushTime:    atomic.LoadInt64(&e.stats.LastFlushTime),
 	}
-}
-
-// periodicFlusher runs a function periodically.
-type periodicFlusher struct {
-	period time.Duration
-	stopCh chan struct{}
-	wg     sync.WaitGroup
-	fn     func()
-}
-
-func newPeriodicFlusher(period time.Duration) *periodicFlusher {
-	return &periodicFlusher{
-		period: period,
-		stopCh: make(chan struct{}),
-	}
-}
-
-func (p *periodicFlusher) Start(fn func()) {
-	p.fn = fn
-	p.wg.Add(1)
-	go p.run()
-}
-
-func (p *periodicFlusher) run() {
-	defer p.wg.Done()
-	ticker := time.NewTicker(p.period)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			if p.fn != nil {
-				p.fn()
-			}
-		case <-p.stopCh:
-			return
-		}
-	}
-}
-
-func (p *periodicFlusher) Stop() {
-	close(p.stopCh)
-	p.wg.Wait()
 }
 
 // NullTelemetryEmitter is a no-op emitter for testing or when telemetry is disabled.
 type NullTelemetryEmitter struct{}
 
-func (NullTelemetryEmitter) EmitUsage(context.Context, UsageRecord)   {}
-func (NullTelemetryEmitter) EmitError(context.Context, ErrorRecord)   {}
-func (NullTelemetryEmitter) Flush(context.Context) error              { return nil }
-func (NullTelemetryEmitter) Close() error                             { return nil }
+func (NullTelemetryEmitter) EmitUsage(context.Context, UsageRecord) {}
+func (NullTelemetryEmitter) EmitError(context.Context, ErrorRecord) {}
+func (NullTelemetryEmitter) Flush(context.Context) error            { return nil }
+func (NullTelemetryEmitter) Close() error                           { return nil }

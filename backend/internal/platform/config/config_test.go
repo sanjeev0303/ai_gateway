@@ -61,6 +61,42 @@ func TestLoadParsesEnv(t *testing.T) {
 	}
 }
 
+func TestEventbusDefaultsToInProcessPipeline(t *testing.T) {
+	clearEnv(t)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("default config must load: %v", err)
+	}
+	if !cfg.Eventbus.Enabled {
+		t.Error("eventbus must default to enabled so usage is recorded without opt-in")
+	}
+	if cfg.Eventbus.Kind != "inmemory" {
+		t.Errorf("Eventbus.Kind = %q, want inmemory", cfg.Eventbus.Kind)
+	}
+}
+
+func TestEventbusNonInMemoryKindRequiresURL(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("AIGW_EVENTBUS_KIND", "nats")
+	if _, err := Load(); err == nil {
+		t.Fatal("nats without a URL must be rejected")
+	}
+
+	t.Setenv("AIGW_EVENTBUS_URL", "nats://localhost:4222")
+	if _, err := Load(); err != nil {
+		t.Fatalf("nats with a URL must pass validation: %v", err)
+	}
+}
+
+func TestEventbusDisabledSkipsTransportValidation(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("AIGW_EVENTBUS_ENABLED", "false")
+	t.Setenv("AIGW_EVENTBUS_KIND", "kafka")
+	if _, err := Load(); err != nil {
+		t.Fatalf("a disabled eventbus must not require a supported transport: %v", err)
+	}
+}
+
 func TestValidate(t *testing.T) {
 	clearEnv(t)
 	base, err := Load() // valid, fully-defaulted config to mutate from

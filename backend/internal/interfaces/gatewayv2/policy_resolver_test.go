@@ -14,11 +14,11 @@ import (
 
 func enforcedPolicy(id string) domain.Policy {
 	return domain.Policy{
-		ID:           mustUUIDs[0],
+		ID:             mustUUIDs[0],
 		OrganizationID: mustUUIDs[0],
-		Name:         id,
-		Enforcement:  "enforced",
-		Priority:     10,
+		Name:           id,
+		Enforcement:    "enforced",
+		Priority:       10,
 	}
 }
 

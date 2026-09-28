@@ -7,11 +7,12 @@
 # Services
 #   postgres   control-plane database (migrations, tenants, policies, audit)
 #   redis      cache + rate limits (provisioned; wired when the Redis milestone lands)
-#   nats       event bus (provisioned; AIGW_EVENTBUS_KIND=nats already set, flip AIGW_EVENTBUS_ENABLED=true when the eventbus milestone lands)
+#   nats       event bus (provisioned; reserved for the distributed transport. The bus-backed
+#              usage pipeline currently runs in-process, so AIGW_EVENTBUS_KIND=inmemory)
 #   migrate    one-shot: applies DB migrations, then exits
 #   seed       optional (profile "seed"): one-shot demo data
-#   gateway      data plane proxy   (hot path)          host :8080
-#   gateway-v2   data plane v2      (hot path)          host :8084
+#   gateway      data plane v1, FROZEN (profile "legacy-v1", not started by default; ADR-5)
+#   gateway-v2   canonical data plane (hot path)            host :8084
 #   control-api  control plane API                      host :8081
 #   worker       async: rollups, retention, alerts      host :8082
 #   web          Next.js dashboard (port :3000)
@@ -42,8 +43,8 @@ x-backend-env: &backend-env
   AIGW_REDIS_PASSWORD: ${REDIS_PASSWORD:-change-me}
   AIGW_REDIS_DB: "0"
 
-  AIGW_EVENTBUS_ENABLED: "false" # flip to "true" with the eventbus milestone
-  AIGW_EVENTBUS_KIND: nats # none | postgres | kafka | nats
+  AIGW_EVENTBUS_ENABLED: "true"
+  AIGW_EVENTBUS_KIND: inmemory # inmemory runs in-process; nats is reserved and not yet built
   AIGW_EVENTBUS_URL: nats://nats:4222
 
   AIGW_PROVIDER_REQUEST_TIMEOUT: 2m
@@ -145,6 +146,7 @@ services:
   gateway:
     <<: *backend-image
     command: ["/app/gateway"]
+    profiles: ["legacy-v1"]
     environment:
       <<: *backend-env
       AIGW_SERVER_ADDR: ":8080"

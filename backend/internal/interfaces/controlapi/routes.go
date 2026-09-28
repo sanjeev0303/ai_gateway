@@ -101,4 +101,11 @@ func registerProviderRoutes(mux *http.ServeMux, deps Deps) {
 
 	// provider model catalog
 	mux.Handle("GET /v1/models", a.requireAuth(a.listModels))
+	mux.Handle("POST /v1/models/sync", a.requireAuth(a.syncProviderModels))
+
+	// provider connectivity. The probe endpoints take a secret in the body for
+	// the upstream call only; it is never stored, returned, or logged.
+	mux.Handle("POST /v1/provider-credentials/validate", a.requireAuth(a.validateProviderCredential))
+	mux.Handle("POST /v1/provider-health/check", a.requireAuth(a.checkProviderHealth))
+	mux.Handle("GET /v1/provider-health", a.requireAuth(a.listProviderHealth))
 }

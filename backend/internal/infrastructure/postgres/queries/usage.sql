@@ -3,9 +3,9 @@ INSERT INTO llm_requests (
     organization_id, project_id, user_id, api_credential_id, request_id,
     provider_request_id, provider_kind, model, status, error_code,
     prompt_tokens, completion_tokens, cached_input_tokens, total_tokens,
-    latency_ms, cost_micros
+    latency_ms, cost_micros, created_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 ON CONFLICT (organization_id, request_id) DO NOTHING
 RETURNING *;
 
@@ -33,38 +33,102 @@ SELECT * FROM usage_events
 WHERE organization_id = $1 AND request_id = $2
 ORDER BY created_at;
 
--- name: RollupUsageHourly :execrows
+-- name: BackfillLLMRequestCost :exec
+WITH resolvable AS (
+    SELECT r.id,
+           r.prompt_tokens::bigint * p.input_unit_price_micros
+         + r.completion_tokens::bigint * p.output_unit_price_micros AS cost
+    FROM llm_requests r
+    JOIN pricing_models pm
+      ON pm.organization_id = r.organization_id
+     AND pm.model_slug = r.model
+    CROSS JOIN LATERAL (
+        SELECT v.input_unit_price_micros, v.output_unit_price_micros
+        FROM pricing_versions v
+        WHERE v.pricing_model_id = pm.id
+          AND v.organization_id = r.organization_id
+          AND v.effective_from <= r.created_at
+        ORDER BY v.effective_from DESC, v.version DESC
+        LIMIT 1
+    ) p
+    WHERE r.organization_id = sqlc.arg(organization_id)
+      AND r.created_at >= sqlc.arg(from_ts)
+      AND r.created_at < sqlc.arg(to_ts)
+)
+UPDATE llm_requests r
+SET cost_micros = resolvable.cost
+FROM resolvable
+WHERE r.id = resolvable.id
+  AND r.cost_micros IS DISTINCT FROM resolvable.cost;
+
+-- name: DeleteUsageHourlyInWindow :exec
+DELETE FROM usage_hourly
+WHERE organization_id = sqlc.arg(organization_id) AND bucket_start >= sqlc.arg(from_ts) AND bucket_start < sqlc.arg(to_ts);
+
+-- name: RecomputeUsageHourly :exec
 INSERT INTO usage_hourly (organization_id, project_id, model, bucket_start, requests, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, cost_micros, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+SELECT r.organization_id, r.project_id, r.model,
+       date_trunc('hour', r.created_at, 'UTC') AS bucket_start,
+       count(*)::int,
+       sum(r.prompt_tokens)::bigint,
+       sum(r.completion_tokens)::bigint,
+       sum(r.cached_input_tokens)::bigint,
+       sum(r.total_tokens)::bigint,
+       sum(r.cost_micros)::bigint,
+       now()
+FROM llm_requests r
+WHERE r.organization_id = sqlc.arg(organization_id) AND r.project_id IS NOT NULL
+  AND r.created_at >= sqlc.arg(from_ts) AND r.created_at < sqlc.arg(to_ts)
+GROUP BY r.organization_id, r.project_id, r.model, date_trunc('hour', r.created_at, 'UTC')
 ON CONFLICT (organization_id, project_id, model, bucket_start) DO UPDATE SET
-    requests            = usage_hourly.requests + EXCLUDED.requests,
-    prompt_tokens       = usage_hourly.prompt_tokens + EXCLUDED.prompt_tokens,
-    completion_tokens   = usage_hourly.completion_tokens + EXCLUDED.completion_tokens,
-    cached_input_tokens = usage_hourly.cached_input_tokens + EXCLUDED.cached_input_tokens,
-    total_tokens        = usage_hourly.total_tokens + EXCLUDED.total_tokens,
-    cost_micros         = usage_hourly.cost_micros + EXCLUDED.cost_micros,
-    updated_at          = now();
+    requests = EXCLUDED.requests, prompt_tokens = EXCLUDED.prompt_tokens,
+    completion_tokens = EXCLUDED.completion_tokens, cached_input_tokens = EXCLUDED.cached_input_tokens,
+    total_tokens = EXCLUDED.total_tokens, cost_micros = EXCLUDED.cost_micros, updated_at = now();
 
--- name: RollupUsageDaily :execrows
+-- name: DeleteUsageDailyInWindow :exec
+DELETE FROM usage_daily
+WHERE organization_id = sqlc.arg(organization_id) AND bucket_start >= sqlc.arg(from_ts) AND bucket_start < sqlc.arg(to_ts);
+
+-- name: RecomputeUsageDaily :exec
 INSERT INTO usage_daily (organization_id, project_id, model, bucket_start, requests, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, cost_micros, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+SELECT r.organization_id, r.project_id, r.model,
+       date_trunc('day', r.created_at, 'UTC') AS bucket_start,
+       count(*)::int,
+       sum(r.prompt_tokens)::bigint,
+       sum(r.completion_tokens)::bigint,
+       sum(r.cached_input_tokens)::bigint,
+       sum(r.total_tokens)::bigint,
+       sum(r.cost_micros)::bigint,
+       now()
+FROM llm_requests r
+WHERE r.organization_id = sqlc.arg(organization_id) AND r.project_id IS NOT NULL
+  AND r.created_at >= sqlc.arg(from_ts) AND r.created_at < sqlc.arg(to_ts)
+GROUP BY r.organization_id, r.project_id, r.model, date_trunc('day', r.created_at, 'UTC')
 ON CONFLICT (organization_id, project_id, model, bucket_start) DO UPDATE SET
-    requests            = usage_daily.requests + EXCLUDED.requests,
-    prompt_tokens       = usage_daily.prompt_tokens + EXCLUDED.prompt_tokens,
-    completion_tokens   = usage_daily.completion_tokens + EXCLUDED.completion_tokens,
-    cached_input_tokens = usage_daily.cached_input_tokens + EXCLUDED.cached_input_tokens,
-    total_tokens        = usage_daily.total_tokens + EXCLUDED.total_tokens,
-    cost_micros         = usage_daily.cost_micros + EXCLUDED.cost_micros,
-    updated_at          = now();
+    requests = EXCLUDED.requests, prompt_tokens = EXCLUDED.prompt_tokens,
+    completion_tokens = EXCLUDED.completion_tokens, cached_input_tokens = EXCLUDED.cached_input_tokens,
+    total_tokens = EXCLUDED.total_tokens, cost_micros = EXCLUDED.cost_micros, updated_at = now();
 
--- name: RollupUsageMonthly :execrows
+-- name: DeleteUsageMonthlyInWindow :exec
+DELETE FROM usage_monthly
+WHERE organization_id = sqlc.arg(organization_id) AND bucket_start >= sqlc.arg(from_ts) AND bucket_start < sqlc.arg(to_ts);
+
+-- name: RecomputeUsageMonthly :exec
 INSERT INTO usage_monthly (organization_id, project_id, model, bucket_start, requests, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, cost_micros, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+SELECT r.organization_id, r.project_id, r.model,
+       date_trunc('month', r.created_at, 'UTC') AS bucket_start,
+       count(*)::int,
+       sum(r.prompt_tokens)::bigint,
+       sum(r.completion_tokens)::bigint,
+       sum(r.cached_input_tokens)::bigint,
+       sum(r.total_tokens)::bigint,
+       sum(r.cost_micros)::bigint,
+       now()
+FROM llm_requests r
+WHERE r.organization_id = sqlc.arg(organization_id) AND r.project_id IS NOT NULL
+  AND r.created_at >= sqlc.arg(from_ts) AND r.created_at < sqlc.arg(to_ts)
+GROUP BY r.organization_id, r.project_id, r.model, date_trunc('month', r.created_at, 'UTC')
 ON CONFLICT (organization_id, project_id, model, bucket_start) DO UPDATE SET
-    requests            = usage_monthly.requests + EXCLUDED.requests,
-    prompt_tokens       = usage_monthly.prompt_tokens + EXCLUDED.prompt_tokens,
-    completion_tokens   = usage_monthly.completion_tokens + EXCLUDED.completion_tokens,
-    cached_input_tokens = usage_monthly.cached_input_tokens + EXCLUDED.cached_input_tokens,
-    total_tokens        = usage_monthly.total_tokens + EXCLUDED.total_tokens,
-    cost_micros         = usage_monthly.cost_micros + EXCLUDED.cost_micros,
-    updated_at          = now();
+    requests = EXCLUDED.requests, prompt_tokens = EXCLUDED.prompt_tokens,
+    completion_tokens = EXCLUDED.completion_tokens, cached_input_tokens = EXCLUDED.cached_input_tokens,
+    total_tokens = EXCLUDED.total_tokens, cost_micros = EXCLUDED.cost_micros, updated_at = now();

@@ -99,3 +99,28 @@ func (q *Queries) GetOrganizationBySlug(ctx context.Context, slug string) (Organ
 	)
 	return i, err
 }
+
+const listAllOrganizationIDs = `-- name: ListAllOrganizationIDs :many
+SELECT id FROM organizations
+ORDER BY created_at
+`
+
+func (q *Queries) ListAllOrganizationIDs(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listAllOrganizationIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

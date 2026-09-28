@@ -24,12 +24,12 @@ type CredentialCacheEntry struct {
 // InMemoryCredentialCache is a high-performance, thread-safe LRU cache
 // for gateway credentials. Optimized for the hot path with minimal allocations.
 type InMemoryCredentialCache struct {
-	mu       sync.RWMutex
-	entries  map[string]*CredentialCacheEntry // key: hash
-	lru      *lruList
-	maxSize  int
-	ttl      time.Duration
-	clock    func() time.Time
+	mu      sync.RWMutex
+	entries map[string]*CredentialCacheEntry // key: hash
+	lru     *lruList
+	maxSize int
+	ttl     time.Duration
+	clock   func() time.Time
 }
 
 // lruList is a simple doubly-linked list for LRU eviction.

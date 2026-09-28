@@ -36,67 +36,70 @@ func notConfigured(method string) {
 
 // testStubs bundles every stub a Service depends on.
 type testStubs struct {
-	orgs        *stubOrgs
-	users       *stubUsers
-	members     *stubMembers
-	invitations *stubInvitations
-	projects    *stubProjects
-	teams       *stubTeams
-	teamMembers *stubTeamMembers
-	projMembers *stubProjMembers
-	accounts    *stubAccounts
-	credentials *stubCredentials
-	audits      *stubAudits
-	issuer      *stubIssuer
-	verifier    *stubVerifier
-	hasher      *stubHasher
-	auth        *stubAuth
-	refresh     *stubRefreshTokens
-	passwords   *stubPasswords
+	orgs         *stubOrgs
+	users        *stubUsers
+	members      *stubMembers
+	invitations  *stubInvitations
+	projects     *stubProjects
+	teams        *stubTeams
+	teamMembers  *stubTeamMembers
+	projMembers  *stubProjMembers
+	accounts     *stubAccounts
+	credentials  *stubCredentials
+	gatewayCreds *stubGatewayCredentials
+	audits       *stubAudits
+	issuer       *stubIssuer
+	verifier     *stubVerifier
+	hasher       *stubHasher
+	auth         *stubAuth
+	refresh      *stubRefreshTokens
+	passwords    *stubPasswords
 }
 
 // newTestService wires a Service against the stubs with a fixed clock and a
 // non-default invite TTL so the defaulting path in NewService stays distinct.
 func newTestService() (*Service, *testStubs) {
 	st := &testStubs{
-		orgs:        &stubOrgs{},
-		users:       &stubUsers{},
-		members:     &stubMembers{},
-		invitations: &stubInvitations{},
-		projects:    &stubProjects{},
-		teams:       &stubTeams{},
-		teamMembers: &stubTeamMembers{},
-		projMembers: &stubProjMembers{},
-		accounts:    &stubAccounts{},
-		credentials: &stubCredentials{},
-		audits:      &stubAudits{},
-		issuer:      &stubIssuer{},
-		verifier:    &stubVerifier{},
-		hasher:      &stubHasher{},
-		auth:        &stubAuth{},
-		refresh:     &stubRefreshTokens{},
-		passwords:   &stubPasswords{},
+		orgs:         &stubOrgs{},
+		users:        &stubUsers{},
+		members:      &stubMembers{},
+		invitations:  &stubInvitations{},
+		projects:     &stubProjects{},
+		teams:        &stubTeams{},
+		teamMembers:  &stubTeamMembers{},
+		projMembers:  &stubProjMembers{},
+		accounts:     &stubAccounts{},
+		credentials:  &stubCredentials{},
+		gatewayCreds: &stubGatewayCredentials{},
+		audits:       &stubAudits{},
+		issuer:       &stubIssuer{},
+		verifier:     &stubVerifier{},
+		hasher:       &stubHasher{},
+		auth:         &stubAuth{},
+		refresh:      &stubRefreshTokens{},
+		passwords:    &stubPasswords{},
 	}
 	svc := NewService(ServiceDeps{
-		Orgs:          st.orgs,
-		Users:         st.users,
-		Members:       st.members,
-		Invitations:   st.invitations,
-		Projects:      st.projects,
-		Teams:         st.teams,
-		TeamMembers:   st.teamMembers,
-		ProjMembers:   st.projMembers,
-		Accounts:      st.accounts,
-		Credentials:   st.credentials,
-		Audits:        st.audits,
-		Auth:          st.auth,
-		RefreshTokens: st.refresh,
-		Issuer:        st.issuer,
-		Verifier:      st.verifier,
-		Hasher:        st.hasher,
-		Passwords:     st.passwords,
-		Now:           func() time.Time { return testNow },
-		InviteTTL:     testInviteTTL,
+		Orgs:               st.orgs,
+		Users:              st.users,
+		Members:            st.members,
+		Invitations:        st.invitations,
+		Projects:           st.projects,
+		Teams:              st.teams,
+		TeamMembers:        st.teamMembers,
+		ProjMembers:        st.projMembers,
+		Accounts:           st.accounts,
+		Credentials:        st.credentials,
+		GatewayCredentials: st.gatewayCreds,
+		Audits:             st.audits,
+		Auth:               st.auth,
+		RefreshTokens:      st.refresh,
+		Issuer:             st.issuer,
+		Verifier:           st.verifier,
+		Hasher:             st.hasher,
+		Passwords:          st.passwords,
+		Now:                func() time.Time { return testNow },
+		InviteTTL:          testInviteTTL,
 		// Non-default so the defaulting branch in NewService stays distinct
 		// from this harness's wiring.
 		RefreshTokenTTL: 30 * 24 * time.Hour,
@@ -530,4 +533,32 @@ func (s *stubPasswords) Verify(ctx context.Context, encoded, password string) er
 
 func (s *stubPasswords) DecoyDigest() string {
 	return s.decoy
+}
+
+type stubGatewayCredentials struct {
+	repositories.GatewayCredentialRepository
+	list   func(context.Context, uuid.UUID) ([]domain.GatewayCredential, error)
+	get    func(context.Context, uuid.UUID, uuid.UUID) (domain.GatewayCredential, error)
+	revoke func(context.Context, uuid.UUID, uuid.UUID) (domain.GatewayCredential, error)
+}
+
+func (s *stubGatewayCredentials) List(ctx context.Context, orgID uuid.UUID) ([]domain.GatewayCredential, error) {
+	if s.list == nil {
+		notConfigured("stubGatewayCredentials.List")
+	}
+	return s.list(ctx, orgID)
+}
+
+func (s *stubGatewayCredentials) Get(ctx context.Context, orgID, id uuid.UUID) (domain.GatewayCredential, error) {
+	if s.get == nil {
+		notConfigured("stubGatewayCredentials.Get")
+	}
+	return s.get(ctx, orgID, id)
+}
+
+func (s *stubGatewayCredentials) Revoke(ctx context.Context, orgID, id uuid.UUID) (domain.GatewayCredential, error) {
+	if s.revoke == nil {
+		notConfigured("stubGatewayCredentials.Revoke")
+	}
+	return s.revoke(ctx, orgID, id)
 }

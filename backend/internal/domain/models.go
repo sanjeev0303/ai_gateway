@@ -9,13 +9,13 @@ import (
 // Model is one entry in the DB-driven model catalog. The catalog is global
 // (no organization_id): adding a model is a row, not a code change.
 type Model struct {
-	ID          uuid.UUID
+	ID           uuid.UUID
 	ProviderKind string
-	ModelSlug   string
-	DisplayName string
-	IsActive    bool
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ModelSlug    string
+	DisplayName  string
+	IsActive     bool
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // Model statuses, mirroring the CHECK on the catalog status column.

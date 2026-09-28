@@ -25,14 +25,14 @@ var (
 
 // StreamProxyImpl implements high-performance streaming proxy with HTTP/2 support.
 type StreamProxyImpl struct {
-	client         *http.Client
+	client          *http.Client
 	readBufferSize  int
 	writeBufferSize int
-	logger         *slog.Logger
-	mu             sync.RWMutex
-	activeStreams  map[uuid.UUID]*activeStream
-	streamCount    int64
-	maxStreams     int64
+	logger          *slog.Logger
+	mu              sync.RWMutex
+	activeStreams   map[uuid.UUID]*activeStream
+	streamCount     int64
+	maxStreams      int64
 }
 
 type activeStream struct {
@@ -91,11 +91,11 @@ func defaultHTTPClient() *http.Client {
 }
 
 // Forward forwards the request to upstream and streams the response byte-exact.
-func (s *StreamProxyImpl) Forward(ctx context.Context, w http.ResponseWriter, r *http.Request, upstreamURL string, upstreamHeaders http.Header) error {
+func (s *StreamProxyImpl) Forward(ctx context.Context, w http.ResponseWriter, r *http.Request, upstreamURL string, upstreamHeaders http.Header) (*StreamUsage, error) {
 	// Check stream limit
 	if atomic.LoadInt64(&s.streamCount) >= s.maxStreams {
 		s.logger.Warn("stream limit exceeded", "count", s.streamCount, "max", s.maxStreams)
-		return errors.New("gateway: stream limit exceeded")
+		return nil, errors.New("gateway: stream limit exceeded")
 	}
 
 	// Create stream context with cancellation on client disconnect
@@ -114,7 +114,7 @@ func (s *StreamProxyImpl) Forward(ctx context.Context, w http.ResponseWriter, r 
 	s.mu.Lock()
 	if len(s.activeStreams) >= int(s.maxStreams) {
 		s.mu.Unlock()
-		return errors.New("gateway: stream limit exceeded")
+		return nil, errors.New("gateway: stream limit exceeded")
 	}
 	s.activeStreams[streamID] = stream
 	atomic.AddInt64(&s.streamCount, 1)
@@ -128,12 +128,14 @@ func (s *StreamProxyImpl) Forward(ctx context.Context, w http.ResponseWriter, r 
 		s.mu.Unlock()
 	}()
 
-	// Detect client disconnect
-	clientGone := w.(http.CloseNotifier).CloseNotify()
+	// Client-disconnect cancellation needs no extra watcher: streamCtx derives
+	// from the request context, which net/http already cancels when the client
+	// goes away. The previous http.CloseNotifier assertion panicked outright on
+	// any writer that is not HTTP/1, including wrapped and test writers.
+	clientGone := ctx.Done()
 	go func() {
 		select {
 		case <-clientGone:
-			cancel()
 			s.logger.Debug("client disconnected, cancelling upstream", "stream_id", streamID)
 		case <-streamCtx.Done():
 		}
@@ -142,7 +144,7 @@ func (s *StreamProxyImpl) Forward(ctx context.Context, w http.ResponseWriter, r 
 	// Build upstream request
 	upstreamReq, err := s.buildUpstreamRequest(streamCtx, r, upstreamURL, upstreamHeaders)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	stream.upstreamReq = upstreamReq
 
@@ -161,10 +163,10 @@ func (s *StreamProxyImpl) Forward(ctx context.Context, w http.ResponseWriter, r 
 	resp, err := s.client.Do(upstreamReq)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			return ErrClientDisconnected
+			return nil, ErrClientDisconnected
 		}
 		s.logger.Error("upstream request failed", "stream_id", streamID, "error", err)
-		return ErrUpstreamError
+		return nil, ErrUpstreamError
 	}
 	defer resp.Body.Close()
 
@@ -178,19 +180,23 @@ func (s *StreamProxyImpl) Forward(ctx context.Context, w http.ResponseWriter, r 
 	copyResponseHeaders(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
 
-	// Stream response body with flushing
-	if err := s.streamResponse(streamCtx, w, resp.Body); err != nil {
+	// Stream response body with flushing, observing provider-reported usage as
+	// the bytes pass. The observer only reads; the bytes written to w are
+	// exactly the bytes the upstream sent.
+	obs := newUsageObserver(resp.Header.Get("Content-Type"))
+	usage, err := s.streamResponse(streamCtx, w, &observingReader{src: resp.Body, obs: obs}, obs)
+	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			return ErrClientDisconnected
+			return usage, ErrClientDisconnected
 		}
 		if strings.Contains(err.Error(), "broken pipe") || strings.Contains(err.Error(), "connection reset") {
-			return ErrClientDisconnected
+			return usage, ErrClientDisconnected
 		}
 		s.logger.Error("stream copy failed", "stream_id", streamID, "error", err)
-		return ErrStreamTruncated
+		return usage, ErrStreamTruncated
 	}
 
-	return nil
+	return usage, nil
 }
 
 // buildUpstreamRequest constructs the upstream HTTP request.
@@ -221,8 +227,10 @@ func (s *StreamProxyImpl) buildUpstreamRequest(ctx context.Context, r *http.Requ
 	return outReq, nil
 }
 
-// streamResponse copies the upstream response to the client with flushing.
-func (s *StreamProxyImpl) streamResponse(ctx context.Context, w http.ResponseWriter, src io.Reader) error {
+// streamResponse copies the upstream response to the client with flushing,
+// reporting the usage the observer saw. Usage is reported on every exit path:
+// a client that disconnects after the final usage frame was still billed.
+func (s *StreamProxyImpl) streamResponse(ctx context.Context, w http.ResponseWriter, src io.Reader, obs *usageObserver) (*StreamUsage, error) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		s.logger.Warn("ResponseWriter does not support flushing")
@@ -232,7 +240,7 @@ func (s *StreamProxyImpl) streamResponse(ctx context.Context, w http.ResponseWri
 	for {
 		select {
 		case <-ctx.Done():
-			return ErrClientDisconnected
+			return obs.finish(), ErrClientDisconnected
 		default:
 		}
 
@@ -240,9 +248,9 @@ func (s *StreamProxyImpl) streamResponse(ctx context.Context, w http.ResponseWri
 		if n > 0 {
 			if _, werr := w.Write(buf[:n]); werr != nil {
 				if strings.Contains(werr.Error(), "broken pipe") || strings.Contains(werr.Error(), "connection reset") {
-					return ErrClientDisconnected
+					return obs.finish(), ErrClientDisconnected
 				}
-				return werr
+				return obs.finish(), werr
 			}
 			if flusher != nil {
 				flusher.Flush()
@@ -251,9 +259,9 @@ func (s *StreamProxyImpl) streamResponse(ctx context.Context, w http.ResponseWri
 
 		if err != nil {
 			if err == io.EOF {
-				return nil
+				return obs.finish(), nil
 			}
-			return err
+			return obs.finish(), err
 		}
 	}
 }

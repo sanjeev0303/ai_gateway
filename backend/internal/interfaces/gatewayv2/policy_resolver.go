@@ -22,17 +22,17 @@ type PolicyResolverImpl struct {
 
 // PolicyCache caches compiled policy snapshots per organization.
 type PolicyCache struct {
-	mu      sync.RWMutex
+	mu        sync.RWMutex
 	snapshots map[uuid.UUID]*CachedSnapshot
-	maxSize int
-	ttl     time.Duration
-	clock   func() time.Time
+	maxSize   int
+	ttl       time.Duration
+	clock     func() time.Time
 }
 
 type CachedSnapshot struct {
-	Snapshot   PolicySnapshot
-	ExpiresAt  time.Time
-	Version    int64
+	Snapshot  PolicySnapshot
+	ExpiresAt time.Time
+	Version   int64
 }
 
 // NewPolicyResolver creates a new policy resolver.

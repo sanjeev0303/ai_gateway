@@ -2,9 +2,11 @@
 package gatewayv2
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -20,29 +22,35 @@ import (
 )
 
 var (
-	ErrUnauthorized     = errors.New("unauthorized")
-	ErrForbidden        = errors.New("forbidden")
-	ErrRateLimited      = errors.New("rate limited")
-	ErrBudgetExceeded   = errors.New("budget exceeded")
-	ErrInternalError    = errors.New("internal error")
+	ErrUnauthorized       = errors.New("unauthorized")
+	ErrForbidden          = errors.New("forbidden")
+	ErrRateLimited        = errors.New("rate limited")
+	ErrBudgetExceeded     = errors.New("budget exceeded")
+	ErrInternalError      = errors.New("internal error")
 	ErrServiceUnavailable = errors.New("service unavailable")
+	ErrRequestTooLarge    = errors.New("request body too large")
 )
+
+// maxRequestBodyBytes bounds how much of a client request we buffer for
+// inspection. The body must be read to extract routing hints, so the read is
+// capped here: an oversized request is rejected before we allocate for it.
+const maxRequestBodyBytes = 8 << 20 // 8 MiB
 
 // Gateway is the main orchestrator wiring all components.
 type Gateway struct {
-	config          GatewayConfig
-	logger          *slog.Logger
+	config GatewayConfig
+	logger *slog.Logger
 
 	// Components
-	authenticator   Authenticator
-	tenantResolver  TenantResolver
-	policyResolver  PolicyResolver
-	rateLimiter     RateLimiter
-	budgetGuard     BudgetGuard
+	authenticator    Authenticator
+	tenantResolver   TenantResolver
+	policyResolver   PolicyResolver
+	rateLimiter      RateLimiter
+	budgetGuard      BudgetGuard
 	requestInspector RequestInspector
-	providerRouter  ProviderRouter
-	streamProxy     StreamProxy
-	telemetry       TelemetryEmitter
+	providerRouter   ProviderRouter
+	streamProxy      StreamProxy
+	telemetry        TelemetryEmitter
 
 	// State
 	mu           sync.RWMutex
@@ -54,12 +62,12 @@ type Gateway struct {
 
 // GatewayDeps contains all dependencies for the gateway.
 type GatewayDeps struct {
-	Config            GatewayConfig
-	Logger            *slog.Logger
+	Config GatewayConfig
+	Logger *slog.Logger
 
 	// Auth
-	Hasher            ports.TokenHasher
-	GatewayCredRepo   repositories.GatewayCredentialRepository
+	Hasher          ports.TokenHasher
+	GatewayCredRepo repositories.GatewayCredentialRepository
 
 	// Tenant
 	ProviderAccounts    repositories.ProviderAccountRepository
@@ -69,6 +77,10 @@ type GatewayDeps struct {
 	// Policy
 	PolicyRepo repositories.PolicyRepository
 	RuleRepo   repositories.PolicyRuleRepository
+
+	// Usage accounting. The data plane derives usage and publishes it; the
+	// worker owns every ledger write.
+	EventBus ports.EventBus
 
 	// Optional overrides
 	CredentialCache *InMemoryCredentialCache
@@ -124,7 +136,7 @@ func NewGateway(deps GatewayDeps) (*Gateway, error) {
 	// Telemetry
 	telemetry := deps.Telemetry
 	if telemetry == nil {
-		telemetry = NewTelemetryEmitter(10000, 5*time.Second, deps.Logger)
+		telemetry = NewTelemetryEmitter(10000, 5*time.Second, deps.EventBus, deps.Logger)
 	}
 
 	// Build components
@@ -169,12 +181,49 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Pipeline execution
 	result := g.executePipeline(r.Context(), r, reqID)
 
+	// An allowed request must actually reach the provider. Forward performs the
+	// upstream call, streams the response back, and writes the status itself —
+	// the gateway must never answer 200 merely because policy passed.
+	if result.Allowed && result.Context != nil {
+		observed, err := g.streamProxy.Forward(r.Context(), w, r, result.Context.UpstreamURL, result.Context.UpstreamHeaders)
+		if err != nil {
+			g.logger.Error("stream proxy forward failed", "error", err)
+		}
+		g.emitTelemetry(r.Context(), reqID, result, time.Since(start).Milliseconds(), observed)
+		return
+	}
+
 	// Emit telemetry
 	latencyMs := time.Since(start).Milliseconds()
-	g.emitTelemetry(r.Context(), result, latencyMs)
+	g.emitTelemetry(r.Context(), reqID, result, latencyMs, nil)
 
 	// Write response
 	g.writeResult(w, result)
+}
+
+// readAndRestoreBody buffers the request body once under a hard size bound and
+// restores it, so inspection cannot leave an EOF behind for the upstream forward.
+func readAndRestoreBody(r *http.Request) ([]byte, error) {
+	if r.Body == nil {
+		return nil, nil
+	}
+	defer r.Body.Close()
+
+	data, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBodyBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxRequestBodyBytes {
+		return nil, ErrRequestTooLarge
+	}
+
+	// Restore the exact bytes so the forward carries the provider-native payload
+	// untouched, and pin the length so a streamed request is not re-chunked.
+	r.Body = io.NopCloser(bytes.NewReader(data))
+	if r.ContentLength < 0 {
+		r.ContentLength = int64(len(data))
+	}
+	return data, nil
 }
 
 // executePipeline runs the full gateway pipeline.
@@ -198,8 +247,14 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 		return g.pipelineError("policy_resolver", err, http.StatusServiceUnavailable, "policy_unavailable")
 	}
 
-	// Stage 4: Inspect request for routing hints
-	hints, err := g.requestInspector.Inspect(ctx, r.Body)
+	// Stage 4: Inspect request for routing hints. The body must survive
+	// inspection, so it is buffered once under a bound and restored.
+	body, err := readAndRestoreBody(r)
+	if err != nil {
+		return g.pipelineError("request_inspector", err, http.StatusRequestEntityTooLarge, "request_too_large")
+	}
+
+	hints, err := g.requestInspector.Inspect(ctx, bytes.NewReader(body))
 	if err != nil {
 		g.logger.Warn("request inspection failed", "error", err)
 		// Continue with empty hints
@@ -255,8 +310,8 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 	}
 
 	return PipelineResult{
-		Allowed: true,
-		Context: reqCtx,
+		Allowed:    true,
+		Context:    reqCtx,
 		StatusCode: http.StatusOK,
 		// UpstreamURL and Headers will be used by stream proxy
 	}
@@ -353,12 +408,12 @@ func (g *Gateway) pipelineError(stage string, err error, status int, errType str
 	}
 }
 
-// writeResult writes the pipeline result to the response.
+// writeResult writes a denied pipeline result to the response. Allowed results
+// never reach here: ServeHTTP forwards them upstream and writes the response
+// from the provider, so this path is deny-only by design.
 func (g *Gateway) writeResult(w http.ResponseWriter, result PipelineResult) {
 	if result.Allowed {
-		// Stream proxy will handle the actual forwarding
-		// The caller should call StreamProxy.Forward with the context
-		w.WriteHeader(result.StatusCode)
+		g.logger.Error("writeResult called for an allowed result; upstream response was not written")
 		return
 	}
 
@@ -387,26 +442,35 @@ func (g *Gateway) writeError(w http.ResponseWriter, status int, errType, message
 }
 
 // emitTelemetry emits usage and error telemetry.
-func (g *Gateway) emitTelemetry(ctx context.Context, result PipelineResult, latencyMs int64) {
+func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result PipelineResult, latencyMs int64, observed *StreamUsage) {
 	if g.telemetry == nil {
 		return
 	}
 
 	if result.Allowed && result.Context != nil {
-		// Usage telemetry (sampled or all)
 		usage := UsageRecord{
-			OrganizationID:  result.Context.Credential.OrganizationID,
-			CredentialID:    result.Context.Credential.ID,
-			SubjectType:     result.Context.Credential.SubjectType,
-			SubjectID:       result.Context.Credential.SubjectID,
-			ProjectID:       result.Context.Credential.ProjectID,
-			TeamID:          result.Context.Credential.TeamID,
-			Model:           result.Context.InspectorHints.Model,
-			InputTokens:     result.Context.InspectorHints.EstimatedInputTokens,
-			OutputTokens:    result.Context.InspectorHints.EstimatedOutputTokens,
-			LatencyMs:       latencyMs,
-			StatusCode:      result.StatusCode,
-			Timestamp:       time.Now(),
+			RequestID:      reqID,
+			OrganizationID: result.Context.Credential.OrganizationID,
+			CredentialID:   result.Context.Credential.ID,
+			SubjectType:    result.Context.Credential.SubjectType,
+			SubjectID:      result.Context.Credential.SubjectID,
+			ProjectID:      result.Context.Credential.ProjectID,
+			TeamID:         result.Context.Credential.TeamID,
+			Model:          result.Context.InspectorHints.Model,
+			InputTokens:    result.Context.InspectorHints.EstimatedInputTokens,
+			OutputTokens:   result.Context.InspectorHints.EstimatedOutputTokens,
+			LatencyMs:      latencyMs,
+			StatusCode:     result.StatusCode,
+			Timestamp:      time.Now(),
+		}
+		// Provider-reported counts are authoritative; the inspector only
+		// estimates, so it is the fallback for responses carrying no usage.
+		if observed != nil {
+			usage.InputTokens = observed.InputTokens
+			usage.OutputTokens = observed.OutputTokens
+			usage.CacheReadTokens = observed.CacheReadTokens
+			usage.CacheWriteTokens = observed.CacheWriteTokens
+			usage.ProviderMeta = map[string]any{"provider": observed.Provider}
 		}
 		g.telemetry.EmitUsage(ctx, usage)
 	} else {
@@ -431,12 +495,12 @@ func (g *Gateway) Stats() map[string]any {
 	defer g.mu.RUnlock()
 
 	return map[string]any{
-		"uptime_seconds":     time.Since(g.startTime).Seconds(),
-		"request_count":      atomic.LoadInt64(&g.requestCount),
-		"error_count":        atomic.LoadInt64(&g.errorCount),
-		"active_streams":     g.streamProxy.(*StreamProxyImpl).ActiveStreamCount(),
-		"started":            g.started,
-		"start_time":         g.startTime,
+		"uptime_seconds": time.Since(g.startTime).Seconds(),
+		"request_count":  atomic.LoadInt64(&g.requestCount),
+		"error_count":    atomic.LoadInt64(&g.errorCount),
+		"active_streams": g.streamProxy.(*StreamProxyImpl).ActiveStreamCount(),
+		"started":        g.started,
+		"start_time":     g.startTime,
 	}
 }
 

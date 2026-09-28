@@ -36,7 +36,7 @@ func (c *UsageCollector) ProcessEvent(event *StreamingEvent) error {
 	}
 
 	switch event.Object {
-case "chat.completion.chunk":
+	case "chat.completion.chunk":
 		for _, choice := range event.Choices {
 			if choice.FinishReason != "" {
 				c.streamComplete = true
@@ -98,10 +98,10 @@ func (c *UsageCollector) Reset() {
 
 // StreamingProxy forwards requests to OpenAI and captures usage from the stream.
 type StreamingProxy struct {
-	client        *http.Client
-	baseURL       string
-	version       string
-	logger        interface {
+	client  *http.Client
+	baseURL string
+	version string
+	logger  interface {
 		Debug(msg string, args ...any)
 		Warn(msg string, args ...any)
 		Error(msg string, args ...any)
@@ -128,7 +128,7 @@ func NewStreamingProxy(baseURL string, opts ...func(*StreamingProxy)) *Streaming
 	sp := &StreamingProxy{
 		client: &http.Client{
 			Transport: &http.Transport{
-				DisableCompression: true,
+				DisableCompression:    true,
 				ResponseHeaderTimeout: 30 * time.Second,
 			},
 		},
@@ -373,15 +373,15 @@ func copyForwardHeaders(dst, src http.Header) {
 // copyResponseHeaders copies end-to-end headers from upstream to client.
 func copyResponseHeaders(dst, src http.Header) {
 	hopByHop := map[string]bool{
-		"connection":        true,
-		"keep-alive":        true,
-		"proxy-authenticate": true,
+		"connection":          true,
+		"keep-alive":          true,
+		"proxy-authenticate":  true,
 		"proxy-authorization": true,
-		"te":                true,
-		"trailer":           true,
-		"transfer-encoding": true,
-		"upgrade":           true,
-		"content-length":    true,
+		"te":                  true,
+		"trailer":             true,
+		"transfer-encoding":   true,
+		"upgrade":             true,
+		"content-length":      true,
 	}
 
 	for key, values := range src {

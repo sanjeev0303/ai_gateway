@@ -949,6 +949,24 @@ func (r *modelsRepo) List(ctx context.Context) ([]domain.Model, error) {
 	return models, err
 }
 
+func (r *modelsRepo) Upsert(ctx context.Context, providerKind, modelSlug, displayName string) (domain.Model, error) {
+	var model domain.Model
+	err := r.store.WithTx(ctx, func(q *db.Queries) error {
+		row, err := q.UpsertModel(ctx, db.UpsertModelParams{
+			ProviderKind: providerKind,
+			ModelSlug:    modelSlug,
+			DisplayName:  displayName,
+			IsActive:     true,
+		})
+		if err != nil {
+			return err
+		}
+		model = toModel(row)
+		return nil
+	})
+	return model, err
+}
+
 func toModel(m db.Model) domain.Model {
 	return domain.Model{
 		ID:           m.ID,

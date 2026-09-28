@@ -30,25 +30,25 @@ type GatewayCredential struct {
 type ProviderAccount struct {
 	ID             uuid.UUID
 	OrganizationID uuid.UUID
-	ProviderKind  string
-	Name          string
-	BaseURL       string
-	Status        string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ProviderKind   string
+	Name           string
+	BaseURL        string
+	Status         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 // ProviderCredential represents an upstream credential.
 type ProviderCredential struct {
-	ID              uuid.UUID
-	OrganizationID  uuid.UUID
+	ID                uuid.UUID
+	OrganizationID    uuid.UUID
 	ProviderAccountID uuid.UUID
-	SecretRef       string
-	Fingerprint     string
-	Tail            string
-	Status          string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	SecretRef         string
+	Fingerprint       string
+	Tail              string
+	Status            string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 // ResolvedUpstream contains the upstream connection details.
@@ -99,11 +99,11 @@ type RateLimitConfig struct {
 }
 
 type BudgetConfig struct {
-	Key       string
-	Limit     float64
-	Window    time.Duration
-	Scope     string
-	AlertAt   float64
+	Key     string
+	Limit   float64
+	Window  time.Duration
+	Scope   string
+	AlertAt float64
 }
 
 // RateLimitResult captures rate limiting decision.
@@ -119,26 +119,26 @@ type RateLimitResult struct {
 
 // BudgetResult captures budget checking decision.
 type BudgetResult struct {
-	Allowed     bool
-	Current     float64
-	Limit       float64
-	Projected   float64
-	AlertAt     float64
-	Scope       string
-	Key         string
+	Allowed   bool
+	Current   float64
+	Limit     float64
+	Projected float64
+	AlertAt   float64
+	Scope     string
+	Key       string
 }
 
 // InspectorHints carries request inspection results for routing.
 type InspectorHints struct {
-	Model              string
+	Model                 string
 	EstimatedInputTokens  int
 	EstimatedOutputTokens int
-	Tools              []string
-	Stream             bool
-	ConversationID     *uuid.UUID
-	ProjectID          *uuid.UUID
-	RoutingTags        map[string]string
-	Warnings           []string
+	Tools                 []string
+	Stream                bool
+	ConversationID        *uuid.UUID
+	ProjectID             *uuid.UUID
+	RoutingTags           map[string]string
+	Warnings              []string
 }
 
 // UpstreamResponse represents the upstream provider response.
@@ -188,9 +188,12 @@ type ProviderRouter interface {
 	Route(ctx context.Context, upstream ResolvedUpstream, hints InspectorHints) (string, http.Header, error)
 }
 
-// StreamProxy forwards requests and streams responses byte-exact.
+// StreamProxy forwards requests and streams responses byte-exact. Forward
+// returns the provider-reported usage observed on the response, or nil when
+// the upstream sent none. Usage is returned even alongside an error, because a
+// client that disconnects after the final usage frame has still been billed.
 type StreamProxy interface {
-	Forward(ctx context.Context, w http.ResponseWriter, r *http.Request, upstreamURL string, upstreamHeaders http.Header) error
+	Forward(ctx context.Context, w http.ResponseWriter, r *http.Request, upstreamURL string, upstreamHeaders http.Header) (*StreamUsage, error)
 	Close(gracePeriod time.Duration) error
 }
 
@@ -204,22 +207,23 @@ type TelemetryEmitter interface {
 
 // UsageRecord represents a usage event for telemetry.
 type UsageRecord struct {
-	OrganizationID  uuid.UUID
-	CredentialID    uuid.UUID
-	SubjectType     string
-	SubjectID       uuid.UUID
-	ProjectID       *uuid.UUID
-	TeamID          *uuid.UUID
-	Model           string
-	InputTokens     int
-	OutputTokens    int
-	CacheReadTokens int
+	RequestID        string
+	OrganizationID   uuid.UUID
+	CredentialID     uuid.UUID
+	SubjectType      string
+	SubjectID        uuid.UUID
+	ProjectID        *uuid.UUID
+	TeamID           *uuid.UUID
+	Model            string
+	InputTokens      int
+	OutputTokens     int
+	CacheReadTokens  int
 	CacheWriteTokens int
-	ToolCalls       int
-	LatencyMs       int64
-	StatusCode      int
-	Timestamp       time.Time
-	ProviderMeta    map[string]any
+	ToolCalls        int
+	LatencyMs        int64
+	StatusCode       int
+	Timestamp        time.Time
+	ProviderMeta     map[string]any
 }
 
 // ErrorRecord represents an error event for telemetry.
@@ -247,11 +251,11 @@ type PipelineResult struct {
 
 // PipelineError represents a pipeline error with context.
 type PipelineError struct {
-	Stage       string
-	Err         error
-	StatusCode  int
-	ErrorType   string
-	Retryable   bool
+	Stage      string
+	Err        error
+	StatusCode int
+	ErrorType  string
+	Retryable  bool
 }
 
 func (e *PipelineError) Error() string {
@@ -263,9 +267,9 @@ func (e *PipelineError) Error() string {
 // GatewayConfig holds the gateway configuration.
 type GatewayConfig struct {
 	// Timeouts
-	RequestTimeout      time.Duration
-	UpstreamTimeout     time.Duration
-	IdleTimeout         time.Duration
+	RequestTimeout        time.Duration
+	UpstreamTimeout       time.Duration
+	IdleTimeout           time.Duration
 	ResponseHeaderTimeout time.Duration
 
 	// Connection pooling
@@ -294,21 +298,21 @@ type GatewayConfig struct {
 // DefaultGatewayConfig returns sensible defaults.
 func DefaultGatewayConfig() GatewayConfig {
 	return GatewayConfig{
-		RequestTimeout:       30 * time.Second,
-		UpstreamTimeout:      5 * time.Minute,
-		IdleTimeout:          90 * time.Second,
+		RequestTimeout:        30 * time.Second,
+		UpstreamTimeout:       5 * time.Minute,
+		IdleTimeout:           90 * time.Second,
 		ResponseHeaderTimeout: 30 * time.Second,
-		MaxIdleConns:         1000,
-		MaxIdleConnsPerHost:  100,
-		MaxConnsPerHost:      200,
-		ReadBufferSize:       32 * 1024,
-		WriteBufferSize:      32 * 1024,
-		MaxQueuedRequests:    10000,
-		EnableHTTP2:          true,
-		EnableCompression:    false, // byte-exact proxy
-		DefaultRateLimit:     1000,
-		DefaultRateWindow:    time.Minute,
-		DefaultBudgetLimit:   1000.0,
-		DefaultBudgetWindow:  time.Hour,
+		MaxIdleConns:          1000,
+		MaxIdleConnsPerHost:   100,
+		MaxConnsPerHost:       200,
+		ReadBufferSize:        32 * 1024,
+		WriteBufferSize:       32 * 1024,
+		MaxQueuedRequests:     10000,
+		EnableHTTP2:           true,
+		EnableCompression:     false, // byte-exact proxy
+		DefaultRateLimit:      1000,
+		DefaultRateWindow:     time.Minute,
+		DefaultBudgetLimit:    1000.0,
+		DefaultBudgetWindow:   time.Hour,
 	}
 }

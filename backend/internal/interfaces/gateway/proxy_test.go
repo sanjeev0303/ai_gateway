@@ -372,14 +372,14 @@ func TestProxyUnauthorized(t *testing.T) {
 			},
 		},
 		{
-			name: "revoked key",
+			name:        "revoked key",
 			credsByHash: map[string]domain.APICredential{"h:" + testGatewayKey: {ID: uuid.MustParse("55555555-5555-5555-5555-555555555555"), OrganizationID: testOrgID, Scope: string(domain.APICredentialScopeGateway), Status: domain.APICredentialStatusRevoked}},
 			headerSet: func(r *http.Request) {
 				r.Header.Set("x-api-key", testGatewayKey)
 			},
 		},
 		{
-			name: "control-scoped key",
+			name:        "control-scoped key",
 			credsByHash: map[string]domain.APICredential{"h:" + testGatewayKey: {ID: uuid.MustParse("66666666-6666-6666-6666-666666666666"), OrganizationID: testOrgID, Scope: string(domain.APICredentialScopeControl), Status: domain.APICredentialStatusActive}},
 			headerSet: func(r *http.Request) {
 				r.Header.Set("x-api-key", testGatewayKey)

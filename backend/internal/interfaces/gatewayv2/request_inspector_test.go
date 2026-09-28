@@ -1,5 +1,5 @@
 // Package gatewayv2 contract tests for request inspection: extraction rules,
-// token estimation and the streaming inspector wrapper.
+// token estimation, and the request body size bound.
 package gatewayv2
 
 import (
@@ -67,6 +67,16 @@ func TestInspect_ReadError(t *testing.T) {
 	requireErrIs(t, err, errStub)
 }
 
+func TestInspect_RejectsOversizedBody(t *testing.T) {
+	overLimit := strings.NewReader(strings.Repeat("a", maxRequestBodyBytes+1))
+	_, err := NewRequestInspector().Inspect(context.Background(), overLimit)
+	requireErrIs(t, err, ErrRequestTooLarge)
+
+	atLimit := strings.NewReader(strings.Repeat("a", maxRequestBodyBytes))
+	_, err = NewRequestInspector().Inspect(context.Background(), atLimit)
+	requireNoErr(t, err, "body exactly at the limit must be accepted")
+}
+
 func TestInspect_InvalidUUIDsIgnored(t *testing.T) {
 	hints, err := NewRequestInspector().Inspect(context.Background(), strings.NewReader(`{"model":"x","conversation_id":"nope","project_id":"nope"}`))
 	requireNoErr(t, err, "Inspect")
@@ -90,81 +100,4 @@ func TestEstimateOutputTokens(t *testing.T) {
 	// JSON-decoded numbers arrive as float64.
 	requireTrue(t, estimateOutputTokens(map[string]any{"max_tokens": float64(2048)}) == 2048, "max_tokens not honored")
 	requireTrue(t, estimateOutputTokens(map[string]any{}) == 1024, "default output estimate wrong")
-}
-
-func TestStreamingInspector_ForcesInspection(t *testing.T) {
-	si := NewStreamingInspector(strings.NewReader(`{"model":"claude-sonnet-4-5","stream":true}`))
-
-	// Hints inspects buffered data: read the body through first.
-	buf := make([]byte, 64)
-	_, err := si.Read(buf)
-	requireNoErr(t, err, "Read")
-	hints, err := si.Hints(context.Background())
-	requireNoErr(t, err, "Hints")
-	requireTrue(t, hints.Model == "claude-sonnet-4-5", "model not extracted")
-	requireTrue(t, hints.Stream, "stream flag not extracted")
-}
-
-func TestStreamingInspector_AutoInspectsLargeBody(t *testing.T) {
-	payload := `{"model":"claude-sonnet-4-5","padding":"` + strings.Repeat("a", 1100) + `"}`
-	si := NewStreamingInspector(strings.NewReader(payload))
-
-	buf := make([]byte, 2048)
-	n, err := si.Read(buf)
-	requireNoErr(t, err, "Read")
-	requireTrue(t, n > 1024, "expected more than 1024 bytes, got %d", n)
-	requireTrue(t, si.inspected, "large body should auto-inspect")
-
-	hints, err := si.Hints(context.Background())
-	requireNoErr(t, err, "Hints")
-	requireTrue(t, hints.Model == "claude-sonnet-4-5", "model not extracted")
-}
-
-func TestStreamingInspector_EmptyBuffer(t *testing.T) {
-	si := NewStreamingInspector(strings.NewReader(""))
-	hints, err := si.Hints(context.Background())
-	requireNoErr(t, err, "Hints")
-	requireTrue(t, hints.Model == "", "expected empty hints")
-}
-
-func TestStreamingInspector_BadJSON(t *testing.T) {
-	si := NewStreamingInspector(strings.NewReader("not json"))
-	buf := make([]byte, 64)
-	_, err := si.Read(buf)
-	requireNoErr(t, err, "Read")
-
-	// Unmarshal error surfaces only once the bad bytes are buffered.
-	_, err = si.Hints(context.Background())
-	requireTrue(t, err != nil, "malformed body should surface an error")
-}
-
-// closeTracker records whether the underlying body was closed.
-type closeTracker struct {
-	closed bool
-}
-
-func (c *closeTracker) Read(p []byte) (int, error) {
-	return strings.NewReader(`{"model":"x"}`).Read(p)
-}
-
-func (c *closeTracker) Close() error {
-	c.closed = true
-	return nil
-}
-
-func TestPeekReader_ReadThroughAndClose(t *testing.T) {
-	body := &closeTracker{}
-	si, rc := PeekReader(body)
-
-	buf := make([]byte, 64)
-	n, err := rc.Read(buf)
-	requireNoErr(t, err, "Read")
-	requireTrue(t, n > 0, "expected data")
-
-	hints, err := si.Hints(context.Background())
-	requireNoErr(t, err, "Hints")
-	requireTrue(t, hints.Model == "x", "hints not extracted through peek reader")
-
-	requireNoErr(t, rc.Close(), "Close")
-	requireTrue(t, body.closed, "underlying closer not invoked")
 }
