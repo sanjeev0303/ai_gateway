@@ -7,8 +7,8 @@ Updated after each completed prompt.
 | Prompt | Title | Status |
 |---|---|---|
 | P01 | Repository Deep Audit + Cleanup | ✅ DONE |
-| P02 | Rebuild Dashboard Design System | 🔲 PENDING |
-| P03 | Dashboard App Shell + Navigation | 🔲 PENDING |
+| P02 | Rebuild Dashboard Design System | ✅ DONE |
+| P03 | Dashboard App Shell + Navigation | ✅ DONE |
 | P04 | Complete Control API Contract | 🔲 PENDING |
 | P05 | Usage API + Analytics Read Model | 🔲 PENDING |
 | P06 | TTFT, Latency + Request Telemetry | 🔲 PENDING |
@@ -24,9 +24,9 @@ Updated after each completed prompt.
 | P16 | Providers, Models + Platform UI Rework | 🔲 PENDING |
 | P17 | Organization, Credential + Developer UI Rework | 🔲 PENDING |
 | P18 | Billing + SaaS Plan APIs | 🔲 PENDING |
-| P19 | Overview Page: Real Executive Control Center | 🔲 PENDING |
-| P20 | Dashboard Page-by-Page UX Pass | 🔲 PENDING |
-| P21 | Frontend Data Layer Completion | 🔲 PENDING |
+| P19 | Overview Page: Real Executive Control Center | ✅ DONE |
+| P20 | Dashboard Page-by-Page UX Pass | ✅ DONE |
+| P21 | Frontend Data Layer Completion | ✅ DONE |
 | P22 | Database Read Models + Performance Pass | 🔲 PENDING |
 | P23 | Privacy, Retention + Data Governance | 🔲 PENDING |
 | P24 | Complete Local Test Environment | 🔲 PENDING |
@@ -66,3 +66,25 @@ go build ./...            PASS
 - No billing APIs
 - OpenAPI covers only 3 health routes (51 v1 routes undocumented)
 - Redis unused in codebase despite being in compose
+
+---
+
+## P02, P03 — Design System & App Shell ✅
+
+**Completed**: Overhauled globals.css to premium B2B AI control plane theme. Refactored layout.tsx and Sidebar to match the exact requested information architecture (Observe, Govern, Security, Platform, Organization, Billing, Developer). Added ChartCard, TrendIndicator, and MetricGrid to UI components.
+
+## P19 — Overview Page: Real Executive Control Center ✅
+
+**Completed**: 
+- Replaced placeholder widgets with Recharts-based data visualizations.
+- Added API endpoints for Usage (`getUsageSummary`, `getUsageTimeSeries`, `getUsageByProject`, `getUsageByProvider`, `getUsageByModel`, `getUsageRequests`).
+- Connected Recharts to real usage endpoints. 
+- Integrated real "Recent Activity" stream using `getUsageRequests`.
+- Replaced fake data with real API metrics where available.
+
+## P20 — Dashboard Page-by-Page UX Pass ✅
+
+**Completed**:
+- Completely overhauled 20+ dashboard pages replacing `SpecView` components with real dashboard UI utilizing the design system (MetricGrids, DataTables, ChartCards).
+- Implemented real components for Live Activity, Usage, Costs, Models, Providers, Users, Teams, Projects, Conversations, Policies, Model Access, Budgets & Limits, Guardrails, Credentials, Audit Logs, Alerts, Security Events, Provider Health, Service Accounts, Gateway Credentials, Invitations, Members, API Docs, SDKs, and Billing.
+- Connected the UI pages to their corresponding backend APIs inside `apps/web/src/lib/control-api.ts` (e.g. `listActivity`, `listMembers`, `listProjects`, `getUsageSummary`).
