@@ -1,0 +1,158 @@
+"use client";
+
+import * as React from "react";
+import { Loader2 } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { StatusBadge } from "@/components/dashboard/status-badge";
+
+interface ActionState {
+  error?: string;
+  success?: boolean;
+}
+
+export interface ActionDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description: React.ReactNode;
+  action: (state: ActionState, formData: FormData) => Promise<ActionState>;
+  submitLabel?: string;
+  submitVariant?: "default" | "destructive";
+  onSuccess?: () => void;
+}
+
+export function ActionDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  action,
+  submitLabel = "Confirm",
+  submitVariant = "default",
+  onSuccess,
+}: ActionDialogProps) {
+  const [state, formAction, pending] = React.useActionState<ActionState, FormData>(
+    action,
+    {}
+  );
+
+  React.useEffect(() => {
+    if (state.success && !pending) {
+      onOpenChange(false);
+      onSuccess?.();
+    }
+  }, [state.success, pending, onOpenChange, onSuccess]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <form action={formAction}>
+          <DialogFooter className="gap-2 sm:justify-between items-center w-full">
+            <div className="flex-1">
+              {state.error && <StatusBadge tone="danger">{state.error}</StatusBadge>}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onOpenChange(false)}
+                disabled={pending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant={submitVariant}
+                size="sm"
+                disabled={pending}
+              >
+                {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {submitLabel}
+              </Button>
+            </div>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export interface FormDialogProps extends Omit<ActionDialogProps, "description" | "action"> {
+  description?: React.ReactNode;
+  children: React.ReactNode;
+  action: (state: unknown, formData: FormData) => Promise<unknown>;
+}
+
+export function FormDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  children,
+  action,
+  submitLabel = "Save",
+  submitVariant = "default",
+  onSuccess,
+}: FormDialogProps) {
+  const [state, formAction, pending] = React.useActionState(action, {});
+
+  React.useEffect(() => {
+    if (state && typeof state === "object" && "success" in state && state.success && !pending) {
+      onOpenChange(false);
+      onSuccess?.(state);
+    }
+  }, [state, pending, onOpenChange, onSuccess]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          {description && <DialogDescription>{description}</DialogDescription>}
+        </DialogHeader>
+        <form action={formAction} className="space-y-4">
+          <div className="space-y-4 py-4">{children}</div>
+          <DialogFooter className="gap-2 sm:justify-between items-center w-full">
+            <div className="flex-1">
+              {state.error && <StatusBadge tone="danger">{state.error}</StatusBadge>}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onOpenChange(false)}
+                disabled={pending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant={submitVariant}
+                size="sm"
+                disabled={pending}
+              >
+                {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {submitLabel}
+              </Button>
+            </div>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

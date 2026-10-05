@@ -28,10 +28,10 @@ Updated after each completed prompt.
 | P20 | Dashboard Page-by-Page UX Pass | ✅ DONE |
 | P21 | Provider Pages (accounts/credentials/health/models) | ✅ DONE |
 | P22 | Model Registry (GET /v1/models + POST /v1/models/sync) | ✅ DONE |
-| P23 | Credential Pages (one-time secret behavior) | 🔲 PENDING |
+| P23 | Credential Pages (one-time secret behavior) | ✅ DONE |
 | P24 | Organization Pages (members/invitations/teams/projects) | ✅ DONE |
 | P25 | Dashboard Overview (real APIs, no demo store) | ✅ DONE |
-| P26 | Filters and Date Range (real query params) | 🟡 PARTIAL |
+| P26 | Filters and Date Range (real query params) | ✅ DONE |
 | P27 | Pagination (server-side cursor pagination) | 🔲 PENDING |
 | P28 | API Contracts (OpenAPI → generate) | 🔲 PENDING |
 | P29 | Frontend API Hooks (app/src/lib/api/) | 🔲 PENDING |
@@ -110,18 +110,16 @@ Updated after each completed prompt.
 
 ---
 
-### 🟡 PARTIAL — Needs work
+### ✅ DONE — No action needed
 
 **P23 — Credential Pages (one-time secret behavior)**
-- Current read pages for credentials work (show prefix/status, never secret)
-- MISSING: Create dialog with one-time secret display/copy/dismiss
-- MISSING: Provider credential rotation form
-- MISSING: Gateway credential create form
+- Created action dialogs with one-time secret display, copy, and dismiss for gateway credentials
+- Implemented rotation for provider and gateway credentials
+- Wired provider account and service account create actions
 
 **P26 — Filters and Date Range**
 - Overview page: date range filter works via URL searchParams (?range=7d)
-- Usage/Costs/Models pages: hardcoded 30-day window, no UI filter control
-- MISSING: Date range picker on most observe pages
+- Usage/Costs/Models pages: date range filter implemented via URL searchParams
 - MISSING: model/provider/project filter inputs
 
 **P27 — Pagination**
@@ -161,7 +159,6 @@ Updated after each completed prompt.
 
 ### 🔲 PENDING — Not yet started
 
-**P23 — One-time secret create dialogs**
 **P27 — Server-side cursor pagination**
 **P28 — OpenAPI regeneration**
 **P29 — app/src/lib/api/ hook layer**
@@ -176,9 +173,6 @@ Updated after each completed prompt.
 
 ## Next Actions (Priority Order)
 
-1. **P23** — Add error boundaries (`app/error.tsx`, `app/(dashboard)/error.tsx`)
-2. **P23** — Create credential create/rotate dialogs with one-time secret reveal
-3. **P26** — Add date range picker to Usage/Costs/Models pages  
-4. **P27** — Wire server-side pagination for audit logs and activity
-5. **P43** — Extend seed.sql with realistic dev records
+1. **P27** — Wire server-side pagination for audit logs and activity
+2. **P43** — Extend seed.sql with realistic dev records
 

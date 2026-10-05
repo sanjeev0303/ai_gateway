@@ -107,6 +107,8 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   /** Slot above the table for filters or a result count. */
   toolbar?: React.ReactNode;
+  /** Optional render function for a trailing actions cell. */
+  actions?: (row: T) => React.ReactNode;
 }
 
 function cellText(row: Record<string, unknown>, field: string, format: CellFormat): string {
@@ -124,6 +126,7 @@ export function DataTable<T>({
   pageSize = 10,
   emptyMessage = "No records found.",
   toolbar,
+  actions,
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = React.useState<string | null>(null);
   const [ascending, setAscending] = React.useState(true);
@@ -213,6 +216,11 @@ export function DataTable<T>({
                   </TableHead>
                 );
               })}
+              {actions && (
+                <TableHead className="w-12 text-right">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              )}
             </TableRow>
           </TableHeader>
 
@@ -297,6 +305,11 @@ export function DataTable<T>({
                       </TableCell>
                     );
                   })}
+                  {actions && (
+                    <TableCell className="text-right">
+                      {actions(row)}
+                    </TableCell>
+                  )}
                 </TableRow>
               );
             })}

@@ -4,9 +4,11 @@ import { BarChart } from "@/components/charts";
 import {
   DataTable,
   PageShell,
+  RangeTabs,
   StatCard,
   type Column,
 } from "@/components/dashboard";
+import { isDateRange, type DateRange } from "@/lib/date-range";
 import {
   Card,
   CardContent,
@@ -104,9 +106,35 @@ function activeState(isActive: boolean | undefined): { label: string; tone: Stat
     : { label: "inactive", tone: "neutral" };
 }
 
-export default async function ModelsPage() {
+const RANGE_MS: Record<DateRange, number> = {
+  "24h": 24 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
+  "30d": 30 * 24 * 60 * 60 * 1000,
+  "90d": 90 * 24 * 60 * 60 * 1000,
+};
+
+const RANGE_HINT: Record<DateRange, string> = {
+  "24h": "Last 24 hours",
+  "7d": "Last 7 days",
+  "30d": "Last 30 days",
+  "90d": "Last 90 days",
+};
+
+export default async function ModelsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const raw = typeof params.range === "string" ? params.range : null;
+  const range: DateRange = isDateRange(raw) ? raw : "30d";
+
   const { models, usage } = await getApiClient();
-  const [catalog, modelUsage] = await Promise.all([models.list(), usage.byModel()]);
+  
+  const to = new Date();
+  const query = { from: new Date(to.getTime() - RANGE_MS[range]), to };
+
+  const [catalog, modelUsage] = await Promise.all([models.list(), usage.byModel(query)]);
 
   // usage_events.model is the identifier recorded at request time, which is not
   // guaranteed to match a catalog slug. Match either, and fall back to the raw
@@ -167,6 +195,7 @@ export default async function ModelsPage() {
       <PageShell
         title="Models"
         description="Everything the gateway has routed, and the spend each one attracts."
+        actions={<RangeTabs />}
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
@@ -178,17 +207,17 @@ export default async function ModelsPage() {
             label="Models used"
             value={formatNumber(rows.length)}
             tone={unlisted > 0 ? "warning" : "neutral"}
-            hint={unlisted > 0 ? `${formatNumber(unlisted)} not in catalog` : "Trailing 30 days"}
+            hint={unlisted > 0 ? `${formatNumber(unlisted)} not in catalog` : RANGE_HINT[range]}
           />
           <StatCard
             label="Requests"
             value={formatNumber(totalRequests)}
-            hint="Trailing 30 days"
+            hint={RANGE_HINT[range]}
           />
           <StatCard
             label="Spend across models"
             value={formatUsd(totalSpend)}
-            hint="Trailing 30 days"
+            hint={RANGE_HINT[range]}
           />
         </section>
 

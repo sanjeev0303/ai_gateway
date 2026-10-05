@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 
 import { BarChart, DonutChart, LineChart, chartColor } from "@/components/charts";
 import {
-  EmptyState,
   PageShell,
+  RangeTabs,
   StatCard,
 } from "@/components/dashboard";
+import { isDateRange, type DateRange } from "@/lib/date-range";
 import {
   Card,
   CardContent,
@@ -23,12 +24,27 @@ export const metadata: Metadata = {
 
 const DAY = 24 * 60 * 60 * 1000;
 
-async function loadCosts() {
+const RANGE_MS: Record<DateRange, number> = {
+  "24h": DAY,
+  "7d": 7 * DAY,
+  "30d": 30 * DAY,
+  "90d": 90 * DAY,
+};
+
+const RANGE_HINT: Record<DateRange, string> = {
+  "24h": "Last 24 hours",
+  "7d": "Last 7 days",
+  "30d": "Last 30 days",
+  "90d": "Last 90 days",
+};
+
+async function loadCosts(range: DateRange) {
   const { usage, teams, projects } = await getApiClient();
 
   const now = Date.now();
-  const current = { from: new Date(now - 30 * DAY), to: new Date(now) };
-  const previous = { from: new Date(now - 60 * DAY), to: new Date(now - 30 * DAY) };
+  const ms = RANGE_MS[range];
+  const current = { from: new Date(now - ms), to: new Date(now) };
+  const previous = { from: new Date(now - 2 * ms), to: new Date(now - ms) };
 
   const [
     summary,
@@ -68,7 +84,15 @@ async function loadCosts() {
   };
 }
 
-export default async function CostsPage() {
+export default async function CostsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const raw = typeof params.range === "string" ? params.range : null;
+  const range: DateRange = isDateRange(raw) ? raw : "30d";
+
   const {
     summary,
     priorSummary,
@@ -80,7 +104,7 @@ export default async function CostsPage() {
     byUser,
     teamNames,
     projectNames,
-  } = await loadCosts();
+  } = await loadCosts(range);
 
   const spend = microsToUsd(summary.TotalCostMicros);
   const priorSpend = microsToUsd(priorSummary.TotalCostMicros);
@@ -99,13 +123,14 @@ export default async function CostsPage() {
     <div className="p-4 sm:p-6">
       <PageShell
         title="Costs"
-        description="Every dollar attributed to a model, team, project, and provider over the trailing 30 days."
+        description="Every dollar attributed to a model, team, project, and provider."
+        actions={<RangeTabs />}
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Spend"
             value={formatUsd(spend)}
-            hint="Trailing 30 days"
+            hint={RANGE_HINT[range]}
             delta={
               priorSpend > 0
                 ? {
@@ -126,7 +151,7 @@ export default async function CostsPage() {
           <StatCard
             label="Prior period"
             value={formatUsd(priorSpend)}
-            hint="The 30 days before that"
+            hint="The equivalent period before that"
           />
           <StatCard
             label="Blended cost per Mtok"

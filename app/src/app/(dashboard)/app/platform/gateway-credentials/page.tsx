@@ -18,6 +18,7 @@ import { formatDate, formatNumber, formatRelative } from "@/lib/format";
 import { toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
+import { GatewayCredentialActions, CreateCredentialButton } from "./client";
 
 export const metadata: Metadata = {
   title: "Gateway credentials · Sentinel",
@@ -194,6 +195,12 @@ export default async function GatewayCredentialsPage() {
               rowKey="id"
               pageSize={10}
               emptyMessage="No gateway credentials yet."
+              toolbar={
+                <div className="flex justify-end mb-4">
+                  <CreateCredentialButton />
+                </div>
+              }
+              actions={(row) => <GatewayCredentialActions credential={row} />}
             />
           </CardContent>
         </Card>

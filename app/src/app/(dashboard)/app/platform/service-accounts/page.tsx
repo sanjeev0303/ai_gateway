@@ -12,6 +12,7 @@ import { formatDate, formatNumber } from "@/lib/format";
 import { toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
+import { CreateServiceAccountButton, ServiceAccountActions } from "./client";
 
 export const metadata: Metadata = {
   title: "Service accounts · Sentinel",
@@ -105,6 +106,12 @@ export default async function ServiceAccountsPage() {
               rowKey="id"
               pageSize={10}
               emptyMessage="No service accounts yet."
+              toolbar={
+                <div className="flex justify-end mb-4">
+                  <CreateServiceAccountButton />
+                </div>
+              }
+              actions={(row) => <ServiceAccountActions account={row} />}
             />
           </CardContent>
         </Card>

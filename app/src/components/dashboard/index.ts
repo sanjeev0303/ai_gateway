@@ -7,3 +7,4 @@ export * from "./range-tabs";
 export * from "./mobile-nav";
 export * from "./sidebar";
 export * from "./topbar";
+export * from "./dialogs";

@@ -13,6 +13,7 @@ import { formatDate, formatNumber } from "@/lib/format";
 import { toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
+import { CreateProviderAccountButton } from "./client";
 
 export const metadata: Metadata = {
   title: "Provider accounts · Sentinel",
@@ -167,6 +168,11 @@ export default async function ProviderAccountsPage() {
               rowKey="id"
               pageSize={10}
               emptyMessage="No provider accounts connected."
+              toolbar={
+                <div className="flex justify-end mb-4">
+                  <CreateProviderAccountButton />
+                </div>
+              }
             />
           </CardContent>
         </Card>

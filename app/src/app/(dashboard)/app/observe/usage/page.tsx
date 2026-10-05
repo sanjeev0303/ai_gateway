@@ -5,9 +5,11 @@ import {
   DataTable,
   EmptyState,
   PageShell,
+  RangeTabs,
   StatCard,
   type Column,
 } from "@/components/dashboard";
+import { isDateRange, type DateRange } from "@/lib/date-range";
 import {
   Card,
   CardContent,
@@ -96,9 +98,17 @@ const modelColumns: readonly Column<ModelRow>[] = [
   },
 ];
 
-async function loadUsage() {
+const RANGE_MS: Record<DateRange, number> = {
+  "24h": 24 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
+  "30d": 30 * 24 * 60 * 60 * 1000,
+  "90d": 90 * 24 * 60 * 60 * 1000,
+};
+
+async function loadUsage(range: DateRange) {
   const { usage, projects, teams } = await getApiClient();
-  const window = { from: new Date(Date.now() - 30 * DAY) };
+  const to = new Date();
+  const query = { from: new Date(to.getTime() - RANGE_MS[range]), to };
 
   const [
     summary,
@@ -111,13 +121,13 @@ async function loadUsage() {
     projectList,
     teamList,
   ] = await Promise.all([
-    usage.summary(window),
-    usage.timeseries(window),
-    usage.byModel(window),
-    usage.byProvider(window),
-    usage.byProject(window),
-    usage.byUser(window),
-    usage.byTeam(window),
+    usage.summary(query),
+    usage.timeseries(query),
+    usage.byModel(query),
+    usage.byProvider(query),
+    usage.byProject(query),
+    usage.byUser(query),
+    usage.byTeam(query),
     projects.list(),
     teams.list(),
   ]);
@@ -135,7 +145,15 @@ async function loadUsage() {
   };
 }
 
-export default async function UsagePage() {
+export default async function UsagePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const raw = typeof params.range === "string" ? params.range : null;
+  const range: DateRange = isDateRange(raw) ? raw : "30d";
+
   const {
     summary,
     series,
@@ -146,7 +164,7 @@ export default async function UsagePage() {
     byTeam,
     projectNames,
     teamNames,
-  } = await loadUsage();
+  } = await loadUsage(range);
 
   const totalSpend = microsToUsd(summary.TotalCostMicros);
   const totalByModel = byModel.items.reduce((acc, row) => acc + microsToUsd(row.CostMicros), 0);
@@ -180,6 +198,7 @@ export default async function UsagePage() {
       <PageShell
         title="Usage"
         description="Request and token volume across every route, with spend attribution."
+        actions={<RangeTabs />}
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
