@@ -2,34 +2,28 @@ import type { ID, ISODateString, StatusTone } from "./common";
 
 export type PlanTier = "free" | "starter" | "growth" | "enterprise";
 
-export type OrganizationRole = "owner" | "admin" | "member" | "viewer";
+/** Mirrors the storable org roles in `backend/internal/domain/roles.go`. */
+export type OrganizationRole = "owner" | "admin" | "member" | "auditor" | "billing_admin";
 
-export type OrganizationStatus = "active" | "trialing" | "past_due" | "suspended";
+/** Mirrors the `organizations.status` CHECK constraint: active | suspended. */
+export type OrganizationStatus = "active" | "suspended";
 
 export interface Organization {
   id: ID;
   name: string;
   slug: string;
-  logoUrl?: string;
-  plan: PlanTier;
   status: OrganizationStatus;
   createdAt: ISODateString;
-  seatsUsed: number;
-  seatsTotal: number;
-  /** Billing contact, not necessarily a platform user. */
-  billingEmail: string;
-  region: string;
-  /** Annual recurring revenue in whole USD. */
-  mrr: number;
+  updatedAt: ISODateString;
 }
 
 export interface OrganizationSummary {
   organization: Organization;
-  activeUsers: number;
-  activeProjects: number;
-  totalSpendMtd: number;
-  openAlerts: number;
-  policyCompliance: number;
+  activeUsers?: number;
+  activeProjects?: number;
+  totalSpendMtd?: number;
+  openAlerts?: number;
+  policyCompliance?: number;
 }
 
 export const PLAN_LABELS: Record<PlanTier, string> = {
@@ -41,7 +35,10 @@ export const PLAN_LABELS: Record<PlanTier, string> = {
 
 export const ORG_STATUS_TONE: Record<OrganizationStatus, StatusTone> = {
   active: "success",
-  trialing: "info",
-  past_due: "warning",
   suspended: "danger",
+};
+
+export const ORG_STATUS_LABELS: Record<OrganizationStatus, string> = {
+  active: "Active",
+  suspended: "Suspended",
 };

@@ -258,34 +258,71 @@ func (q *Queries) GetUsageByModel(ctx context.Context, arg GetUsageByModelParams
 }
 
 const getUsageByProject = `-- name: GetUsageByProject :many
-SELECT project_id,
-       COALESCE(sum(requests), 0)::bigint as requests,
-       COALESCE(sum(total_tokens), 0)::bigint as total_tokens,
-       COALESCE(sum(cost_micros), 0)::bigint as cost_micros
-FROM usage_daily
-WHERE organization_id = $1
-  AND bucket_start >= $2
-  AND bucket_start < $3
-  AND project_id IS NOT NULL
-GROUP BY project_id
+SELECT r.project_id,
+       p.name,
+       COUNT(*)::bigint as requests,
+       COALESCE(SUM(r.prompt_tokens), 0)::bigint as input_tokens,
+       COALESCE(SUM(r.completion_tokens), 0)::bigint as output_tokens,
+       COALESCE(SUM(r.total_tokens), 0)::bigint as total_tokens,
+       COALESCE(SUM(r.cost_micros), 0)::bigint as cost_micros,
+       COUNT(*) FILTER (WHERE r.status = 'failed')::bigint as errors,
+       COALESCE(AVG(r.latency_ms), 0)::float8 as avg_latency_ms,
+       MAX(r.created_at)::timestamptz as last_activity_at
+FROM llm_requests r
+JOIN projects p ON p.id = r.project_id
+WHERE r.organization_id = $1
+  AND r.created_at >= $2
+  AND r.created_at < $3
+  AND r.project_id IS NOT NULL
+  AND ($4::uuid IS NULL OR r.user_id = $4)
+  AND ($5::uuid IS NULL OR EXISTS (
+        SELECT 1
+        FROM team_members tm
+        WHERE tm.team_id = $5
+          AND tm.user_id = r.user_id
+          AND tm.organization_id = r.organization_id))
+  AND ($6::text IS NULL OR r.provider_kind = $6)
+  AND ($7::text IS NULL OR r.model = $7)
+  AND ($8::text IS NULL OR r.status = $8)
+GROUP BY r.project_id, p.name
 ORDER BY total_tokens DESC
 `
 
 type GetUsageByProjectParams struct {
-	OrganizationID uuid.UUID `json:"organization_id"`
-	FromTs         time.Time `json:"from_ts"`
-	ToTs           time.Time `json:"to_ts"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	FromTs         time.Time  `json:"from_ts"`
+	ToTs           time.Time  `json:"to_ts"`
+	UserID         *uuid.UUID `json:"user_id"`
+	TeamID         *uuid.UUID `json:"team_id"`
+	Provider       *string    `json:"provider"`
+	Model          *string    `json:"model"`
+	Status         *string    `json:"status"`
 }
 
 type GetUsageByProjectRow struct {
-	ProjectID   uuid.UUID `json:"project_id"`
-	Requests    int64     `json:"requests"`
-	TotalTokens int64     `json:"total_tokens"`
-	CostMicros  int64     `json:"cost_micros"`
+	ProjectID      *uuid.UUID `json:"project_id"`
+	Name           string     `json:"name"`
+	Requests       int64      `json:"requests"`
+	InputTokens    int64      `json:"input_tokens"`
+	OutputTokens   int64      `json:"output_tokens"`
+	TotalTokens    int64      `json:"total_tokens"`
+	CostMicros     int64      `json:"cost_micros"`
+	Errors         int64      `json:"errors"`
+	AvgLatencyMs   float64    `json:"avg_latency_ms"`
+	LastActivityAt time.Time  `json:"last_activity_at"`
 }
 
 func (q *Queries) GetUsageByProject(ctx context.Context, arg GetUsageByProjectParams) ([]GetUsageByProjectRow, error) {
-	rows, err := q.db.Query(ctx, getUsageByProject, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, getUsageByProject,
+		arg.OrganizationID,
+		arg.FromTs,
+		arg.ToTs,
+		arg.UserID,
+		arg.TeamID,
+		arg.Provider,
+		arg.Model,
+		arg.Status,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -295,9 +332,15 @@ func (q *Queries) GetUsageByProject(ctx context.Context, arg GetUsageByProjectPa
 		var i GetUsageByProjectRow
 		if err := rows.Scan(
 			&i.ProjectID,
+			&i.Name,
 			&i.Requests,
+			&i.InputTokens,
+			&i.OutputTokens,
 			&i.TotalTokens,
 			&i.CostMicros,
+			&i.Errors,
+			&i.AvgLatencyMs,
+			&i.LastActivityAt,
 		); err != nil {
 			return nil, err
 		}
@@ -362,33 +405,65 @@ func (q *Queries) GetUsageByProvider(ctx context.Context, arg GetUsageByProvider
 
 const getUsageByTeam = `-- name: GetUsageByTeam :many
 SELECT tm.team_id,
-       COUNT(r.id)::int as requests,
+       t.name,
+       COUNT(r.id)::bigint as requests,
+       COALESCE(SUM(r.prompt_tokens), 0)::bigint as input_tokens,
+       COALESCE(SUM(r.completion_tokens), 0)::bigint as output_tokens,
        COALESCE(SUM(r.total_tokens), 0)::bigint as total_tokens,
-       COALESCE(SUM(r.cost_micros), 0)::bigint as cost_micros
+       COALESCE(SUM(r.cost_micros), 0)::bigint as cost_micros,
+       COUNT(r.id) FILTER (WHERE r.status = 'failed')::bigint as errors,
+       COALESCE(AVG(r.latency_ms), 0)::float8 as avg_latency_ms,
+       MAX(r.created_at)::timestamptz as last_activity_at
 FROM llm_requests r
-JOIN team_members tm ON r.user_id = tm.user_id
+JOIN team_members tm ON tm.user_id = r.user_id AND tm.organization_id = r.organization_id
+JOIN teams t ON t.id = tm.team_id
 WHERE r.organization_id = $1
   AND r.created_at >= $2
   AND r.created_at < $3
-GROUP BY tm.team_id
+  AND ($4::uuid IS NULL OR r.project_id = $4)
+  AND ($5::uuid IS NULL OR r.user_id = $5)
+  AND ($6::text IS NULL OR r.provider_kind = $6)
+  AND ($7::text IS NULL OR r.model = $7)
+  AND ($8::text IS NULL OR r.status = $8)
+GROUP BY tm.team_id, t.name
 ORDER BY total_tokens DESC
 `
 
 type GetUsageByTeamParams struct {
-	OrganizationID uuid.UUID `json:"organization_id"`
-	FromTs         time.Time `json:"from_ts"`
-	ToTs           time.Time `json:"to_ts"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	FromTs         time.Time  `json:"from_ts"`
+	ToTs           time.Time  `json:"to_ts"`
+	ProjectID      *uuid.UUID `json:"project_id"`
+	UserID         *uuid.UUID `json:"user_id"`
+	Provider       *string    `json:"provider"`
+	Model          *string    `json:"model"`
+	Status         *string    `json:"status"`
 }
 
 type GetUsageByTeamRow struct {
-	TeamID      uuid.UUID `json:"team_id"`
-	Requests    int32     `json:"requests"`
-	TotalTokens int64     `json:"total_tokens"`
-	CostMicros  int64     `json:"cost_micros"`
+	TeamID         uuid.UUID `json:"team_id"`
+	Name           string    `json:"name"`
+	Requests       int64     `json:"requests"`
+	InputTokens    int64     `json:"input_tokens"`
+	OutputTokens   int64     `json:"output_tokens"`
+	TotalTokens    int64     `json:"total_tokens"`
+	CostMicros     int64     `json:"cost_micros"`
+	Errors         int64     `json:"errors"`
+	AvgLatencyMs   float64   `json:"avg_latency_ms"`
+	LastActivityAt time.Time `json:"last_activity_at"`
 }
 
 func (q *Queries) GetUsageByTeam(ctx context.Context, arg GetUsageByTeamParams) ([]GetUsageByTeamRow, error) {
-	rows, err := q.db.Query(ctx, getUsageByTeam, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, getUsageByTeam,
+		arg.OrganizationID,
+		arg.FromTs,
+		arg.ToTs,
+		arg.ProjectID,
+		arg.UserID,
+		arg.Provider,
+		arg.Model,
+		arg.Status,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -398,9 +473,15 @@ func (q *Queries) GetUsageByTeam(ctx context.Context, arg GetUsageByTeamParams) 
 		var i GetUsageByTeamRow
 		if err := rows.Scan(
 			&i.TeamID,
+			&i.Name,
 			&i.Requests,
+			&i.InputTokens,
+			&i.OutputTokens,
 			&i.TotalTokens,
 			&i.CostMicros,
+			&i.Errors,
+			&i.AvgLatencyMs,
+			&i.LastActivityAt,
 		); err != nil {
 			return nil, err
 		}
@@ -413,34 +494,73 @@ func (q *Queries) GetUsageByTeam(ctx context.Context, arg GetUsageByTeamParams) 
 }
 
 const getUsageByUser = `-- name: GetUsageByUser :many
-SELECT user_id,
-       COUNT(*) as requests,
-       COALESCE(SUM(total_tokens), 0)::bigint as total_tokens,
-       COALESCE(SUM(cost_micros), 0)::bigint as cost_micros
-FROM llm_requests
-WHERE organization_id = $1
-  AND created_at >= $2
-  AND created_at < $3
-  AND user_id IS NOT NULL
-GROUP BY user_id
+SELECT r.user_id,
+       u.email,
+       u.display_name,
+       COUNT(*)::bigint as requests,
+       COALESCE(SUM(r.prompt_tokens), 0)::bigint as input_tokens,
+       COALESCE(SUM(r.completion_tokens), 0)::bigint as output_tokens,
+       COALESCE(SUM(r.total_tokens), 0)::bigint as total_tokens,
+       COALESCE(SUM(r.cost_micros), 0)::bigint as cost_micros,
+       COUNT(*) FILTER (WHERE r.status = 'failed')::bigint as errors,
+       COALESCE(AVG(r.latency_ms), 0)::float8 as avg_latency_ms,
+       MAX(r.created_at)::timestamptz as last_activity_at
+FROM llm_requests r
+JOIN users u ON u.id = r.user_id
+WHERE r.organization_id = $1
+  AND r.created_at >= $2
+  AND r.created_at < $3
+  AND r.user_id IS NOT NULL
+  AND ($4::uuid IS NULL OR r.project_id = $4)
+  AND ($5::uuid IS NULL OR EXISTS (
+        SELECT 1
+        FROM team_members tm
+        WHERE tm.team_id = $5
+          AND tm.user_id = r.user_id
+          AND tm.organization_id = r.organization_id))
+  AND ($6::text IS NULL OR r.provider_kind = $6)
+  AND ($7::text IS NULL OR r.model = $7)
+  AND ($8::text IS NULL OR r.status = $8)
+GROUP BY r.user_id, u.email, u.display_name
 ORDER BY total_tokens DESC
 `
 
 type GetUsageByUserParams struct {
-	OrganizationID uuid.UUID `json:"organization_id"`
-	FromTs         time.Time `json:"from_ts"`
-	ToTs           time.Time `json:"to_ts"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	FromTs         time.Time  `json:"from_ts"`
+	ToTs           time.Time  `json:"to_ts"`
+	ProjectID      *uuid.UUID `json:"project_id"`
+	TeamID         *uuid.UUID `json:"team_id"`
+	Provider       *string    `json:"provider"`
+	Model          *string    `json:"model"`
+	Status         *string    `json:"status"`
 }
 
 type GetUsageByUserRow struct {
-	UserID      *uuid.UUID `json:"user_id"`
-	Requests    int64      `json:"requests"`
-	TotalTokens int64      `json:"total_tokens"`
-	CostMicros  int64      `json:"cost_micros"`
+	UserID         *uuid.UUID `json:"user_id"`
+	Email          string     `json:"email"`
+	DisplayName    string     `json:"display_name"`
+	Requests       int64      `json:"requests"`
+	InputTokens    int64      `json:"input_tokens"`
+	OutputTokens   int64      `json:"output_tokens"`
+	TotalTokens    int64      `json:"total_tokens"`
+	CostMicros     int64      `json:"cost_micros"`
+	Errors         int64      `json:"errors"`
+	AvgLatencyMs   float64    `json:"avg_latency_ms"`
+	LastActivityAt time.Time  `json:"last_activity_at"`
 }
 
 func (q *Queries) GetUsageByUser(ctx context.Context, arg GetUsageByUserParams) ([]GetUsageByUserRow, error) {
-	rows, err := q.db.Query(ctx, getUsageByUser, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, getUsageByUser,
+		arg.OrganizationID,
+		arg.FromTs,
+		arg.ToTs,
+		arg.ProjectID,
+		arg.TeamID,
+		arg.Provider,
+		arg.Model,
+		arg.Status,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -450,9 +570,16 @@ func (q *Queries) GetUsageByUser(ctx context.Context, arg GetUsageByUserParams) 
 		var i GetUsageByUserRow
 		if err := rows.Scan(
 			&i.UserID,
+			&i.Email,
+			&i.DisplayName,
 			&i.Requests,
+			&i.InputTokens,
+			&i.OutputTokens,
 			&i.TotalTokens,
 			&i.CostMicros,
+			&i.Errors,
+			&i.AvgLatencyMs,
+			&i.LastActivityAt,
 		); err != nil {
 			return nil, err
 		}
@@ -491,22 +618,222 @@ func (q *Queries) GetUsageEvent(ctx context.Context, arg GetUsageEventParams) (U
 	return i, err
 }
 
+const getUsageLatencyByProviderModel = `-- name: GetUsageLatencyByProviderModel :many
+SELECT r.provider_kind as provider,
+       r.model,
+       COUNT(r.time_to_first_token_ms)::bigint as ttft_samples,
+       COUNT(r.total_latency_ms)::bigint as total_samples,
+       COALESCE(AVG(r.time_to_first_token_ms), 0)::float8 as avg_ttft_ms,
+       COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY r.time_to_first_token_ms), 0)::float8 as p50_ttft_ms,
+       COALESCE(percentile_cont(0.95) WITHIN GROUP (ORDER BY r.time_to_first_token_ms), 0)::float8 as p95_ttft_ms,
+       COALESCE(percentile_cont(0.99) WITHIN GROUP (ORDER BY r.time_to_first_token_ms), 0)::float8 as p99_ttft_ms,
+       COALESCE(AVG(r.total_latency_ms), 0)::float8 as avg_total_ms,
+       COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY r.total_latency_ms), 0)::float8 as p50_total_ms,
+       COALESCE(percentile_cont(0.95) WITHIN GROUP (ORDER BY r.total_latency_ms), 0)::float8 as p95_total_ms,
+       COALESCE(percentile_cont(0.99) WITHIN GROUP (ORDER BY r.total_latency_ms), 0)::float8 as p99_total_ms
+FROM llm_requests r
+WHERE r.organization_id = $1
+  AND r.created_at >= $2
+  AND r.created_at < $3
+  AND ($4::uuid IS NULL OR r.project_id = $4)
+  AND ($5::uuid IS NULL OR r.user_id = $5)
+  AND ($6::uuid IS NULL OR EXISTS (
+        SELECT 1
+        FROM team_members tm
+        WHERE tm.team_id = $6
+          AND tm.user_id = r.user_id
+          AND tm.organization_id = r.organization_id))
+  AND ($7::text IS NULL OR r.provider_kind = $7)
+  AND ($8::text IS NULL OR r.model = $8)
+  AND ($9::text IS NULL OR r.status = $9)
+GROUP BY r.provider_kind, r.model
+ORDER BY total_samples DESC
+`
+
+type GetUsageLatencyByProviderModelParams struct {
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	FromTs         time.Time  `json:"from_ts"`
+	ToTs           time.Time  `json:"to_ts"`
+	ProjectID      *uuid.UUID `json:"project_id"`
+	UserID         *uuid.UUID `json:"user_id"`
+	TeamID         *uuid.UUID `json:"team_id"`
+	Provider       *string    `json:"provider"`
+	Model          *string    `json:"model"`
+	Status         *string    `json:"status"`
+}
+
+type GetUsageLatencyByProviderModelRow struct {
+	Provider     string  `json:"provider"`
+	Model        string  `json:"model"`
+	TtftSamples  int64   `json:"ttft_samples"`
+	TotalSamples int64   `json:"total_samples"`
+	AvgTtftMs    float64 `json:"avg_ttft_ms"`
+	P50TtftMs    float64 `json:"p50_ttft_ms"`
+	P95TtftMs    float64 `json:"p95_ttft_ms"`
+	P99TtftMs    float64 `json:"p99_ttft_ms"`
+	AvgTotalMs   float64 `json:"avg_total_ms"`
+	P50TotalMs   float64 `json:"p50_total_ms"`
+	P95TotalMs   float64 `json:"p95_total_ms"`
+	P99TotalMs   float64 `json:"p99_total_ms"`
+}
+
+func (q *Queries) GetUsageLatencyByProviderModel(ctx context.Context, arg GetUsageLatencyByProviderModelParams) ([]GetUsageLatencyByProviderModelRow, error) {
+	rows, err := q.db.Query(ctx, getUsageLatencyByProviderModel,
+		arg.OrganizationID,
+		arg.FromTs,
+		arg.ToTs,
+		arg.ProjectID,
+		arg.UserID,
+		arg.TeamID,
+		arg.Provider,
+		arg.Model,
+		arg.Status,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUsageLatencyByProviderModelRow{}
+	for rows.Next() {
+		var i GetUsageLatencyByProviderModelRow
+		if err := rows.Scan(
+			&i.Provider,
+			&i.Model,
+			&i.TtftSamples,
+			&i.TotalSamples,
+			&i.AvgTtftMs,
+			&i.P50TtftMs,
+			&i.P95TtftMs,
+			&i.P99TtftMs,
+			&i.AvgTotalMs,
+			&i.P50TotalMs,
+			&i.P95TotalMs,
+			&i.P99TotalMs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsageLatencyOverall = `-- name: GetUsageLatencyOverall :one
+SELECT COUNT(r.time_to_first_token_ms)::bigint as ttft_samples,
+       COUNT(r.total_latency_ms)::bigint as total_samples,
+       COALESCE(AVG(r.time_to_first_token_ms), 0)::float8 as avg_ttft_ms,
+       COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY r.time_to_first_token_ms), 0)::float8 as p50_ttft_ms,
+       COALESCE(percentile_cont(0.95) WITHIN GROUP (ORDER BY r.time_to_first_token_ms), 0)::float8 as p95_ttft_ms,
+       COALESCE(percentile_cont(0.99) WITHIN GROUP (ORDER BY r.time_to_first_token_ms), 0)::float8 as p99_ttft_ms,
+       COALESCE(AVG(r.total_latency_ms), 0)::float8 as avg_total_ms,
+       COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY r.total_latency_ms), 0)::float8 as p50_total_ms,
+       COALESCE(percentile_cont(0.95) WITHIN GROUP (ORDER BY r.total_latency_ms), 0)::float8 as p95_total_ms,
+       COALESCE(percentile_cont(0.99) WITHIN GROUP (ORDER BY r.total_latency_ms), 0)::float8 as p99_total_ms
+FROM llm_requests r
+WHERE r.organization_id = $1
+  AND r.created_at >= $2
+  AND r.created_at < $3
+  AND ($4::uuid IS NULL OR r.project_id = $4)
+  AND ($5::uuid IS NULL OR r.user_id = $5)
+  AND ($6::uuid IS NULL OR EXISTS (
+        SELECT 1
+        FROM team_members tm
+        WHERE tm.team_id = $6
+          AND tm.user_id = r.user_id
+          AND tm.organization_id = r.organization_id))
+  AND ($7::text IS NULL OR r.provider_kind = $7)
+  AND ($8::text IS NULL OR r.model = $8)
+  AND ($9::text IS NULL OR r.status = $9)
+`
+
+type GetUsageLatencyOverallParams struct {
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	FromTs         time.Time  `json:"from_ts"`
+	ToTs           time.Time  `json:"to_ts"`
+	ProjectID      *uuid.UUID `json:"project_id"`
+	UserID         *uuid.UUID `json:"user_id"`
+	TeamID         *uuid.UUID `json:"team_id"`
+	Provider       *string    `json:"provider"`
+	Model          *string    `json:"model"`
+	Status         *string    `json:"status"`
+}
+
+type GetUsageLatencyOverallRow struct {
+	TtftSamples  int64   `json:"ttft_samples"`
+	TotalSamples int64   `json:"total_samples"`
+	AvgTtftMs    float64 `json:"avg_ttft_ms"`
+	P50TtftMs    float64 `json:"p50_ttft_ms"`
+	P95TtftMs    float64 `json:"p95_ttft_ms"`
+	P99TtftMs    float64 `json:"p99_ttft_ms"`
+	AvgTotalMs   float64 `json:"avg_total_ms"`
+	P50TotalMs   float64 `json:"p50_total_ms"`
+	P95TotalMs   float64 `json:"p95_total_ms"`
+	P99TotalMs   float64 `json:"p99_total_ms"`
+}
+
+func (q *Queries) GetUsageLatencyOverall(ctx context.Context, arg GetUsageLatencyOverallParams) (GetUsageLatencyOverallRow, error) {
+	row := q.db.QueryRow(ctx, getUsageLatencyOverall,
+		arg.OrganizationID,
+		arg.FromTs,
+		arg.ToTs,
+		arg.ProjectID,
+		arg.UserID,
+		arg.TeamID,
+		arg.Provider,
+		arg.Model,
+		arg.Status,
+	)
+	var i GetUsageLatencyOverallRow
+	err := row.Scan(
+		&i.TtftSamples,
+		&i.TotalSamples,
+		&i.AvgTtftMs,
+		&i.P50TtftMs,
+		&i.P95TtftMs,
+		&i.P99TtftMs,
+		&i.AvgTotalMs,
+		&i.P50TotalMs,
+		&i.P95TotalMs,
+		&i.P99TotalMs,
+	)
+	return i, err
+}
+
 const getUsageRequests = `-- name: GetUsageRequests :many
 SELECT id, request_id, project_id, user_id, provider_kind, model, status, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms
-FROM llm_requests
-WHERE organization_id = $1
-  AND created_at >= $2
-  AND created_at < $3
-ORDER BY created_at DESC
-LIMIT $5 OFFSET $4
+FROM llm_requests r
+WHERE r.organization_id = $1
+  AND r.created_at >= $2
+  AND r.created_at < $3
+  AND ($4::uuid IS NULL OR r.project_id = $4)
+  AND ($5::uuid IS NULL OR r.user_id = $5)
+  AND ($6::uuid IS NULL OR EXISTS (
+        SELECT 1
+        FROM team_members tm
+        WHERE tm.team_id = $6
+          AND tm.user_id = r.user_id
+          AND tm.organization_id = r.organization_id))
+  AND ($7::text IS NULL OR r.provider_kind = $7)
+  AND ($8::text IS NULL OR r.model = $8)
+  AND ($9::text IS NULL OR r.status = $9)
+ORDER BY r.created_at DESC
+LIMIT $11 OFFSET $10
 `
 
 type GetUsageRequestsParams struct {
-	OrganizationID uuid.UUID `json:"organization_id"`
-	FromTs         time.Time `json:"from_ts"`
-	ToTs           time.Time `json:"to_ts"`
-	OffsetCount    int32     `json:"offset_count"`
-	LimitCount     int32     `json:"limit_count"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	FromTs         time.Time  `json:"from_ts"`
+	ToTs           time.Time  `json:"to_ts"`
+	ProjectID      *uuid.UUID `json:"project_id"`
+	UserID         *uuid.UUID `json:"user_id"`
+	TeamID         *uuid.UUID `json:"team_id"`
+	Provider       *string    `json:"provider"`
+	Model          *string    `json:"model"`
+	Status         *string    `json:"status"`
+	OffsetCount    int32      `json:"offset_count"`
+	LimitCount     int32      `json:"limit_count"`
 }
 
 type GetUsageRequestsRow struct {
@@ -533,6 +860,12 @@ func (q *Queries) GetUsageRequests(ctx context.Context, arg GetUsageRequestsPara
 		arg.OrganizationID,
 		arg.FromTs,
 		arg.ToTs,
+		arg.ProjectID,
+		arg.UserID,
+		arg.TeamID,
+		arg.Provider,
+		arg.Model,
+		arg.Status,
 		arg.OffsetCount,
 		arg.LimitCount,
 	)
@@ -572,18 +905,33 @@ func (q *Queries) GetUsageRequests(ctx context.Context, arg GetUsageRequestsPara
 }
 
 const getUsageSummary = `-- name: GetUsageSummary :one
-SELECT COALESCE(sum(requests), 0)::bigint as total_requests,
-       COALESCE(sum(prompt_tokens), 0)::bigint as input_tokens,
-       COALESCE(sum(completion_tokens), 0)::bigint as output_tokens,
-       COALESCE(sum(cached_input_tokens), 0)::bigint as cached_tokens,
-       COALESCE(sum(total_tokens), 0)::bigint as total_tokens,
-       COALESCE(sum(cost_micros), 0)::bigint as total_cost_micros
-FROM usage_daily
-WHERE organization_id = $1
-  AND bucket_start >= $2
-  AND bucket_start < $3
-  AND ($4::uuid IS NULL OR project_id = $4)
-  AND ($5::text IS NULL OR model = $5)
+SELECT COUNT(*)::bigint as total_requests,
+       COALESCE(SUM(r.prompt_tokens), 0)::bigint as input_tokens,
+       COALESCE(SUM(r.completion_tokens), 0)::bigint as output_tokens,
+       COALESCE(SUM(r.cached_input_tokens), 0)::bigint as cached_tokens,
+       COALESCE(SUM(r.total_tokens), 0)::bigint as total_tokens,
+       COALESCE(SUM(r.cost_micros), 0)::bigint as total_cost_micros,
+       COUNT(*) FILTER (WHERE r.status = 'failed')::bigint as errors,
+       COALESCE(AVG(r.latency_ms), 0)::float8 as avg_latency_ms,
+       -- An ungrouped aggregate always returns one row, so an empty window makes
+       -- MAX() NULL. Coalesce to Go's zero time so the scan cannot fail; the
+       -- repository detects "no requests" from TotalRequests.
+       COALESCE(MAX(r.created_at)::timestamptz, '0001-01-01 00:00:00+00'::timestamptz)::timestamptz as last_activity_at
+FROM llm_requests r
+WHERE r.organization_id = $1
+  AND r.created_at >= $2
+  AND r.created_at < $3
+  AND ($4::uuid IS NULL OR r.project_id = $4)
+  AND ($5::uuid IS NULL OR r.user_id = $5)
+  AND ($6::uuid IS NULL OR EXISTS (
+        SELECT 1
+        FROM team_members tm
+        WHERE tm.team_id = $6
+          AND tm.user_id = r.user_id
+          AND tm.organization_id = r.organization_id))
+  AND ($7::text IS NULL OR r.provider_kind = $7)
+  AND ($8::text IS NULL OR r.model = $8)
+  AND ($9::text IS NULL OR r.status = $9)
 `
 
 type GetUsageSummaryParams struct {
@@ -591,16 +939,23 @@ type GetUsageSummaryParams struct {
 	FromTs         time.Time  `json:"from_ts"`
 	ToTs           time.Time  `json:"to_ts"`
 	ProjectID      *uuid.UUID `json:"project_id"`
+	UserID         *uuid.UUID `json:"user_id"`
+	TeamID         *uuid.UUID `json:"team_id"`
+	Provider       *string    `json:"provider"`
 	Model          *string    `json:"model"`
+	Status         *string    `json:"status"`
 }
 
 type GetUsageSummaryRow struct {
-	TotalRequests   int64 `json:"total_requests"`
-	InputTokens     int64 `json:"input_tokens"`
-	OutputTokens    int64 `json:"output_tokens"`
-	CachedTokens    int64 `json:"cached_tokens"`
-	TotalTokens     int64 `json:"total_tokens"`
-	TotalCostMicros int64 `json:"total_cost_micros"`
+	TotalRequests   int64     `json:"total_requests"`
+	InputTokens     int64     `json:"input_tokens"`
+	OutputTokens    int64     `json:"output_tokens"`
+	CachedTokens    int64     `json:"cached_tokens"`
+	TotalTokens     int64     `json:"total_tokens"`
+	TotalCostMicros int64     `json:"total_cost_micros"`
+	Errors          int64     `json:"errors"`
+	AvgLatencyMs    float64   `json:"avg_latency_ms"`
+	LastActivityAt  time.Time `json:"last_activity_at"`
 }
 
 func (q *Queries) GetUsageSummary(ctx context.Context, arg GetUsageSummaryParams) (GetUsageSummaryRow, error) {
@@ -609,7 +964,11 @@ func (q *Queries) GetUsageSummary(ctx context.Context, arg GetUsageSummaryParams
 		arg.FromTs,
 		arg.ToTs,
 		arg.ProjectID,
+		arg.UserID,
+		arg.TeamID,
+		arg.Provider,
 		arg.Model,
+		arg.Status,
 	)
 	var i GetUsageSummaryRow
 	err := row.Scan(
@@ -619,6 +978,9 @@ func (q *Queries) GetUsageSummary(ctx context.Context, arg GetUsageSummaryParams
 		&i.CachedTokens,
 		&i.TotalTokens,
 		&i.TotalCostMicros,
+		&i.Errors,
+		&i.AvgLatencyMs,
+		&i.LastActivityAt,
 	)
 	return i, err
 }

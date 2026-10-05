@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 
-import { BarChart, DonutChart } from "@/components/charts";
+import type { AuditLog } from "@ai-governance/api-client";
 import {
   DataTable,
   PageShell,
-  StatCard,
   type Column,
 } from "@/components/dashboard";
 import {
@@ -14,177 +13,119 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatNumber, formatRelative } from "@/lib/format";
-import { NOW, auditLogs } from "@/lib/mock-data";
-import {
-  AUDIT_ACTION_TONE,
-  type AuditAction,
-  type AuditActorType,
-  type StatusTone,
-} from "@/types";
+import { getApiClient } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Audit logs · Sentinel",
   description: "Append-only record of every actor, action, and resource touched in the console.",
 };
 
-const ACTOR_TONE: Record<AuditActorType, StatusTone> = {
-  user: "info",
-  api_key: "neutral",
-  system: "success",
-};
-
-const RISKY_ACTIONS: readonly AuditAction[] = [
-  "delete",
-  "export",
-  "policy_change",
-  "permission_change",
-];
-
 interface AuditRow {
   id: string;
-  when: string;
-  actor: string;
-  actorType: string;
-  actorTypeTone: StatusTone;
-  email: string;
   action: string;
-  actionTone: StatusTone;
+  actor: string;
+  actorId: string;
   resource: string;
-  details: string;
+  resourceId: string;
+  changes: string;
   origin: string;
-  country: string;
-  mfa: string;
-  mfaTone: StatusTone;
+  occurredAt: string;
 }
 
-const auditColumns: readonly Column<AuditRow>[] = [
-  { key: "actor", header: "Actor", primary: "actor", secondary: "email", sort: "actor" },
-  { key: "actorType", header: "Type", primary: "actorType", tone: "actorTypeTone", sort: "actorType" },
-  { key: "action", header: "Action", primary: "action", tone: "actionTone", sort: "action" },
-  { key: "resource", header: "Resource", primary: "resource", sort: "resource" },
-  { key: "details", header: "Details", primary: "details", sort: "details" },
-  { key: "origin", header: "Origin", primary: "origin", secondary: "country", sort: "origin" },
-  { key: "mfa", header: "MFA", primary: "mfa", tone: "mfaTone", sort: "mfa" },
-  { key: "when", header: "When", primary: "when", sort: "when" },
+/**
+ * Audit records are append-only, so this view is deliberately read-only: there
+ * is no control here that could edit or remove a record, matching the API.
+ */
+
+/** Actor column shows which kind of actor acted, with the id muted beneath. */
+function actorLabel(record: AuditLog): string {
+  return record.actor_type === "service_account" ? "Service account" : "User";
+}
+
+/** Counts top-level keys that actually differ between `before` and `after`. */
+function changedKeys(before: AuditLog["before"], after: AuditLog["after"]): number {
+  const keys = new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]);
+  let changed = 0;
+  for (const key of keys) {
+    if (JSON.stringify(before?.[key]) !== JSON.stringify(after?.[key])) changed += 1;
+  }
+  return changed;
+}
+
+function toRow(record: AuditLog): AuditRow {
+  const changed = changedKeys(record.before, record.after);
+
+  return {
+    id: record.id,
+    action: record.action,
+    actor: actorLabel(record),
+    actorId: record.actor_user_id ?? record.actor_service_account_id ?? "",
+    resource: record.resource_type,
+    resourceId: record.resource_id ?? "",
+    changes:
+      changed === 0
+        ? "No field-level change recorded"
+        : `${changed} field${changed === 1 ? "" : "s"} changed`,
+    origin: [record.ip_address, record.request_id].filter(Boolean).join(" · ") || "—",
+    occurredAt: record.created_at,
+  };
+}
+
+const columns: readonly Column<AuditRow>[] = [
+  { key: "action", header: "Action", primary: "action", secondary: "changes", sort: "action" },
+  { key: "actor", header: "Actor", primary: "actor", secondary: "actorId", sort: "actor" },
+  {
+    key: "resource",
+    header: "Resource",
+    primary: "resource",
+    secondary: "resourceId",
+    sort: "resource",
+  },
+  { key: "origin", header: "Origin", primary: "origin", sort: "origin" },
+  {
+    key: "occurredAt",
+    header: "When",
+    primary: "occurredAt",
+    format: "relative",
+    align: "right",
+    sort: "occurredAt",
+  },
 ];
 
-const rows: AuditRow[] = [...auditLogs]
-  .sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : -1))
-  .map((entry) => ({
-    id: entry.id,
-    when: formatRelative(entry.occurredAt, NOW),
-    actor: entry.actorName,
-    actorType: entry.actorType,
-    actorTypeTone: ACTOR_TONE[entry.actorType],
-    email: entry.actorEmail ?? "—",
-    action: entry.action,
-    actionTone: AUDIT_ACTION_TONE[entry.action],
-    resource: entry.resource,
-    details: entry.details,
-    origin: entry.ipAddress,
-    country: entry.ipCountry,
-    mfa: entry.mfaVerified ? "Verified" : "Not required",
-    mfaTone: entry.mfaVerified ? "success" : "neutral",
-  }));
+async function loadAuditLogs() {
+  const { auditLogs } = await getApiClient();
+  return auditLogs.list({ limit: 200 });
+}
 
-const risky = auditLogs.filter((entry) => RISKY_ACTIONS.includes(entry.action));
-const byApiKey = auditLogs.filter((entry) => entry.actorType === "api_key");
-const uniqueActors = new Set(auditLogs.map((entry) => entry.actorId)).size;
-const foreignOrigins = new Set(auditLogs.map((entry) => entry.ipCountry)).size;
+export default async function AuditLogsPage() {
+  const { items } = await loadAuditLogs();
+  const rows = items.map(toRow);
 
-const actionVolume = [...auditLogs.reduce((acc, entry) => {
-  acc.set(entry.action, (acc.get(entry.action) ?? 0) + 1);
-  return acc;
-}, new Map<AuditAction, number>())]
-  .map(([action, count]) => ({ label: action.replace("_", " "), value: count }))
-  .sort((a, b) => b.value - a.value)
-  .slice(0, 8);
-
-const actorMix = (["user", "api_key", "system"] as const).map((actorType) => ({
-  label: actorType.replace("_", " "),
-  value: auditLogs.filter((entry) => entry.actorType === actorType).length,
-}));
-
-export default function AuditLogsPage() {
   return (
     <div className="p-4 sm:p-6">
       <PageShell
         title="Audit logs"
-        description="Append-only. Entries cannot be edited or deleted, so a gap here means a retention problem rather than a missing row."
+        description="Append-only record of every actor, action, and resource touched in the console."
       >
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            label="Entries"
-            value={formatNumber(auditLogs.length)}
-            hint="Retention window"
-          />
-          <StatCard
-            label="Distinct actors"
-            value={formatNumber(uniqueActors)}
-            hint="Humans, keys, and services"
-          />
-          <StatCard
-            label="Privileged actions"
-            value={formatNumber(risky.length)}
-            tone={risky.length > 0 ? "warning" : "neutral"}
-            hint="Exports, deletes, policy edits"
-          />
-          <StatCard
-            label="Origin countries"
-            value={formatNumber(foreignOrigins)}
-            tone={foreignOrigins > 1 ? "warning" : "success"}
-            hint="A second country is worth a look"
-          />
-        </section>
-
-        <section className="grid gap-4 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Action volume</CardTitle>
-              <CardDescription>
-                A spike in exports or permission changes is the signature of a
-                review that went sideways.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <BarChart data={actionVolume} formatValue={(value) => formatNumber(value)} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Actor types</CardTitle>
-              <CardDescription>
-                {formatNumber(byApiKey.length)} entries came from API keys
-                rather than a signed-in person.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DonutChart
-                data={actorMix}
-                centerLabel={formatNumber(auditLogs.length)}
-                formatValue={(value) => `${formatNumber(value)} entries`}
-              />
-            </CardContent>
-          </Card>
-        </section>
-
         <Card>
           <CardHeader>
-            <CardTitle>All entries</CardTitle>
+            <CardTitle>Actor and action history</CardTitle>
             <CardDescription>
-              Newest first. Timestamps are shown relative to the snapshot clock,
-              with the absolute value available on hover of the row detail.
+              Newest first, scoped to your organization. Records can never be edited or deleted.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <DataTable
-              columns={auditColumns}
+              columns={columns}
               rows={rows}
               rowKey="id"
-              pageSize={15}
-              emptyMessage="No audit entries in the retention window."
+              pageSize={25}
+              emptyMessage="No audit records yet"
+              toolbar={
+                <p className="text-muted-foreground text-sm">
+                  {rows.length} record{rows.length === 1 ? "" : "s"}
+                </p>
+              }
             />
           </CardContent>
         </Card>

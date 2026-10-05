@@ -215,13 +215,17 @@ type BillingEvent struct {
 }
 
 type Conversation struct {
-	ID             uuid.UUID `json:"id"`
-	OrganizationID uuid.UUID `json:"organization_id"`
-	UserID         uuid.UUID `json:"user_id"`
-	Title          string    `json:"title"`
-	Status         string    `json:"status"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	UserID         uuid.UUID  `json:"user_id"`
+	Title          string     `json:"title"`
+	Status         string     `json:"status"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	ProjectID      *uuid.UUID `json:"project_id"`
+	Model          *string    `json:"model"`
+	Provider       *string    `json:"provider"`
+	PrivacyState   *string    `json:"privacy_state"`
 }
 
 type ConversationMessage struct {
@@ -234,6 +238,7 @@ type ConversationMessage struct {
 	Tokens            int32     `json:"tokens"`
 	ProviderMessageID *string   `json:"provider_message_id"`
 	CreatedAt         time.Time `json:"created_at"`
+	ToolName          *string   `json:"tool_name"`
 }
 
 type GatewayCredential struct {
@@ -276,6 +281,32 @@ type Invitation struct {
 	AcceptedAt     *time.Time `json:"accepted_at"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
+type Invoice struct {
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	SubscriptionID *uuid.UUID `json:"subscription_id"`
+	Number         string     `json:"number"`
+	Status         string     `json:"status"`
+	Currency       string     `json:"currency"`
+	TotalMicros    int64      `json:"total_micros"`
+	PeriodStart    time.Time  `json:"period_start"`
+	PeriodEnd      time.Time  `json:"period_end"`
+	IssuedAt       time.Time  `json:"issued_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
+type InvoiceLine struct {
+	ID             uuid.UUID `json:"id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+	InvoiceID      uuid.UUID `json:"invoice_id"`
+	Description    string    `json:"description"`
+	Quantity       int64     `json:"quantity"`
+	UnitMicros     int64     `json:"unit_micros"`
+	AmountMicros   int64     `json:"amount_micros"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type LlmRequest struct {
@@ -444,6 +475,17 @@ type ProviderHealth struct {
 	LastError    string    `json:"last_error"`
 	CheckedAt    time.Time `json:"checked_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type SecurityEvent struct {
+	ID             uuid.UUID `json:"id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+	Category       string    `json:"category"`
+	Severity       string    `json:"severity"`
+	Title          string    `json:"title"`
+	Detail         []byte    `json:"detail"`
+	Source         string    `json:"source"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type ServiceAccount struct {

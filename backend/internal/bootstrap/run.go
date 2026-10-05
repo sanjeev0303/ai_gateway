@@ -14,8 +14,13 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"ai-governance-saas/backend/internal/application/activity"
+	"ai-governance-saas/backend/internal/application/alert"
+	"ai-governance-saas/backend/internal/application/auditlog"
+	"ai-governance-saas/backend/internal/application/billing"
+	"ai-governance-saas/backend/internal/application/conversation"
 	"ai-governance-saas/backend/internal/application/identity"
 	"ai-governance-saas/backend/internal/application/provider"
+	"ai-governance-saas/backend/internal/application/securityevent"
 	"ai-governance-saas/backend/internal/application/usage"
 	"ai-governance-saas/backend/internal/domain"
 	"ai-governance-saas/backend/internal/infrastructure/auth"
@@ -150,9 +155,9 @@ func RunGatewayV2(ctx context.Context) error {
 				return redisClient.Ping(ctx).Err()
 			})
 		}
-		
+
 		activityTracker := gatewayv2.NewActivityTracker(redisClient, log)
-		
+
 		// Build gateway v2 with all components
 		gatewayV2, err := gatewayv2.NewGateway(gatewayv2.GatewayDeps{
 			Config: gatewayv2.DefaultGatewayConfig(),
@@ -258,6 +263,7 @@ func RunControlAPI(ctx context.Context) error {
 
 			Auth:            repositories.NewAuthRepository(store),
 			RefreshTokens:   repositories.NewRefreshTokenRepository(store),
+			Subs:            repositories.NewSubscriptionRepository(store),
 			Passwords:       auth.NewPBKDF2PasswordHasher(0),
 			RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 
@@ -279,15 +285,21 @@ func RunControlAPI(ctx context.Context) error {
 			return fmt.Errorf("control-api: secrets store: %w", err)
 		}
 
+		securityEventSvc := securityevent.NewService(securityevent.ServiceDeps{
+			Events: repositories.NewSecurityEventRepository(store),
+			Log:    log,
+		})
+
 		providerSvc := provider.NewService(provider.ServiceDeps{
-			Accounts:    repositories.NewProviderAccountRepository(store),
-			Credentials: repositories.NewProviderCredentialRepository(store),
-			Models:      repositories.NewModelRepository(store),
-			Health:      repositories.NewProviderHealthRepository(store),
-			Audits:      repositories.NewAuditLogRepository(store),
-			Secrets:     secretStore,
-			Providers:   providerAdapters(),
-			Log:         log,
+			Accounts:       repositories.NewProviderAccountRepository(store),
+			Credentials:    repositories.NewProviderCredentialRepository(store),
+			Models:         repositories.NewModelRepository(store),
+			Health:         repositories.NewProviderHealthRepository(store),
+			Audits:         repositories.NewAuditLogRepository(store),
+			SecurityEvents: securityEventSvc,
+			Secrets:        secretStore,
+			Providers:      providerAdapters(),
+			Log:            log,
 		})
 
 		var redisClient *redis.Client
@@ -301,13 +313,38 @@ func RunControlAPI(ctx context.Context) error {
 				return redisClient.Ping(ctx).Err()
 			})
 		}
-		
+
 		activitySvc := activity.NewService(redisClient, log)
 
 		usageSvc := usage.NewService(usage.ServiceDeps{
+			Rollups:     repositories.NewUsageRollupRepository(store),
 			LlmRequests: repositories.NewLlmRequestRepository(store),
 			UsageEvents: repositories.NewUsageEventRepository(store),
 			Log:         log,
+		})
+
+		privacyDefault, _ := domain.ParsePrivacyMode(cfg.Conversation.PrivacyDefault)
+		conversationSvc := conversation.NewService(conversation.ServiceDeps{
+			Conversations:  repositories.NewConversationRepository(store),
+			Messages:       repositories.NewConversationMessageRepository(store),
+			DefaultPrivacy: privacyDefault,
+			Log:            log,
+		})
+
+		auditSvc := auditlog.NewService(auditlog.ServiceDeps{
+			Audits: repositories.NewAuditLogRepository(store),
+			Log:    log,
+		})
+
+		alertSvc := alert.NewService(alert.ServiceDeps{
+			Alerts: repositories.NewAlertRepository(store),
+		})
+
+		billingSvc := billing.NewService(billing.ServiceDeps{
+			Plans:         repositories.NewPlanRepository(store),
+			Subscriptions: repositories.NewSubscriptionRepository(store),
+			Invoices:      repositories.NewInvoiceRepository(store),
+			Rollups:       repositories.NewUsageRollupRepository(store),
 		})
 
 		deps = controlapi.Deps{
@@ -316,6 +353,11 @@ func RunControlAPI(ctx context.Context) error {
 			Providers:           providerSvc,
 			Usage:               usageSvc,
 			Activity:            activitySvc,
+			Conversations:       conversationSvc,
+			AuditLogs:           auditSvc,
+			Alerts:              alertSvc,
+			SecurityEvents:      securityEventSvc,
+			Billing:             billingSvc,
 			DevLoginEnabled:     cfg.Auth.DevLoginEnabled,
 			SessionCookieName:   cfg.Auth.SessionCookieName,
 			SessionCookieSecure: cfg.Auth.SessionCookieSecure,
@@ -369,7 +411,11 @@ func RunWorker(ctx context.Context) error {
 			Rollups:     repositories.NewUsageRollupRepository(store),
 			LlmRequests: repositories.NewLlmRequestRepository(store),
 			UsageEvents: repositories.NewUsageEventRepository(store),
-			Log:         log,
+			SecurityEvents: securityevent.NewService(securityevent.ServiceDeps{
+				Events: repositories.NewSecurityEventRepository(store),
+				Log:    log,
+			}),
+			Log: log,
 		})
 		jobs.Add(1)
 		go func() {

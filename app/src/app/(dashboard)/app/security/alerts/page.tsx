@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 
-import { BarChart, DonutChart } from "@/components/charts";
+import type { Alert, AlertSeverity, AlertStatus } from "@ai-governance/api-client";
 import {
   DataTable,
+  EmptyState,
   PageShell,
-  StatCard,
   type Column,
 } from "@/components/dashboard";
 import {
@@ -14,204 +14,125 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatNumber, formatRelative } from "@/lib/format";
-import { NOW, alerts } from "@/lib/mock-data";
-import {
-  ALERT_SEVERITY_TONE,
-  type AlertCategory,
-  type AlertState,
-  type StatusTone,
-} from "@/types";
+import { getApiClient } from "@/lib/session";
+import type { StatusTone } from "@/types";
 
 export const metadata: Metadata = {
   title: "Alerts · Sentinel",
-  description: "Open, acknowledged, and resolved alerts across cost, policy, provider, and credential signals.",
-};
-
-const CATEGORY_TONE: Record<AlertCategory, StatusTone> = {
-  cost_anomaly: "warning",
-  policy_violation: "danger",
-  provider_outage: "danger",
-  error_rate: "warning",
-  credential_expiry: "info",
-  budget_exceeded: "warning",
-  unusual_access: "danger",
-};
-
-const STATE_TONE: Record<AlertState, StatusTone> = {
-  open: "danger",
-  acknowledged: "warning",
-  resolved: "success",
+  description: "Alert rules configured for your organization.",
 };
 
 interface AlertRow {
   id: string;
-  title: string;
-  description: string;
+  name: string;
+  alertType: string;
   severity: string;
   severityTone: StatusTone;
-  category: string;
-  categoryTone: StatusTone;
-  state: string;
-  stateTone: StatusTone;
-  notified: string;
-  notifiedCount: number;
-  when: string;
-  ageMinutes: number;
+  configuration: string;
+  status: string;
+  statusTone: StatusTone;
+  lastTriggered: string;
+  updatedAt: string;
 }
 
-const alertColumns: readonly Column<AlertRow>[] = [
-  { key: "title", header: "Alert", primary: "title", secondary: "description", sort: "title" },
-  { key: "severity", header: "Severity", primary: "severity", tone: "severityTone", sort: "severity" },
-  { key: "category", header: "Category", primary: "category", tone: "categoryTone", sort: "category" },
-  { key: "state", header: "State", primary: "state", tone: "stateTone", sort: "state" },
-  { key: "notified", header: "Notified", primary: "notified", align: "right", sort: "notifiedCount" },
-  { key: "when", header: "Raised", primary: "when", sort: "ageMinutes" },
+const SEVERITY_TONE: Record<AlertSeverity, StatusTone> = {
+  info: "info",
+  warning: "warning",
+  critical: "danger",
+};
+
+const STATUS_TONE: Record<AlertStatus, StatusTone> = {
+  active: "success",
+  muted: "neutral",
+};
+
+const ALERT_TYPE_LABEL: Record<Alert["alert_type"], string> = {
+  spend_limit: "Spend limit",
+  rate_limit: "Rate limit",
+  error_rate: "Error rate",
+  anomaly: "Anomaly",
+};
+
+function summarizeConfiguration(alert: Alert): string {
+  const keys = Object.keys(alert.configuration ?? {});
+  if (keys.length === 0) return "No thresholds configured";
+  return keys.map((key) => `${key}: ${JSON.stringify(alert.configuration[key])}`).join(" · ");
+}
+
+function toRow(alert: Alert): AlertRow {
+  return {
+    id: alert.id,
+    name: alert.name,
+    alertType: ALERT_TYPE_LABEL[alert.alert_type],
+    severity: alert.severity,
+    severityTone: SEVERITY_TONE[alert.severity],
+    configuration: summarizeConfiguration(alert),
+    status: alert.status,
+    statusTone: STATUS_TONE[alert.status],
+    lastTriggered: alert.last_triggered_at ?? "Never — nothing evaluates rules",
+    updatedAt: alert.updated_at,
+  };
+}
+
+const columns: readonly Column<AlertRow>[] = [
+  { key: "name", header: "Rule", primary: "name", secondary: "alertType", sort: "name" },
+  {
+    key: "severity",
+    header: "Severity",
+    primary: "severity",
+    tone: "severityTone",
+    sort: "severity",
+  },
+  { key: "configuration", header: "Configuration", primary: "configuration", sort: "configuration" },
+  { key: "status", header: "Status", primary: "status", tone: "statusTone", sort: "status" },
+  { key: "lastTriggered", header: "Last triggered", primary: "lastTriggered", sort: "lastTriggered" },
+  { key: "updatedAt", header: "Updated", primary: "updatedAt", format: "relative", align: "right", sort: "updatedAt" },
 ];
 
-const rows: AlertRow[] = alerts.map((alert) => ({
-  id: alert.id,
-  title: alert.title,
-  description: alert.description,
-  severity: alert.severity,
-  severityTone: ALERT_SEVERITY_TONE[alert.severity],
-  category: alert.category,
-  categoryTone: CATEGORY_TONE[alert.category],
-  state: alert.state,
-  stateTone: STATE_TONE[alert.state],
-  notified: formatNumber(alert.notifiedUserIds.length),
-  notifiedCount: alert.notifiedUserIds.length,
-  when: formatRelative(alert.occurredAt, NOW),
-  ageMinutes: Math.round((NOW.getTime() - new Date(alert.occurredAt).getTime()) / 60_000),
-}));
+async function loadAlerts() {
+  const { alerts } = await getApiClient();
+  return alerts.list();
+}
 
-const open = alerts.filter((alert) => alert.state === "open");
-const acknowledged = alerts.filter((alert) => alert.state === "acknowledged");
-const resolved = alerts.filter((alert) => alert.state === "resolved");
-const critical = open.filter(
-  (alert) => alert.severity === "critical" || alert.severity === "high",
-);
+export default async function AlertsPage() {
+  const { items } = await loadAlerts();
+  const rows = items.map(toRow);
 
-const categoryCounts = [...alerts.reduce((acc, alert) => {
-  acc.set(alert.category, (acc.get(alert.category) ?? 0) + 1);
-  return acc;
-}, new Map<AlertCategory, number>())]
-  .map(([category, count]) => ({ label: category.replace(/_/g, " "), value: count }))
-  .sort((a, b) => b.value - a.value);
-
-const stateMix = (["open", "acknowledged", "resolved"] as const).map((state) => ({
-  label: state,
-  value: alerts.filter((alert) => alert.state === state).length,
-}));
-
-export default function AlertsPage() {
   return (
     <div className="p-4 sm:p-6">
       <PageShell
         title="Alerts"
-        description="An acknowledged alert is still yours until it is resolved. Acknowledging is how you stop the pager, not how you close the issue."
+        description="Alert rules configured for your organization."
       >
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            label="Open"
-            value={formatNumber(open.length)}
-            tone={open.length > 0 ? "danger" : "success"}
-            hint="Unacknowledged"
-          />
-          <StatCard
-            label="Critical or high"
-            value={formatNumber(critical.length)}
-            tone={critical.length > 0 ? "danger" : "success"}
-            hint="Still open"
-          />
-          <StatCard
-            label="Acknowledged"
-            value={formatNumber(acknowledged.length)}
-            tone={acknowledged.length > 0 ? "warning" : "neutral"}
-            hint="Owned, not closed"
-          />
-          <StatCard
-            label="Resolved"
-            value={formatNumber(resolved.length)}
-            tone="success"
-            hint="In the window"
-          />
-        </section>
-
-        {critical.length > 0 ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Needs attention</CardTitle>
-              <CardDescription>
-                Open alerts at critical or high severity. These are the ones that
-                justify waking someone up.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {critical.map((alert) => (
-                <div
-                  key={alert.id}
-                  className="flex flex-col gap-2 rounded-lg border border-border p-3 sm:flex-row sm:items-start sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground">{alert.title}</p>
-                    <p className="text-xs text-muted-foreground">{alert.description}</p>
-                  </div>
-                  <p className="shrink-0 text-xs text-muted-foreground">
-                    {formatRelative(alert.occurredAt, NOW)}
-                  </p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        ) : null}
-
-        <section className="grid gap-4 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Alerts by category</CardTitle>
-              <CardDescription>
-                Cost and policy signals dominate in a well-run workspace.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <BarChart data={categoryCounts} formatValue={(value) => formatNumber(value)} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Lifecycle</CardTitle>
-              <CardDescription>
-                A large acknowledged pile means triage is lagging behind the
-                pager.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DonutChart
-                data={stateMix}
-                centerLabel={formatNumber(alerts.length)}
-                formatValue={(value) => `${formatNumber(value)} alerts`}
-              />
-            </CardContent>
-          </Card>
-        </section>
-
         <Card>
           <CardHeader>
-            <CardTitle>All alerts</CardTitle>
+            <CardTitle>Configured rules</CardTitle>
             <CardDescription>
-              Each row links to the page where the underlying signal is visible.
+              These rules only store configuration. No evaluator is wired to any rule type, so
+              nothing is ever triggered and no notification is ever sent — &ldquo;Last
+              triggered&rdquo; stays empty by design, not by failure.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <DataTable
-              columns={alertColumns}
-              rows={rows}
-              rowKey="id"
-              pageSize={10}
-              emptyMessage="No alerts in the retention window."
-            />
+            {rows.length === 0 ? (
+              <EmptyState
+                title="No alert rules configured"
+                description="No alert rules exist yet, and the control API has no endpoint to create one — so there is nothing to list and no create form here. Once a rule does exist you can edit, mute, and delete it from this page, but it still won't fire: no evaluator reads these rows."
+              />
+            ) : (
+              <DataTable
+                columns={columns}
+                rows={rows}
+                rowKey="id"
+                pageSize={25}
+                emptyMessage="No alert rules configured"
+                toolbar={
+                  <p className="text-muted-foreground text-sm">
+                    {rows.length} rule{rows.length === 1 ? "" : "s"}
+                  </p>
+                }
+              />
+            )}
           </CardContent>
         </Card>
       </PageShell>

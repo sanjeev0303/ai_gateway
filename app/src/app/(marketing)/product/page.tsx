@@ -10,7 +10,7 @@ import { APP_NAME } from "@/lib/constants";
 export const metadata: Metadata = {
   title: `Product · ${APP_NAME}`,
   description:
-    "A single gateway over every model provider, with policy enforcement, cost attribution, and an immutable audit trail.",
+    "A single gateway over every model provider, with cost attribution and a recorded request trail.",
 };
 
 export default function ProductPage() {
@@ -18,7 +18,7 @@ export default function ProductPage() {
     <>
       <Hero
         headline="Inspect, attribute, and record every request"
-        subheadline="Sentinel proxies your AI traffic through a policy engine, tags every call with the user, team, and project that caused it, and writes an immutable record you can hand to an auditor."
+        subheadline="Sentinel proxies your AI traffic through one gateway, tags every call with the user, team, and project that caused it, and writes the cost and outcome to a recorded request trail."
       />
       <FeatureGrid
         eyebrow="Capabilities"

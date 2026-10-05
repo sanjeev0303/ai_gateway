@@ -3,14 +3,20 @@ package controlapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
 
 	"ai-governance-saas/backend/internal/application/activity"
+	"ai-governance-saas/backend/internal/application/alert"
+	"ai-governance-saas/backend/internal/application/auditlog"
+	"ai-governance-saas/backend/internal/application/billing"
+	"ai-governance-saas/backend/internal/application/conversation"
 	"ai-governance-saas/backend/internal/application/identity"
 	"ai-governance-saas/backend/internal/application/provider"
+	"ai-governance-saas/backend/internal/application/securityevent"
 	"ai-governance-saas/backend/internal/application/usage"
 	"ai-governance-saas/backend/internal/domain"
 	perrors "ai-governance-saas/backend/internal/platform/errors"
@@ -24,10 +30,15 @@ const maxBodyBytes = 1 << 20
 // api carries the services every v1 handler needs plus the session/CSRF
 // settings that drive the browser cookie flow.
 type api struct {
-	svc       *identity.Service
-	providers *provider.Service
-	usage     *usage.Service
-	activity  *activity.Service
+	svc            *identity.Service
+	providers      *provider.Service
+	usage          *usage.Service
+	activity       *activity.Service
+	conversations  *conversation.Service
+	auditLogs      *auditlog.Service
+	alerts         *alert.Service
+	securityEvents *securityevent.Service
+	billing        *billing.Service
 
 	sessionCookieName   string
 	sessionCookieSecure bool
@@ -42,6 +53,11 @@ func newAPI(deps Deps) *api {
 		providers:           deps.Providers,
 		usage:               deps.Usage,
 		activity:            deps.Activity,
+		conversations:       deps.Conversations,
+		auditLogs:           deps.AuditLogs,
+		alerts:              deps.Alerts,
+		securityEvents:      deps.SecurityEvents,
+		billing:             deps.Billing,
 		sessionCookieName:   deps.SessionCookieName,
 		sessionCookieSecure: deps.SessionCookieSecure,
 		csrfEnabled:         deps.CSRFEnabled,
@@ -79,6 +95,29 @@ type invitationDTO struct {
 	AcceptedAt     *string `json:"accepted_at,omitempty"`
 	CreatedAt      string  `json:"created_at"`
 	UpdatedAt      string  `json:"updated_at"`
+}
+
+type organizationDTO struct {
+	ID        string                  `json:"id"`
+	Name      string                  `json:"name"`
+	Slug      string                  `json:"slug"`
+	Status    string                  `json:"status"`
+	CreatedAt string                  `json:"created_at"`
+	UpdatedAt string                  `json:"updated_at"`
+	Plan      *organizationPlanDTO    `json:"plan"`
+	Billing   *organizationBillingDTO `json:"billing"`
+}
+
+type organizationPlanDTO struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
+}
+
+type organizationBillingDTO struct {
+	Status             string `json:"status"`
+	CurrentPeriodStart string `json:"current_period_start"`
+	CurrentPeriodEnd   string `json:"current_period_end"`
+	CancelAtPeriodEnd  bool   `json:"cancel_at_period_end"`
 }
 
 type projectDTO struct {
@@ -292,6 +331,28 @@ func toProjectDTO(p domain.Project) projectDTO {
 	}
 }
 
+func toOrganizationDTO(o domain.Organization, plan *domain.OrganizationPlan) organizationDTO {
+	dto := organizationDTO{
+		ID:        o.ID.String(),
+		Name:      o.Name,
+		Slug:      o.Slug,
+		Status:    o.Status,
+		CreatedAt: ts(o.CreatedAt),
+		UpdatedAt: ts(o.UpdatedAt),
+	}
+	if plan == nil {
+		return dto
+	}
+	dto.Plan = &organizationPlanDTO{Code: plan.PlanCode, Name: plan.PlanName}
+	dto.Billing = &organizationBillingDTO{
+		Status:             plan.Status,
+		CurrentPeriodStart: tsPtr(plan.CurrentPeriodStart),
+		CurrentPeriodEnd:   tsPtr(plan.CurrentPeriodEnd),
+		CancelAtPeriodEnd:  plan.CancelAtPeriodEnd,
+	}
+	return dto
+}
+
 func toTeamDTO(t domain.Team) teamDTO {
 	return teamDTO{
 		ID:             t.ID.String(),
@@ -370,6 +431,13 @@ func toClaimsDTO(c domain.TokenClaims) claimsDTO {
 
 func ts(t time.Time) string { return t.UTC().Format(time.RFC3339) }
 
+func tsPtr(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return ts(*t)
+}
+
 // ---- helpers -------------------------------------------------------------
 
 // writeServiceError maps service/repository errors to typed application errors
@@ -392,6 +460,8 @@ func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
 		appErr = perrors.New(perrors.KindInvalidArgument, "invalid_argument", repositories.ErrInvalid.Error())
 	case errors.Is(err, repositories.ErrNotFound):
 		appErr = perrors.New(perrors.KindNotFound, "not_found", repositories.ErrNotFound.Error())
+	case errors.Is(err, repositories.ErrEmailTaken):
+		appErr = perrors.New(perrors.KindConflict, "email_taken", "an account with this email already exists")
 	case errors.Is(err, repositories.ErrConflict):
 		appErr = perrors.New(perrors.KindConflict, "conflict", repositories.ErrConflict.Error())
 	case errors.Is(err, repositories.ErrForbidden):
@@ -424,6 +494,13 @@ func pathUUID(r *http.Request, name string) (uuid.UUID, error) {
 		return uuid.Nil, perrors.New(perrors.KindInvalidArgument, "invalid_id", "invalid "+name+" in path")
 	}
 	return id, nil
+}
+
+// invalidQuery marks a malformed query parameter with ErrInvalid so
+// writeServiceError reports 400. A bare error falls through to 500, which
+// tells the caller the gateway is broken when really they sent a bad value.
+func invalidQuery(msg string) error {
+	return fmt.Errorf("%w: %s", repositories.ErrInvalid, msg)
 }
 
 // parseOptionalUUID converts an optional JSON UUID string. An empty string is
@@ -474,6 +551,41 @@ func (a *api) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	a.clearSessionCookies(w)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ---- organization handlers ----------------------------------------------
+
+func (a *api) getOrganization(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	org, plan, err := a.svc.GetOrganization(r.Context(), actor)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toOrganizationDTO(org, plan))
+}
+
+type updateOrganizationRequest struct {
+	Name *string `json:"name"`
+	Slug *string `json:"slug"`
+}
+
+func (a *api) updateOrganization(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	var req updateOrganizationRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	org, err := a.svc.UpdateOrganization(r.Context(), actor, domain.UpdateOrganization{
+		Name: req.Name,
+		Slug: req.Slug,
+	})
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toOrganizationDTO(org, nil))
 }
 
 // ---- member handlers -----------------------------------------------------

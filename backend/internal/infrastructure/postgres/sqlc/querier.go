@@ -15,6 +15,7 @@ type Querier interface {
 	AddProjectMember(ctx context.Context, arg AddProjectMemberParams) (ProjectMember, error)
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (TeamMember, error)
 	AppendAuditLog(ctx context.Context, arg AppendAuditLogParams) (AuditLog, error)
+	AppendSecurityEvent(ctx context.Context, arg AppendSecurityEventParams) (SecurityEvent, error)
 	BackfillLLMRequestCost(ctx context.Context, arg BackfillLLMRequestCostParams) error
 	CountOrgMembersByRole(ctx context.Context, arg CountOrgMembersByRoleParams) (int64, error)
 	CreateAPICredential(ctx context.Context, arg CreateAPICredentialParams) (ApiCredential, error)
@@ -40,14 +41,23 @@ type Querier interface {
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserWithPassword(ctx context.Context, arg CreateUserWithPasswordParams) (User, error)
+	DeleteAlert(ctx context.Context, arg DeleteAlertParams) (int64, error)
 	DeleteUsageDailyInWindow(ctx context.Context, arg DeleteUsageDailyInWindowParams) error
 	DeleteUsageHourlyInWindow(ctx context.Context, arg DeleteUsageHourlyInWindowParams) error
 	DeleteUsageMonthlyInWindow(ctx context.Context, arg DeleteUsageMonthlyInWindowParams) error
+	// The organization's current plan: its active (or trialing) subscription
+	// joined to the plan catalog. Filters to the same statuses as
+	// subscriptions_one_active_per_org, so at most one row is ever returned.
+	// Columns are aliased from both tables because both carry id/status/created_at.
+	GetActiveSubscriptionWithPlan(ctx context.Context, organizationID uuid.UUID) (GetActiveSubscriptionWithPlanRow, error)
+	GetAlert(ctx context.Context, arg GetAlertParams) (Alert, error)
+	GetAuditLog(ctx context.Context, arg GetAuditLogParams) (AuditLog, error)
 	GetBillingEvent(ctx context.Context, arg GetBillingEventParams) (BillingEvent, error)
 	GetConversation(ctx context.Context, arg GetConversationParams) (Conversation, error)
 	GetGatewayCredential(ctx context.Context, arg GetGatewayCredentialParams) (GatewayCredential, error)
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	GetInvitation(ctx context.Context, arg GetInvitationParams) (Invitation, error)
+	GetInvoice(ctx context.Context, arg GetInvoiceParams) (Invoice, error)
 	GetLLMRequestByRequestID(ctx context.Context, arg GetLLMRequestByRequestIDParams) (LlmRequest, error)
 	GetOrgMember(ctx context.Context, arg GetOrgMemberParams) (GetOrgMemberRow, error)
 	GetOrganizationByID(ctx context.Context, id uuid.UUID) (Organization, error)
@@ -69,6 +79,8 @@ type Querier interface {
 	GetUsageByTeam(ctx context.Context, arg GetUsageByTeamParams) ([]GetUsageByTeamRow, error)
 	GetUsageByUser(ctx context.Context, arg GetUsageByUserParams) ([]GetUsageByUserRow, error)
 	GetUsageEvent(ctx context.Context, arg GetUsageEventParams) (UsageEvent, error)
+	GetUsageLatencyByProviderModel(ctx context.Context, arg GetUsageLatencyByProviderModelParams) ([]GetUsageLatencyByProviderModelRow, error)
+	GetUsageLatencyOverall(ctx context.Context, arg GetUsageLatencyOverallParams) (GetUsageLatencyOverallRow, error)
 	GetUsageRequests(ctx context.Context, arg GetUsageRequestsParams) ([]GetUsageRequestsRow, error)
 	GetUsageSummary(ctx context.Context, arg GetUsageSummaryParams) (GetUsageSummaryRow, error)
 	GetUsageTimeSeries(ctx context.Context, arg GetUsageTimeSeriesParams) ([]GetUsageTimeSeriesRow, error)
@@ -81,10 +93,22 @@ type Querier interface {
 	ListAPICredentials(ctx context.Context, organizationID uuid.UUID) ([]ApiCredential, error)
 	ListAlerts(ctx context.Context, organizationID uuid.UUID) ([]Alert, error)
 	ListAllOrganizationIDs(ctx context.Context) ([]uuid.UUID, error)
+	// Read-only projection of the append-only ledger. Append-only is preserved
+	// structurally: this file is the only place that names audit_logs, and it
+	// contains no UPDATE or DELETE statement, so no code path can rewrite history.
+	// `actor_id` matches either actor column; `actor_type` then narrows to the
+	// column that is actually populated.
+	ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]AuditLog, error)
 	ListConversationMessages(ctx context.Context, arg ListConversationMessagesParams) ([]ConversationMessage, error)
-	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
+	// Aggregates come from conversation_messages because llm_requests has no
+	// conversation key: an assistant turn is the only evidence of a provider
+	// request. GROUP BY the primary key so the ungrouped conversation columns can
+	// still be selected.
+	ListConversations(ctx context.Context, arg ListConversationsParams) ([]ListConversationsRow, error)
 	ListGatewayCredentials(ctx context.Context, organizationID uuid.UUID) ([]GatewayCredential, error)
 	ListInvitations(ctx context.Context, organizationID uuid.UUID) ([]Invitation, error)
+	ListInvoiceLines(ctx context.Context, arg ListInvoiceLinesParams) ([]InvoiceLine, error)
+	ListInvoices(ctx context.Context, organizationID uuid.UUID) ([]Invoice, error)
 	ListLLMRequests(ctx context.Context, arg ListLLMRequestsParams) ([]LlmRequest, error)
 	ListModels(ctx context.Context) ([]Model, error)
 	ListModelsByProvider(ctx context.Context, providerKind string) ([]Model, error)
@@ -103,6 +127,10 @@ type Querier interface {
 	ListProviderCredentials(ctx context.Context, organizationID uuid.UUID) ([]ProviderCredential, error)
 	ListProviderCredentialsByAccount(ctx context.Context, arg ListProviderCredentialsByAccountParams) ([]ProviderCredential, error)
 	ListProviderHealth(ctx context.Context) ([]ProviderHealth, error)
+	// Read-only projection of the append-only event ledger. Append-only holds
+	// structurally: this file is the only place that names security_events and it
+	// contains no UPDATE or DELETE, so no code path can rewrite a recorded event.
+	ListSecurityEvents(ctx context.Context, arg ListSecurityEventsParams) ([]SecurityEvent, error)
 	ListServiceAccounts(ctx context.Context, organizationID uuid.UUID) ([]ServiceAccount, error)
 	ListSubscriptions(ctx context.Context, organizationID uuid.UUID) ([]Subscription, error)
 	ListTeamMembers(ctx context.Context, arg ListTeamMembersParams) ([]ListTeamMembersRow, error)
@@ -133,14 +161,15 @@ type Querier interface {
 	// reports 0 rows affected so the caller can treat reuse as a stolen token.
 	RevokeRefreshToken(ctx context.Context, tokenHash string) (int64, error)
 	RevokeServiceAccount(ctx context.Context, arg RevokeServiceAccountParams) (ServiceAccount, error)
-	SetAlertStatus(ctx context.Context, arg SetAlertStatusParams) (Alert, error)
 	SetOrgMemberRole(ctx context.Context, arg SetOrgMemberRoleParams) (OrganizationMember, error)
 	SetPolicyEnforcement(ctx context.Context, arg SetPolicyEnforcementParams) (Policy, error)
 	SetPolicyRuleEnabled(ctx context.Context, arg SetPolicyRuleEnabledParams) (PolicyRule, error)
 	SetProjectStatus(ctx context.Context, arg SetProjectStatusParams) (Project, error)
 	SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) error
 	TouchUserLastLogin(ctx context.Context, id uuid.UUID) error
+	UpdateAlert(ctx context.Context, arg UpdateAlertParams) (Alert, error)
 	UpdateGatewayCredentialStatus(ctx context.Context, arg UpdateGatewayCredentialStatusParams) (GatewayCredential, error)
+	UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error)
 	UpsertModel(ctx context.Context, arg UpsertModelParams) (Model, error)
 	UpsertPricingModel(ctx context.Context, arg UpsertPricingModelParams) (PricingModel, error)
 	UpsertProviderHealth(ctx context.Context, arg UpsertProviderHealthParams) (ProviderHealth, error)

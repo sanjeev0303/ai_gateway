@@ -1,6 +1,7 @@
 /** Barrel for the domain type layer. Import from "@/types" only. */
 
 export * from "./common";
+export * from "./session";
 export * from "./organization";
 export * from "./user";
 export * from "./team";

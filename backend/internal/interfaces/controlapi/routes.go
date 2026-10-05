@@ -28,6 +28,11 @@ func registerV1Routes(mux *http.ServeMux, deps Deps) {
 		mux.Handle("POST /v1/auth/dev-login", http.HandlerFunc(a.devLogin))
 	}
 
+	// organization
+	mux.Handle("GET /v1/organizations/me", a.requireAuth(a.getOrganization))
+	mux.Handle("GET /v1/organization", a.requireAuth(a.getOrganization))
+	mux.Handle("PATCH /v1/organization", a.requireAuth(a.updateOrganization))
+
 	// members
 	mux.Handle("GET /v1/members", a.requireAuth(a.listMembers))
 	mux.Handle("PATCH /v1/members/{userID}/role", a.requireAuth(a.setMemberRole))

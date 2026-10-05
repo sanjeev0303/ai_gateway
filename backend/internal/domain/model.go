@@ -190,3 +190,9 @@ type UserOrganization struct {
 	Organization Organization
 	Role         string
 }
+
+// UpdateOrganization carries partial updates to an organization.
+type UpdateOrganization struct {
+	Name *string
+	Slug *string
+}

@@ -25,7 +25,6 @@ export interface SdkIntegration {
   id: ID;
   name: string;
   language: string;
-  installed: boolean;
   latestVersion: string;
   docsUrl: string;
 }

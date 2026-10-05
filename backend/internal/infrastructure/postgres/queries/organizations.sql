@@ -19,3 +19,11 @@ WHERE slug = $1;
 -- name: ListAllOrganizationIDs :many
 SELECT id FROM organizations
 ORDER BY created_at;
+-- name: UpdateOrganization :one
+UPDATE organizations
+SET
+  name = COALESCE(sqlc.narg('name')::text, name),
+  slug = COALESCE(sqlc.narg('slug')::text, slug),
+  updated_at = now()
+WHERE id = $1
+RETURNING *;

@@ -15,7 +15,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { organization } from "@/lib/mock-data";
 import type { StatusTone } from "@/types";
 
 export const metadata: Metadata = {
@@ -38,25 +37,31 @@ const COLUMNS: readonly Column<EndpointRow>[] = [
   { key: "summary", header: "Purpose", primary: "summary", secondary: "scope", sort: "summary" },
 ];
 
+// Hardcoded from gatewayv2/server.go. Anthropic-compatible, no /v1/chat/completions.
+// Scopes are credential scopes (see domain/credentials.go), not per-endpoint permissions.
 const ENDPOINTS: readonly EndpointRow[] = [
-  { id: "e1", method: "POST", methodTone: "success", path: "/v1/chat/completions", summary: "Create a chat completion through the gateway", scope: "gateway:write" },
-  { id: "e2", method: "POST", methodTone: "success", path: "/v1/embeddings", summary: "Create embeddings for a batch of inputs", scope: "gateway:write" },
-  { id: "e3", method: "GET", methodTone: "info", path: "/v1/models", summary: "List models available to the calling project", scope: "gateway:read" },
-  { id: "e4", method: "GET", methodTone: "info", path: "/v1/models/{model_id}", summary: "Retrieve one model with its entitlement state", scope: "gateway:read" },
-  { id: "e5", method: "GET", methodTone: "info", path: "/v1/usage", summary: "Query metered usage and cost for a window", scope: "usage:read" },
-  { id: "e6", method: "GET", methodTone: "info", path: "/v1/audit/events", summary: "Read the immutable administrative audit trail", scope: "audit:read" },
-  { id: "e7", method: "GET", methodTone: "info", path: "/v1/budgets", summary: "List budget thresholds and current consumption", scope: "budgets:read" },
-  { id: "e8", method: "PATCH", methodTone: "warning", path: "/v1/budgets/{budget_id}", summary: "Adjust a budget threshold or its period", scope: "budgets:write" },
-  { id: "e9", method: "GET", methodTone: "info", path: "/v1/billing/invoices", summary: "List invoices for the authenticated organization", scope: "billing:read" },
+  { id: "e1", method: "POST", methodTone: "success", path: "/v1/messages", summary: "Create a message through the gateway", scope: "gateway" },
+  { id: "e2", method: "POST", methodTone: "success", path: "/v1/messages/count_tokens", summary: "Count input tokens without calling a provider", scope: "gateway" },
+  { id: "e3", method: "GET", methodTone: "info", path: "/v1/models", summary: "List models the calling credential can use", scope: "gateway" },
+  { id: "e4", method: "GET", methodTone: "info", path: "/v1/gateway/stats", summary: "Gateway pipeline statistics", scope: "gateway" },
+  { id: "e5", method: "GET", methodTone: "info", path: "/v1/gateway/health", summary: "Upstream provider reachability", scope: "gateway" },
+  { id: "e6", method: "GET", methodTone: "info", path: "/livez", summary: "Liveness probe", scope: "none" },
+  { id: "e7", method: "GET", methodTone: "info", path: "/readyz", summary: "Readiness probe", scope: "none" },
+  { id: "e8", method: "GET", methodTone: "info", path: "/healthz", summary: "Health probe", scope: "none" },
 ];
 
+const SCOPES = ["gateway", "control", "all"];
+
+// Statuses and types are the ones gateway.go actually emits via writeError.
 const ERRORS = [
-  { status: "400", name: "invalid_request", meaning: "The payload failed validation before any policy was evaluated." },
-  { status: "401", name: "unauthenticated", meaning: "The key is missing, malformed, or revoked." },
-  { status: "403", name: "policy_denied", meaning: "A policy matched and blocked the request. The reason is in `error.detail`." },
-  { status: "404", name: "model_not_found", meaning: "The model is not in the registry, or not entitled for this project." },
-  { status: "429", name: "rate_limited", meaning: "Rate or budget ceiling hit. `retry_after` is in seconds." },
-  { status: "502", name: "upstream_error", meaning: "The provider failed. Safe to retry with backoff." },
+  { status: "401", name: "authentication_error", meaning: "The credential was not found, expired, or revoked." },
+  { status: "403", name: "policy_denied", meaning: "The authorization stage refused the request." },
+  { status: "405", name: "method_not_allowed", meaning: "The path exists but not for this HTTP method." },
+  { status: "429", name: "rate_limit_exceeded", meaning: "The credential exceeded its rate limit." },
+  { status: "429", name: "budget_exceeded", meaning: "The credential exceeded its budget ceiling." },
+  { status: "500", name: "routing_error", meaning: "No upstream could be routed for the request." },
+  { status: "503", name: "upstream_unavailable", meaning: "The tenant's upstream could not be resolved." },
+  { status: "503", name: "policy_unavailable", meaning: "The policy snapshot could not be loaded." },
 ] as const;
 
 export default function ApiDocsPage() {
@@ -64,52 +69,42 @@ export default function ApiDocsPage() {
     <div className="p-4 sm:p-6">
       <PageShell
         title="API docs"
-        description="One REST surface. Everything the dashboard does is reachable from here."
+        description="The gateway is the model data plane. It is a separate service from the control plane the dashboard talks to."
         eyebrow={
           <p className="text-xs text-muted-foreground">
-            Base URL <code className="font-mono">https://api.sentinel.dev</code> ·{" "}
-            <StatusBadge tone="info">v1 stable</StatusBadge>
+            Base URL <code className="font-mono">http://localhost:8084</code> ·{" "}
+            <StatusBadge tone="info">Anthropic-compatible</StatusBadge>
           </p>
         }
       >
         <section className="grid gap-4 sm:grid-cols-3">
-          <StatCard label="Endpoints" value={String(ENDPOINTS.length)} hint="Stable in v1" />
-          <StatCard
-            label="Auth"
-            value="Bearer"
-            tone="info"
-            hint="Scoped API key"
-          />
-          <StatCard
-            label="Region"
-            value={organization.region}
-            hint="Requests stay in-region"
-          />
+          <StatCard label="Endpoints" value={String(ENDPOINTS.length)} hint="Registered in gatewayv2" />
+          <StatCard label="Auth header" value="x-api-key" tone="info" hint="Credential scope required" />
+          <StatCard label="Response shape" value="Anthropic" hint="Upstream body, unrewritten" />
         </section>
 
         <Card>
           <CardHeader>
             <CardTitle>Authentication</CardTitle>
             <CardDescription>
-              Scopes are enforced at the gateway. A key is refused before the request
-              reaches a provider if it lacks the scope the endpoint requires.
+              The raw key is read from the x-api-key header, falling back to the
+              Authorization header. It is hashed and looked up before any provider is
+              contacted.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <CodeBlock
-              label="Authorization header"
+              label="Send the key"
               language="bash"
-              code={`curl https://api.sentinel.dev/v1/models \\
-  -H "Authorization: Bearer $SENTINEL_API_KEY"`}
+              code={`curl http://localhost:8084/v1/models \\
+  -H "x-api-key: $AIGW_API_KEY"`}
             />
             <div className="flex flex-wrap gap-2">
-              {["gateway:read", "gateway:write", "usage:read", "budgets:read", "audit:read", "billing:read"].map(
-                (scope) => (
-                  <StatusBadge key={scope} tone="neutral">
-                    {scope}
-                  </StatusBadge>
-                ),
-              )}
+              {SCOPES.map((scope) => (
+                <StatusBadge key={scope} tone="neutral">
+                  {scope}
+                </StatusBadge>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -134,30 +129,27 @@ export default function ApiDocsPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>Request and response</CardTitle>
-              <CardDescription>
-                Responses echo the identifiers that tie the call back to a trace.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <CodeBlock
-                label="Response"
-                language="bash"
-                code={`{
-  "id": "resp_8f3a12",
+<CardTitle>Request and response</CardTitle>
+            <CardDescription>
+              The gateway forwards the request body as sent, rewriting only the auth and
+              version headers the target provider expects, and streams the provider&apos;s
+              response straight back. It does not wrap the payload.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <CodeBlock
+              label="Response"
+              language="bash"
+              code={`{
+  "id": "msg_8f3a12",
+  "type": "message",
+  "role": "assistant",
   "model": "claude-sonnet-4-5",
-  "choices": [
-    { "message": { "role": "assistant", "content": "…" } }
-  ],
-  "usage": { "input_tokens": 128, "output_tokens": 412 },
-  "sentinel": {
-    "trace_id": "trc_1b9d40",
-    "project": "customer-portal",
-    "policy_decision": "allow",
-    "cost_usd": 0.0043
-  }
+  "content": [{ "type": "text", "text": "…" }],
+  "stop_reason": "end_turn",
+  "usage": { "input_tokens": 128, "output_tokens": 412 }
 }`}
-              />
+            />
             </CardContent>
           </Card>
 
@@ -188,19 +180,23 @@ export default function ApiDocsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Rate limits</CardTitle>
+            <CardTitle>Rate limits and budgets</CardTitle>
             <CardDescription>
-              Per key, per organization. Every response carries the current window state.
+              Both are evaluated on the request path. A breach fails the call outright
+              rather than degrading the response.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <CodeBlock
-              label="Response headers"
+              label="Rejected requests"
               language="bash"
-              code={`X-RateLimit-Limit: 1000
-X-RateLimit-Remaining: 847
-X-RateLimit-Reset: 1789543200
-Retry-After: 12   # present on 429 only`}
+              code={`{ "type": "error", "error": { "type": "rate_limit_exceeded", "message": "…" } }
+{ "type": "error", "error": { "type": "budget_exceeded",      "message": "…" } }`}
+            />
+            <CodeBlock
+              label="Correlation"
+              language="bash"
+              code={`x-request-id: 8f3a12c4`}
             />
           </CardContent>
         </Card>

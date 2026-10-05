@@ -3,7 +3,6 @@ export * from "./state";
 export * from "./page-shell";
 export * from "./stat-card";
 export * from "./data-table";
-export * from "./filter-bar";
 export * from "./range-tabs";
 export * from "./mobile-nav";
 export * from "./sidebar";

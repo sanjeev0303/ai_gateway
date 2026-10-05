@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
-import { Plus } from "lucide-react";
 
-import { DataTable, PageShell, StatCard, StatusBadge, type Column } from "@/components/dashboard";
-import { Button } from "@/components/ui/button";
+import {
+  DataTable,
+  PageShell,
+  StatCard,
+  StatusBadge,
+  type Column,
+} from "@/components/dashboard";
 import {
   Card,
   CardContent,
@@ -10,90 +14,168 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatDate, formatRelative } from "@/lib/format";
-import { credentials } from "@/lib/mock-data";
-import { CREDENTIAL_STATUS_TONE, type StatusTone } from "@/types";
+import { formatDate, formatNumber, formatRelative } from "@/lib/format";
+import { toneFor } from "@/lib/org-tones";
+import { getApiClient } from "@/lib/session";
+import type { StatusTone } from "@/types";
 
 export const metadata: Metadata = {
   title: "Gateway credentials · Sentinel",
-  description: "Every credential stored by the gateway, with expiry and rotation state.",
+  description: "Every credential the gateway holds, with expiry and scope.",
 };
+
+const CREDENTIAL_TONE: Record<string, StatusTone> = {
+  active: "success",
+  expired: "danger",
+  revoked: "neutral",
+};
+
+const EXPIRY_WINDOW_DAYS = 30;
+
+const short = (id?: string) => (id ? `${id.slice(0, 8)}…` : "—");
 
 interface CredentialRow {
   id: string;
   name: string;
-  kind: string;
-  providerName: string;
+  prefix: string;
+  subject: string;
+  subjectId: string;
+  owner: string;
+  ownerId: string;
+  scopes: string;
   status: string;
   tone: StatusTone;
-  masked: string;
-  created: string;
   expires: string;
+  expiresSort: string;
   lastUsed: string;
-  usedBy: number;
 }
 
 const COLUMNS: readonly Column<CredentialRow>[] = [
-  { key: "name", header: "Credential", primary: "name", secondary: "kind" },
-  { key: "status", header: "Status", primary: "status", tone: "tone" },
-  { key: "providerName", header: "Bound to", primary: "providerName" },
-  { key: "masked", header: "Secret", primary: "masked" },
-  { key: "expires", header: "Expires", primary: "expires", align: "right" },
-  { key: "lastUsed", header: "Last used", primary: "lastUsed", align: "right" },
-  { key: "usedBy", header: "Projects", primary: "usedBy", align: "right" },
+  {
+    key: "name",
+    header: "Credential",
+    primary: "name",
+    secondary: "prefix",
+    sort: "name",
+  },
+  {
+    key: "subject",
+    header: "Subject",
+    primary: "subject",
+    secondary: "subjectId",
+    sort: "subject",
+  },
+  { key: "owner", header: "Owner", primary: "owner", secondary: "ownerId", sort: "owner" },
+  { key: "scopes", header: "Scopes", primary: "scopes", sort: "scopes" },
+  { key: "status", header: "Status", primary: "status", tone: "tone", sort: "status" },
+  {
+    key: "expires",
+    header: "Expires",
+    primary: "expires",
+    sort: "expiresSort",
+    align: "right",
+  },
+  {
+    key: "lastUsed",
+    header: "Last used",
+    primary: "lastUsed",
+    sort: "lastUsed",
+    align: "right",
+  },
 ];
 
-export default function GatewayCredentialsPage() {
-  const rows: CredentialRow[] = credentials.map((credential) => ({
-    id: credential.id,
-    name: credential.name,
-    kind: credential.kind.replace(/_/g, " "),
-    providerName: credential.providerName,
-    status: credential.status,
-    tone: CREDENTIAL_STATUS_TONE[credential.status],
-    masked: credential.maskedValue,
-    created: formatDate(credential.createdAt),
-    expires: credential.expiresAt ? formatDate(credential.expiresAt) : "Never",
-    lastUsed: formatRelative(credential.lastUsedAt),
-    usedBy: credential.usedByProjectCount,
-  }));
+async function loadGatewayCredentials() {
+  const { credentials } = await getApiClient();
+  const list = await credentials.listGateway();
+  const now = new Date();
+  const windowEnd = now.getTime() + EXPIRY_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
-  const expiring = credentials.filter((c) => c.status === "expiring");
-  const expired = credentials.filter((c) => c.status === "expired");
-  const soonest = [...credentials]
-    .filter((c) => c.expiresAt)
-    .sort((a, b) => (a.expiresAt ?? "").localeCompare(b.expiresAt ?? ""))[0];
+  const rows: CredentialRow[] = [...list.items]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((credential) => {
+      const owner = credential.project_id
+        ? "Project"
+        : credential.team_id
+          ? "Team"
+          : "Organization";
+
+      return {
+        id: credential.id,
+        name: credential.name,
+        prefix: credential.key_prefix,
+        subject: credential.subject_type.replace(/_/g, " "),
+        subjectId: short(credential.subject_id),
+        owner,
+        ownerId: short(credential.project_id ?? credential.team_id),
+        scopes: credential.scopes.length ? credential.scopes.join(", ") : "none",
+        status: credential.status,
+        tone: toneFor(CREDENTIAL_TONE, credential.status),
+        expires: credential.expires_at ? formatDate(credential.expires_at) : "Never",
+        expiresSort: credential.expires_at ?? "9999-12-31",
+        lastUsed: credential.last_used_at
+          ? formatRelative(credential.last_used_at, now)
+          : "Never",
+      };
+    });
+
+  const expiring = list.items.filter((credential) => {
+    if (credential.status !== "active" || !credential.expires_at) return false;
+    const at = new Date(credential.expires_at).getTime();
+    return at >= now.getTime() && at <= windowEnd;
+  });
+
+  const schedule = list.items
+    .filter((credential) => Boolean(credential.expires_at))
+    .sort((a, b) => (a.expires_at ?? "").localeCompare(b.expires_at ?? ""));
+
+  return {
+    rows,
+    total: rows.length,
+    active: rows.filter((row) => row.status === "active").length,
+    expiring: expiring.length,
+    expired: list.items.filter((credential) => credential.status === "expired").length,
+    schedule: schedule.map((credential) => ({
+      id: credential.id,
+      name: credential.name,
+      status: credential.status,
+      tone: toneFor(CREDENTIAL_TONE, credential.status),
+      expires: formatDate(credential.expires_at ?? ""),
+    })),
+  };
+}
+
+export default async function GatewayCredentialsPage() {
+  const { rows, total, active, expiring, expired, schedule } = await loadGatewayCredentials();
 
   return (
     <div className="p-4 sm:p-6">
       <PageShell
         title="Gateway credentials"
-        description="All secrets the gateway holds, whether for upstream providers or inbound webhooks."
-        actions={
-          <Button size="sm">
-            <Plus aria-hidden /> Add credential
-          </Button>
-        }
+        description="Keys the gateway accepts from callers, scoped to a subject and optionally to one team or project."
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Total credentials" value={String(credentials.length)} hint="Across all providers" />
           <StatCard
-            label="Healthy"
-            value={String(credentials.length - expiring.length - expired.length)}
-            tone="success"
-            hint="No action required"
+            label="Gateway credentials"
+            value={formatNumber(total)}
+            hint={`${formatNumber(active)} active`}
           />
           <StatCard
-            label="Expiring soon"
-            value={String(expiring.length)}
-            tone={expiring.length > 0 ? "warning" : "success"}
-            hint={soonest ? `Next: ${formatDate(soonest.expiresAt!)}` : "Nothing scheduled"}
+            label={`Expiring within ${EXPIRY_WINDOW_DAYS} days`}
+            value={formatNumber(expiring)}
+            tone={expiring > 0 ? "warning" : "success"}
+            hint="Active, with an expiry date set"
           />
           <StatCard
             label="Expired"
-            value={String(expired.length)}
-            tone={expired.length > 0 ? "danger" : "neutral"}
-            hint="Rotation has lapsed"
+            value={formatNumber(expired)}
+            tone={expired > 0 ? "danger" : "neutral"}
+            hint="Past its expiry date"
+          />
+          <StatCard
+            label="Revoked"
+            value={formatNumber(total - active - expired)}
+            tone={total - active - expired > 0 ? "neutral" : "success"}
+            hint="Withdrawn before expiry"
           />
         </section>
 
@@ -101,7 +183,8 @@ export default function GatewayCredentialsPage() {
           <CardHeader>
             <CardTitle>Stored credentials</CardTitle>
             <CardDescription>
-              Secrets are masked on read and can only be revealed once, at creation.
+              Only the key prefix is stored and returned. The secret itself is shown
+              once, at creation, and cannot be read back.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -109,32 +192,28 @@ export default function GatewayCredentialsPage() {
               columns={COLUMNS}
               rows={rows}
               rowKey="id"
-              toolbar={
-                <p className="text-sm text-muted-foreground">
-                  {credentials.filter((c) => c.usedByProjectCount > 0).length} of{" "}
-                  {credentials.length} are referenced by at least one project.
-                </p>
-              }
-              emptyMessage="No credentials stored yet."
+              pageSize={10}
+              emptyMessage="No gateway credentials yet."
             />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Rotation posture</CardTitle>
+            <CardTitle>Expiry schedule</CardTitle>
             <CardDescription>
-              Expired or expiring secrets, ordered by urgency.
+              Credentials carrying an expiry date, soonest first. Nothing rotates
+              automatically — the control API only records the date.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {expiring.length + expired.length === 0 ? (
+            {schedule.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Every credential is inside its rotation window.
+                No gateway credential has an expiry date set.
               </p>
             ) : (
               <ul className="space-y-2">
-                {[...expired, ...expiring].map((credential) => (
+                {schedule.map((credential) => (
                   <li
                     key={credential.id}
                     className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
@@ -142,20 +221,10 @@ export default function GatewayCredentialsPage() {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{credential.name}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {credential.providerName} ·{" "}
-                        {credential.expiresAt
-                          ? `expires ${formatDate(credential.expiresAt)}`
-                          : "no expiry set"}
+                        expires {credential.expires}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <StatusBadge tone={CREDENTIAL_STATUS_TONE[credential.status]}>
-                        {credential.status}
-                      </StatusBadge>
-                      <Button size="sm" variant="outline">
-                        Rotate
-                      </Button>
-                    </div>
+                    <StatusBadge tone={credential.tone}>{credential.status}</StatusBadge>
                   </li>
                 ))}
               </ul>

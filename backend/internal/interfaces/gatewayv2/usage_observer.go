@@ -49,8 +49,8 @@ func newUsageObserver(contentType string) *usageObserver {
 
 // observingReader passes bytes through untouched while feeding the observer.
 type observingReader struct {
-	src io.Reader
-	obs *usageObserver
+	src        io.Reader
+	obs        *usageObserver
 	firstToken time.Time
 }
 

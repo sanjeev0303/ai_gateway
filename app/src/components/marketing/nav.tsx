@@ -68,7 +68,7 @@ export function MarketingNav({ className }: MarketingNavProps) {
             <Link href="/app/overview">Sign in</Link>
           </Button>
           <Button asChild>
-            <Link href="/app/overview">Start free</Link>
+            <Link href="/app/overview">Open dashboard</Link>
           </Button>
 
           {/* The full nav collapses into a sheet below md. */}

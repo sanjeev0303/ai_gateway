@@ -207,28 +207,28 @@ type TelemetryEmitter interface {
 
 // UsageRecord represents a usage event for telemetry.
 type UsageRecord struct {
-	RequestID        string
-	OrganizationID   uuid.UUID
-	CredentialID     uuid.UUID
-	SubjectType      string
-	SubjectID        uuid.UUID
-	ProjectID        *uuid.UUID
-	TeamID           *uuid.UUID
-	Model            string
-	InputTokens      int
-	OutputTokens     int
-	CacheReadTokens  int
-	CacheWriteTokens int
-	ToolCalls        int
-	LatencyMs        int64
-	StatusCode       int
-	Timestamp        time.Time
-	RequestStartedAt  time.Time
-	FirstTokenAt      *time.Time
-	CompletedAt       time.Time
+	RequestID          string
+	OrganizationID     uuid.UUID
+	CredentialID       uuid.UUID
+	SubjectType        string
+	SubjectID          uuid.UUID
+	ProjectID          *uuid.UUID
+	TeamID             *uuid.UUID
+	Model              string
+	InputTokens        int
+	OutputTokens       int
+	CacheReadTokens    int
+	CacheWriteTokens   int
+	ToolCalls          int
+	LatencyMs          int64
+	StatusCode         int
+	Timestamp          time.Time
+	RequestStartedAt   time.Time
+	FirstTokenAt       *time.Time
+	CompletedAt        time.Time
 	TimeToFirstTokenMs *int32
-	TotalLatencyMs    *int32
-	ProviderMeta     map[string]any
+	TotalLatencyMs     *int32
+	ProviderMeta       map[string]any
 }
 
 // ErrorRecord represents an error event for telemetry.

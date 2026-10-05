@@ -11,8 +11,13 @@ import (
 	"net/http"
 
 	"ai-governance-saas/backend/internal/application/activity"
+	"ai-governance-saas/backend/internal/application/alert"
+	"ai-governance-saas/backend/internal/application/auditlog"
+	"ai-governance-saas/backend/internal/application/billing"
+	"ai-governance-saas/backend/internal/application/conversation"
 	"ai-governance-saas/backend/internal/application/identity"
 	"ai-governance-saas/backend/internal/application/provider"
+	"ai-governance-saas/backend/internal/application/securityevent"
 	"ai-governance-saas/backend/internal/application/usage"
 	"ai-governance-saas/backend/internal/platform/health"
 	"ai-governance-saas/backend/internal/platform/httpx"
@@ -27,6 +32,11 @@ type Deps struct {
 	Providers       *provider.Service
 	Usage           *usage.Service
 	Activity        *activity.Service
+	Conversations   *conversation.Service
+	AuditLogs       *auditlog.Service
+	Alerts          *alert.Service
+	SecurityEvents  *securityevent.Service
+	Billing         *billing.Service
 	DevLoginEnabled bool
 
 	// SessionCookieName names the HttpOnly auth cookie for the web UI
@@ -53,6 +63,21 @@ func NewHandler(log *slog.Logger, mw *httpx.Middleware, reg *health.Registry, de
 		}
 		if deps.Activity != nil {
 			registerActivityRoutes(mux, deps)
+		}
+		if deps.Conversations != nil {
+			registerConversationRoutes(mux, deps)
+		}
+		if deps.AuditLogs != nil {
+			registerAuditLogRoutes(mux, deps)
+		}
+		if deps.Alerts != nil {
+			registerAlertRoutes(mux, deps)
+		}
+		if deps.SecurityEvents != nil {
+			registerSecurityEventRoutes(mux, deps)
+		}
+		if deps.Billing != nil {
+			registerBillingRoutes(mux, deps)
 		}
 	}
 	return mw.Chain(mux)

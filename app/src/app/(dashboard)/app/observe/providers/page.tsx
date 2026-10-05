@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { BarChart, chartColor, LineChart } from "@/components/charts";
+import { BarChart, LineChart, chartColor } from "@/components/charts";
 import {
   DataTable,
   PageShell,
@@ -15,191 +15,217 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatMs, formatNumber, formatPercent, formatUsd } from "@/lib/format";
-import { NOW, models, platformHealth, providers } from "@/lib/mock-data";
-import { PROVIDER_STATUS_TONE } from "@/types";
+import {
+  formatNumber,
+  formatPercent,
+  formatUsd,
+  microsToUsd,
+} from "@/lib/format";
+import { toneFor } from "@/lib/org-tones";
+import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
 
 export const metadata: Metadata = {
   title: "Providers · Sentinel",
-  description: "Upstream health, latency, and cost for every connected provider.",
+  description: "Upstream connections, probe health, and cost for every provider.",
 };
 
-function latencyTone(ms: number): StatusTone {
-  if (ms >= 4_000) return "danger";
-  if (ms >= 2_500) return "warning";
-  return "success";
-}
+const ACCOUNT_STATUS_TONE: Record<string, StatusTone> = {
+  active: "success",
+  disabled: "neutral",
+};
+
+// provider_health.status is a free-text column, so this map is a best effort.
+const HEALTH_TONE: Record<string, StatusTone> = {
+  healthy: "success",
+  ok: "success",
+  degraded: "warning",
+  down: "danger",
+  error: "danger",
+};
 
 interface ProviderRow {
   id: string;
   name: string;
+  kind: string;
   status: string;
   statusTone: StatusTone;
-  uptime: number;
-  modelCount: number;
-  p50: number;
-  p95: number;
-  p95Tone: StatusTone;
-  fee: number;
-  lastIncident: string;
+  health: string;
+  healthTone: StatusTone;
+  reason: string;
+  requests: number;
+  tokens: number;
+  share: string;
+  shareFraction: number;
+  spend: number;
 }
 
 const providerColumns: readonly Column<ProviderRow>[] = [
-  { key: "name", header: "Provider", primary: "name", sort: "name" },
+  { key: "name", header: "Connection", primary: "name", secondary: "kind", sort: "name" },
   { key: "status", header: "Status", primary: "status", tone: "statusTone", sort: "status" },
   {
-    key: "uptime",
-    header: "Uptime 30d",
-    primary: "uptime",
-    format: "percentRaw",
-    meter: "uptime",
-    meterMax: 100,
+    key: "health",
+    header: "Probe",
+    primary: "health",
+    tone: "healthTone",
+    sort: "health",
+  },
+  { key: "reason", header: "Probe detail", primary: "reason", sort: "reason" },
+  {
+    key: "requests",
+    header: "Requests",
+    primary: "requests",
+    format: "compact",
     align: "right",
-    sort: "uptime",
+    sort: "requests",
   },
   {
-    key: "modelCount",
-    header: "Models",
-    primary: "modelCount",
-    format: "number",
+    key: "tokens",
+    header: "Tokens",
+    primary: "tokens",
+    format: "compact",
     align: "right",
-    sort: "modelCount",
+    sort: "tokens",
   },
   {
-    key: "p50",
-    header: "TTFT p50",
-    primary: "p50",
-    format: "ms",
+    key: "share",
+    header: "Share",
+    primary: "share",
+    meter: "shareFraction",
+    meterMax: 1,
+    sort: "shareFraction",
     align: "right",
-    sort: "p50",
   },
   {
-    key: "p95",
-    header: "TTFT p95",
-    primary: "p95",
-    format: "ms",
-    tone: "p95Tone",
-    align: "right",
-    sort: "p95",
-  },
-  {
-    key: "fee",
-    header: "Platform fee",
-    primary: "fee",
+    key: "spend",
+    header: "Spend 30d",
+    primary: "spend",
     format: "usd",
     align: "right",
-    sort: "fee",
+    sort: "spend",
   },
-  { key: "lastIncident", header: "Last incident", primary: "lastIncident", sort: "lastIncident" },
 ];
 
-const rows: ProviderRow[] = providers.map((provider) => ({
-  id: provider.id,
-  name: provider.displayName,
-  status: provider.status,
-  statusTone: PROVIDER_STATUS_TONE[provider.status],
-  uptime: provider.uptime30d,
-  modelCount: provider.models.length,
-  p50: provider.latencyP50Ms,
-  p95: provider.latencyP95Ms,
-  p95Tone: latencyTone(provider.latencyP95Ms),
-  fee: provider.monthlyFee,
-  lastIncident: provider.lastIncidentAt ?? "None recorded",
-}));
+const DAY = 24 * 60 * 60 * 1000;
 
-const healthy = providers.filter((provider) => provider.status === "healthy").length;
-const avgUptime =
-  providers.reduce((acc, provider) => acc + provider.uptime30d, 0) / providers.length;
-const worstP95 = Math.max(...providers.map((provider) => provider.latencyP95Ms));
-const totalFees = providers.reduce((acc, provider) => acc + provider.monthlyFee, 0);
+function trailingWindow() {
+  return { from: new Date(Date.now() - 30 * DAY) };
+}
 
-export default function ProvidersPage() {
+export default async function ProvidersPage() {
+  const { providers, usage } = await getApiClient();
+  const window = trailingWindow();
+  const [accounts, health, providerUsage, series] = await Promise.all([
+    providers.listAccounts(),
+    providers.health(),
+    usage.byProvider(window),
+    usage.timeseries(window),
+  ]);
+
+  // by-provider groups on provider_kind, which is a real key on both sides.
+  const healthByKind = new Map(health.items.map((row) => [row.provider_kind, row]));
+  const usageByKind = new Map(providerUsage.items.map((row) => [row.Provider, row]));
+
+  const totalSpend = providerUsage.items.reduce(
+    (sum, row) => sum + microsToUsd(row.CostMicros),
+    0,
+  );
+  const totalRequests = providerUsage.items.reduce((sum, row) => sum + row.Requests, 0);
+  const active = accounts.items.filter((account) => account.status === "active").length;
+  const degraded = health.items.filter(
+    (row) => (row.status !== "healthy" && row.status !== "ok") || Boolean(row.last_error),
+  ).length;
+
+  const rows: ProviderRow[] = accounts.items.map((account) => {
+    const probe = healthByKind.get(account.provider_kind);
+    const attributed = usageByKind.get(account.provider_kind);
+    const spend = microsToUsd(attributed?.CostMicros ?? 0);
+    const shareFraction = totalSpend > 0 ? spend / totalSpend : 0;
+    return {
+      id: account.id,
+      name: account.name,
+      kind: account.provider_kind,
+      status: account.status,
+      statusTone: toneFor(ACCOUNT_STATUS_TONE, account.status),
+      health: probe?.status ?? "unknown",
+      healthTone: toneFor(HEALTH_TONE, probe?.status ?? ""),
+      reason: probe?.status_reason || probe?.last_error || "—",
+      requests: attributed?.Requests ?? 0,
+      tokens: attributed?.TotalTokens ?? 0,
+      share: formatPercent(shareFraction),
+      shareFraction,
+      spend,
+    };
+  });
+
+  const requestRate = series.items.map((point) => ({
+    date: point.BucketStart.slice(5, 16).replace("T", " "),
+    value: point.Requests,
+  }));
+
+  const spendByProvider = providerUsage.items
+    .map((row) => ({ label: row.Provider, value: microsToUsd(row.CostMicros) }))
+    .sort((a, b) => b.value - a.value);
+
   return (
     <div className="p-4 sm:p-6">
       <PageShell
         title="Providers"
-        description="Upstream health, time to first token, and the fixed platform fee each connection costs."
+        description="Upstream connections, what the last probe said, and what each one costs."
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            label="Providers healthy"
-            value={`${formatNumber(healthy)} of ${formatNumber(providers.length)}`}
-            tone={healthy === providers.length ? "success" : "warning"}
-            hint="Current status"
+            label="Connections"
+            value={formatNumber(accounts.items.length)}
+            hint={`${formatNumber(active)} active`}
           />
           <StatCard
-            label="Average uptime"
-            value={formatPercent(avgUptime / 100)}
+            label="Failing probes"
+            value={formatNumber(degraded)}
+            tone={degraded > 0 ? "danger" : "success"}
+            hint="Unhealthy or errored"
+          />
+          <StatCard
+            label="Requests"
+            value={formatNumber(totalRequests)}
             hint="Trailing 30 days"
           />
           <StatCard
-            label="Slowest p95"
-            value={formatMs(worstP95)}
-            tone={latencyTone(worstP95)}
-            hint="Time to first token"
-          />
-          <StatCard
-            label="Platform fees"
-            value={formatUsd(totalFees)}
-            hint="Per month, before usage"
+            label="Spend 30d"
+            value={formatUsd(totalSpend)}
+            hint="Across every provider"
           />
         </section>
 
         <section className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>Uptime by provider</CardTitle>
-              <CardDescription>Trailing 30-day availability.</CardDescription>
+              <CardTitle>Spend by provider</CardTitle>
+              <CardDescription>Trailing 30 days, highest first.</CardDescription>
             </CardHeader>
             <CardContent>
-              <BarChart
-                data={providers.map((provider) => ({
-                  label: provider.displayName,
-                  value: provider.uptime30d,
-                }))}
-                formatValue={(value) => formatPercent(value / 100)}
-              />
+              <BarChart data={spendByProvider} formatValue={formatUsd} />
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Time to first token</CardTitle>
+              <CardTitle>Gateway request rate</CardTitle>
               <CardDescription>
-                p50 and p95 per provider. The gap is queueing, not generation.
+                Trailing 30 days, aggregated across every provider, so a single
+                outage shows as a dip.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <BarChart
-                label="TTFT"
-                data={providers.map((provider) => ({
-                  label: provider.displayName,
-                  value: provider.latencyP95Ms,
-                }))}
-                formatValue={formatMs}
+              <LineChart
+                label="Requests"
+                data={requestRate}
+                color={chartColor(0)}
+                formatValue={formatNumber}
               />
             </CardContent>
           </Card>
         </section>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Gateway request rate</CardTitle>
-            <CardDescription>
-              Aggregated across every provider, so a single outage shows as a
-              dip.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <LineChart
-              label="Gateway request rate"
-              data={platformHealth.requestVolume}
-              color={chartColor(0)}
-              formatValue={formatNumber}
-            />
-          </CardContent>
-        </Card>
 
         <Card>
           <CardHeader>
@@ -224,54 +250,46 @@ export default function ProvidersPage() {
             Status board
           </h2>
           <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {providers.map((provider) => {
-              const owned = models.filter((model) => model.providerId === provider.id);
+            {rows.map((row) => {
+              const account = accounts.items.find((item) => item.id === row.id);
+              const probe = healthByKind.get(row.kind);
               return (
-                <li key={provider.id} className="rounded-lg border bg-card p-4">
+                <li key={row.id} className="rounded-lg border bg-card p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="font-medium">{provider.displayName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatNumber(provider.models.length)} models ·{" "}
-                        {formatUsd(provider.monthlyFee)}/mo
-                      </p>
+                      <p className="font-medium">{row.name}</p>
+                      <p className="text-xs text-muted-foreground">{row.kind}</p>
                     </div>
-                    <StatusBadge tone={PROVIDER_STATUS_TONE[provider.status]}>
-                      {provider.status}
-                    </StatusBadge>
+                    <StatusBadge tone={row.statusTone}>{row.status}</StatusBadge>
                   </div>
                   <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <dt className="text-muted-foreground">Uptime</dt>
+                      <dt className="text-muted-foreground">Probe</dt>
                       <dd className="tabular-nums">
-                        {formatPercent(provider.uptime30d / 100)}
+                        {probe?.checked_at ? probe.checked_at.slice(0, 16).replace("T", " ") : "—"}
                       </dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted-foreground">p95 TTFT</dt>
-                      <dd className="tabular-nums">{formatMs(provider.latencyP95Ms)}</dd>
                     </div>
                     <div>
                       <dt className="text-muted-foreground">Spend 30d</dt>
-                      <dd className="tabular-nums">
-                        {formatUsd(owned.reduce((acc, model) => acc + model.spend30d, 0))}
-                      </dd>
+                      <dd className="tabular-nums">{formatUsd(row.spend)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Requests</dt>
+                      <dd className="tabular-nums">{formatNumber(row.requests)}</dd>
                     </div>
                     <div>
                       <dt className="text-muted-foreground">Connected</dt>
-                      <dd className="tabular-nums">{provider.createdAt.slice(0, 10)}</dd>
+                      <dd className="tabular-nums">{account?.created_at.slice(0, 10) ?? "—"}</dd>
                     </div>
                   </dl>
+                  {row.reason !== "—" ? (
+                    <p className="mt-3 text-xs text-muted-foreground">{row.reason}</p>
+                  ) : null}
                 </li>
               );
             })}
           </ul>
         </section>
-
-        <p className="text-xs text-muted-foreground">
-          Status reflects the probe taken as of {NOW.toISOString().slice(0, 16).replace("T", " ")}{" "}
-          UTC.
-        </p>
       </PageShell>
     </div>
   );

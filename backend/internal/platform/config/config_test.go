@@ -44,6 +44,7 @@ func TestLoadParsesEnv(t *testing.T) {
 	t.Setenv("AIGW_SERVER_ADDR", ":9999")
 	t.Setenv("AIGW_OBSERVABILITY_LOG_LEVEL", "debug")
 	t.Setenv("AIGW_SECURITY_CORS_ALLOWED_ORIGINS", "https://a.example,https://b.example")
+	t.Setenv("AIGW_CONVERSATION_PRIVACY_DEFAULT", "PROMPT_ONLY")
 
 	cfg, err := Load()
 	if err != nil {
@@ -54,6 +55,9 @@ func TestLoadParsesEnv(t *testing.T) {
 	}
 	if cfg.Observability.LogLevel != "debug" {
 		t.Errorf("LogLevel = %q, want debug", cfg.Observability.LogLevel)
+	}
+	if cfg.Conversation.PrivacyDefault != "PROMPT_ONLY" {
+		t.Errorf("Conversation.PrivacyDefault = %q, want PROMPT_ONLY", cfg.Conversation.PrivacyDefault)
 	}
 	want := []string{"https://a.example", "https://b.example"}
 	if len(cfg.Security.CORSAllowedOrigins) != 2 || cfg.Security.CORSAllowedOrigins[0] != want[0] {
@@ -128,6 +132,20 @@ func TestValidate(t *testing.T) {
 			c.Auth.DevLoginEnabled = true
 			c.Auth.HMACSigningKey = ""
 		}, "AUTH_DEV_LOGIN_ENABLED"},
+		{"every supported privacy mode passes", func(c *Config) {
+			for _, m := range []string{"OFF", "METADATA_ONLY", "PROMPT_ONLY", "FULL_CONTENT"} {
+				c.Conversation.PrivacyDefault = m
+				if err := c.Validate(); err != nil {
+					t.Errorf("privacy default %q rejected: %v", m, err)
+				}
+			}
+		}, ""},
+		{"unknown privacy default fails", func(c *Config) {
+			c.Conversation.PrivacyDefault = "ALL"
+		}, "CONVERSATION_PRIVACY_DEFAULT"},
+		{"empty privacy default fails", func(c *Config) {
+			c.Conversation.PrivacyDefault = ""
+		}, "CONVERSATION_PRIVACY_DEFAULT"},
 	}
 
 	for _, tt := range tests {

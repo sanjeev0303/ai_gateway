@@ -1,17 +1,34 @@
 import Link from "next/link";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { APP_DESCRIPTION, APP_NAME, APP_TAGLINE } from "@/lib/constants";
-import { costSummary, organizationSummary } from "@/lib/mock-data";
 
 interface HeroProps {
   /** Marketing pages pass their own headline; the homepage uses the tagline. */
   headline?: string;
   subheadline?: string;
 }
+
+const CAPABILITIES = [
+  {
+    title: "One request shape, provider-native out",
+    detail: "Anthropic messages in; auth and version headers are rewritten for Anthropic and OpenAI upstreams.",
+  },
+  {
+    title: "Governance in the request path",
+    detail: "Auth, policy snapshot, rate and budget checks, then forward.",
+  },
+  {
+    title: "Idempotent usage accounting",
+    detail: "Keyed per request, rolled up hourly, daily, and monthly.",
+  },
+  {
+    title: "Multi-tenant control plane",
+    detail: "Organizations, teams, projects, and scoped credentials.",
+  },
+];
 
 export function Hero({
   headline = APP_TAGLINE,
@@ -23,7 +40,7 @@ export function Hero({
         <div>
           <p className="inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
             <ShieldCheck className="size-3.5 text-primary" aria-hidden />
-            Policy enforcement in under 40ms
+            Governance enforced in the request path
           </p>
 
           <h1 className="mt-5 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
@@ -52,46 +69,24 @@ export function Hero({
         </div>
 
         <Card className="shadow-sm">
-          <CardContent className="space-y-5">
-            <div className="flex items-baseline justify-between">
-              <div>
-                <p className="text-sm font-medium">Policy compliance</p>
-                <p className="text-xs text-muted-foreground">
-                  Rolling 30 days, all projects
-                </p>
-              </div>
-              <p className="text-2xl font-semibold tabular-nums">
-                {organizationSummary.policyCompliance}%
-              </p>
-            </div>
-            <Progress value={organizationSummary.policyCompliance} />
-
-            <div className="space-y-2 border-t pt-4 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Spend this month</span>
-                <span className="font-medium tabular-nums">
-                  ${costSummary.mtd.toLocaleString("en-US")}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Open alerts</span>
-                <span className="font-medium tabular-nums">
-                  {organizationSummary.openAlerts}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Blended cost per MTok</span>
-                <span className="font-medium tabular-nums">
-                  ${costSummary.blendedCostPerMTok}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Month forecast</span>
-                <span className="font-medium tabular-nums">
-                  ${costSummary.forecast.projected.toLocaleString("en-US")}
-                </span>
-              </div>
-            </div>
+          <CardContent className="space-y-4">
+            <p className="text-sm font-medium">What the gateway does</p>
+            <ul className="space-y-3">
+              {CAPABILITIES.map((capability) => (
+                <li key={capability.title} className="flex gap-2.5">
+                  <Check
+                    className="mt-0.5 size-4 shrink-0 text-primary"
+                    aria-hidden
+                  />
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium">{capability.title}</p>
+                    <p className="text-xs text-muted-foreground text-pretty">
+                      {capability.detail}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
       </div>

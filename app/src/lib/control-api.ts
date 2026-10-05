@@ -1,0 +1,1 @@
+export const CONTROL_API_BASE = process.env.NEXT_PUBLIC_CONTROL_API_BASE ?? "/api/control";

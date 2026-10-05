@@ -17,30 +17,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatNumber, formatPercent, formatUsd } from "@/lib/format";
-import { organization, teams, users } from "@/lib/mock-data";
-import type { OrganizationRole, StatusTone, UserStatus } from "@/types";
+import { formatNumber, formatUsd, microsToUsd } from "@/lib/format";
+import { ROLE_ORDER, ROLE_TONE, STATUS_TONE, toneFor } from "@/lib/org-tones";
+import { getApiClient } from "@/lib/session";
+import type { StatusTone } from "@/types";
 
 export const metadata: Metadata = {
   title: "Members · Sentinel",
   description: "Everyone in the organization, with their role, status, and attributed spend.",
 };
-
-const USER_STATUS_TONE: Record<UserStatus, StatusTone> = {
-  active: "success",
-  invited: "info",
-  suspended: "warning",
-  deactivated: "neutral",
-};
-
-const ROLE_TONE: Record<OrganizationRole, StatusTone> = {
-  owner: "info",
-  admin: "info",
-  member: "neutral",
-  viewer: "neutral",
-};
-
-const teamName = new Map(teams.map((team) => [team.id, team.name]));
 
 interface MemberRow {
   id: string;
@@ -50,8 +35,6 @@ interface MemberRow {
   roleTone: StatusTone;
   status: string;
   statusTone: StatusTone;
-  teams: string;
-  projects: number;
   spend: number;
 }
 
@@ -59,40 +42,43 @@ const COLUMNS: readonly Column<MemberRow>[] = [
   { key: "name", header: "Member", primary: "name", secondary: "email", sort: "name" },
   { key: "role", header: "Role", primary: "role", tone: "roleTone" },
   { key: "status", header: "Status", primary: "status", tone: "statusTone" },
-  { key: "teams", header: "Teams", primary: "teams" },
-  { key: "projects", header: "Projects", primary: "projects", align: "right" },
-  { key: "spend", header: "Spend MTD", primary: "spend", format: "usd", align: "right", sort: "spend" },
+  { key: "spend", header: "Spend (30d)", primary: "spend", format: "usd", align: "right", sort: "spend" },
 ];
 
-export default function MembersPage() {
-  const rows: MemberRow[] = users.map((user) => ({
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    roleTone: ROLE_TONE[user.role],
-    status: user.status,
-    statusTone: USER_STATUS_TONE[user.status],
-    teams:
-      user.teamIds.length > 0
-        ? user.teamIds.map((id) => teamName.get(id) ?? id).join(", ")
-        : "No team",
-    projects: user.projectIds.length,
-    spend: user.spendMtd,
+export default async function MembersPage() {
+  const { members, usage } = await getApiClient();
+  const [memberList, spendByUser] = await Promise.all([members.list(), usage.byUser()]);
+
+  const spend = new Map(
+    spendByUser.items.map((row) => [row.UserID, microsToUsd(row.CostMicros)]),
+  );
+
+  const rows: MemberRow[] = memberList.items.map((member) => ({
+    id: member.user.id,
+    name: member.user.display_name || member.user.email,
+    email: member.user.email,
+    role: member.role,
+    roleTone: toneFor(ROLE_TONE, member.role),
+    status: member.user.status,
+    statusTone: toneFor(STATUS_TONE, member.user.status),
+    spend: spend.get(member.user.id) ?? 0,
   }));
 
-  const active = users.filter((user) => user.status === "active");
-  const admins = users.filter((user) => user.role === "owner" || user.role === "admin");
-  const seatPct = (organization.seatsUsed / organization.seatsTotal) * 100;
+  const active = rows.filter((row) => row.status === "active");
+  const admins = rows.filter((row) => row.role === "owner" || row.role === "admin");
+  const totalSpend = rows.reduce((sum, row) => sum + row.spend, 0);
 
-  const byRole = (Object.keys(ROLE_TONE) as OrganizationRole[])
-    .map((role) => ({ label: role, value: users.filter((user) => user.role === role).length }))
-    .filter((datum) => datum.value > 0);
+  const byRole = ROLE_ORDER.map((role) => ({
+    label: role,
+    value: rows.filter((row) => row.role === role).length,
+  })).filter((datum) => datum.value > 0);
 
-  const topSpenders = [...users]
-    .sort((a, b) => b.spendMtd - a.spendMtd)
+  const topSpenders = [...rows]
+    .sort((a, b) => b.spend - a.spend)
     .slice(0, 6)
-    .map((user) => ({ label: user.name, value: user.spendMtd }));
+    .map((row) => ({ label: row.name, value: row.spend }));
+
+  const disabled = rows.filter((row) => row.status === "disabled");
 
   return (
     <div className="p-4 sm:p-6">
@@ -107,15 +93,15 @@ export default function MembersPage() {
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            label="Seats in use"
-            value={`${organization.seatsUsed} / ${organization.seatsTotal}`}
-            hint={formatPercent(seatPct, 0) + " of the plan allocation"}
+            label="Active members"
+            value={formatNumber(active.length)}
+            tone="success"
+            hint="Enabled and signing in"
           />
-          <StatCard label="Active members" value={formatNumber(active.length)} tone="success" hint="Enabled and signing in" />
           <StatCard label="Admins" value={String(admins.length)} hint="Owners and admins" />
           <StatCard
             label="Attributed spend"
-            value={formatUsd(users.reduce((sum, user) => sum + user.spendMtd, 0))}
+            value={formatUsd(totalSpend)}
             hint="Trailing 30 days"
           />
         </section>
@@ -133,7 +119,7 @@ export default function MembersPage() {
           <Card>
             <CardHeader>
               <CardTitle>Top spenders</CardTitle>
-              <CardDescription>Highest attributed model spend this month.</CardDescription>
+              <CardDescription>Highest attributed model spend, trailing 30 days.</CardDescription>
             </CardHeader>
             <CardContent>
               <BarChart data={topSpenders} formatValue={(value) => formatUsd(value)} />
@@ -157,15 +143,8 @@ export default function MembersPage() {
               toolbar={
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge tone="success">{active.length} active</StatusBadge>
-                  {users.some((user) => user.status === "invited") && (
-                    <StatusBadge tone="info">
-                      {users.filter((user) => user.status === "invited").length} invited
-                    </StatusBadge>
-                  )}
-                  {users.some((user) => user.status === "suspended") && (
-                    <StatusBadge tone="warning">
-                      {users.filter((user) => user.status === "suspended").length} suspended
-                    </StatusBadge>
+                  {disabled.length > 0 && (
+                    <StatusBadge tone="warning">{disabled.length} disabled</StatusBadge>
                   )}
                 </div>
               }

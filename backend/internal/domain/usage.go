@@ -41,29 +41,29 @@ const (
 
 // LlmRequest is a normalized record of one gateway request to a provider.
 type LlmRequest struct {
-	ID                uuid.UUID
-	OrganizationID    uuid.UUID
-	ProjectID         *uuid.UUID
-	UserID            *uuid.UUID
-	APICredentialID   *uuid.UUID
-	RequestID         string
-	ProviderRequestID *string
-	ProviderKind      string
-	Model             string
-	Status            string
-	ErrorCode         *string
-	PromptTokens      int32
-	CompletionTokens  int32
-	CachedInputTokens int32
-	TotalTokens       int32
-	LatencyMs         int32
-	CostMicros        int64
-	CreatedAt         time.Time
-	RequestStartedAt  *time.Time
-	FirstTokenAt      *time.Time
-	CompletedAt       *time.Time
+	ID                 uuid.UUID
+	OrganizationID     uuid.UUID
+	ProjectID          *uuid.UUID
+	UserID             *uuid.UUID
+	APICredentialID    *uuid.UUID
+	RequestID          string
+	ProviderRequestID  *string
+	ProviderKind       string
+	Model              string
+	Status             string
+	ErrorCode          *string
+	PromptTokens       int32
+	CompletionTokens   int32
+	CachedInputTokens  int32
+	TotalTokens        int32
+	LatencyMs          int32
+	CostMicros         int64
+	CreatedAt          time.Time
+	RequestStartedAt   *time.Time
+	FirstTokenAt       *time.Time
+	CompletedAt        *time.Time
 	TimeToFirstTokenMs *int32
-	TotalLatencyMs    *int32
+	TotalLatencyMs     *int32
 }
 
 // UsageEvent is a granular, append-only accounting record.
@@ -93,14 +93,20 @@ type UsageRollup struct {
 	UpdatedAt         time.Time
 }
 
-// UsageSummary is the aggregated output of a usage period.
+// UsageSummary is the aggregated output of a usage period. AvgLatencyMs is
+// nil when the window held no requests, and LastActivityAt is the zero time
+// in that same case, so callers never read a fabricated zero millisecond
+// figure as a real measurement.
 type UsageSummary struct {
-	Requests       int64
-	InputTokens    int64
-	OutputTokens   int64
-	CachedTokens   int64
-	TotalTokens    int64
+	Requests        int64
+	InputTokens     int64
+	OutputTokens    int64
+	CachedTokens    int64
+	TotalTokens     int64
 	TotalCostMicros int64
+	Errors          int64
+	AvgLatencyMs    *float64
+	LastActivityAt  time.Time
 }
 
 // UsageTimeSeriesPoint is one point in a usage graph.
@@ -111,12 +117,38 @@ type UsageTimeSeriesPoint struct {
 	CostMicros  int64
 }
 
+// UsageFilter narrows a usage query. Nil members are ignored, so it composes
+// with any subset of the entity and dimension filters.
+type UsageFilter struct {
+	From      time.Time
+	To        time.Time
+	ProjectID *uuid.UUID
+	UserID    *uuid.UUID
+	TeamID    *uuid.UUID
+	Provider  *string
+	Model     *string
+	Status    *string
+}
+
+// UsageTotals is the metric set shared by every entity breakdown. It is
+// embedded so it flattens onto the wire beside the entity's identity fields.
+// AvgLatencyMs is nil when the group recorded no latency sample.
+type UsageTotals struct {
+	Requests       int64
+	InputTokens    int64
+	OutputTokens   int64
+	TotalTokens    int64
+	CostMicros     int64
+	Errors         int64
+	AvgLatencyMs   *float64
+	LastActivityAt time.Time
+}
+
 // UsageByProject aggregates usage across projects.
 type UsageByProject struct {
-	ProjectID   uuid.UUID
-	Requests    int64
-	TotalTokens int64
-	CostMicros  int64
+	ProjectID uuid.UUID
+	Name      string
+	UsageTotals
 }
 
 // UsageByModel aggregates usage by model.
@@ -134,86 +166,66 @@ type UsageByProvider struct {
 	CostMicros  int64
 }
 
+// UsageByUser aggregates usage per user, with identity resolved by join.
 type UsageByUser struct {
 	UserID      uuid.UUID
-	Requests    int64
-	TotalTokens int64
-	CostMicros  int64
+	Email       string
+	DisplayName string
+	UsageTotals
 }
 
+// UsageByTeam aggregates usage per team. Membership is many-to-many, so a
+// request counts toward every team its user belongs to and team totals are not
+// additive.
 type UsageByTeam struct {
-	TeamID      uuid.UUID
-	Requests    int64
-	TotalTokens int64
-	CostMicros  int64
+	TeamID uuid.UUID
+	Name   string
+	UsageTotals
 }
 
-// Conversation is a user's persisted chat session.
-type Conversation struct {
-	ID             uuid.UUID
-	OrganizationID uuid.UUID
-	UserID         uuid.UUID
-	Title          string
-	Status         string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-}
-
-// ConversationMessage is one turn within a conversation.
-type ConversationMessage struct {
-	ID                uuid.UUID
-	ConversationID    uuid.UUID
-	OrganizationID    uuid.UUID
-	UserID            uuid.UUID
-	Role              string
-	Content           string
-	Tokens            int32
-	ProviderMessageID *string
-	CreatedAt         time.Time
-}
-
-// NewConversation carries the caller-supplied fields for creating a
-// conversation. Status is defaulted by the database to 'active'.
-type NewConversation struct {
-	UserID uuid.UUID
-	Title  string
-}
-
-// NewConversationMessage carries the caller-supplied fields for appending a
-// message to a conversation.
-type NewConversationMessage struct {
-	ConversationID    uuid.UUID
-	UserID            uuid.UUID
-	Role              string
-	Content           string
-	Tokens            int32
-	ProviderMessageID *string
+// UsageLatency is a percentile summary of request timings. Percentiles are
+// computed in Postgres so clients never aggregate raw samples. TTFT and total
+// latency are counted separately because a non-streaming request has no
+// time-to-first-token sample, so each family is nil only when it has none.
+type UsageLatency struct {
+	Provider     *string
+	Model        *string
+	TtftSamples  int64
+	TotalSamples int64
+	AvgTTFTMs    *float64
+	P50TTFTMs    *float64
+	P95TTFTMs    *float64
+	P99TTFTMs    *float64
+	AvgTotalMs   *float64
+	P50TotalMs   *float64
+	P95TotalMs   *float64
+	P99TotalMs   *float64
 }
 
 // NewLlmRequest carries the caller-supplied fields for recording one gateway
 // request. Status is the recorded outcome, so it is always supplied.
 type NewLlmRequest struct {
-	ProjectID         *uuid.UUID
-	UserID            *uuid.UUID
-	APICredentialID   *uuid.UUID
-	RequestID         string
-	ProviderRequestID *string
-	ProviderKind      string
-	Model             string
-	Status            string
-	ErrorCode         *string
-	PromptTokens      int32
-	CompletionTokens  int32
-	CachedInputTokens int32
-	TotalTokens       int32
-	LatencyMs         int32
-	CostMicros        int64
-	CreatedAt         time.Time
-	RequestStartedAt  *time.Time
-	FirstTokenAt      *time.Time
-	CompletedAt       *time.Time
+	ProjectID          *uuid.UUID
+	UserID             *uuid.UUID
+	APICredentialID    *uuid.UUID
+	RequestID          string
+	ProviderRequestID  *string
+	ProviderKind       string
+	Model              string
+	Status             string
+	ErrorCode          *string
+	PromptTokens       int32
+	CompletionTokens   int32
+	CachedInputTokens  int32
+	TotalTokens        int32
+	LatencyMs          int32
+	CostMicros         int64
+	CreatedAt          time.Time
+	RequestStartedAt   *time.Time
+	FirstTokenAt       *time.Time
+	CompletedAt        *time.Time
 	TimeToFirstTokenMs *int32
-	TotalLatencyMs    *int32
+	TotalLatencyMs     *int32
 }
 
 // NewUsageEvent carries the caller-supplied fields for recording a usage

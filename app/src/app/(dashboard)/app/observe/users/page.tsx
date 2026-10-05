@@ -14,30 +14,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatCompact, formatNumber, formatPercent, formatRelative, formatUsd } from "@/lib/format";
-import { NOW, teams, users } from "@/lib/mock-data";
-import type { OrganizationRole, StatusTone, UserStatus } from "@/types";
+import { formatCompact, formatNumber, formatPercent, formatUsd, microsToUsd } from "@/lib/format";
+import { ROLE_ORDER, ROLE_TONE, STATUS_TONE, toneFor } from "@/lib/org-tones";
+import { getApiClient } from "@/lib/session";
+import type { StatusTone } from "@/types";
 
 export const metadata: Metadata = {
   title: "Users · Sentinel",
-  description: "Who is calling models, on which teams, and what it costs.",
+  description: "Who is calling models, and what it costs.",
 };
-
-const USER_STATUS_TONE: Record<UserStatus, StatusTone> = {
-  active: "success",
-  invited: "info",
-  suspended: "warning",
-  deactivated: "neutral",
-};
-
-const ROLE_TONE: Record<OrganizationRole, StatusTone> = {
-  owner: "info",
-  admin: "info",
-  member: "neutral",
-  viewer: "neutral",
-};
-
-const teamNames = new Map(teams.map((team) => [team.id, team.name]));
 
 interface UserRow {
   id: string;
@@ -47,116 +32,87 @@ interface UserRow {
   roleTone: StatusTone;
   status: string;
   statusTone: StatusTone;
-  teams: string;
-  teamCount: number;
-  projects: number;
-  lastActive: string;
-  lastActiveTs: number;
+  requests: number;
+  tokens: number;
   spend: number;
-  token: string;
 }
 
 const userColumns: readonly Column<UserRow>[] = [
   { key: "name", header: "User", primary: "name", secondary: "email", sort: "name" },
   { key: "role", header: "Role", primary: "role", tone: "roleTone", sort: "role" },
   { key: "status", header: "Status", primary: "status", tone: "statusTone", sort: "status" },
-  {
-    key: "teams",
-    header: "Teams",
-    primary: "teams",
-    sort: "teamCount",
-  },
-  {
-    key: "projects",
-    header: "Projects",
-    primary: "projects",
-    format: "number",
-    align: "right",
-    sort: "projects",
-  },
-  {
-    key: "lastActive",
-    header: "Last active",
-    primary: "lastActive",
-    sort: "lastActiveTs",
-  },
-  {
-    key: "spend",
-    header: "Spend 30d",
-    primary: "spend",
-    format: "usd",
-    align: "right",
-    sort: "spend",
-  },
-  { key: "token", header: "Token", primary: "token", sort: "token" },
+  { key: "requests", header: "Requests 30d", primary: "requests", format: "number", align: "right", sort: "requests" },
+  { key: "tokens", header: "Tokens 30d", primary: "tokens", format: "number", align: "right", sort: "tokens" },
+  { key: "spend", header: "Spend 30d", primary: "spend", format: "usd", align: "right", sort: "spend" },
 ];
 
-const rows: UserRow[] = users.map((user) => ({
-  id: user.id,
-  name: user.name,
-  email: user.email,
-  role: user.role,
-  roleTone: ROLE_TONE[user.role],
-  status: user.status,
-  statusTone: USER_STATUS_TONE[user.status],
-  teams:
-    user.teamIds.length === 0
-      ? "No team"
-      : user.teamIds.map((id) => teamNames.get(id) ?? "Unknown").join(", "),
-  teamCount: user.teamIds.length,
-  projects: user.projectIds.length,
-  lastActive: formatRelative(user.lastActiveAt, NOW),
-  lastActiveTs: Date.parse(user.lastActiveAt),
-  spend: user.spendMtd,
-  token: user.hasPersonalToken ? "Personal" : "SSO only",
-}));
+export default async function UsersPage() {
+  const { members, usage } = await getApiClient();
+  const [memberList, spendByUser] = await Promise.all([members.list(), usage.byUser()]);
 
-const active = users.filter((user) => user.status === "active").length;
-const invited = users.filter((user) => user.status === "invited").length;
-const personalTokens = users.filter((user) => user.hasPersonalToken).length;
-const totalSpend = users.reduce((acc, user) => acc + user.spendMtd, 0);
+  const totals = new Map(
+    spendByUser.items.map((row) => [row.UserID, { requests: row.Requests, tokens: row.TotalTokens, spend: microsToUsd(row.CostMicros) }]),
+  );
 
-const spendByRole = Object.entries(
-  users.reduce<Record<string, number>>((acc, user) => {
-    acc[user.role] = (acc[user.role] ?? 0) + user.spendMtd;
-    return acc;
-  }, {}),
-).map(([label, value]) => ({ label, value }));
+  const rows: UserRow[] = memberList.items.map((member) => {
+    const totals_ = totals.get(member.user.id);
+    const role = member.role;
+    const status = member.user.status;
+    return {
+      id: member.user.id,
+      name: member.user.display_name || member.user.email,
+      email: member.user.email,
+      role,
+      roleTone: toneFor(ROLE_TONE, role),
+      status,
+      statusTone: toneFor(STATUS_TONE, status),
+      requests: totals_?.requests ?? 0,
+      tokens: totals_?.tokens ?? 0,
+      spend: totals_?.spend ?? 0,
+    };
+  });
 
-const topSpenders = [...users]
-  .sort((a, b) => b.spendMtd - a.spendMtd)
-  .slice(0, 6)
-  .map((user) => ({ label: user.name, value: user.spendMtd }));
+  const active = rows.filter((row) => row.status === "active").length;
+  const totalSpend = rows.reduce((sum, row) => sum + row.spend, 0);
+  const totalRequests = rows.reduce((sum, row) => sum + row.requests, 0);
 
-export default function UsersPage() {
+  const spendByRole = ROLE_ORDER.map((role) => ({
+    label: role,
+    value: rows.filter((row) => row.role === role).reduce((sum, row) => sum + row.spend, 0),
+  })).filter((datum) => datum.value > 0);
+
+  const topSpenders = [...rows]
+    .sort((a, b) => b.spend - a.spend)
+    .slice(0, 6)
+    .map((row) => ({ label: row.name, value: row.spend }));
+
   return (
     <div className="p-4 sm:p-6">
       <PageShell
         title="Users"
-        description="Everyone with access to the gateway, what they are spending, and whether they hold a personal token."
+        description="Everyone with access to the gateway, and what they are spending."
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Active users"
             value={formatNumber(active)}
-            hint={`${formatNumber(users.length)} total accounts`}
+            hint={`${formatNumber(rows.length)} total accounts`}
           />
           <StatCard
-            label="Pending invites"
-            value={formatNumber(invited)}
-            tone={invited > 0 ? "info" : "neutral"}
-            hint="Have not signed in yet"
-          />
-          <StatCard
-            label="Personal tokens"
-            value={formatNumber(personalTokens)}
-            tone={personalTokens > 0 ? "warning" : "success"}
-            hint="Bypass SSO and rotate independently"
+            label="Requests"
+            value={formatCompact(totalRequests)}
+            hint="Trailing 30 days"
           />
           <StatCard
             label="Spend 30d"
             value={formatUsd(totalSpend)}
             hint={`${formatUsd(totalSpend / Math.max(1, active))} per active user`}
+          />
+          <StatCard
+            label="Avg spend"
+            value={formatUsd(totalSpend / Math.max(1, rows.length))}
+            tone="neutral"
+            hint="Across all accounts"
           />
         </section>
 
@@ -192,8 +148,7 @@ export default function UsersPage() {
           <CardHeader>
             <CardTitle>People</CardTitle>
             <CardDescription>
-              A personal token is a weaker control than SSO, so it is surfaced
-              here rather than buried in settings.
+              Request and token counts are attributed per user over the trailing 30 days.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -208,7 +163,7 @@ export default function UsersPage() {
         </Card>
 
         <p className="text-xs text-muted-foreground">
-          {formatPercent(active / Math.max(1, users.length))} of accounts are active.
+          {formatPercent(active / Math.max(1, rows.length))} of accounts are active.
         </p>
       </PageShell>
     </div>

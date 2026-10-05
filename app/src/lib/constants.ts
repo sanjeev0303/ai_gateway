@@ -14,7 +14,6 @@ import {
   Gauge,
   KeyRound,
   Layers,
-  Lock,
   Radar,
   ScrollText,
   Server,
@@ -27,7 +26,7 @@ import {
 export const APP_NAME = "Sentinel";
 export const APP_TAGLINE = "Govern every AI request your company makes.";
 export const APP_DESCRIPTION =
-  "Sentinel is the control plane for enterprise AI: one gateway over every model provider, with policy enforcement, cost attribution, and an immutable audit trail.";
+  "Sentinel is the control plane for enterprise AI: one gateway over your model providers, with per-project cost attribution and a recorded history of every request.";
 
 /** Marketing navigation, rendered by the (marketing) header. */
 export const MARKETING_NAV = [
@@ -173,7 +172,7 @@ export const DASHBOARD_NAV: NavSection[] = [
       {
         label: "Provider health",
         href: "/app/platform/provider-health",
-        description: "Uptime and latency",
+        description: "Upstream reachability",
       },
       {
         label: "Provider accounts",
@@ -338,82 +337,54 @@ export const MARKETING_FEATURES = [
     icon: Blocks,
     title: "One gateway, every model",
     description:
-      "Route traffic to any provider behind a single endpoint. Swap models without redeploying, and fail over automatically when an upstream degrades.",
+      "Route provider traffic through a single endpoint. Request bodies are forwarded as sent, with auth headers rewritten for Anthropic and OpenAI upstreams, so the gateway never imposes a schema of its own.",
   },
   {
     icon: ShieldCheck,
-    title: "Policy at the edge",
+    title: "Governed in the request path",
     description:
-      "Enforce PII redaction, injection defence, and residency rules on every request in under 40ms, before tokens are ever billed.",
+      "Scoped credentials and compiled, immutable policy snapshots authorize, rate limit, and budget check every request before it is dispatched upstream.",
   },
   {
     icon: BadgeDollarSign,
-    title: "Cost you can defend",
+    title: "Usage you can price",
     description:
-      "Attribute every dollar to a user, team, project, and model. Set budgets that alert, throttle, or hard-stop automatically.",
+      "Every request records model, tokens, and latency off the hot path. A worker prices requests from the price sheet effective at request time and rolls them into hourly, daily, and monthly buckets.",
   },
   {
     icon: FileClock,
-    title: "An audit trail that holds up",
+    title: "An audit trail you can export",
     description:
-      "Immutable, exportable records of every request, policy decision, and configuration change — retained for seven years.",
+      "Tenant, credential, policy, and configuration changes are recorded as they happen and can be exported on demand.",
   },
   {
     icon: Users,
     title: "Built for real orgs",
     description:
-      "SCIM provisioning, SAML SSO, role-based access, and per-team isolation. Your security team signs off once, not every quarter.",
+      "Isolation across organizations, teams, and projects, with credentials scoped to gateway, control, or both.",
   },
   {
     icon: Layers,
     title: "Works with your stack",
     description:
-      "Native SDKs for TypeScript and Python, an OpenAI-compatible API, and drop-in proxy support for LangChain, LlamaIndex, and Vercel AI SDK.",
+      "The gateway speaks the Anthropic request contract, so existing Anthropic client code works by changing the base URL and the key. No wrapper SDK to adopt.",
   },
 ];
 
-/** Pricing tiers rendered on /pricing. */
+/** No billing or settlement exists yet, so there is no price list to publish. */
 export const PRICING_TIERS = [
   {
-    name: "Starter",
-    monthlyPrice: 0,
-    tagline: "For a first team getting a handle on AI spend.",
-    cta: "Start free",
-    features: [
-      "Up to 5 team members",
-      "1 gateway project",
-      "Community model providers",
-      "7-day audit log retention",
-      "Email support",
-    ],
-  },
-  {
-    name: "Growth",
-    monthlyPrice: 499,
-    tagline: "For teams shipping AI to production.",
-    cta: "Start 14-day trial",
-    featured: true,
-    features: [
-      "Unlimited team members",
-      "Unlimited projects and environments",
-      "Policy engine and guardrails",
-      "Budget enforcement and alerts",
-      "90-day audit log retention",
-      "SSO and role-based access",
-    ],
-  },
-  {
-    name: "Enterprise",
+    name: "Design partners",
     monthlyPrice: null,
-    tagline: "For regulated orgs with procurement requirements.",
-    cta: "Talk to sales",
+    tagline:
+      "The platform is pre-release. We are onboarding teams directly rather than selling seats.",
+    cta: "Get in touch",
     features: [
-      "Everything in Growth",
-      "Private networking and data residency",
-      "SCIM provisioning",
-      "Custom retention up to 7 years",
-      "99.99% uptime SLA",
-      "Dedicated support engineer",
+      "Self-serve control plane over the REST API",
+      "Gateway hot path: scoped credentials, policy snapshots, rate limits, budgets",
+      "Usage accounting with idempotent ingest and hourly, daily, and monthly rollups",
+      "Audit export for tenant, credential, and policy changes",
+      "Anthropic-compatible request surface, auth headers rewritten for Anthropic and OpenAI",
     ],
   },
 ] as const;
@@ -438,72 +409,52 @@ export const MARKETING_SHOWCASE = [
     icon: Gauge,
     title: "Observe",
     description:
-      "Every request, streamed as it lands. Latency, tokens, and cost broken down by model, team, and project without waiting on a nightly rollup.",
+      "Every request is recorded with its model, tokens, and latency. Records are written off the hot path, so accounting never slows dispatch.",
   },
   {
     icon: ShieldCheck,
     title: "Govern",
     description:
-      "Write policy once and apply it at the gateway. Test against real traffic, then promote from draft to enforced with a full change record.",
+      "Compiled, immutable policy snapshots authorize each request in the path, alongside rate limits and budget checks. Enforcement runs on every request; there is no API for authoring the rules yet.",
   },
   {
     icon: CircleDollarSign,
-    title: "Control spend",
+    title: "Price it",
     description:
-      "Hard budgets per team and per project. Overruns alert first, throttle second, and stop third — thresholds you choose, not invoices you discover.",
+      "A worker prices each request from the price sheet that was effective when it ran, then rolls it into hourly, daily, and monthly buckets. Nothing settles an invoice yet.",
   },
   {
     icon: ScrollText,
     title: "Prove it",
     description:
-      "Export the audit trail on demand. Seven years of retention, immutable, and shaped for the auditor who asks the same question twice.",
+      "Export the audit trail on demand for tenant, credential, and policy changes. Retention windows are not implemented yet.",
   },
 ] as const;
 
 export const MARKETING_SECURITY = [
   {
-    icon: Shield,
-    title: "SOC 2 Type II",
-    description: "Audited annually, with reports available under NDA.",
-  },
-  {
-    icon: Lock,
-    title: "Data residency",
-    description: "Pin processing to EU or US regions per workspace.",
+    icon: Users,
+    title: "Tenant isolation",
+    description:
+      "Organizations, teams, and projects each get scoped access. A credential resolves to exactly one tenant context.",
   },
   {
     icon: KeyRound,
-    title: "SSO and SCIM",
-    description: "SAML SSO with automated deprovisioning on every plan.",
+    title: "Scoped credentials",
+    description:
+      "Keys are limited to gateway, control, or both, and every gateway request carries a request id you can trace.",
   },
   {
-    icon: Server,
-    title: "No training on your data",
-    description: "Prompts are never used to train models, ours or anyone else's.",
-  },
-] as const;
-
-export const MARKETING_TESTIMONIALS = [
-  {
-    quote:
-      "We found four hundred thousand dollars a quarter of shadow LLM spend in the first week. The attribution view paid for the contract.",
-    name: "Priya Raghunathan",
-    role: "VP Engineering",
-    company: "Northwind Logistics",
+    icon: Layers,
+    title: "Nothing reshaped on the wire",
+    description:
+      "Request bodies are forwarded as sent, so the gateway never normalizes your request into a schema it would have to guess at.",
   },
   {
-    quote:
-      "Security signed off in one meeting because the audit trail already answered every question they had. That has never happened before.",
-    name: "Marcus Oyelaran",
-    role: "Head of Platform",
-    company: "Halden Financial",
-  },
-  {
-    quote:
-      "Our engineers did not have to change a line of code. We moved three hundred services onto the gateway over a long weekend.",
-    name: "Elena Vasquez",
-    role: "Director of Infrastructure",
-    company: "Corvus Health",
+    icon: ScrollText,
+    title: "Exportable audit trail",
+    description:
+      "Credential, policy, and tenant changes are recorded and can be exported on demand.",
   },
 ] as const;
 
@@ -512,24 +463,24 @@ export const MARKETING_PERSONAS = [
     icon: Code2,
     title: "Platform engineers",
     description:
-      "Swap models and providers behind one endpoint, and stop owning per-vendor failover logic.",
+      "Route provider traffic through one endpoint without rewriting clients. Request bodies are forwarded as sent, so switching models is a request parameter.",
   },
   {
     icon: Shield,
     title: "Security and compliance",
     description:
-      "Enforce residency and redaction rules on every request, and export evidence when an auditor asks.",
+      "Issue credentials scoped to gateway or control, and export the audit trail when someone asks what changed and who changed it.",
   },
   {
     icon: CircleDollarSign,
     title: "Finance",
     description:
-      "Get a per-team number that matches the finance system, without asking engineering for a spreadsheet.",
+      "Per-request token and latency records, priced from the price sheet that was effective when the request ran, then rolled up by hour, day, and month.",
   },
   {
     icon: Users,
     title: "Engineering leadership",
     description:
-      "See adoption and spend on one board, and know which pilots deserve to become products.",
+      "See which teams and projects call which models, and what each call cost to run.",
   },
 ] as const;

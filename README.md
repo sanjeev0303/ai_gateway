@@ -38,7 +38,7 @@ Six Go processes plus a web app, in one monorepo:
 | `backend/cmd/gateway` | Data plane v1 — **frozen and not deployed** ([ADR-5](docs/adr/0005-gateway-v2-canonical.md)); kept one release as a rollback path |
 | `backend/cmd/migrate` | One-shot: applies DB migrations |
 | `backend/cmd/seed` | One-shot: applies migrations + seeds demo data |
-| `apps/web` | Next.js dashboard over the control API |
+| `app/` | Next.js dashboard over the control API |
 
 Design decisions live in [`docs/adr`](docs/adr); the roadmap is in
 [`docs/plan/milestones.md`](docs/plan/milestones.md).
@@ -47,7 +47,7 @@ Design decisions live in [`docs/adr`](docs/adr); the roadmap is in
 
 ```
 backend/    Go module: cmd/{gateway,gateway-v2,control-api,worker,migrate,seed} + internal/ (domain, application, ports, interfaces, infrastructure, platform, bootstrap)
-apps/web    Next.js web app
+app/        Next.js dashboard (app router)
 packages/   Shared TS: api-client, contracts, cli
 deploy/     Docker, docker-compose, Kubernetes, Terraform (AWS)
 docs/       Architecture, ADRs, API, security, operations, runbooks, plan
@@ -59,11 +59,16 @@ scripts/    Dev and ops helpers
 Platform foundations, persistence, identity/tenants, the provider layer, and the
 gateway-v2 hot path are implemented and covered by a green `-race` suite.
 
-Not yet functional as a product: the async worker now prices and rolls up usage,
-but there is no control API for price sheets and nothing settles an invoice, so
-derived cost cannot actually be reached or billed yet; policy types and queries
-exist but there is no policy engine or API; and the OpenAPI spec documents only
-the health endpoints, not the 51 implemented `/v1` routes.
+The gateway-v2 hot path enforces policy, rate limits, and per-organization budget
+caps on every request from compiled, immutable policy snapshots. What is missing is
+the control plane that would author those rules: no routes manage policy rules,
+price sheets, or budget caps, and nothing settles an invoice, so derived cost
+cannot be configured or billed through the product yet.
+
+The OpenAPI spec now documents all 83 implemented `/v1` operations across 69
+paths, plus the 3 health endpoints, in parity with the registered control API.
+The remaining gap is schema depth, not coverage: `packages/contracts` exports 5
+domain types for those 83 operations.
 
 [`docs/architecture/completeness-matrix.md`](docs/architecture/completeness-matrix.md)
 is the item-by-item inventory with evidence. See

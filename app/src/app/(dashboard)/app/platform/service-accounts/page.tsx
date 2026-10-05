@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import { Plus } from "lucide-react";
 
-import { DataTable, PageShell, StatCard, StatusBadge, type Column } from "@/components/dashboard";
-import { Button } from "@/components/ui/button";
+import { DataTable, PageShell, StatCard, type Column } from "@/components/dashboard";
 import {
   Card,
   CardContent,
@@ -10,95 +8,94 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatRelative, initials } from "@/lib/format";
-import { credentials } from "@/lib/mock-data";
-import { CREDENTIAL_STATUS_TONE, type StatusTone } from "@/types";
+import { formatDate, formatNumber } from "@/lib/format";
+import { toneFor } from "@/lib/org-tones";
+import { getApiClient } from "@/lib/session";
+import type { StatusTone } from "@/types";
 
 export const metadata: Metadata = {
   title: "Service accounts · Sentinel",
   description: "Machine identities used by workloads instead of human sessions.",
 };
 
+const SERVICE_ACCOUNT_TONE: Record<string, StatusTone> = {
+  active: "success",
+  revoked: "neutral",
+};
+
 interface ServiceAccountRow {
   id: string;
   name: string;
-  providerName: string;
+  description: string;
   status: string;
   tone: StatusTone;
-  lastUsed: string;
-  projects: number;
-  keyHint: string;
+  created: string;
 }
 
 const COLUMNS: readonly Column<ServiceAccountRow>[] = [
-  { key: "name", header: "Service account", primary: "name", secondary: "providerName" },
-  { key: "status", header: "Status", primary: "status", tone: "tone" },
-  { key: "keyHint", header: "Key", primary: "keyHint" },
-  { key: "lastUsed", header: "Last used", primary: "lastUsed", align: "right" },
-  { key: "projects", header: "Projects", primary: "projects", align: "right" },
+  { key: "name", header: "Service account", primary: "name", secondary: "description", sort: "name" },
+  { key: "status", header: "Status", primary: "status", tone: "tone", sort: "status" },
+  { key: "created", header: "Created", primary: "created", sort: "created" },
 ];
 
-export default function ServiceAccountsPage() {
-  const serviceAccounts = credentials.filter(
-    (credential) => credential.kind === "service_account" || credential.kind === "webhook",
-  );
+async function loadServiceAccounts() {
+  const { serviceAccounts } = await getApiClient();
+  const list = await serviceAccounts.list();
 
-  const rows: ServiceAccountRow[] = serviceAccounts.map((credential) => ({
-    id: credential.id,
-    name: credential.name,
-    providerName: credential.providerName,
-    status: credential.status,
-    tone: CREDENTIAL_STATUS_TONE[credential.status],
-    lastUsed: formatRelative(credential.lastUsedAt),
-    projects: credential.usedByProjectCount,
-    keyHint: credential.maskedValue,
-  }));
+  const rows: ServiceAccountRow[] = [...list.items]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((account) => ({
+      id: account.id,
+      name: account.name,
+      description: account.description || "No description",
+      status: account.status,
+      tone: toneFor(SERVICE_ACCOUNT_TONE, account.status),
+      created: formatDate(account.created_at),
+    }));
 
-  const expiring = serviceAccounts.filter(
-    (credential) => credential.status === "expiring" || credential.status === "expired",
-  );
-  const orphanCount = serviceAccounts.filter(
-    (credential) => credential.usedByProjectCount === 0,
-  ).length;
+  return {
+    rows,
+    total: rows.length,
+    active: rows.filter((row) => row.status === "active").length,
+    described: list.items.filter((item) => Boolean(item.description)).length,
+  };
+}
+
+export default async function ServiceAccountsPage() {
+  const { rows, total, active, described } = await loadServiceAccounts();
 
   return (
     <div className="p-4 sm:p-6">
       <PageShell
         title="Service accounts"
         description="Non-human identities that call the gateway on behalf of workloads and pipelines."
-        actions={
-          <Button size="sm">
-            <Plus aria-hidden /> New service account
-          </Button>
-        }
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Service accounts" value={String(serviceAccounts.length)} hint="Machine identities" />
           <StatCard
-            label="Healthy"
-            value={String(serviceAccounts.length - expiring.length)}
-            tone="success"
-            hint="No action needed"
+            label="Service accounts"
+            value={formatNumber(total)}
+            hint={`${formatNumber(active)} active`}
           />
           <StatCard
-            label="Expiring"
-            value={String(expiring.length)}
-            tone={expiring.length > 0 ? "warning" : "success"}
-            hint="Within the rotation window"
+            label="Revoked"
+            value={formatNumber(total - active)}
+            tone={total - active > 0 ? "neutral" : "success"}
+            hint="No longer usable"
           />
           <StatCard
-            label="Unreferenced"
-            value={String(orphanCount)}
-            tone={orphanCount > 0 ? "warning" : "neutral"}
-            hint="Safe to revoke"
+            label="Described"
+            value={formatNumber(described)}
+            hint="Have a description on file"
           />
+          <StatCard label="Organization" value="1" hint="Accounts are org-wide" />
         </section>
 
         <Card>
           <CardHeader>
             <CardTitle>Accounts</CardTitle>
             <CardDescription>
-              Secrets are shown masked at all times and never returned after creation.
+              Service accounts hold no secret of their own. Keys are issued
+              separately and can be scoped to a team or project.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -106,12 +103,7 @@ export default function ServiceAccountsPage() {
               columns={COLUMNS}
               rows={rows}
               rowKey="id"
-              toolbar={
-                <p className="text-sm text-muted-foreground">
-                  {serviceAccounts.length} accounts across{" "}
-                  {new Set(serviceAccounts.map((c) => c.providerName)).size} providers.
-                </p>
-              }
+              pageSize={10}
               emptyMessage="No service accounts yet."
             />
           </CardContent>
@@ -119,32 +111,19 @@ export default function ServiceAccountsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Rotation policy</CardTitle>
-            <CardDescription>
-              Service account keys rotate automatically before they can expire.
-            </CardDescription>
+            <CardTitle>Usage and rotation</CardTitle>
+            <CardDescription>Not reported by the control API today.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <ul className="grid gap-3 sm:grid-cols-2">
-              {serviceAccounts.slice(0, 4).map((credential) => (
-                <li key={credential.id} className="flex items-center gap-3 rounded-lg border p-3">
-                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold">
-                    {initials(credential.name)}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{credential.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {credential.providerName} ·{" "}
-                      {credential.usedByProjectCount} project
-                      {credential.usedByProjectCount === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                  <StatusBadge tone={CREDENTIAL_STATUS_TONE[credential.status]}>
-                    {credential.status}
-                  </StatusBadge>
-                </li>
-              ))}
-            </ul>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>
+              A service account record carries no last-used timestamp, no key
+              expiry, and no count of the projects using it, so this page cannot
+              flag unused identities or schedule rotation.
+            </p>
+            <p>
+              Expiry and owning team or project are recorded on the gateway
+              credential itself, listed under Platform.
+            </p>
           </CardContent>
         </Card>
       </PageShell>

@@ -30,6 +30,10 @@ func (f *fakeOrgs) GetBySlug(context.Context, string) (domain.Organization, erro
 	return domain.Organization{}, errors.New("unused")
 }
 
+func (f *fakeOrgs) Update(context.Context, uuid.UUID, domain.UpdateOrganization) (domain.Organization, error) {
+	return domain.Organization{}, errors.New("unused")
+}
+
 func (f *fakeOrgs) ListAllIDs(context.Context) ([]uuid.UUID, error) {
 	return f.ids, f.listErr
 }
@@ -46,13 +50,33 @@ func (f *fakeRollups) Recompute(_ context.Context, orgID uuid.UUID, from, to tim
 	return f.fail[orgID]
 }
 
-func (f *fakeRollups) GetByProvider(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByProvider, error) { return nil, nil }
-func (f *fakeRollups) GetByUser(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByUser, error) { return nil, nil }
-func (f *fakeRollups) GetByTeam(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByTeam, error) { return nil, nil }
-func (f *fakeRollups) GetByModel(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByModel, error) { return nil, nil }
-func (f *fakeRollups) GetByProject(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByProject, error) { return nil, nil }
-func (f *fakeRollups) GetTimeSeries(context.Context, uuid.UUID, time.Time, time.Time, *uuid.UUID) ([]domain.UsageTimeSeriesPoint, error) { return nil, nil }
-func (f *fakeRollups) GetSummary(context.Context, uuid.UUID, time.Time, time.Time, *uuid.UUID, *string) (domain.UsageSummary, error) { return domain.UsageSummary{}, nil }
+func (f *fakeRollups) GetByProvider(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByProvider, error) {
+	return nil, nil
+}
+func (f *fakeRollups) GetByUser(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByUser, error) {
+	return nil, nil
+}
+func (f *fakeRollups) GetByTeam(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByTeam, error) {
+	return nil, nil
+}
+func (f *fakeRollups) GetByModel(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByModel, error) {
+	return nil, nil
+}
+func (f *fakeRollups) GetByProject(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByProject, error) {
+	return nil, nil
+}
+func (f *fakeRollups) GetTimeSeries(context.Context, uuid.UUID, time.Time, time.Time, *uuid.UUID) ([]domain.UsageTimeSeriesPoint, error) {
+	return nil, nil
+}
+func (f *fakeRollups) GetSummary(context.Context, uuid.UUID, domain.UsageFilter) (domain.UsageSummary, error) {
+	return domain.UsageSummary{}, nil
+}
+func (f *fakeRollups) GetLatency(context.Context, uuid.UUID, domain.UsageFilter) (domain.UsageLatency, error) {
+	return domain.UsageLatency{}, nil
+}
+func (f *fakeRollups) GetLatencyByProviderModel(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageLatency, error) {
+	return nil, nil
+}
 
 func TestRecomputeAll(t *testing.T) {
 	orgA, orgB, orgC := uuid.New(), uuid.New(), uuid.New()
@@ -133,8 +157,12 @@ func (f *fakeLlmRequests) List(context.Context, uuid.UUID, time.Time, time.Time)
 	return nil, nil
 }
 
-func (f *fakeLlmRequests) GetRecent(context.Context, uuid.UUID) ([]domain.LlmRequest, error) { return nil, nil }
-func (f *fakeLlmRequests) GetRequests(context.Context, uuid.UUID, time.Time, time.Time, int32, int32) ([]domain.LlmRequest, error) { return nil, nil }
+func (f *fakeLlmRequests) GetRecent(context.Context, uuid.UUID) ([]domain.LlmRequest, error) {
+	return nil, nil
+}
+func (f *fakeLlmRequests) GetRequests(context.Context, uuid.UUID, domain.UsageFilter, int32, int32) ([]domain.LlmRequest, error) {
+	return nil, nil
+}
 
 type fakeUsageEvents struct {
 	err    error
@@ -231,6 +259,112 @@ func TestRecordRequest(t *testing.T) {
 
 		if err := svc.RecordRequest(context.Background(), orgID, req, ev); !errors.Is(err, boom) {
 			t.Fatalf("got %v, want the event failure", err)
+		}
+	})
+}
+
+type fakeSecurityEvents struct {
+	failures   []recordedFailure
+	failureErr error
+}
+
+type recordedFailure struct {
+	orgID uuid.UUID
+	stage string
+	cause error
+}
+
+func (f *fakeSecurityEvents) RecordProviderTransition(context.Context, uuid.UUID, domain.ProviderHealthState, string) error {
+	return nil
+}
+
+func (f *fakeSecurityEvents) RecordPipelineFailure(_ context.Context, orgID uuid.UUID, stage string, cause error) error {
+	f.failures = append(f.failures, recordedFailure{orgID: orgID, stage: stage, cause: cause})
+	return f.failureErr
+}
+
+func TestRecomputeAllCapturesPipelineFailures(t *testing.T) {
+	orgA, orgB := uuid.New(), uuid.New()
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC)
+	quiet := slog.New(slog.DiscardHandler)
+	boom := errors.New("relation does not exist")
+
+	t.Run("a failing organization is captured with its window", func(t *testing.T) {
+		events := &fakeSecurityEvents{}
+		svc := NewService(ServiceDeps{
+			Orgs:           &fakeOrgs{ids: []uuid.UUID{orgA, orgB}},
+			Rollups:        &fakeRollups{fail: map[uuid.UUID]error{orgB: boom}},
+			SecurityEvents: events,
+			Log:            quiet,
+		})
+
+		if err := svc.RecomputeAll(context.Background(), from, to); !errors.Is(err, boom) {
+			t.Fatalf("rollup failure stopped surfacing: %v", err)
+		}
+		if len(events.failures) != 1 {
+			t.Fatalf("captured %d failures, want 1 (only the failing org)", len(events.failures))
+		}
+		got := events.failures[0]
+		if got.orgID != orgB {
+			t.Fatalf("failure attributed to %v, want the failing org %v", got.orgID, orgB)
+		}
+		if !errors.Is(got.cause, boom) {
+			t.Fatalf("cause lost: %v", got.cause)
+		}
+		// The window is what an operator needs to reproduce the failure.
+		wantStage := "rollup 2026-01-01T00:00:00Z to 2026-01-01T01:00:00Z"
+		if got.stage != wantStage {
+			t.Fatalf("stage = %q, want %q", got.stage, wantStage)
+		}
+	})
+
+	t.Run("healthy organizations capture nothing", func(t *testing.T) {
+		events := &fakeSecurityEvents{}
+		svc := NewService(ServiceDeps{
+			Orgs:           &fakeOrgs{ids: []uuid.UUID{orgA, orgB}},
+			Rollups:        &fakeRollups{},
+			SecurityEvents: events,
+			Log:            quiet,
+		})
+
+		if err := svc.RecomputeAll(context.Background(), from, to); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(events.failures) != 0 {
+			t.Fatalf("a clean run recorded %d failures", len(events.failures))
+		}
+	})
+
+	t.Run("recorder failure does not change the returned error", func(t *testing.T) {
+		events := &fakeSecurityEvents{failureErr: errors.New("event ledger down")}
+		svc := NewService(ServiceDeps{
+			Orgs:           &fakeOrgs{ids: []uuid.UUID{orgA}},
+			Rollups:        &fakeRollups{fail: map[uuid.UUID]error{orgA: boom}},
+			SecurityEvents: events,
+			Log:            quiet,
+		})
+
+		err := svc.RecomputeAll(context.Background(), from, to)
+		if !errors.Is(err, boom) {
+			t.Fatalf("got %v, want the rollup failure, not the recorder failure", err)
+		}
+	})
+
+	t.Run("enumeration failure captures nothing", func(t *testing.T) {
+		events := &fakeSecurityEvents{}
+		svc := NewService(ServiceDeps{
+			Orgs:           &fakeOrgs{listErr: errors.New("no db")},
+			Rollups:        &fakeRollups{},
+			SecurityEvents: events,
+			Log:            quiet,
+		})
+
+		if err := svc.RecomputeAll(context.Background(), from, to); err == nil {
+			t.Fatal("expected the enumeration failure")
+		}
+		if len(events.failures) != 0 {
+			t.Fatalf("recorded %d failures without knowing any tenant", len(events.failures))
 		}
 	})
 }

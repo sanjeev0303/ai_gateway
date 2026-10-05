@@ -8,4 +8,3 @@ export * from "./provider-strip";
 export * from "./product-showcase";
 export * from "./persona-grid";
 export * from "./security-section";
-export * from "./testimonials";

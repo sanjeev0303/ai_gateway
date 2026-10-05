@@ -5,6 +5,7 @@ import { LogOut, Monitor, Moon, Search, Settings, Sun, User as UserIcon } from "
 
 import { MobileNav } from "./mobile-nav";
 import { StatusBadge } from "./status-badge";
+import { signOut } from "@/app/(auth)/signin/actions";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -24,9 +25,9 @@ import {
 } from "@/components/ui/select";
 import { useTheme } from "@/hooks/use-theme";
 import { DATE_RANGES } from "@/lib/constants";
-import { currentUser, organization } from "@/lib/mock-data";
 import { initials } from "@/lib/format";
-import { ORG_STATUS_TONE, PLAN_LABELS } from "@/types";
+import { useSession } from "@/lib/session-context";
+import { ORG_STATUS_LABELS, ORG_STATUS_TONE } from "@/types";
 
 /** Sun/moon/system switch. `useTheme` only mutates the DOM after mount. */
 function ThemeToggle() {
@@ -67,6 +68,9 @@ interface TopbarProps {
 
 export function Topbar({ defaultRange = "7d" }: TopbarProps) {
   const [range, setRange] = React.useState<string>(defaultRange);
+  const session = useSession();
+  if (session.status !== "authenticated") return null;
+  const { user, organization } = session.session;
 
   return (
     <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur-sm sm:px-4">
@@ -77,7 +81,7 @@ export function Topbar({ defaultRange = "7d" }: TopbarProps) {
           {organization.name}
         </span>
         <StatusBadge tone={ORG_STATUS_TONE[organization.status]}>
-          {PLAN_LABELS[organization.plan]}
+          {ORG_STATUS_LABELS[organization.status]}
         </StatusBadge>
       </div>
 
@@ -119,15 +123,15 @@ export function Topbar({ defaultRange = "7d" }: TopbarProps) {
               aria-label="Account menu"
             >
               <span className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                {initials(currentUser.name)}
+                {initials(user.name)}
               </span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel className="font-normal">
-              <span className="block text-sm font-medium">{currentUser.name}</span>
+              <span className="block text-sm font-medium">{user.name}</span>
               <span className="block truncate text-xs text-muted-foreground">
-                {currentUser.email}
+                {user.email}
               </span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
@@ -138,9 +142,13 @@ export function Topbar({ defaultRange = "7d" }: TopbarProps) {
               <Settings className="size-4" aria-hidden /> Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive">
-              <LogOut className="size-4" aria-hidden /> Sign out
-            </DropdownMenuItem>
+            <form action={signOut}>
+              <DropdownMenuItem asChild variant="destructive" className="w-full">
+                <button type="submit">
+                  <LogOut className="size-4" aria-hidden /> Sign out
+                </button>
+              </DropdownMenuItem>
+            </form>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

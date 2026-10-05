@@ -124,6 +124,55 @@ paths:
             application/json:
               schema:
                 type: object
+  /v1/organizations/me:
+    get:
+      operationId: getv1organizationsme
+      summary: Get the caller's organization
+      description: >-
+        Alias of GET /v1/organization. Carries the caller's plan and billing
+        state only when an active or trialing subscription row exists; both are
+        null otherwise. No derived metrics are synthesized.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+  /v1/organization:
+    get:
+      operationId: getv1organization
+      summary: Get the caller's organization
+      description: >-
+        Returns the caller's organization. plan and billing are populated only
+        when the organization has an active or trialing subscription.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+    patch:
+      operationId: patchv1organization
+      summary: Update the caller's organization
+      description: >-
+        Updates the writable organization fields. Only name and slug are
+        mutable. plan and billing come back null because this write path does
+        not re-read the subscription.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
   /v1/members:
     get:
       operationId: getv1members
@@ -781,6 +830,16 @@ paths:
             application/json:
               schema:
                 type: object
+  /v1/usage/latency:
+    get:
+      operationId: getv1usagelatency
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
   /v1/usage/recent:
     get:
       operationId: getv1usagerecent
@@ -801,9 +860,1387 @@ paths:
             application/json:
               schema:
                 type: object
+  /v1/conversations:
+    get:
+      operationId: getv1conversations
+      summary: List conversations
+      description: >-
+        Returns conversations in the caller's organization with the aggregates
+        derived from their messages. No query parameter influences how much
+        transcript content is returned.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationListResponse'
+        '400':
+          description: A filter or pagination value is malformed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: user_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: team_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: project_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: provider
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: model
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: false
+        description: Only conversations started at or after this RFC3339 timestamp.
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        description: Only conversations started at or before this RFC3339 timestamp.
+        schema:
+          type: string
+          format: date-time
+      - name: limit
+        in: query
+        required: false
+        description: Page size, 1 to 200.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+      - name: offset
+        in: query
+        required: false
+        description: Rows to skip; must be zero or greater.
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+  /v1/conversations/{id}:
+    get:
+      operationId: getv1conversationsid
+      summary: Get one conversation
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationSummary'
+        '400':
+          description: The id is not a UUID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No such conversation in the caller's organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /v1/conversations/{id}/messages:
+    get:
+      operationId: getv1conversationsidmessages
+      summary: List the turns of one conversation
+      description: >-
+        content is omitted from a turn whose content the effective privacy mode
+        withholds, so a redacted turn carries no content key at all.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationMessagesResponse'
+        '400':
+          description: The id is not a UUID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No such conversation in the caller's organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /v1/audit-logs:
+    get:
+      operationId: getv1auditlogs
+      summary: List audit records
+      description: >-
+        Returns the caller's organization audit ledger, newest first. Audit
+        records are append-only: this API exposes no way to modify or remove
+        one. Requires the audit.read permission.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogListResponse'
+        '400':
+          description: A filter or pagination value is malformed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The caller's role does not grant audit.read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: actor_id
+        in: query
+        required: false
+        description: >-
+          Matches a record written by either the user or the service account
+          with this id. Combine with actor_type to disambiguate.
+        schema:
+          type: string
+          format: uuid
+      - name: actor_type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - user
+          - service_account
+      - name: action
+        in: query
+        required: false
+        description: Exact action name, e.g. organization.update.
+        schema:
+          type: string
+      - name: resource_type
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: resource_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: false
+        description: Only records created at or after this RFC3339 timestamp.
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        description: Only records created before this RFC3339 timestamp.
+        schema:
+          type: string
+          format: date-time
+      - name: limit
+        in: query
+        required: false
+        description: Page size, 1 to 200.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+      - name: offset
+        in: query
+        required: false
+        description: Rows to skip; must be zero or greater.
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+  /v1/audit-logs/{id}:
+    get:
+      operationId: getv1auditlogsid
+      summary: Get one audit record
+      description: >-
+        Requires the audit.read permission. A record belonging to another
+        organization is reported as not found rather than forbidden.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLog'
+        '400':
+          description: The id is not a UUID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The caller's role does not grant audit.read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No such audit record in the caller's organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /v1/security-events:
+    get:
+      operationId: getv1securityevents
+      summary: List security events
+      description: >-
+        Returns the caller's organization security feed, newest first. Events are
+        produced by the platform rather than by any user action and are
+        append-only: this API exposes no way to modify or remove one. Two
+        categories exist — provider_incident for a provider's observed
+        reachability changing, and pipeline_failure for a background job failing
+        — so the feed covers the platform itself, not gateway request activity.
+        Requires the security_events.read permission.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityEventListResponse'
+        '400':
+          description: A filter or pagination value is malformed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The caller's role does not grant security_events.read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: category
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - provider_incident
+          - pipeline_failure
+      - name: severity
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - info
+          - warning
+          - critical
+      - name: from
+        in: query
+        required: false
+        description: Only events created at or after this RFC3339 timestamp.
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        description: Only events created before this RFC3339 timestamp.
+        schema:
+          type: string
+          format: date-time
+      - name: limit
+        in: query
+        required: false
+        description: Page size, 1 to 200.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+      - name: offset
+        in: query
+        required: false
+        description: Rows to skip; must be zero or greater.
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+  /v1/alerts:
+    get:
+      operationId: getvalerts
+      summary: List alert rules
+      description: >-
+        Returns the caller's organization alert rules. Listing a rule reports
+        only its configuration; no rule is evaluated by this API. Requires the
+        alerts.read permission.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertListResponse'
+        '403':
+          description: The caller's role does not grant alerts.read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/alerts/{id}:
+    get:
+      operationId: getvalertsid
+      summary: Get one alert rule
+      description: >-
+        Requires the alerts.read permission. A rule belonging to another
+        organization is reported as not found rather than forbidden.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alert'
+        '400':
+          description: The id is not a UUID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The caller's role does not grant alerts.read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No such alert rule in the caller's organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: putvalertsid
+      summary: Replace an alert rule
+      description: >-
+        Replaces the mutable fields of an alert rule in full; every field is
+        required. alert_type is fixed at creation and cannot be changed. The
+        configuration must be a JSON object. Requires the alerts.manage
+        permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAlertRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alert'
+        '400':
+          description: >-
+            The id is not a UUID, the body is malformed, the name is blank, the
+            severity or status is not a known value, or the configuration is not
+            a JSON object.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The caller's role does not grant alerts.manage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No such alert rule in the caller's organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      operationId: deletevalertsid
+      summary: Delete an alert rule
+      description: >-
+        Deletes the rule. Requires the alerts.manage permission.
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          description: The id is not a UUID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The caller's role does not grant alerts.manage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No such alert rule in the caller's organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /v1/alerts/{id}/test:
+    post:
+      operationId: postvalertsidtest
+      summary: Validate an alert rule's configuration
+      description: >-
+        Returns the rule's declared configuration and whether it is muted. No
+        evaluator is wired to any alert rule type, so this never reports whether
+        a rule would fire and never sends a notification: notification_sent is
+        always false. Requires the alerts.manage permission.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertTestResult'
+        '400':
+          description: The id is not a UUID, or the stored configuration is not a JSON object.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The caller's role does not grant alerts.manage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No such alert rule in the caller's organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /v1/billing/plans:
+    get:
+      operationId: getv1billingplans
+      summary: List sellable plans
+      description: >-
+        Returns every plan in the catalog. Plans are global, so this list is
+        identical for all organizations. No price is returned because no price
+        is stored anywhere in this service. Requires the billing.read
+        permission.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanListResponse'
+        '403':
+          description: The caller's role does not grant billing.read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/billing/subscription:
+    get:
+      operationId: getv1billingsubscription
+      summary: Get the organization's current plan and billing cycle
+      description: >-
+        Returns the organization's stored subscription. An organization with
+        no subscription is reported as not found rather than as an empty
+        object. Requires the billing.read permission.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '403':
+          description: The caller's role does not grant billing.read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: The organization has no subscription.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/billing/usage:
+    get:
+      operationId: getv1billingusage
+      summary: Get recorded cost and request totals for a window
+      description: >-
+        Returns the same aggregated usage summary as /v1/usage/summary, scoped
+        to the caller's organization. All values are measured from recorded
+        requests; nothing here is estimated or forecast. Requires the
+        billing.read permission.
+      parameters:
+      - name: from
+        in: query
+        required: false
+        description: Inclusive RFC3339 start. Defaults to 30 days ago.
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        description: Exclusive RFC3339 end. Defaults to now.
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingUsageSummary'
+        '400':
+          description: from or to is not RFC3339, or from is not before to.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The caller's role does not grant billing.read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/billing/invoices:
+    get:
+      operationId: getv1billinginvoices
+      summary: List the organization's invoices
+      description: >-
+        Returns the organization's invoices newest issued first, each with its
+        itemisation lines. These are locally computed statements only: no
+        payment processor is integrated, so no invoice is ever marked paid and
+        no field references a charge, payment, or PDF. Requires the billing.read
+        permission.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceListResponse'
+        '403':
+          description: The caller's role does not grant billing.read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
 components:
   schemas:
     EmptyResponse:
       type: object
     PaginatedResponse:
       type: object
+    ErrorEnvelope:
+      type: object
+      description: The error body returned by every endpoint.
+      required:
+      - error
+      properties:
+        error:
+          type: object
+          required:
+          - code
+          - message
+          properties:
+            code:
+              type: string
+              description: Stable machine-readable code, e.g. not_found or invalid_argument.
+            message:
+              type: string
+              description: Human-readable summary; safe to surface to an end user.
+            request_id:
+              type: string
+              description: Correlates the response with server logs.
+            details:
+              description: Optional structured context; shape depends on code.
+    ConversationPrivacyMode:
+      type: string
+      description: >-
+        How much transcript content may be returned for a conversation. A
+        conversation's own privacy_state always wins; otherwise the server
+        applies AIGW_CONVERSATION_PRIVACY_DEFAULT and fails closed to
+        METADATA_ONLY when that is unset or unrecognized. No query parameter
+        can widen this.
+      enum:
+      - OFF
+      - METADATA_ONLY
+      - PROMPT_ONLY
+      - FULL_CONTENT
+    ConversationSummary:
+      type: object
+      description: >-
+        One conversation plus the aggregates derived from its messages.
+        request_count counts assistant turns, not messages, so it can be lower
+        than message_count.
+      required:
+      - id
+      - title
+      - user_id
+      - started_at
+      - request_count
+      - message_count
+      - total_tokens
+      - privacy_state
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        user_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+          nullable: true
+        provider:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+        last_activity_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null when the conversation has no messages.
+        request_count:
+          type: integer
+          format: int32
+        message_count:
+          type: integer
+          format: int32
+        total_tokens:
+          type: integer
+          format: int32
+        cost_micros:
+          type: integer
+          format: int64
+          nullable: true
+          description: >-
+            Always null today: conversation_messages carries no link to
+            llm_requests, so per-conversation spend cannot be derived. The field
+            is present so cost can be filled in without a breaking change.
+        privacy_state:
+          $ref: '#/components/schemas/ConversationPrivacyMode'
+    ConversationMessage:
+      type: object
+      description: >-
+        One stored turn. content is deliberately not required: a turn whose
+        content the effective privacy mode withholds carries no content key at
+        all rather than an empty string, so a client can tell redacted from
+        genuinely empty.
+      required:
+      - id
+      - conversation_id
+      - role
+      - tokens
+      - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        conversation_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          description: >-
+            system, user, assistant, or tool. PROMPT_ONLY keeps content only for
+            system and user turns.
+        content:
+          type: string
+          description: Absent when the effective privacy mode withholds it.
+        tokens:
+          type: integer
+          format: int32
+        tool_name:
+          type: string
+          nullable: true
+        provider_message_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    ConversationListResponse:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationSummary'
+    ConversationMessagesResponse:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationMessage'
+    AuditLog:
+      type: object
+      description: >-
+        One immutable audit record. Audit records are written by the server and
+        can never be edited or deleted through the API. actor_type reports
+        which of the two actor id columns is populated.
+      required:
+      - id
+      - actor_type
+      - action
+      - resource_type
+      - before
+      - after
+      - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        actor_type:
+          type: string
+          enum:
+          - user
+          - service_account
+        actor_user_id:
+          type: string
+          format: uuid
+          nullable: true
+        actor_service_account_id:
+          type: string
+          format: uuid
+          nullable: true
+        action:
+          type: string
+          description: Dotted action name, e.g. organization.update.
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+          format: uuid
+          nullable: true
+        before:
+          type: object
+          additionalProperties: true
+          description: State before the change; an empty object when not recorded.
+        after:
+          type: object
+          additionalProperties: true
+          description: State after the change; an empty object when not recorded.
+        ip_address:
+          type: string
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    AuditLogListResponse:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLog'
+    SecurityEvent:
+      type: object
+      description: >-
+        One platform-originated security event. Events are written by background
+        jobs and health probes, never by a user request, and can never be edited
+        or deleted through the API.
+      required:
+      - id
+      - category
+      - severity
+      - title
+      - detail
+      - source
+      - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        category:
+          type: string
+          enum:
+          - provider_incident
+          - pipeline_failure
+        severity:
+          type: string
+          enum:
+          - info
+          - warning
+          - critical
+        title:
+          type: string
+          description: Short human-readable summary of what changed.
+        detail:
+          type: object
+          additionalProperties: true
+          description: >-
+            Structured context for the event, e.g. the provider kind and the
+            from/to status for a provider_incident, or the failing stage for a
+            pipeline_failure. An empty object when nothing was recorded.
+        source:
+          type: string
+          description: >-
+            Originating subsystem, e.g. provider_health or usage_rollup.
+        created_at:
+          type: string
+          format: date-time
+    SecurityEventListResponse:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SecurityEvent'
+    Alert:
+      type: object
+      description: >-
+        One configured alert rule. Reading a rule exposes only what it declares:
+        no evaluator is wired to any rule type, so last_triggered_at stays null
+        and nothing here implies the rule fires.
+      required:
+      - id
+      - alert_type
+      - name
+      - severity
+      - configuration
+      - status
+      - last_triggered_at
+      - created_at
+      - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        alert_type:
+          type: string
+          enum:
+          - spend_limit
+          - rate_limit
+          - error_rate
+          - anomaly
+        name:
+          type: string
+        severity:
+          type: string
+          enum:
+          - info
+          - warning
+          - critical
+        configuration:
+          type: object
+          additionalProperties: true
+          description: Rule thresholds and options; an empty object when unset.
+        status:
+          type: string
+          enum:
+          - active
+          - muted
+        last_triggered_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Always null today, because nothing evaluates alert rules.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AlertListResponse:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Alert'
+    UpdateAlertRequest:
+      type: object
+      description: >-
+        Full replacement of an alert rule's mutable fields; all four are
+        required. alert_type is not writable.
+      required:
+      - name
+      - severity
+      - configuration
+      - status
+      properties:
+        name:
+          type: string
+          minLength: 1
+        severity:
+          type: string
+          enum:
+          - info
+          - warning
+          - critical
+        configuration:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum:
+          - active
+          - muted
+    AlertTestResult:
+      type: object
+      description: >-
+        The outcome of validating a rule's configuration. There is deliberately
+        no would-fire field: no evaluator exists to produce one.
+      required:
+      - alert_id
+      - alert_type
+      - severity
+      - status
+      - configuration
+      - status_is_muted
+      - notification_sent
+      - message
+      properties:
+        alert_id:
+          type: string
+          format: uuid
+        alert_type:
+          type: string
+          enum:
+          - spend_limit
+          - rate_limit
+          - error_rate
+          - anomaly
+        severity:
+          type: string
+          enum:
+          - info
+          - warning
+          - critical
+        status:
+          type: string
+          enum:
+          - active
+          - muted
+        configuration:
+          type: object
+          additionalProperties: true
+        status_is_muted:
+          type: boolean
+        notification_sent:
+          type: boolean
+          description: Always false; no notifier is invoked.
+        message:
+          type: string
+    Organization:
+      type: object
+      description: >-
+        An organization. Only persisted columns are exposed. MRR, seat counts,
+        billing contact email and region are deliberately absent because no
+        such data is stored for an organization.
+      required:
+      - id
+      - name
+      - slug
+      - status
+      - created_at
+      - updated_at
+      - plan
+      - billing
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        status:
+          type: string
+          enum:
+          - active
+          - suspended
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        plan:
+          nullable: true
+          description: Null when the organization has no active or trialing subscription.
+          allOf:
+          - $ref: '#/components/schemas/OrganizationPlan'
+        billing:
+          nullable: true
+          description: Null when the organization has no active or trialing subscription.
+          allOf:
+          - $ref: '#/components/schemas/OrganizationBilling'
+    OrganizationPlan:
+      type: object
+      description: The plan on the organization's active or trialing subscription.
+      required:
+      - code
+      - name
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+    OrganizationBilling:
+      type: object
+      description: >-
+        Billing state of the organization's active or trialing subscription.
+        Period timestamps are empty strings when the stored column is NULL.
+      required:
+      - status
+      - current_period_start
+      - current_period_end
+      - cancel_at_period_end
+      properties:
+        status:
+          type: string
+          description: >-
+            Only active or trialing subscriptions are surfaced; other states
+            leave plan and billing null.
+          enum:
+          - active
+          - trialing
+        current_period_start:
+          type: string
+          description: RFC3339 timestamp, or an empty string when NULL.
+        current_period_end:
+          type: string
+          description: RFC3339 timestamp, or an empty string when NULL.
+        cancel_at_period_end:
+          type: boolean
+    UpdateOrganizationRequest:
+      type: object
+      description: >-
+        Writable organization fields. Both are optional; a blank name or slug
+        is rejected. status is read-only.
+      properties:
+        name:
+          type: string
+          minLength: 1
+        slug:
+          type: string
+          minLength: 1
+    Plan:
+      type: object
+      description: >-
+        One sellable plan from the global catalog. No price, seat count, or
+        billing contact is included because none is stored in this service.
+      required:
+      - id
+      - code
+      - name
+      - description
+      - status
+      - created_at
+      - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    PlanListResponse:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Plan'
+    Subscription:
+      type: object
+      description: >-
+        The organization's current plan and billing cycle, built from stored
+        columns only.
+      required:
+      - plan_code
+      - plan_name
+      - status
+      - current_period_start
+      - current_period_end
+      - cancel_at_period_end
+      properties:
+        plan_code:
+          type: string
+        plan_name:
+          type: string
+        status:
+          type: string
+          description: >-
+            Mirrors the stored subscription status; not narrowed to the states
+            the organization endpoint surfaces.
+          enum:
+          - active
+          - trialing
+          - canceled
+          - past_due
+          - incomplete
+        current_period_start:
+          type: string
+          format: date-time
+          nullable: true
+        current_period_end:
+          type: string
+          format: date-time
+          nullable: true
+        cancel_at_period_end:
+          type: boolean
+    InvoiceLine:
+      type: object
+      description: One itemisation row behind an invoice total.
+      required:
+      - id
+      - description
+      - quantity
+      - unit_micros
+      - amount_micros
+      properties:
+        id:
+          type: string
+          format: uuid
+        description:
+          type: string
+        quantity:
+          type: integer
+          format: int64
+        unit_micros:
+          type: integer
+          format: int64
+          description: Price per unit in millionths of the currency's major unit.
+        amount_micros:
+          type: integer
+          format: int64
+    Invoice:
+      type: object
+      description: >-
+        One locally computed invoice statement. There is deliberately no paid
+        status, charge id, processor reference, or PDF URL, because no payment
+        processor is integrated and no field here may imply money moved.
+      required:
+      - id
+      - subscription_id
+      - number
+      - status
+      - currency
+      - total_micros
+      - period_start
+      - period_end
+      - issued_at
+      - lines
+      properties:
+        id:
+          type: string
+          format: uuid
+        subscription_id:
+          type: string
+          format: uuid
+          nullable: true
+        number:
+          type: string
+          description: Human-readable invoice reference.
+        status:
+          type: string
+          enum:
+          - open
+          - void
+        currency:
+          type: string
+        total_micros:
+          type: integer
+          format: int64
+          description: Invoice total in millionths of the currency's major unit.
+        period_start:
+          type: string
+          format: date-time
+        period_end:
+          type: string
+          format: date-time
+        issued_at:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceLine'
+    InvoiceListResponse:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Invoice'
+    BillingUsageSummary:
+      type: object
+      description: >-
+        Recorded usage totals for a window, identical to the body of
+        /v1/usage/summary. Field names are the Go field names the handler
+        serializes today; averages and last activity stay null or zero when the
+        window held no requests, so no fabricated measurement is reported.
+      required:
+      - Requests
+      - InputTokens
+      - OutputTokens
+      - CachedTokens
+      - TotalTokens
+      - TotalCostMicros
+      - Errors
+      - AvgLatencyMs
+      - LastActivityAt
+      properties:
+        Requests:
+          type: integer
+          format: int64
+        InputTokens:
+          type: integer
+          format: int64
+        OutputTokens:
+          type: integer
+          format: int64
+        CachedTokens:
+          type: integer
+          format: int64
+        TotalTokens:
+          type: integer
+          format: int64
+        TotalCostMicros:
+          type: integer
+          format: int64
+          description: Recorded cost in millionths of the currency's major unit.
+        Errors:
+          type: integer
+          format: int64
+        AvgLatencyMs:
+          type: number
+          format: double
+          nullable: true
+          description: Null when the window held no requests.
+        LastActivityAt:
+          type: string
+          format: date-time
+          description: Zero time when the window held no requests.

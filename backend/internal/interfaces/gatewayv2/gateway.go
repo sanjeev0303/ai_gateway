@@ -19,7 +19,7 @@ import (
 	"ai-governance-saas/backend/internal/ports/secrets"
 
 	"github.com/google/uuid"
-	
+
 	"ai-governance-saas/backend/internal/domain"
 )
 
@@ -204,7 +204,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				CurrentState:   domain.ActivityStateActive,
 			})
 		}
-		
+
 		observed, err := g.streamProxy.Forward(r.Context(), w, r, result.Context.UpstreamURL, result.Context.UpstreamHeaders)
 		if err != nil {
 			g.logger.Error("stream proxy forward failed", "error", err)
@@ -470,7 +470,7 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 	if result.Context != nil {
 		providerKind = result.Context.Upstream.ProviderAccount.ProviderKind
 		model = result.Context.InspectorHints.Model
-		
+
 		if g.activity != nil {
 			state := domain.ActivityStateCompleted
 			if result.StatusCode >= 400 {
@@ -513,7 +513,7 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 			RequestStartedAt: startUTC,
 			CompletedAt:      completedAt,
 		}
-		
+
 		totalLatencyMs := int32(latencyMs)
 		usage.TotalLatencyMs = &totalLatencyMs
 
@@ -525,7 +525,7 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 			usage.CacheReadTokens = observed.CacheReadTokens
 			usage.CacheWriteTokens = observed.CacheWriteTokens
 			usage.ProviderMeta = map[string]any{"provider": observed.Provider}
-			
+
 			if !observed.FirstTokenAt.IsZero() {
 				firstToken := observed.FirstTokenAt.UTC()
 				usage.FirstTokenAt = &firstToken

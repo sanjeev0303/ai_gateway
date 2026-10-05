@@ -2,12 +2,7 @@ import type { Metadata } from "next";
 import { Plus } from "lucide-react";
 
 import { BarChart, DonutChart } from "@/components/charts";
-import {
-  DataTable,
-  PageShell,
-  StatCard,
-  type Column,
-} from "@/components/dashboard";
+import { DataTable, PageShell, StatCard, type Column } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,69 +11,68 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { formatNumber, formatPercent, formatUsd } from "@/lib/format";
-import { teams, users } from "@/lib/mock-data";
-import type { StatusTone } from "@/types";
+import { formatNumber, formatUsd, microsToUsd } from "@/lib/format";
+import { getApiClient } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Teams · Sentinel",
-  description: "Groups that own workloads, carry budgets, and accrue spend.",
+  description: "Groups that own workloads and accrue spend.",
 };
-
-const userName = new Map(users.map((user) => [user.id, user.name]));
 
 interface TeamRow {
   id: string;
   name: string;
-  slug: string;
-  lead: string;
+  description: string;
   members: number;
-  projects: number;
-  budget: string;
+  requests: number;
+  tokens: number;
   spend: number;
-  burnPct: number;
-  budgetTone: StatusTone;
 }
 
 const COLUMNS: readonly Column<TeamRow>[] = [
-  { key: "name", header: "Team", primary: "name", secondary: "slug", sort: "name" },
-  { key: "lead", header: "Lead", primary: "lead" },
-  { key: "members", header: "Members", primary: "members", align: "right" },
-  { key: "projects", header: "Projects", primary: "projects", align: "right" },
-  { key: "budget", header: "Budget", primary: "budget", align: "right" },
-  { key: "spend", header: "Spend MTD", primary: "spend", format: "usd", align: "right", sort: "spend" },
-  { key: "burnPct", header: "Budget used", primary: "burnPct", format: "percentRaw", align: "right", meter: "burnPct", meterMax: 100, sort: "burnPct" },
+  { key: "name", header: "Team", primary: "name", secondary: "description", sort: "name" },
+  { key: "members", header: "Members", primary: "members", format: "number", align: "right", sort: "members" },
+  { key: "requests", header: "Requests", primary: "requests", format: "compact", align: "right", sort: "requests" },
+  { key: "tokens", header: "Tokens", primary: "tokens", format: "compact", align: "right", sort: "tokens" },
+  { key: "spend", header: "Spend (30d)", primary: "spend", format: "usd", align: "right", sort: "spend" },
 ];
 
-export default function TeamsPage() {
-  const rows: TeamRow[] = teams.map((team) => {
-    const burnPct = team.monthlyBudget
-      ? (team.spendMtd / team.monthlyBudget) * 100
-      : 0;
+export default async function TeamsPage() {
+  const { teams, usage } = await getApiClient();
+  const [teamList, teamUsage] = await Promise.all([teams.list(), usage.byTeam()]);
+
+  const spendByTeam = new Map(teamUsage.items.map((row) => [row.TeamID, row]));
+  const memberCounts = new Map(
+    await Promise.all(
+      teamList.items.map(
+        async (team) => [team.id, (await teams.listMembers(team.id)).items.length] as const,
+      ),
+    ),
+  );
+
+  const rows: TeamRow[] = teamList.items.map((team) => {
+    const attributed = spendByTeam.get(team.id);
     return {
       id: team.id,
       name: team.name,
-      slug: team.slug,
-      lead: userName.get(team.leadId) ?? "Unassigned",
-      members: team.memberIds.length,
-      projects: team.projectIds.length,
-      budget: team.monthlyBudget === null ? "Unbudgeted" : formatUsd(team.monthlyBudget),
-      spend: team.spendMtd,
-      burnPct: Math.round(burnPct),
-      budgetTone: burnPct >= 95 ? "danger" : burnPct >= 80 ? "warning" : "success",
+      description: team.description,
+      members: memberCounts.get(team.id) ?? 0,
+      requests: attributed?.Requests ?? 0,
+      tokens: attributed?.TotalTokens ?? 0,
+      spend: microsToUsd(attributed?.CostMicros ?? 0),
     };
   });
 
-  const totalBudget = teams.reduce((sum, team) => sum + (team.monthlyBudget ?? 0), 0);
-  const totalSpend = teams.reduce((sum, team) => sum + team.spendMtd, 0);
-  const overBudget = rows.filter((row) => row.burnPct >= 80);
+  const totalMembers = rows.reduce((sum, row) => sum + row.members, 0);
+  const totalRequests = rows.reduce((sum, row) => sum + row.requests, 0);
+  const totalSpend = rows.reduce((sum, row) => sum + row.spend, 0);
+  const topSpend = [...rows].sort((a, b) => b.spend - a.spend).slice(0, 8);
 
   return (
     <div className="p-4 sm:p-6">
       <PageShell
         title="Teams"
-        description="Groups that own projects, hold budget, and are the unit of accountability for spend."
+        description="Groups that own projects and are the unit of accountability for spend."
         actions={
           <Button size="sm">
             <Plus aria-hidden /> New team
@@ -86,22 +80,21 @@ export default function TeamsPage() {
         }
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Teams" value={String(teams.length)} hint="Across the organization" />
+          <StatCard label="Teams" value={String(rows.length)} hint="Across the organization" />
           <StatCard
-            label="Total budget"
-            value={formatUsd(totalBudget)}
-            hint="Monthly, budgeted teams only"
+            label="Seats filled"
+            value={formatNumber(totalMembers)}
+            hint="Team memberships held"
           />
           <StatCard
-            label="Spend MTD"
+            label="Requests"
+            value={formatNumber(totalRequests)}
+            hint="Trailing 30 days"
+          />
+          <StatCard
+            label="Spend"
             value={formatUsd(totalSpend)}
-            hint={formatPercent((totalSpend / totalBudget) * 100, 0) + " of allocated budget"}
-          />
-          <StatCard
-            label="Near budget"
-            value={String(overBudget.length)}
-            tone={overBudget.length > 0 ? "warning" : "success"}
-            hint="At or above 80% burn"
+            hint="Trailing 30 days"
           />
         </section>
 
@@ -109,18 +102,11 @@ export default function TeamsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Spend by team</CardTitle>
-              <CardDescription>Trailing 30-day spend against monthly budget.</CardDescription>
+              <CardDescription>Trailing 30-day spend, top eight teams.</CardDescription>
             </CardHeader>
             <CardContent>
               <BarChart
-                data={[...teams]
-                  .sort((a, b) => b.spendMtd - a.spendMtd)
-                  .map((team) => ({
-                    label: team.name,
-                    value: team.spendMtd,
-                    secondary: team.monthlyBudget ?? 0,
-                  }))}
-                showSecondary
+                data={topSpend.map((row) => ({ label: row.name, value: row.spend }))}
                 formatValue={(value) => formatUsd(value)}
               />
             </CardContent>
@@ -132,10 +118,7 @@ export default function TeamsPage() {
             </CardHeader>
             <CardContent>
               <DonutChart
-                data={teams.map((team) => ({
-                  label: team.name,
-                  value: team.memberIds.length,
-                }))}
+                data={rows.map((row) => ({ label: row.name, value: row.members }))}
                 centerLabel="members"
                 size={190}
               />
@@ -147,7 +130,7 @@ export default function TeamsPage() {
           <CardHeader>
             <CardTitle>All teams</CardTitle>
             <CardDescription>
-              {formatNumber(users.length)} people are distributed across these groups.
+              {formatNumber(totalMembers)} people are distributed across these groups.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -155,38 +138,8 @@ export default function TeamsPage() {
               columns={COLUMNS}
               rows={rows}
               rowKey="id"
-              toolbar={
-                <p className="text-sm text-muted-foreground">
-                  {overBudget.length} team{overBudget.length === 1 ? "" : "s"} at or above 80% of budget.
-                </p>
-              }
               emptyMessage="No teams created yet."
             />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Budget burn</CardTitle>
-            <CardDescription>Month-to-date consumption of each team allocation.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-3">
-              {rows.map((row) => (
-                <li key={row.id} className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="truncate font-medium">{row.name}</span>
-                    <span className="tabular-nums text-muted-foreground">
-                      {formatUsd(row.spend)} of {row.budget}
-                    </span>
-                  </div>
-                  <Progress
-                    value={Math.min(row.burnPct, 100)}
-                    className={row.budgetTone === "danger" ? "[&>div]:bg-rose-500" : row.budgetTone === "warning" ? "[&>div]:bg-amber-500" : undefined}
-                  />
-                </li>
-              ))}
-            </ul>
           </CardContent>
         </Card>
       </PageShell>

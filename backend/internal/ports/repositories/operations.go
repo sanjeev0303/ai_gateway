@@ -13,7 +13,10 @@ import (
 type ConversationRepository interface {
 	Create(ctx context.Context, orgID uuid.UUID, input domain.NewConversation) (domain.Conversation, error)
 	Get(ctx context.Context, orgID, id uuid.UUID) (domain.Conversation, error)
-	List(ctx context.Context, orgID, userID uuid.UUID) ([]domain.Conversation, error)
+	// Detail returns one conversation together with the aggregates derived
+	// from its messages; Get returns the bare row.
+	Detail(ctx context.Context, orgID, id uuid.UUID) (domain.ConversationSummary, error)
+	List(ctx context.Context, orgID uuid.UUID, filter domain.ConversationFilter, limit, offset int32) ([]domain.ConversationSummary, error)
 }
 
 // ConversationMessageRepository manages the turns of a conversation.
@@ -31,7 +34,7 @@ type LlmRequestRepository interface {
 	// List returns requests within the [from, to) window.
 	List(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.LlmRequest, error)
 	GetRecent(ctx context.Context, orgID uuid.UUID) ([]domain.LlmRequest, error)
-	GetRequests(ctx context.Context, orgID uuid.UUID, from, to time.Time, limit, offset int32) ([]domain.LlmRequest, error)
+	GetRequests(ctx context.Context, orgID uuid.UUID, filter domain.UsageFilter, limit, offset int32) ([]domain.LlmRequest, error)
 }
 
 // UsageEventRepository records and reads the append-only usage ledger.
@@ -47,13 +50,18 @@ type UsageEventRepository interface {
 // organization from llm_requests over the half-open window [from, to).
 type UsageRollupRepository interface {
 	Recompute(ctx context.Context, orgID uuid.UUID, from, to time.Time) error
-	GetSummary(ctx context.Context, orgID uuid.UUID, from, to time.Time, projectID *uuid.UUID, model *string) (domain.UsageSummary, error)
+	GetSummary(ctx context.Context, orgID uuid.UUID, filter domain.UsageFilter) (domain.UsageSummary, error)
 	GetTimeSeries(ctx context.Context, orgID uuid.UUID, from, to time.Time, projectID *uuid.UUID) ([]domain.UsageTimeSeriesPoint, error)
-	GetByProject(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByProject, error)
+	GetByProject(ctx context.Context, orgID uuid.UUID, filter domain.UsageFilter) ([]domain.UsageByProject, error)
 	GetByModel(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByModel, error)
 	GetByProvider(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByProvider, error)
-	GetByUser(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByUser, error)
-	GetByTeam(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByTeam, error)
+	GetByUser(ctx context.Context, orgID uuid.UUID, filter domain.UsageFilter) ([]domain.UsageByUser, error)
+	GetByTeam(ctx context.Context, orgID uuid.UUID, filter domain.UsageFilter) ([]domain.UsageByTeam, error)
+	// GetLatency returns percentile timings for the whole filtered set, and
+	// GetLatencyByProviderModel breaks the same percentiles down per provider
+	// and model. Both compute percentiles in Postgres.
+	GetLatency(ctx context.Context, orgID uuid.UUID, filter domain.UsageFilter) (domain.UsageLatency, error)
+	GetLatencyByProviderModel(ctx context.Context, orgID uuid.UUID, filter domain.UsageFilter) ([]domain.UsageLatency, error)
 }
 
 // IdempotencyRepository protects request deduplication.
@@ -74,6 +82,9 @@ type SubscriptionRepository interface {
 	Create(ctx context.Context, orgID uuid.UUID, input domain.NewSubscription) (domain.Subscription, error)
 	Get(ctx context.Context, orgID, id uuid.UUID) (domain.Subscription, error)
 	List(ctx context.Context, orgID uuid.UUID) ([]domain.Subscription, error)
+	// ActiveWithPlan returns the organization's active or trialing subscription
+	// joined to its plan, or ErrNotFound when it has none.
+	ActiveWithPlan(ctx context.Context, orgID uuid.UUID) (domain.OrganizationPlan, error)
 }
 
 // BillingEventRepository records the append-only billing ledger.
@@ -82,6 +93,14 @@ type BillingEventRepository interface {
 	// returns ErrConflict.
 	Record(ctx context.Context, orgID uuid.UUID, input domain.NewBillingEvent) (domain.BillingEvent, error)
 	Get(ctx context.Context, orgID uuid.UUID, billingEventID string) (domain.BillingEvent, error)
+}
+
+// InvoiceRepository reads locally computed billing statements.
+type InvoiceRepository interface {
+	// List returns the organization's invoices, newest issued first, each with
+	// its lines attached.
+	List(ctx context.Context, orgID uuid.UUID) ([]domain.Invoice, error)
+	Get(ctx context.Context, orgID, id uuid.UUID) (domain.Invoice, error)
 }
 
 // PricingModelRepository manages per-organization model price catalogs.
@@ -100,10 +119,14 @@ type PricingVersionRepository interface {
 type AlertRepository interface {
 	Create(ctx context.Context, orgID uuid.UUID, input domain.NewAlert) (domain.Alert, error)
 	List(ctx context.Context, orgID uuid.UUID) ([]domain.Alert, error)
-	SetStatus(ctx context.Context, orgID, id uuid.UUID, status string) (domain.Alert, error)
+	Get(ctx context.Context, orgID, id uuid.UUID) (domain.Alert, error)
+	Update(ctx context.Context, orgID, id uuid.UUID, input domain.AlertUpdate) (domain.Alert, error)
+	Delete(ctx context.Context, orgID, id uuid.UUID) error
 }
 
-// AuditLogRepository appends immutable audit records.
+// AuditLogRepository appends immutable audit records and reads them back.
 type AuditLogRepository interface {
 	Append(ctx context.Context, orgID uuid.UUID, input domain.NewAuditLog) (domain.AuditLog, error)
+	List(ctx context.Context, orgID uuid.UUID, filter domain.AuditLogFilter, limit, offset int32) ([]domain.AuditLog, error)
+	Get(ctx context.Context, orgID, id uuid.UUID) (domain.AuditLog, error)
 }

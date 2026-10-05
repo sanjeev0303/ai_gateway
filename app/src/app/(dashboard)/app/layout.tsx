@@ -1,12 +1,15 @@
 import { SidebarNav } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
-import { DemoDataProvider } from "@/lib/demo/store";
+import { SessionProvider } from "@/lib/session-context";
+import { requireDashboardSession } from "@/lib/session";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const session = await requireDashboardSession();
+
   return (
-    <DemoDataProvider>
+    <SessionProvider session={session}>
       <div className="flex h-screen overflow-hidden">
         <aside className="hidden w-60 shrink-0 border-r border-sidebar-border bg-sidebar lg:block">
           <SidebarNav />
@@ -17,6 +20,6 @@ export default function DashboardLayout({
           <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
         </div>
       </div>
-    </DemoDataProvider>
+    </SessionProvider>
   );
 }

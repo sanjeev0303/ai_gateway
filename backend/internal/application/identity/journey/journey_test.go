@@ -43,6 +43,7 @@ func newJourneyService(t *testing.T, store *postgres.Store) *identity.Service {
 		Accounts:    repos.NewServiceAccountRepository(store),
 		Credentials: repos.NewAPICredentialRepository(store),
 		Audits:      repos.NewAuditLogRepository(store),
+		Subs:        repos.NewSubscriptionRepository(store),
 		Issuer:      issuer,
 		Verifier:    verifier,
 		Hasher:      auth.NewSHA256TokenHasher(),

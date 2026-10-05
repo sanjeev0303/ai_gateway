@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	uuid "github.com/google/uuid"
 )
@@ -14,7 +15,7 @@ import (
 const createConversation = `-- name: CreateConversation :one
 INSERT INTO conversations (organization_id, user_id, title, status)
 VALUES ($1, $2, $3, $4)
-RETURNING id, organization_id, user_id, title, status, created_at, updated_at
+RETURNING id, organization_id, user_id, title, status, created_at, updated_at, project_id, model, provider, privacy_state
 `
 
 type CreateConversationParams struct {
@@ -40,14 +41,19 @@ func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversation
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProjectID,
+		&i.Model,
+		&i.Provider,
+		&i.PrivacyState,
 	)
 	return i, err
 }
 
 const createConversationMessage = `-- name: CreateConversationMessage :one
-INSERT INTO conversation_messages (conversation_id, organization_id, user_id, role, content, tokens, provider_message_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, conversation_id, organization_id, user_id, role, content, tokens, provider_message_id, created_at
+INSERT INTO conversation_messages (conversation_id, organization_id, user_id, role, content, tokens, tool_name, provider_message_id)
+VALUES ($1, $2, $3, $4,
+        $5, $6, $7, $8)
+RETURNING id, conversation_id, organization_id, user_id, role, content, tokens, provider_message_id, created_at, tool_name
 `
 
 type CreateConversationMessageParams struct {
@@ -57,6 +63,7 @@ type CreateConversationMessageParams struct {
 	Role              string    `json:"role"`
 	Content           string    `json:"content"`
 	Tokens            int32     `json:"tokens"`
+	ToolName          *string   `json:"tool_name"`
 	ProviderMessageID *string   `json:"provider_message_id"`
 }
 
@@ -68,6 +75,7 @@ func (q *Queries) CreateConversationMessage(ctx context.Context, arg CreateConve
 		arg.Role,
 		arg.Content,
 		arg.Tokens,
+		arg.ToolName,
 		arg.ProviderMessageID,
 	)
 	var i ConversationMessage
@@ -81,12 +89,13 @@ func (q *Queries) CreateConversationMessage(ctx context.Context, arg CreateConve
 		&i.Tokens,
 		&i.ProviderMessageID,
 		&i.CreatedAt,
+		&i.ToolName,
 	)
 	return i, err
 }
 
 const getConversation = `-- name: GetConversation :one
-SELECT id, organization_id, user_id, title, status, created_at, updated_at FROM conversations
+SELECT id, organization_id, user_id, title, status, created_at, updated_at, project_id, model, provider, privacy_state FROM conversations
 WHERE organization_id = $1 AND id = $2
 `
 
@@ -106,14 +115,18 @@ func (q *Queries) GetConversation(ctx context.Context, arg GetConversationParams
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProjectID,
+		&i.Model,
+		&i.Provider,
+		&i.PrivacyState,
 	)
 	return i, err
 }
 
 const listConversationMessages = `-- name: ListConversationMessages :many
-SELECT id, conversation_id, organization_id, user_id, role, content, tokens, provider_message_id, created_at FROM conversation_messages
+SELECT id, conversation_id, organization_id, user_id, role, content, tokens, provider_message_id, created_at, tool_name FROM conversation_messages
 WHERE organization_id = $1 AND conversation_id = $2
-ORDER BY created_at
+ORDER BY created_at, id
 `
 
 type ListConversationMessagesParams struct {
@@ -140,6 +153,7 @@ func (q *Queries) ListConversationMessages(ctx context.Context, arg ListConversa
 			&i.Tokens,
 			&i.ProviderMessageID,
 			&i.CreatedAt,
+			&i.ToolName,
 		); err != nil {
 			return nil, err
 		}
@@ -152,33 +166,110 @@ func (q *Queries) ListConversationMessages(ctx context.Context, arg ListConversa
 }
 
 const listConversations = `-- name: ListConversations :many
-SELECT id, organization_id, user_id, title, status, created_at, updated_at FROM conversations
-WHERE organization_id = $1 AND user_id = $2
-ORDER BY created_at DESC
+SELECT c.id,
+       c.title,
+       c.user_id,
+       c.project_id,
+       c.model,
+       c.provider,
+       c.privacy_state,
+       c.created_at,
+       COUNT(m.id)::bigint                                        AS message_count,
+       COUNT(m.id) FILTER (WHERE m.role = 'assistant')::bigint    AS request_count,
+       COALESCE(SUM(m.tokens), 0)::bigint                         AS total_tokens,
+       -- Coalesce because the LEFT JOIN yields NULL for a conversation with no
+       -- messages; the repository detects that case from MessageCount == 0.
+       COALESCE(MAX(m.created_at)::timestamptz, '0001-01-01 00:00:00+00'::timestamptz)::timestamptz AS last_activity_at
+FROM conversations c
+LEFT JOIN conversation_messages m
+       ON m.conversation_id = c.id
+      AND m.organization_id = c.organization_id
+WHERE c.organization_id = $1
+  AND ($2::uuid IS NULL OR c.id = $2)
+  AND ($3::uuid IS NULL OR c.user_id = $3)
+  AND ($4::uuid IS NULL OR c.project_id = $4)
+  AND ($5::text IS NULL OR c.provider = $5)
+  AND ($6::text IS NULL OR c.model = $6)
+  AND ($7::timestamptz IS NULL OR c.created_at >= $7::timestamptz)
+  AND ($8::timestamptz IS NULL OR c.created_at < $8::timestamptz)
+  AND ($9::uuid IS NULL OR EXISTS (
+        SELECT 1
+        FROM team_members tm
+        WHERE tm.team_id = $9
+          AND tm.user_id = c.user_id
+          AND tm.organization_id = c.organization_id))
+GROUP BY c.id
+ORDER BY c.created_at DESC, c.id DESC
+LIMIT $11::int OFFSET $10::int
 `
 
 type ListConversationsParams struct {
-	OrganizationID uuid.UUID `json:"organization_id"`
-	UserID         uuid.UUID `json:"user_id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	ID             *uuid.UUID `json:"id"`
+	UserID         *uuid.UUID `json:"user_id"`
+	ProjectID      *uuid.UUID `json:"project_id"`
+	Provider       *string    `json:"provider"`
+	Model          *string    `json:"model"`
+	FromTs         *time.Time `json:"from_ts"`
+	ToTs           *time.Time `json:"to_ts"`
+	TeamID         *uuid.UUID `json:"team_id"`
+	OffsetCount    int32      `json:"offset_count"`
+	LimitCount     int32      `json:"limit_count"`
 }
 
-func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error) {
-	rows, err := q.db.Query(ctx, listConversations, arg.OrganizationID, arg.UserID)
+type ListConversationsRow struct {
+	ID             uuid.UUID  `json:"id"`
+	Title          string     `json:"title"`
+	UserID         uuid.UUID  `json:"user_id"`
+	ProjectID      *uuid.UUID `json:"project_id"`
+	Model          *string    `json:"model"`
+	Provider       *string    `json:"provider"`
+	PrivacyState   *string    `json:"privacy_state"`
+	CreatedAt      time.Time  `json:"created_at"`
+	MessageCount   int64      `json:"message_count"`
+	RequestCount   int64      `json:"request_count"`
+	TotalTokens    int64      `json:"total_tokens"`
+	LastActivityAt time.Time  `json:"last_activity_at"`
+}
+
+// Aggregates come from conversation_messages because llm_requests has no
+// conversation key: an assistant turn is the only evidence of a provider
+// request. GROUP BY the primary key so the ungrouped conversation columns can
+// still be selected.
+func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsParams) ([]ListConversationsRow, error) {
+	rows, err := q.db.Query(ctx, listConversations,
+		arg.OrganizationID,
+		arg.ID,
+		arg.UserID,
+		arg.ProjectID,
+		arg.Provider,
+		arg.Model,
+		arg.FromTs,
+		arg.ToTs,
+		arg.TeamID,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Conversation{}
+	items := []ListConversationsRow{}
 	for rows.Next() {
-		var i Conversation
+		var i ListConversationsRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.OrganizationID,
-			&i.UserID,
 			&i.Title,
-			&i.Status,
+			&i.UserID,
+			&i.ProjectID,
+			&i.Model,
+			&i.Provider,
+			&i.PrivacyState,
 			&i.CreatedAt,
-			&i.UpdatedAt,
+			&i.MessageCount,
+			&i.RequestCount,
+			&i.TotalTokens,
+			&i.LastActivityAt,
 		); err != nil {
 			return nil, err
 		}

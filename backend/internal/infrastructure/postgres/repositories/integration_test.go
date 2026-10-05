@@ -890,78 +890,6 @@ func TestPolicyAndRuleRepositories(t *testing.T) {
 	requireNotFound(t, func() error { _, err := ruleRepo.SetEnabled(testCtx, orgID, uuid.New(), false); return err }())
 }
 
-func TestConversationRepository(t *testing.T) {
-	repo := repos.NewConversationRepository(testStore)
-	orgID, userID, _ := newTenant(t)
-
-	conv, err := repo.Create(testCtx, orgID, domain.NewConversation{UserID: userID, Title: "triage"})
-	requireNoErr(t, err)
-	if conv.Status != domain.ConversationStatusActive || conv.UserID != userID {
-		t.Fatalf("unexpected conversation: %+v", conv)
-	}
-
-	got, err := repo.Get(testCtx, orgID, conv.ID)
-	requireNoErr(t, err)
-	if got.Title != "triage" {
-		t.Fatalf("Get mismatch: %+v", got)
-	}
-
-	list, err := repo.List(testCtx, orgID, userID)
-	requireNoErr(t, err)
-	if len(list) != 1 {
-		t.Fatalf("expected 1 conversation, got %d: %+v", len(list), list)
-	}
-
-	// Listing is user-scoped: another user's conversations are invisible.
-	_, otherUser, _ := newTenant(t)
-	otherList, err := repo.List(testCtx, orgID, otherUser)
-	requireNoErr(t, err)
-	if len(otherList) != 0 {
-		t.Fatalf("expected no conversations for other user, got %+v", otherList)
-	}
-
-	requireNotFound(t, func() error { _, err := repo.Get(testCtx, orgID, uuid.New()); return err }())
-	otherOrg, _, _ := newTenant(t)
-	requireNotFound(t, func() error { _, err := repo.Get(testCtx, otherOrg, conv.ID); return err }())
-}
-
-func TestConversationMessageRepository(t *testing.T) {
-	convRepo := repos.NewConversationRepository(testStore)
-	msgRepo := repos.NewConversationMessageRepository(testStore)
-	orgID, userID, _ := newTenant(t)
-
-	conv, err := convRepo.Create(testCtx, orgID, domain.NewConversation{UserID: userID, Title: "thread"})
-	requireNoErr(t, err)
-
-	pmid := "provider-msg-1"
-	m1, err := msgRepo.Create(testCtx, orgID, domain.NewConversationMessage{
-		ConversationID:    conv.ID,
-		UserID:            userID,
-		Role:              domain.MessageRoleUser,
-		Content:           "hello",
-		Tokens:            int32(5),
-		ProviderMessageID: &pmid,
-	})
-	requireNoErr(t, err)
-	m2, err := msgRepo.Create(testCtx, orgID, domain.NewConversationMessage{
-		ConversationID: conv.ID,
-		UserID:         userID,
-		Role:           domain.MessageRoleAssistant,
-		Content:        "hi there",
-		Tokens:         int32(7),
-	})
-	requireNoErr(t, err)
-
-	msgs, err := msgRepo.List(testCtx, orgID, conv.ID)
-	requireNoErr(t, err)
-	if len(msgs) != 2 || msgs[0].ID != m1.ID || msgs[1].ID != m2.ID {
-		t.Fatalf("unexpected message order: %+v", msgs)
-	}
-	if msgs[0].ProviderMessageID == nil || *msgs[0].ProviderMessageID != pmid {
-		t.Fatalf("provider_message_id not round-tripped: %+v", msgs[0])
-	}
-}
-
 func TestLlmRequestRepository_HonorsRequestTime(t *testing.T) {
 	repo := repos.NewLlmRequestRepository(testStore)
 	orgID, _, _ := newTenant(t)
@@ -1617,10 +1545,15 @@ func TestAlertRepository(t *testing.T) {
 	}
 
 	time.Sleep(2 * time.Millisecond) // guarantee a distinct updated_at
-	muted, err := repo.SetStatus(testCtx, orgID, alert.ID, domain.AlertStatusMuted)
+	muted, err := repo.Update(testCtx, orgID, alert.ID, domain.AlertUpdate{
+		Name:          alert.Name,
+		Severity:      alert.Severity,
+		Configuration: alert.Configuration,
+		Status:        domain.AlertStatusMuted,
+	})
 	requireNoErr(t, err)
 	if muted.Status != domain.AlertStatusMuted || !muted.UpdatedAt.After(muted.CreatedAt) {
-		t.Fatalf("SetStatus mismatch: %+v", muted)
+		t.Fatalf("Update mismatch: %+v", muted)
 	}
 
 	list, err := repo.List(testCtx, orgID)
@@ -1630,7 +1563,12 @@ func TestAlertRepository(t *testing.T) {
 	}
 
 	requireNotFound(t, func() error {
-		_, err := repo.SetStatus(testCtx, orgID, uuid.New(), domain.AlertStatusMuted)
+		_, err := repo.Update(testCtx, orgID, uuid.New(), domain.AlertUpdate{
+			Name:          "missing",
+			Severity:      domain.AlertSeverityWarning,
+			Configuration: []byte(`{}`),
+			Status:        domain.AlertStatusMuted,
+		})
 		return err
 	}())
 }

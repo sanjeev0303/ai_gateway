@@ -124,3 +124,33 @@ func (q *Queries) ListAllOrganizationIDs(ctx context.Context) ([]uuid.UUID, erro
 	}
 	return items, nil
 }
+
+const updateOrganization = `-- name: UpdateOrganization :one
+UPDATE organizations
+SET
+  name = COALESCE($2::text, name),
+  slug = COALESCE($3::text, slug),
+  updated_at = now()
+WHERE id = $1
+RETURNING id, name, slug, status, created_at, updated_at
+`
+
+type UpdateOrganizationParams struct {
+	ID   uuid.UUID `json:"id"`
+	Name *string   `json:"name"`
+	Slug *string   `json:"slug"`
+}
+
+func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error) {
+	row := q.db.QueryRow(ctx, updateOrganization, arg.ID, arg.Name, arg.Slug)
+	var i Organization
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

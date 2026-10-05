@@ -21,6 +21,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"ai-governance-saas/backend/internal/application/securityevent"
 	"ai-governance-saas/backend/internal/domain"
 	providerclient "ai-governance-saas/backend/internal/ports/provider"
 	repositories "ai-governance-saas/backend/internal/ports/repositories"
@@ -30,11 +31,12 @@ import (
 // ServiceDeps carries the dependencies of the provider service. Log and Now
 // are optional (sane defaults apply); the rest are required.
 type ServiceDeps struct {
-	Accounts    repositories.ProviderAccountRepository
-	Credentials repositories.ProviderCredentialRepository
-	Models      repositories.ModelRepository
-	Health      repositories.ProviderHealthRepository
-	Audits      repositories.AuditLogRepository
+	Accounts       repositories.ProviderAccountRepository
+	Credentials    repositories.ProviderCredentialRepository
+	Models         repositories.ModelRepository
+	Health         repositories.ProviderHealthRepository
+	Audits         repositories.AuditLogRepository
+	SecurityEvents securityevent.Recorder
 
 	Secrets secrets.Store
 	// Providers dispatches by provider kind (e.g. domain.ProviderKindAnthropic)
@@ -47,11 +49,12 @@ type ServiceDeps struct {
 
 // Service is the provider application service.
 type Service struct {
-	accounts    repositories.ProviderAccountRepository
-	credentials repositories.ProviderCredentialRepository
-	models      repositories.ModelRepository
-	health      repositories.ProviderHealthRepository
-	audits      repositories.AuditLogRepository
+	accounts       repositories.ProviderAccountRepository
+	credentials    repositories.ProviderCredentialRepository
+	models         repositories.ModelRepository
+	health         repositories.ProviderHealthRepository
+	audits         repositories.AuditLogRepository
+	securityEvents securityevent.Recorder
 
 	secrets   secrets.Store
 	providers map[string]providerclient.Provider
@@ -72,15 +75,16 @@ func NewService(deps ServiceDeps) *Service {
 		now = time.Now
 	}
 	return &Service{
-		accounts:    deps.Accounts,
-		credentials: deps.Credentials,
-		models:      deps.Models,
-		health:      deps.Health,
-		audits:      deps.Audits,
-		secrets:     deps.Secrets,
-		providers:   deps.Providers,
-		log:         log,
-		now:         now,
+		accounts:       deps.Accounts,
+		credentials:    deps.Credentials,
+		models:         deps.Models,
+		health:         deps.Health,
+		audits:         deps.Audits,
+		securityEvents: deps.SecurityEvents,
+		secrets:        deps.Secrets,
+		providers:      deps.Providers,
+		log:            log,
+		now:            now,
 	}
 }
 
@@ -340,10 +344,47 @@ func (s *Service) CheckHealth(ctx context.Context, actor domain.Actor, providerK
 		}
 		state.LastError = err.Error()
 	}
+	// provider_health holds only current state, so the previous status has to be
+	// read before the upsert to know whether this observation is a transition.
+	priorStatus, hasPrior := s.priorProviderStatus(ctx, providerKind)
 	if err := s.health.Upsert(ctx, state); err != nil {
 		return domain.ProviderHealthState{}, err
 	}
+	if hasPrior && priorStatus != state.Status {
+		s.recordHealthTransition(ctx, actor.OrganizationID, state, priorStatus)
+	}
 	return state, nil
+}
+
+// priorProviderStatus returns the status last recorded for providerKind and
+// whether anything was recorded at all. A kind that has never been probed has
+// no prior status, and a first observation is not an incident. A read error is
+// logged and treated as "no prior status" so that a transient database failure
+// cannot suppress the health upsert that follows.
+func (s *Service) priorProviderStatus(ctx context.Context, providerKind string) (string, bool) {
+	prior, err := s.health.Get(ctx, providerKind)
+	switch {
+	case err == nil:
+		return prior.Status, true
+	case errors.Is(err, repositories.ErrNotFound):
+		return "", false
+	default:
+		s.log.Warn("reading prior provider health failed", "provider_kind", providerKind, "error", err)
+		return "", false
+	}
+}
+
+// recordHealthTransition appends one observed reachability change to the
+// security feed. It never returns an error: the probe succeeded and its result
+// is already persisted, so failing to also record the transition must not turn
+// a successful health check into a failed request.
+func (s *Service) recordHealthTransition(ctx context.Context, orgID uuid.UUID, state domain.ProviderHealthState, from string) {
+	if s.securityEvents == nil {
+		return
+	}
+	if err := s.securityEvents.RecordProviderTransition(ctx, orgID, state, from); err != nil {
+		s.log.Error("recording provider incident event failed", "provider_kind", state.ProviderKind, "error", err)
+	}
 }
 
 // ValidateCredential proves an apiKey is accepted by providerKind. The key is

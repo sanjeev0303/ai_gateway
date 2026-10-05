@@ -16,6 +16,8 @@ import (
 
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
+
+	"ai-governance-saas/backend/internal/domain"
 )
 
 // EnvPrefix is the prefix of every environment variable this service reads.
@@ -33,6 +35,15 @@ type Config struct {
 	Billing       BillingConfig       `envPrefix:"BILLING_"`
 	Observability ObservabilityConfig `envPrefix:"OBSERVABILITY_"`
 	Security      SecurityConfig      `envPrefix:"SECURITY_"`
+	Conversation  ConversationConfig  `envPrefix:"CONVERSATION_"`
+}
+
+// ConversationConfig controls how much transcript content the API may return.
+type ConversationConfig struct {
+	// PrivacyDefault applies to conversations whose own privacy_state is NULL.
+	// Fail-closed: an unrecognized value is rejected at startup rather than
+	// silently widening what content is readable.
+	PrivacyDefault string `env:"PRIVACY_DEFAULT" envDefault:"METADATA_ONLY"`
 }
 
 // Load parses the environment into a validated Config.
@@ -258,6 +269,10 @@ func (c Config) Validate() error {
 	}
 	if c.Auth.DevLoginEnabled && c.Auth.HMACSigningKey == "" {
 		add(errors.New("AUTH_DEV_LOGIN_ENABLED=true still requires AUTH_HMAC_SIGNING_KEY"))
+	}
+
+	if _, ok := domain.ParsePrivacyMode(c.Conversation.PrivacyDefault); !ok {
+		add(fmt.Errorf("CONVERSATION_PRIVACY_DEFAULT %q is not one of OFF|METADATA_ONLY|PROMPT_ONLY|FULL_CONTENT", c.Conversation.PrivacyDefault))
 	}
 
 	return errors.Join(errs...)

@@ -107,14 +107,14 @@ func TestSignUpRejectsWeakPassword(t *testing.T) {
 func TestSignUpRejectsDuplicateEmail(t *testing.T) {
 	srv, st := newAuthServer(t, true, true)
 	st.auth.registerFn = func(_ context.Context, _ domain.Registration) (domain.User, domain.Organization, error) {
-		return domain.User{}, domain.Organization{}, repositories.ErrConflict
+		return domain.User{}, domain.Organization{}, repositories.ErrEmailTaken
 	}
 
 	resp := doJSON(t, srv, http.MethodPost, "/v1/auth/signup", signupRequest(), nil)
 
-	code, msg := decodeError(t, resp)
+	code, errCode := decodeError(t, resp)
 	requireEqual(t, code, http.StatusConflict)
-	requireEqual(t, msg, "conflict")
+	requireEqual(t, errCode, "email_taken")
 }
 
 func TestSignUpRequiresCookieDeployment(t *testing.T) {

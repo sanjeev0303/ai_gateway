@@ -19,7 +19,12 @@ var (
 	ErrNotFound = errors.New("repositories: not found")
 	// ErrConflict is returned when an idempotent insert collides with an
 	// existing row (duplicate request, idempotency key, or billing event).
+	// Callers may retry the operation (e.g. org provisioning under a new slug).
 	ErrConflict = errors.New("repositories: conflict")
+	// ErrEmailTaken is returned when registration collides with an existing
+	// account email. Unlike ErrConflict it is not retryable: the email is
+	// already registered, so the caller must ask the user to sign in instead.
+	ErrEmailTaken = errors.New("repositories: email already registered")
 	// ErrInvalid is returned when input fails persistence-side validation.
 	ErrInvalid = errors.New("repositories: invalid")
 	// ErrForbidden is returned when the operation is rejected by policy or

@@ -78,7 +78,7 @@ working behavior · `absent` — not started
 | Tenant resolution | `done` | `tenant_resolver.go` |
 | Gateway-credential authentication | `done` | `authenticator.go` |
 | Credential cache | `done` | `credential_cache.go` |
-| Policy resolution | `partial` | `policy_resolver.go`, `buildSnapshot` now correctly loads rules from policies with `enforcement='active'`. **Bug fixed in Prompt 01**: was filtering on `"enforced"` (never matched the DB CHECK constraint); no rules were ever loaded before this fix. Policy *engine* (CRUD authoring surface, hierarchy, compiler) still absent — see §7 |
+| Policy resolution | `partial` | `policy_resolver.go`, `buildSnapshot` now correctly loads rules from policies with `enforcement='active'`. **Bug fixed in Prompt 01**: was filtering on `"enforced"` (never matched the DB CHECK constraint); no rules were ever loaded before this fix. The enforcement engine resolves real rules; what is absent is the *authoring* surface (CRUD, hierarchy, compiler) — see §7 |
 | Rate limiting | `partial` | `rate_limiter.go` in-process; no atomic/distributed backing |
 | Budget guard | `partial` | `budget_guard.go`; no ledger/settlement behind it |
 | Request inspection | `done` | `request_inspector.go`; 8 MiB bounded, rejects oversize |
@@ -109,7 +109,7 @@ working behavior · `absent` — not started
 |---|---|---|
 | Policy domain model | `schema-only` | `domain/policy.go` types, `policies.sql.go` queries |
 | Policy CRUD API | `absent` | no policy routes in `routes.go` |
-| Policy engine (evaluation, snapshot compilation) | `absent` | not started |
+| Policy engine (evaluation, snapshot compilation) | `partial` | `gatewayv2/policy_resolver.go` compiles an immutable per-org `PolicySnapshot` from active policies and enabled rules, cached 5 min (1000 orgs); `gatewayv2/policy_authorizer.go` evaluates model allowlist/blocklist under deny-overrides at `gateway.go:285`. Scope is model authorization only — no rule types beyond allowlist/blocklist, and no hierarchy |
 | Policy hierarchy (org → team → project → key) | `absent` | not started |
 | Event-driven policy invalidation | `absent` | a durable `ports.EventBus` now exists (in-memory + NATS JetStream), but nothing publishes or consumes policy events on it yet |
 | Audit log write path | `partial` | identity/provider paths audit; no general audit API |
@@ -144,17 +144,20 @@ working behavior · `absent` — not started
 
 | Area | State | Evidence |
 |---|---|---|
-| OpenAPI spec | `partial` | `backend/api/openapi/openapi.yaml` is 109 lines and documents **only** `/livez`, `/readyz`, `/healthz` |
-| Real `/v1` surface documented | `absent` | 51 routes exist; spec documents none of them |
-| Generated TS contracts | `partial` | `packages/contracts/src/generated.ts` (178 LOC) generated from the 3-path spec |
-| `api-client` | `partial` | 32 LOC, health only; no `/v1` methods |
-| CLI (Go) | `partial` | 393 LOC; auth/credential/config/install commands only; no policy/usage/billing |
-| Web app | `partial` | 12 routes; registry-driven client over the real control API (TanStack Query + Zod + React Hook Form, 11 sections across Platform / Credentials / Organization, filtered by the backend role matrix so `member`/`billing_admin` see only Organization). All self-serve create/invite/sync mutations now have UI: invite member, create project, create team, create API key, create gateway key (subject picked from real members/service accounts), create provider account, create provider credential, and sync models — one-time secrets are revealed then cleared, and provider/API-key inputs are reset on success. Still `partial`: the OBSERVE (usage, cost, latency), GOVERNANCE (policy), ALERTS, AUDIT, and BILLING read surfaces are all blocked, because the control API exposes no aggregate, policy, alert, audit, or billing read routes. Latency is blocked twice over: no aggregate route exists *and* `llm_requests` persists no TTFT. Project/team membership management remains unwired: there is no project/team detail surface for the member hooks |
+| OpenAPI spec | `done` | `backend/api/openapi/openapi.yaml` is 2246 lines: 69 `/v1` paths (83 operations) + 3 health endpoints, in parity with the registered control API |
+| Real `/v1` surface documented | `done` | 83 operations across 69 paths are mounted in `controlapi` and all 83 are documented in the spec |
+| Generated TS contracts | `partial` | `packages/contracts/src/generated.ts` (3676 LOC) carries all 69 route literals, but exports only 5 domain types — route-complete, payload-thin |
+| `api-client` | `done` | 1852 LOC across 17 domain modules + `client.ts` transport (cookies, CSRF, request IDs, pagination, error mapping); 81 typed `/v1` transport call sites |
+| CLI (Go) | `partial` | 393 LOC across 5 Go files; auth/credential/config/install commands only; no policy/usage/billing |
+| Web app | `partial` | `app/` is a Next.js app-router dashboard: 43 pages, **none** of which read `@/lib/mock-data` (that module is deleted); the only demo-backed surface left is `govern/model-access` (direct), via `@/lib/demo`. Auth is live — `/v1/auth/session`, signin, refresh, logout, CSRF — and every route renders dynamically behind `requireSession`. The typed `api-client` (81 `/v1` transport call sites) is now consumed by 8 modules. Still `partial`: there are no policy routes, so GOVERNANCE (policy) authoring remains blocked, but ALERTS, AUDIT and BILLING are unblocked — read APIs exist (`GET /v1/alerts`, `GET /v1/audit-logs`, and 4 `GET /v1/billing/*` routes) and the pages call them. Usage and cost aggregates exist (10 `GET /v1/usage/*` routes), so OBSERVE usage/cost is unblocked at the API layer; latency is unblocked too — `llm_requests` persists `time_to_first_token_ms` and `GET /v1/usage/latency` serves P50/P95/P99 TTFT. Project/team membership management remains unwired: there is no project/team detail surface for the member hooks |
 
-> **Note — ADR-1 drift.** ADR-1 names the OpenAPI spec the single source of
-> truth for every wire type. In practice the spec predates the implemented API
-> and documents none of the 51 `/v1` routes, so contracts are not actually
-> driving the TS side. This is a tracked gap, not an intentional state.
+> **Note — ADR-1 drift (narrowed, not closed).** ADR-1 names the OpenAPI spec
+> the single source of truth for every wire type. The spec now documents all 83
+> implemented `/v1` operations, so it no longer lags on coverage — but it yields
+> only 5 exported domain types for those 83 operations, leaving the TS side
+> route-driven rather than payload-driven: most operations have a path literal
+> and no dedicated response type. This is a tracked gap, not an intentional
+> state.
 
 ## 11. Operations & hardening
 
@@ -178,16 +181,17 @@ and covered by a green `-race` suite.
 
 **The critical structural gap:** the gateway enforces governance and writes usage,
 the worker prices that usage from versioned price sheets and rolls it up, but the
-control plane still has no policy engine. Cost derivation is now sound but
-unreachable in practice: there is no control API for price sheets, so an operator
+control plane has no API to author the policies it enforces. Cost derivation is
+now sound but unreachable in practice: there is no control API for price sheets, so an operator
 cannot create or amend one through the product, and nothing settles an invoice
 from the derived cost. Usage now reaches the ledger over a real `ports.EventBus`
 (in-memory locally, JetStream across processes), so the transport is no longer
 the blocker; the rollup job still rebuilds on a ticker rather than reacting to a
 usage event, and the bus carries usage only, not policy invalidation.
 
-**Fastest path to a coherent product:** policy CRUD + engine is now the
-highest-leverage remaining item, because the hot path already calls a policy
-resolver that currently has nothing real behind it. Pricing control API + invoice
+**Fastest path to a coherent product:** a policy authoring (CRUD) API is now the
+highest-leverage remaining item, because the hot path already authorizes from
+compiled, immutable policy snapshots, but no operator surface exists to author the
+rules those snapshots enforce. Pricing control API + invoice
 settlement is close behind, because the cost derivation they would expose already
 exists and is tested — only the operator-facing surface is missing.

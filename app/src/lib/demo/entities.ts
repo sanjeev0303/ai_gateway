@@ -28,13 +28,7 @@ export const organization: DemoOrganization = {
   plan: "scale",
   status: "active",
   createdAt: "2024-03-11T09:00:00Z",
-  seatsUsed: 10,
-  seatsTotal: 25,
-  billingEmail: "ap@acme.example",
-  region: "us-east-1",
-  platformFeeMonthly: 499,
-  dataResidency: "United States",
-  ssoEnforced: true,
+
 };
 
 /* ------------------------------------------------------------------ *

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { BarChart, DonutChart } from "@/components/charts";
+import { DonutChart } from "@/components/charts";
 import {
   DataTable,
   PageShell,
@@ -15,161 +15,141 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { formatDate, formatNumber, formatRelative } from "@/lib/format";
-import { NOW, credentials } from "@/lib/mock-data";
-import {
-  CREDENTIAL_STATUS_TONE,
-  type CredentialKind,
-  type StatusTone,
-} from "@/types";
+import { toneFor } from "@/lib/org-tones";
+import { getApiClient } from "@/lib/session";
+import type { StatusTone } from "@/types";
 
 export const metadata: Metadata = {
   title: "Credentials · Sentinel",
-  description: "Provider secrets, their rotation state, and which projects depend on each one.",
+  description: "Control-plane API keys, their scopes, and last use.",
 };
 
-const KIND_TONE: Record<CredentialKind, StatusTone> = {
-  api_key: "info",
-  oauth: "success",
-  service_account: "neutral",
-  webhook: "warning",
+const CREDENTIAL_TONE: Record<string, StatusTone> = {
+  active: "success",
+  revoked: "neutral",
+  expired: "danger",
 };
 
 interface CredentialRow {
   id: string;
   name: string;
-  kind: string;
-  kindTone: StatusTone;
-  provider: string;
-  masked: string;
+  prefix: string;
+  scope: string;
   status: string;
   statusTone: StatusTone;
-  created: string;
-  expires: string;
+  serviceAccount: string;
   lastUsed: string;
-  projects: string;
-  projectCount: number;
+  created: string;
 }
 
 const credentialColumns: readonly Column<CredentialRow>[] = [
-  { key: "name", header: "Credential", primary: "name", secondary: "masked", sort: "name" },
-  { key: "kind", header: "Kind", primary: "kind", tone: "kindTone", sort: "kind" },
-  { key: "provider", header: "Provider", primary: "provider", sort: "provider" },
+  { key: "name", header: "Credential", primary: "name", secondary: "prefix", sort: "name" },
+  { key: "scope", header: "Scope", primary: "scope", sort: "scope" },
   { key: "status", header: "Status", primary: "status", tone: "statusTone", sort: "status" },
-  { key: "created", header: "Created", primary: "created", sort: "created" },
-  { key: "expires", header: "Expires", primary: "expires", sort: "expires" },
-  { key: "lastUsed", header: "Last used", primary: "lastUsed", sort: "lastUsed" },
   {
-    key: "projects",
-    header: "Projects",
-    primary: "projects",
-    align: "right",
-    sort: "projectCount",
+    key: "serviceAccount",
+    header: "Service account",
+    primary: "serviceAccount",
+    sort: "serviceAccount",
   },
+  { key: "lastUsed", header: "Last used", primary: "lastUsed", sort: "lastUsed" },
+  { key: "created", header: "Created", primary: "created", sort: "created" },
 ];
 
-const rows: CredentialRow[] = [...credentials]
-  .sort((a, b) => a.name.localeCompare(b.name))
-  .map((credential) => ({
-    id: credential.id,
-    name: credential.name,
-    kind: credential.kind,
-    kindTone: KIND_TONE[credential.kind],
-    provider: credential.providerName,
-    masked: credential.maskedValue,
-    status: credential.status,
-    statusTone: CREDENTIAL_STATUS_TONE[credential.status],
-    created: formatDate(credential.createdAt),
-    expires: credential.expiresAt ? formatDate(credential.expiresAt) : "Never",
-    lastUsed: formatRelative(credential.lastUsedAt, NOW),
-    projects: formatNumber(credential.usedByProjectCount),
-    projectCount: credential.usedByProjectCount,
-  }));
+async function loadCredentials() {
+  const { credentials } = await getApiClient();
+  const list = await credentials.list();
+  const now = new Date();
 
-const healthy = credentials.filter((credential) => credential.status === "healthy");
-const expiring = credentials.filter((credential) => credential.status === "expiring");
-const broken = credentials.filter(
-  (credential) => credential.status === "expired" || credential.status === "revoked",
-);
-const sharedWidely = credentials.filter(
-  (credential) => credential.usedByProjectCount > 1,
-);
+  const rows: CredentialRow[] = [...list.items]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((credential) => ({
+      id: credential.id,
+      name: credential.name,
+      prefix: credential.key_prefix,
+      scope: credential.scope || "unspecified",
+      status: credential.status,
+      statusTone: toneFor(CREDENTIAL_TONE, credential.status),
+      serviceAccount: credential.service_account_id ?? "—",
+      lastUsed: credential.last_used_at ? formatRelative(credential.last_used_at, now) : "Never",
+      created: formatDate(credential.created_at),
+    }));
 
-const kindMix = (["api_key", "oauth", "service_account", "webhook"] as const).map(
-  (kind) => ({ label: kind.replace("_", " "), value: credentials.filter((c) => c.kind === kind).length }),
-);
+  const scopeCounts = new Map<string, number>();
+  for (const row of rows) {
+    scopeCounts.set(row.scope, (scopeCounts.get(row.scope) ?? 0) + 1);
+  }
 
-const blastRadius = [...credentials]
-  .sort((a, b) => b.usedByProjectCount - a.usedByProjectCount)
-  .slice(0, 8)
-  .map((credential) => ({
-    label: credential.name,
-    value: credential.usedByProjectCount,
-  }));
+  return {
+    rows,
+    total: rows.length,
+    active: rows.filter((row) => row.status === "active").length,
+    neverUsed: list.items.filter((item) => !item.last_used_at).length,
+    scopeMix: [...scopeCounts.entries()]
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value),
+  };
+}
 
-export default function CredentialsPage() {
+export default async function CredentialsPage() {
+  const { rows, total, active, neverUsed, scopeMix } = await loadCredentials();
+
   return (
     <div className="p-4 sm:p-6">
       <PageShell
         title="Credentials"
-        description="Secrets are stored by the gateway and never returned to this console. Rotation is a scheduling problem, not a discovery problem."
+        description="Control-plane API keys for this organization. Key hashes are never returned, so only the prefix shown here leaves the server."
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Credentials"
-            value={formatNumber(credentials.length)}
-            hint={`${formatNumber(healthy.length)} healthy`}
+            value={formatNumber(total)}
+            hint={`${formatNumber(active)} active`}
           />
           <StatCard
-            label="Expiring"
-            value={formatNumber(expiring.length)}
-            tone={expiring.length > 0 ? "warning" : "success"}
-            hint="Rotation due"
+            label="Never used"
+            value={formatNumber(neverUsed)}
+            tone={neverUsed > 0 ? "warning" : "success"}
+            hint="No last-used timestamp yet"
           />
+          <StatCard label="Scopes" value={formatNumber(scopeMix.length)} hint="Distinct scopes" />
           <StatCard
-            label="Unusable"
-            value={formatNumber(broken.length)}
-            tone={broken.length > 0 ? "danger" : "success"}
-            hint="Expired or revoked"
-          />
-          <StatCard
-            label="Shared"
-            value={formatNumber(sharedWidely.length)}
-            tone={sharedWidely.length > 0 ? "warning" : "neutral"}
-            hint="Used by multiple projects"
+            label="Revoked"
+            value={formatNumber(total - active)}
+            tone={total - active > 0 ? "neutral" : "success"}
+            hint="No longer usable"
           />
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
+        <section className="grid gap-4 lg:grid-cols-2">
+          <Card>
             <CardHeader>
-              <CardTitle>Blast radius by credential</CardTitle>
-              <CardDescription>
-                A widely used secret is worth rotating on a schedule, because
-                rotating it breaks everything at once.
-              </CardDescription>
+              <CardTitle>Credentials by scope</CardTitle>
+              <CardDescription>How the keys on file are scoped.</CardDescription>
             </CardHeader>
             <CardContent>
-              <BarChart
-                data={blastRadius}
-                formatValue={(value) => `${formatNumber(value)} projects`}
+              <DonutChart
+                data={scopeMix}
+                centerLabel={formatNumber(total)}
+                formatValue={(value) => `${formatNumber(value)} keys`}
               />
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Credentials by kind</CardTitle>
-              <CardDescription>
-                OAuth tokens outlive API keys and need an explicit revocation
-                path.
-              </CardDescription>
+              <CardTitle>Expiry and blast radius</CardTitle>
+              <CardDescription>Not available for control-plane keys.</CardDescription>
             </CardHeader>
-            <CardContent>
-              <DonutChart
-                data={kindMix}
-                centerLabel={formatNumber(credentials.length)}
-                formatValue={(value) => `${formatNumber(value)} keys`}
-              />
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
+              <p>
+                These keys carry no expiry and no per-project usage, so there is
+                nothing to schedule rotation against or rank by blast radius.
+              </p>
+              <p>
+                Gateway credentials do expose expiry, scopes, and an owning team
+                or project, and are listed under Platform.
+              </p>
             </CardContent>
           </Card>
         </section>
@@ -178,8 +158,8 @@ export default function CredentialsPage() {
           <CardHeader>
             <CardTitle>All credentials</CardTitle>
             <CardDescription>
-              Only the last four characters are ever shown, so a leak of this
-              table is not a leak of your providers.
+              Only a short prefix is stored and returned, so a leak of this table
+              is not a leak of your keys.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -188,7 +168,7 @@ export default function CredentialsPage() {
               rows={rows}
               rowKey="id"
               pageSize={10}
-              emptyMessage="No credentials configured."
+              emptyMessage="No control-plane credentials."
             />
           </CardContent>
         </Card>

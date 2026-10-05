@@ -242,11 +242,13 @@ services:
       context: ../..
       dockerfile: app/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8081}
+        CONTROL_API_URL: "http://control-api:8080"
     environment:
       NODE_ENV: production
       HOSTNAME: 0.0.0.0
       PORT: "3000"
+      # Runtime proxy target: service name + internal port, not localhost.
+      CONTROL_API_URL: http://control-api:8080
     ports:
       - "3000:3000"
     depends_on:

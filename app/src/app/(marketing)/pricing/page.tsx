@@ -8,20 +8,20 @@ import { APP_NAME } from "@/lib/constants";
 export const metadata: Metadata = {
   title: `Pricing · ${APP_NAME}`,
   description:
-    "Start free with the gateway, then pay for policy enforcement, retention, and controls as your AI usage grows.",
+    "Sentinel is pre-release and not yet priced. What the platform does today, without a made-up price list.",
 };
 
 export default function PricingPage() {
   return (
     <>
       <Hero
-        headline="Start on the gateway. Pay for control."
-        subheadline="No per-seat pricing theatre. Every plan includes the routing layer; you pay more when you need policy enforcement, long retention, and procurement-grade controls."
+        headline="Not priced yet"
+        subheadline="There is no billing, invoicing, or seat management in the product yet, so any price list here would be fiction. Here is what the platform actually does today."
       />
       <PricingTable />
       <CallToAction
-        heading="Try it against real traffic for a week"
-        body="The Starter plan is free for five people. No card, no sales call, no procurement cycle."
+        heading="Send one request through it"
+        body="The fastest way to understand the control plane is to route a single request through the gateway and inspect the record it writes."
         primaryLabel="Open the dashboard"
         secondaryLabel="Learn what you get"
         secondaryHref="/product"

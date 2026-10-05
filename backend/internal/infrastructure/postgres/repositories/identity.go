@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -60,6 +61,23 @@ func (r *organizationRepo) GetBySlug(ctx context.Context, slug string) (domain.O
 		return nil
 	})
 	return org, mapNotFound(err)
+}
+
+func (r *organizationRepo) Update(ctx context.Context, id uuid.UUID, input domain.UpdateOrganization) (domain.Organization, error) {
+	var org domain.Organization
+	err := r.store.WithTx(ctx, func(q *db.Queries) error {
+		row, err := q.UpdateOrganization(ctx, db.UpdateOrganizationParams{
+			ID:   id,
+			Name: input.Name,
+			Slug: input.Slug,
+		})
+		if err != nil {
+			return err
+		}
+		org = toOrganization(row)
+		return nil
+	})
+	return org, mapUniqueViolation(mapNotFound(err))
 }
 
 func (r *organizationRepo) ListAllIDs(ctx context.Context) ([]uuid.UUID, error) {
@@ -193,6 +211,9 @@ func (r *authRepo) Register(ctx context.Context, reg domain.Registration) (domai
 		return nil
 	})
 	if err != nil {
+		if uniqueViolationOn(err, "users_email_lower_key") {
+			return domain.User{}, domain.Organization{}, fmt.Errorf("%w: %v", ports.ErrEmailTaken, err)
+		}
 		return domain.User{}, domain.Organization{}, mapUniqueViolation(err)
 	}
 	return user, org, nil

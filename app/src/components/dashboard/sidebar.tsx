@@ -8,7 +8,7 @@ import { Logo } from "@/components/logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DASHBOARD_NAV } from "@/lib/constants";
 import { initials } from "@/lib/format";
-import { currentUser, organization } from "@/lib/mock-data";
+import { useSession } from "@/lib/session-context";
 import { cn } from "@/lib/utils";
 
 interface SidebarNavProps {
@@ -26,6 +26,9 @@ const isActive = (pathname: string, href: string): boolean =>
  */
 export function SidebarNav({ onNavigate }: SidebarNavProps) {
   const pathname = usePathname();
+  const session = useSession();
+  if (session.status !== "authenticated") return null;
+  const { user, organization } = session.session;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -129,11 +132,11 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
         <div className="mt-2 flex items-center gap-2.5 rounded-md px-2.5 py-1.5">
           <Avatar className="size-7">
             <AvatarFallback className="text-[11px]">
-              {initials(currentUser.name)}
+              {initials(user.name)}
             </AvatarFallback>
           </Avatar>
           <span className="min-w-0 flex-1 truncate text-[13px] text-sidebar-foreground">
-            {currentUser.name}
+            {user.name}
           </span>
           <ChevronDown className="size-3.5 shrink-0 text-sidebar-muted" aria-hidden />
         </div>

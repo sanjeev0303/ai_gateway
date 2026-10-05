@@ -153,6 +153,7 @@ type controlStubs struct {
 	auth        *stubAuth
 	refresh     *stubRefreshTokens
 	passwords   *stubPasswords
+	subs        *stubSubscriptions
 
 	providerAccounts    *stubProviderAccounts
 	providerCredentials *stubProviderCredentials
@@ -183,6 +184,7 @@ func newControlStubs() *controlStubs {
 		auth:      &stubAuth{},
 		refresh:   &stubRefreshTokens{},
 		passwords: &stubPasswords{},
+		subs:      &stubSubscriptions{},
 
 		providerAccounts:    &stubProviderAccounts{},
 		providerCredentials: &stubProviderCredentials{},
@@ -209,6 +211,7 @@ func (st *controlStubs) deps() identity.ServiceDeps {
 		Audits:          st.audits,
 		Auth:            st.auth,
 		RefreshTokens:   st.refresh,
+		Subs:            st.subs,
 		Issuer:          st.issuer,
 		Verifier:        st.verifier,
 		Hasher:          st.hasher,

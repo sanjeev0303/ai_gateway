@@ -3,9 +3,7 @@ import { Eye, Gauge, Lock, Scale } from "lucide-react";
 
 import { CallToAction } from "@/components/marketing/cta";
 import { Hero } from "@/components/marketing/hero";
-import { Testimonials } from "@/components/marketing/testimonials";
 import { APP_NAME, MARKETING_NAV } from "@/lib/constants";
-import { organization } from "@/lib/mock-data";
 
 export const metadata: Metadata = {
   title: `Company · ${APP_NAME}`,
@@ -22,21 +20,21 @@ const PRINCIPLES = [
   },
   {
     icon: Lock,
-    title: "Refuse by default",
+    title: "Deny by default",
     description:
-      "Traffic is inspected before it is billed. A policy that blocks a request is a cheaper outcome than a leaked one.",
+      "A credential resolves to exactly one tenant, and an immutable policy snapshot is consulted before the provider is called.",
   },
   {
     icon: Gauge,
-    title: "Fast enough to keep",
+    title: "Cheap enough to keep",
     description:
-      "Enforcement runs in under 40ms. A security control nobody tolerates in the hot path is not a control.",
+      "Authorization, rate limits, and budget checks sit on the hot path, so they read a compiled snapshot instead of querying on every request.",
   },
   {
     icon: Scale,
     title: "Explainable after the fact",
     description:
-      "Seven years of immutable records, exportable without asking us, because the auditor should not need a favour.",
+      "Requests keep their model, tokens, and latency. Tenant, credential, and policy changes are recorded and exportable on demand.",
   },
 ] as const;
 
@@ -85,47 +83,23 @@ export default function CompanyPage() {
 
       <section className="border-b">
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
-          <div className="grid gap-10 md:grid-cols-2">
-            <div>
-              <h2 className="text-3xl font-semibold tracking-tight text-balance">
-                Where this runs today
-              </h2>
-              <p className="mt-4 text-lg text-muted-foreground text-pretty">
-                The dashboard is populated from a representative Acme Corp
-                Analytics workspace, so every figure you see is a real record
-                with a real policy decision attached to it.
-              </p>
-            </div>
-            <dl className="grid grid-cols-2 gap-6 self-start">
-              <div className="rounded-lg border bg-card p-4">
-                <dt className="text-sm text-muted-foreground">Organization</dt>
-                <dd className="mt-1 font-medium">{organization.name}</dd>
-              </div>
-              <div className="rounded-lg border bg-card p-4">
-                <dt className="text-sm text-muted-foreground">Region</dt>
-                <dd className="mt-1 font-medium">{organization.region}</dd>
-              </div>
-              <div className="rounded-lg border bg-card p-4">
-                <dt className="text-sm text-muted-foreground">Seats in use</dt>
-                <dd className="mt-1 font-medium tabular-nums">
-                  {organization.seatsUsed} of {organization.seatsTotal}
-                </dd>
-              </div>
-              <div className="rounded-lg border bg-card p-4">
-                <dt className="text-sm text-muted-foreground">Billing contact</dt>
-                <dd className="mt-1 truncate font-medium">
-                  {organization.billingEmail}
-                </dd>
-              </div>
-            </dl>
+          <div className="max-w-2xl">
+            <h2 className="text-3xl font-semibold tracking-tight text-balance">
+              No sample data
+            </h2>
+            <p className="mt-4 text-lg text-muted-foreground text-pretty">
+              There is no demo workspace behind these pages. Every panel in the
+              dashboard is a live query against the control API, scoped to the
+              tenant you are signed in as, and a failed query says so instead of
+              rendering a placeholder.
+            </p>
           </div>
         </div>
       </section>
 
-      <Testimonials />
       <CallToAction
         heading="Put the control plane in front of your traffic"
-        body="Start with one project on the free plan. Invite your security reviewer when the first audit record lands."
+        body="Create a tenant, issue a scoped credential, and route your first request through the gateway. Invite your security reviewer when the first audit record lands."
         secondaryLabel={`Read the ${MARKETING_NAV[0]?.label.toLowerCase() ?? "product"} overview`}
         secondaryHref="/product"
       />

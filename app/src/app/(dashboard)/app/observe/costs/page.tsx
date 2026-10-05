@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 
 import { BarChart, DonutChart, LineChart, chartColor } from "@/components/charts";
 import {
+  EmptyState,
   PageShell,
   StatCard,
 } from "@/components/dashboard";
-import { Progress } from "@/components/ui/progress";
 import {
   Card,
   CardContent,
@@ -13,96 +13,146 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatPercent, formatUsd, formatUsdExact } from "@/lib/format";
-import { costSeries, costSummary } from "@/lib/mock-data";
-import type { StatusTone } from "@/types";
+import { formatCompact, formatUsd, formatUsdExact, microsToUsd } from "@/lib/format";
+import { getApiClient } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Costs · Sentinel",
-  description: "Spend to date, forecast, and attribution by model, team, and project.",
+  description: "Spend attributed to models, teams, projects, and providers.",
 };
 
-export default function CostsPage() {
-  const { forecast } = costSummary;
-  const budgetTone: StatusTone =
-    forecast.budget !== null && forecast.actual >= forecast.budget
-      ? "danger"
-      : forecast.projectedOverspend > 0
-        ? "warning"
-        : "success";
-  const budgetProgress =
-    forecast.budget !== null && forecast.budget > 0
-      ? Math.min(1, forecast.actual / forecast.budget)
-      : 0;
+const DAY = 24 * 60 * 60 * 1000;
+
+async function loadCosts() {
+  const { usage, teams, projects } = await getApiClient();
+
+  const now = Date.now();
+  const current = { from: new Date(now - 30 * DAY), to: new Date(now) };
+  const previous = { from: new Date(now - 60 * DAY), to: new Date(now - 30 * DAY) };
+
+  const [
+    summary,
+    priorSummary,
+    series,
+    byTeam,
+    byProject,
+    byProvider,
+    byModel,
+    byUser,
+    teamList,
+    projectList,
+  ] = await Promise.all([
+    usage.summary(current),
+    usage.summary(previous),
+    usage.timeseries(current),
+    usage.byTeam(current),
+    usage.byProject(current),
+    usage.byProvider(current),
+    usage.byModel(current),
+    usage.byUser(current),
+    teams.list(),
+    projects.list(),
+  ]);
+
+  return {
+    summary,
+    priorSummary,
+    series,
+    byTeam,
+    byProject,
+    byProvider,
+    byModel,
+    byUser,
+    teamNames: new Map(teamList.items.map((team) => [team.id, team.name])),
+    projectNames: new Map(projectList.items.map((project) => [project.id, project.name])),
+  };
+}
+
+export default async function CostsPage() {
+  const {
+    summary,
+    priorSummary,
+    series,
+    byTeam,
+    byProject,
+    byProvider,
+    byModel,
+    byUser,
+    teamNames,
+    projectNames,
+  } = await loadCosts();
+
+  const spend = microsToUsd(summary.TotalCostMicros);
+  const priorSpend = microsToUsd(priorSummary.TotalCostMicros);
+  const changeFraction = priorSpend > 0 ? (spend - priorSpend) / priorSpend : 0;
+
+  const spendSeries = series.items.map((point) => ({
+    date: point.BucketStart.slice(0, 10),
+    value: microsToUsd(point.CostMicros),
+  }));
+
+  const perMillionTokens =
+    summary.TotalTokens > 0 ? (spend / summary.TotalTokens) * 1_000_000 : 0;
+  const perRequest = summary.Requests > 0 ? spend / summary.Requests : 0;
 
   return (
     <div className="p-4 sm:p-6">
       <PageShell
         title="Costs"
-        description="Every dollar attributed to a model, team, project, and environment, with a month-end forecast."
+        description="Every dollar attributed to a model, team, project, and provider over the trailing 30 days."
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            label="Spend month to date"
-            value={formatUsd(costSummary.mtd)}
-            hint={`${formatUsd(costSummary.lastMonth)} same period last month`}
-            delta={{
-              fraction: costSummary.changePct,
-              direction: costSummary.changePct > 0 ? "up" : "down",
-              higherIsWorse: true,
-              label: "vs last month",
-            }}
-            sparkline={costSeries.dailySpend}
+            label="Spend"
+            value={formatUsd(spend)}
+            hint="Trailing 30 days"
+            delta={
+              priorSpend > 0
+                ? {
+                    fraction: changeFraction,
+                    direction:
+                      changeFraction > 0.005
+                        ? "up"
+                        : changeFraction < -0.005
+                          ? "down"
+                          : "flat",
+                    higherIsWorse: true,
+                    label: "vs prior 30 days",
+                  }
+                : undefined
+            }
+            sparkline={spendSeries}
           />
           <StatCard
-            label="Forecast at month end"
-            value={formatUsd(forecast.projected)}
-            tone={budgetTone}
-            hint={
-              forecast.projectedOverspend > 0
-                ? `${formatUsd(forecast.projectedOverspend)} over budget`
-                : "Within budget"
-            }
+            label="Prior period"
+            value={formatUsd(priorSpend)}
+            hint="The 30 days before that"
           />
           <StatCard
             label="Blended cost per Mtok"
-            value={formatUsdExact(costSummary.blendedCostPerMTok)}
+            value={formatUsdExact(perMillionTokens)}
             hint="Across all traffic"
           />
           <StatCard
-            label="Monthly budget"
-            value={forecast.budget === null ? "No cap" : formatUsd(forecast.budget)}
-            tone={budgetTone}
-            hint={`${formatPercent(budgetProgress)} consumed`}
+            label="Cost per request"
+            value={formatUsdExact(perRequest)}
+            hint={`${formatCompact(summary.TotalTokens)} tokens over ${summary.Requests} requests`}
           />
         </section>
 
         <Card>
           <CardHeader>
             <CardTitle>Daily spend</CardTitle>
-            <CardDescription>
-              The last 60 days, so the current month can be compared against the
-              full prior month.
-            </CardDescription>
+            <CardDescription>Trailing 30 days, priced from the provider price sheet.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent>
             <LineChart
               label="Daily spend"
-              data={costSeries.dailySpend}
+              data={spendSeries}
               color={chartColor(0)}
               height={260}
               formatValue={formatUsd}
             />
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Budget consumed</span>
-                <span className="tabular-nums">
-                  {formatUsd(forecast.actual)}
-                  {forecast.budget !== null && ` of ${formatUsd(forecast.budget)}`}
-                </span>
-              </div>
-              <Progress value={budgetProgress * 100} />
-            </div>
           </CardContent>
         </Card>
 
@@ -110,65 +160,97 @@ export default function CostsPage() {
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle>Spend by team</CardTitle>
-              <CardDescription>
-                Month-to-date spend attributed to each team.
-              </CardDescription>
+              <CardDescription>Attributed to each team over the trailing window.</CardDescription>
             </CardHeader>
             <CardContent>
-              <BarChart data={costSeries.byTeam} formatValue={formatUsd} />
+              <BarChart
+                data={byTeam.items.map((row) => ({
+                  label: teamNames.get(row.TeamID) ?? row.TeamID,
+                  value: microsToUsd(row.CostMicros),
+                }))}
+                formatValue={formatUsd}
+              />
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
               <CardTitle>Spend by provider</CardTitle>
-              <CardDescription>Where the invoice lands.</CardDescription>
+              <CardDescription>Where the spend lands upstream.</CardDescription>
             </CardHeader>
             <CardContent>
               <DonutChart
-                data={costSeries.byProvider}
-                centerLabel={formatUsd(costSummary.mtd)}
+                data={byProvider.items.map((row) => ({
+                  label: row.Provider,
+                  value: microsToUsd(row.CostMicros),
+                }))}
+                centerLabel={formatUsd(spend)}
                 formatValue={formatUsd}
               />
             </CardContent>
           </Card>
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-2">
+        <section className="grid gap-4 lg:grid-cols-3">
           <Card>
             <CardHeader>
               <CardTitle>Spend by project</CardTitle>
               <CardDescription>Highest first.</CardDescription>
             </CardHeader>
             <CardContent>
-              <BarChart data={costSeries.byProject} formatValue={formatUsd} />
+              <BarChart
+                data={byProject.items.map((row) => ({
+                  label: projectNames.get(row.ProjectID) ?? row.ProjectID,
+                  value: microsToUsd(row.CostMicros),
+                }))}
+                formatValue={formatUsd}
+              />
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Spend by environment</CardTitle>
-              <CardDescription>
-                Production versus staging and development.
-              </CardDescription>
+              <CardTitle>Spend by model</CardTitle>
+              <CardDescription>Highest first.</CardDescription>
             </CardHeader>
             <CardContent>
-              <BarChart data={costSeries.byEnvironment} formatValue={formatUsd} />
+                <BarChart
+                  data={[...byModel.items]
+                    .sort((a, b) => b.CostMicros - a.CostMicros)
+                    .map((row) => ({
+                      label: row.Model,
+                      value: microsToUsd(row.CostMicros),
+                    }))}
+                  formatValue={formatUsd}
+                />
+              </CardContent>
+            </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Spend by user</CardTitle>
+              <CardDescription>Highest first.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {byUser.items.length === 0 ? (
+                <EmptyState
+                  title="No per-user spend yet"
+                  description="Once requests land in this window, spend will break down by user."
+                />
+              ) : (
+                <BarChart
+                  data={[...byUser.items]
+                    .sort((a, b) => b.CostMicros - a.CostMicros)
+                    .map((row) => ({
+                      label: row.UserID,
+                      value: microsToUsd(row.CostMicros),
+                    }))}
+                  formatValue={formatUsd}
+                />
+              )}
             </CardContent>
           </Card>
         </section>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Spend by model</CardTitle>
-            <CardDescription>
-              Trailing 30 days, highest first.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <BarChart data={costSeries.byModel} formatValue={formatUsd} />
-          </CardContent>
-        </Card>
       </PageShell>
     </div>
   );

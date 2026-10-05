@@ -22,6 +22,19 @@ type AuditLog struct {
 	CreatedAt             time.Time
 }
 
+// AuditLogFilter narrows a list of audit records. A nil pointer or the zero
+// time means that dimension is unconstrained. ActorID matches either actor
+// column; ActorType disambiguates which one it was.
+type AuditLogFilter struct {
+	ActorID      *uuid.UUID
+	ActorType    *string
+	Action       *string
+	ResourceType *string
+	ResourceID   *uuid.UUID
+	From         time.Time
+	To           time.Time
+}
+
 // NewAuditLog carries the caller-supplied fields for appending an audit
 // record. The tenant (OrganizationID) is supplied to the repository call.
 type NewAuditLog struct {

@@ -58,14 +58,7 @@ export interface DemoOrganization {
   plan: PlanTier;
   status: "active" | "trialing" | "past_due";
   createdAt: ISODateString;
-  seatsUsed: number;
-  seatsTotal: number;
-  billingEmail: string;
-  region: string;
-  /** Recurring platform fee in whole USD, before metered usage. */
-  platformFeeMonthly: number;
-  dataResidency: string;
-  ssoEnforced: boolean;
+
 }
 
 export const PLAN_LABEL: Record<PlanTier, string> = {

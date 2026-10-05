@@ -96,12 +96,12 @@ export function RequestInspector() {
                     <span
                       className={cn(
                         "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                        sample.decision === "Blocked"
+                        sample.outcome === "Error"
                           ? "bg-destructive/10 text-destructive"
                           : "bg-primary/10 text-primary",
                       )}
                     >
-                      {sample.decision}
+                      {sample.outcome}
                     </span>
                   </span>
                   <span className="mt-1.5 block truncate text-sm font-medium">
@@ -132,15 +132,15 @@ export function RequestInspector() {
             <dl className="mt-4 divide-y">
               <DetailRow label="Project" value={active.project} />
               <DetailRow label="Team" value={active.team} />
-              <DetailRow label="Policy" value={active.policy} />
+              <DetailRow label="Status" value={active.status} />
               <DetailRow label="Timestamp" value={active.time} />
               <DetailRow label="Tokens" value={formatTokens(active.tokens)} />
-              <DetailRow label="Cost avoided" value={formatCost(active.cost)} />
+              <DetailRow label="Cost" value={formatCost(active.cost)} />
             </dl>
 
             <div className="mt-4 rounded-lg border border-dashed p-4">
-              <p className="text-xs font-medium text-muted-foreground">Reason</p>
-              <p className="mt-1.5 text-sm leading-relaxed text-pretty">{active.reason}</p>
+              <p className="text-xs font-medium text-muted-foreground">Detail</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-pretty">{active.detail}</p>
             </div>
           </div>
         </div>

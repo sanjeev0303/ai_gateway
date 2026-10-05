@@ -19,6 +19,7 @@ const (
 // roles. Individual operations map onto one permission.
 const (
 	PermissionOrgRead           = "org.read"
+	PermissionOrgUpdate         = "org.update"
 	PermissionOrgManage         = "org.manage"
 	PermissionMembersRead       = "members.read"
 	PermissionMembersManage     = "members.manage"
@@ -34,6 +35,13 @@ const (
 	PermissionAuditRead         = "audit.read"
 	PermissionBillingRead       = "billing.read"
 	PermissionBillingManage     = "billing.manage"
+	PermissionAlertsRead        = "alerts.read"
+	PermissionAlertsManage      = "alerts.manage"
+	// PermissionSecurityEventsRead gates the platform-originated event feed.
+	// There is no manage variant: security_events is an append-only ledger
+	// written only by the components that detect a condition, so there is no
+	// caller-side mutation to authorize.
+	PermissionSecurityEventsRead = "security_events.read"
 )
 
 // rolePermissions maps each role to the permissions it grants.
@@ -47,31 +55,36 @@ const (
 var rolePermissions = map[string]map[string]bool{
 	RoleOwner: allPermissions(),
 	RoleAdmin: {
-		PermissionOrgRead:           true,
-		PermissionMembersRead:       true,
-		PermissionMembersManage:     true,
-		PermissionTeamsRead:         true,
-		PermissionTeamsManage:       true,
-		PermissionProjectsRead:      true,
-		PermissionProjectsManage:    true,
-		PermissionProvidersRead:     true,
-		PermissionProvidersManage:   true,
-		PermissionCredentialsRead:   true,
-		PermissionCredentialsManage: true,
-		PermissionUsageRead:         true,
-		PermissionAuditRead:         true,
-		PermissionBillingRead:       true,
+		PermissionOrgRead:            true,
+		PermissionMembersRead:        true,
+		PermissionMembersManage:      true,
+		PermissionTeamsRead:          true,
+		PermissionTeamsManage:        true,
+		PermissionProjectsRead:       true,
+		PermissionProjectsManage:     true,
+		PermissionProvidersRead:      true,
+		PermissionProvidersManage:    true,
+		PermissionCredentialsRead:    true,
+		PermissionCredentialsManage:  true,
+		PermissionUsageRead:          true,
+		PermissionAuditRead:          true,
+		PermissionAlertsRead:         true,
+		PermissionAlertsManage:       true,
+		PermissionSecurityEventsRead: true,
+		PermissionBillingRead:        true,
 	},
 	RoleAuditor: {
-		PermissionOrgRead:         true,
-		PermissionMembersRead:     true,
-		PermissionTeamsRead:       true,
-		PermissionProjectsRead:    true,
-		PermissionProvidersRead:   true,
-		PermissionCredentialsRead: true,
-		PermissionUsageRead:       true,
-		PermissionAuditRead:       true,
-		PermissionBillingRead:     true,
+		PermissionOrgRead:            true,
+		PermissionMembersRead:        true,
+		PermissionTeamsRead:          true,
+		PermissionProjectsRead:       true,
+		PermissionProvidersRead:      true,
+		PermissionCredentialsRead:    true,
+		PermissionUsageRead:          true,
+		PermissionAuditRead:          true,
+		PermissionAlertsRead:         true,
+		PermissionSecurityEventsRead: true,
+		PermissionBillingRead:        true,
 	},
 	RoleBillingAdmin: {
 		PermissionOrgRead:       true,
@@ -99,22 +112,26 @@ var rolePermissions = map[string]map[string]bool{
 
 func allPermissions() map[string]bool {
 	return map[string]bool{
-		PermissionOrgRead:           true,
-		PermissionOrgManage:         true,
-		PermissionMembersRead:       true,
-		PermissionMembersManage:     true,
-		PermissionTeamsRead:         true,
-		PermissionTeamsManage:       true,
-		PermissionProjectsRead:      true,
-		PermissionProjectsManage:    true,
-		PermissionProvidersRead:     true,
-		PermissionProvidersManage:   true,
-		PermissionCredentialsRead:   true,
-		PermissionCredentialsManage: true,
-		PermissionUsageRead:         true,
-		PermissionAuditRead:         true,
-		PermissionBillingRead:       true,
-		PermissionBillingManage:     true,
+		PermissionOrgRead:            true,
+		PermissionOrgUpdate:          true,
+		PermissionOrgManage:          true,
+		PermissionMembersRead:        true,
+		PermissionMembersManage:      true,
+		PermissionTeamsRead:          true,
+		PermissionTeamsManage:        true,
+		PermissionProjectsRead:       true,
+		PermissionProjectsManage:     true,
+		PermissionProvidersRead:      true,
+		PermissionProvidersManage:    true,
+		PermissionCredentialsRead:    true,
+		PermissionCredentialsManage:  true,
+		PermissionUsageRead:          true,
+		PermissionAuditRead:          true,
+		PermissionBillingRead:        true,
+		PermissionBillingManage:      true,
+		PermissionAlertsRead:         true,
+		PermissionAlertsManage:       true,
+		PermissionSecurityEventsRead: true,
 	}
 }
 

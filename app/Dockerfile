@@ -8,21 +8,35 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 
-COPY app/package.json app/package-lock.json ./
+# Install from the root workspace so @ai-governance/* resolve to the local
+# packages rather than the (unpublished) registry.
+COPY package.json package-lock.json ./
+COPY packages/contracts/package.json packages/contracts/
+COPY packages/api-client/package.json packages/api-client/
+COPY packages/cli/package.json packages/cli/
+COPY app/package.json app/
 RUN npm ci --ignore-scripts
 
 # ── builder ───────────────────────────────────────────────────────────────────
 FROM node:22-alpine AS builder
 WORKDIR /app
 
-# Accept build-time public env vars
-ARG NEXT_PUBLIC_API_URL=http://localhost:8081
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# Bounds the heap so `next build` cannot grow into a kernel OOM-kill (exit 137)
+# on a small builder VM. 1024MB is verified sufficient; do not raise or remove.
+ENV NODE_OPTIONS=--max-old-space-size=1024
 
+COPY package.json package-lock.json ./
+COPY packages ./packages
+COPY app ./app
+# Copied after the sources, which would otherwise overwrite the nested tree.
+# npm left next under app/node_modules rather than hoisting it.
 COPY --from=deps /app/node_modules ./node_modules
-COPY app/ .
+COPY --from=deps /app/app/node_modules ./app/node_modules
 
-RUN npm run build
+ARG CONTROL_API_URL
+ENV CONTROL_API_URL=${CONTROL_API_URL}
+
+RUN npm run build -w app
 
 # ── runner ────────────────────────────────────────────────────────────────────
 FROM node:22-alpine AS runner
@@ -35,11 +49,14 @@ RUN addgroup --system --gid 1001 nodejs \
  && adduser  --system --uid 1001 nextjs
 
 # Public files
-COPY --from=builder /app/public ./public
+COPY --from=builder /app/app/public ./public
 
-# Standalone output (next.config must set output: 'standalone')
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Tracing root is the repo root, so standalone mirrors it: server.js lives at
+# standalone/app/server.js. Flatten that subtree up so the CMD stays unchanged,
+# and merge the nested node_modules (npm left next under app/).
+COPY --from=builder /app/app/.next/standalone/node_modules ./node_modules
+COPY --from=builder /app/app/.next/standalone/app ./
+COPY --from=builder /app/app/.next/static ./.next/static
 
 USER nextjs
 EXPOSE 3000

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { ExternalLink } from "lucide-react";
 
 import { CodeBlock } from "@/components/developer/code-block";
 import {
@@ -9,7 +8,6 @@ import {
   StatusBadge,
   type Column,
 } from "@/components/dashboard";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -17,37 +15,25 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { sdkIntegrations } from "@/lib/mock-data";
+import { sdkIntegrations } from "@/lib/developer-content";
 
 export const metadata: Metadata = {
   title: "SDKs · Sentinel",
-  description: "Official client libraries and their install commands.",
-};
-
-const INSTALL: Record<string, string> = {
-  TypeScript: "npm install @sentinel/sdk",
-  Python: "pip install sentinel",
-  Go: "go get github.com/sentinel-dev/sentinel-go",
-  Ruby: "gem install sentinel",
+  description: "Client libraries available in this repository.",
 };
 
 interface SdkRow {
   id: string;
   name: string;
   language: string;
-  installed: boolean;
-  installedLabel: string;
-  installedTone: "success" | "neutral";
   latestVersion: string;
   docsUrl: string;
-  docsLabel: string;
 }
 
 const COLUMNS: readonly Column<SdkRow>[] = [
   { key: "name", header: "Package", primary: "name", secondary: "language", sort: "name" },
-  { key: "installed", header: "Installed", primary: "installedLabel", tone: "installedTone" },
-  { key: "latestVersion", header: "Latest", primary: "latestVersion", align: "right", sort: "latestVersion" },
-  { key: "docsUrl", header: "Docs", primary: "docsLabel", href: "docsUrl", align: "right" },
+  { key: "latestVersion", header: "Version", primary: "latestVersion", align: "right", sort: "latestVersion" },
+  { key: "docsUrl", header: "Source", primary: "docsUrl" },
 ];
 
 export default function SdksPage() {
@@ -55,72 +41,51 @@ export default function SdksPage() {
     id: sdk.id,
     name: sdk.name,
     language: sdk.language,
-    installed: sdk.installed,
-    installedLabel: sdk.installed ? "installed" : "not installed",
-    installedTone: sdk.installed ? "success" : "neutral",
     latestVersion: sdk.latestVersion,
     docsUrl: sdk.docsUrl,
-    docsLabel: "Open reference",
   }));
-
-  const installed = sdkIntegrations.filter((sdk) => sdk.installed).length;
 
   return (
     <div className="p-4 sm:p-6">
       <PageShell
         title="SDKs"
-        description="Official clients for the gateway. Each wraps the same REST surface with local types."
-        actions={
-          <Button size="sm" variant="outline">
-            <ExternalLink aria-hidden /> All SDKs
-          </Button>
-        }
+        description="No client library is published to a public registry yet. The gateway is plain HTTP, and these two TypeScript packages exist inside this monorepo only."
       >
-        <section className="grid gap-4 sm:grid-cols-3">
+        <section className="grid gap-4 sm:grid-cols-2">
+          <StatCard label="Published libraries" value="0" hint="Nothing on npm, PyPI, or Go proxies" />
           <StatCard
-            label="Libraries"
+            label="Workspace packages"
             value={String(sdkIntegrations.length)}
-            hint="Maintained by Sentinel"
-          />
-          <StatCard
-            label="Installed"
-            value={`${installed} of ${sdkIntegrations.length}`}
-            tone="success"
-            hint="Detected from your workspaces"
-          />
-          <StatCard
-            label="Surface"
-            value="100%"
-            tone="info"
-            hint="Covered by the gateway contract"
+            hint="Consumed by the dashboard, not installed by users"
           />
         </section>
 
         <Card>
           <CardHeader>
-            <CardTitle>Install</CardTitle>
+            <CardTitle>Call the gateway directly</CardTitle>
             <CardDescription>
-              Libraries are versioned together with the gateway, so a minor release never
-              moves the wire format underneath you.
+              Requests go to the gateway&apos;s Anthropic-shaped messages endpoint, so you do not need a
+              wrapper library. See Quick start for a complete request.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {sdkIntegrations.map((sdk) => (
-              <CodeBlock
-                key={sdk.id}
-                label={`${sdk.name} · ${sdk.latestVersion}`}
-                language="bash"
-                code={INSTALL[sdk.language] ?? `npm install ${sdk.name}`}
-              />
-            ))}
+            <CodeBlock
+              label="POST /v1/messages"
+              language="bash"
+              code={`curl http://localhost:8084/v1/messages \\
+  -H "x-api-key: $AIGW_API_KEY" \\
+  -H "content-type: application/json" \\
+  -d '{"model":"claude-sonnet-4-5","max_tokens":1024,"messages":[]}'`}
+            />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Available libraries</CardTitle>
+            <CardTitle>Available packages</CardTitle>
             <CardDescription>
-              Go and Ruby are community-maintained and currently behind the release train.
+              Both are private workspace packages versioned at 0.0.0. The API client
+              talks to the control plane, not the gateway.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -131,13 +96,13 @@ export default function SdksPage() {
               toolbar={
                 <div className="flex flex-wrap gap-2">
                   {sdkIntegrations.map((sdk) => (
-                    <StatusBadge key={sdk.id} tone={sdk.installed ? "success" : "neutral"}>
+                    <StatusBadge key={sdk.id} tone="neutral">
                       {sdk.language}
                     </StatusBadge>
                   ))}
                 </div>
               }
-              emptyMessage="No SDKs available."
+              emptyMessage="No packages available."
             />
           </CardContent>
         </Card>

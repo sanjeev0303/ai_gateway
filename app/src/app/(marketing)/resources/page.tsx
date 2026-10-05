@@ -16,25 +16,25 @@ const RESOURCES = [
     icon: Terminal,
     title: "Gateway quickstart",
     description:
-      "Point an existing OpenAI-compatible client at the gateway, keep your model names, and confirm attribution in the dashboard.",
+      "Route provider traffic through POST /v1/messages. The request shape is Anthropic's, so existing Anthropic clients need no rewriting.",
   },
   {
     icon: BookOpen,
-    title: "Policy reference",
+    title: "Credentials and policy",
     description:
-      "Every rule type Sentinel evaluates at the edge, how they combine, and what happens when a request fails inspection.",
+      "The credential scopes the gateway enforces, and what an immutable policy snapshot does at request time. The snapshot is compiled from stored policy records; there is no API for authoring it yet.",
   },
   {
     icon: FileText,
-    title: "Audit and retention",
+    title: "Audit export",
     description:
-      "The exact record written for each request, decision, and configuration change — and how to export it for review.",
+      "Which tenant, credential, and policy changes get recorded, and how to export the trail. Retention windows are not implemented yet.",
   },
   {
     icon: LifeBuoy,
-    title: "Migration guide",
+    title: "Client packages",
     description:
-      "Moving an existing multi-provider setup behind one endpoint without downtime, dual writes, or a flag day.",
+      "The private workspace packages that talk to the control API, plus how to call the REST API directly if you would rather not take a dependency.",
   },
 ] as const;
 
@@ -43,7 +43,7 @@ export default function ResourcesPage() {
     <>
       <Hero
         headline="Everything you need to run the gateway"
-        subheadline="Integration notes, the policy reference, and the audit format your security team will ask about — written for people who have to actually operate this."
+        subheadline="Quickstart, API reference, credential scopes, and client packages — for the parts that are real, and an explicit note where they are not."
       />
 
       <section className="border-b">
@@ -52,9 +52,10 @@ export default function ResourcesPage() {
             Start here
           </h2>
           <p className="mt-4 max-w-2xl text-lg text-muted-foreground text-pretty">
-            Most teams ship the gateway behind a single environment variable and
-            reconcile the numbers afterwards. These four references cover that
-            path end to end.
+            These four references are all in the developer section of the
+            dashboard. Each one states which backend capabilities exist today,
+            because two of the four cover behaviour that is specified but not
+            yet implemented.
           </p>
 
           <ul className="mt-12 grid gap-6 sm:grid-cols-2">

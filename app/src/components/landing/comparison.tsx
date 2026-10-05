@@ -2,14 +2,15 @@ import { Check, Minus } from "lucide-react";
 
 import { Container, SectionHeading } from "@/components/landing/section";
 import { COMPARISON } from "@/lib/landing-data";
-import { cn } from "@/lib/utils";
 
-function Cell({ value, highlight }: { value: string; highlight: boolean }) {
-  const affirmative = value === "Yes" || value === "Per request, at write time" || value === "Evaluated at the gateway" || value === "One append-only log" || value === "One environment variable";
+const NOT_IMPLEMENTED = "Not implemented";
+
+function Cell({ value, ours = false }: { value: string; ours?: boolean }) {
+  const affirmative = ours && value !== NOT_IMPLEMENTED;
 
   if (affirmative) {
     return (
-      <span className={cn("inline-flex items-start gap-1.5", highlight && "font-medium")}>
+      <span className="inline-flex items-start gap-1.5 font-medium">
         <Check className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden />
         <span>{value}</span>
       </span>
@@ -17,7 +18,7 @@ function Cell({ value, highlight }: { value: string; highlight: boolean }) {
   }
 
   return (
-    <span className={cn("inline-flex items-start gap-1.5 text-muted-foreground", highlight && "font-medium text-foreground")}>
+    <span className="inline-flex items-start gap-1.5 text-muted-foreground">
       <Minus className="mt-0.5 size-3.5 shrink-0" aria-hidden />
       <span>{value}</span>
     </span>
@@ -64,13 +65,13 @@ export function Comparison() {
                     {row.capability}
                   </th>
                   <td className="py-4 pr-4">
-                    <Cell value={row.sentinel} highlight />
+                    <Cell value={row.sentinel} ours />
                   </td>
                   <td className="py-4 pr-4">
-                    <Cell value={row.inHouse} highlight={false} />
+                    <Cell value={row.inHouse} />
                   </td>
                   <td className="py-4">
-                    <Cell value={row.providerNative} highlight={false} />
+                    <Cell value={row.providerNative} />
                   </td>
                 </tr>
               ))}

@@ -57,6 +57,7 @@ type ServiceDeps struct {
 	Audits             repositories.AuditLogRepository
 	Auth               repositories.AuthRepository
 	RefreshTokens      repositories.RefreshTokenRepository
+	Subs               repositories.SubscriptionRepository
 
 	Issuer                 ports.TokenIssuer
 	Verifier               ports.TokenVerifier
@@ -85,6 +86,7 @@ type Service struct {
 	audits                 repositories.AuditLogRepository
 	auth                   repositories.AuthRepository
 	refreshTokens          repositories.RefreshTokenRepository
+	subs                   repositories.SubscriptionRepository
 	gatewayCredentialCache *credentialcache.CredentialCache
 
 	issuer     ports.TokenIssuer
@@ -131,6 +133,7 @@ func NewService(deps ServiceDeps) *Service {
 		audits:                 deps.Audits,
 		auth:                   deps.Auth,
 		refreshTokens:          deps.RefreshTokens,
+		subs:                   deps.Subs,
 		gatewayCredentialCache: deps.GatewayCredentialCache,
 		issuer:                 deps.Issuer,
 		verifier:               deps.Verifier,
@@ -316,6 +319,49 @@ func (s *Service) ListMembers(ctx context.Context, actor domain.Actor) ([]domain
 		return nil, err
 	}
 	return s.members.List(ctx, actor.OrganizationID)
+}
+
+// GetOrganization returns the actor's own organization, plus its current plan
+// when it has an active subscription.
+func (s *Service) GetOrganization(ctx context.Context, actor domain.Actor) (domain.Organization, *domain.OrganizationPlan, error) {
+	if err := s.RequirePermission(actor, domain.PermissionOrgRead); err != nil {
+		return domain.Organization{}, nil, err
+	}
+	org, err := s.orgs.GetByID(ctx, actor.OrganizationID)
+	if err != nil {
+		return domain.Organization{}, nil, err
+	}
+	plan, err := s.subs.ActiveWithPlan(ctx, actor.OrganizationID)
+	switch {
+	case errors.Is(err, repositories.ErrNotFound):
+		return org, nil, nil
+	case err != nil:
+		return domain.Organization{}, nil, err
+	}
+	return org, &plan, nil
+}
+
+// UpdateOrganization updates the actor's own organization.
+func (s *Service) UpdateOrganization(ctx context.Context, actor domain.Actor, input domain.UpdateOrganization) (domain.Organization, error) {
+	if err := s.RequirePermission(actor, domain.PermissionOrgUpdate); err != nil {
+		return domain.Organization{}, err
+	}
+	if input.Name != nil && strings.TrimSpace(*input.Name) == "" {
+		return domain.Organization{}, repositories.ErrInvalid
+	}
+	if input.Slug != nil {
+		slug := strings.ToLower(strings.TrimSpace(*input.Slug))
+		if slug == "" {
+			return domain.Organization{}, repositories.ErrInvalid
+		}
+		input.Slug = &slug
+	}
+	org, err := s.orgs.Update(ctx, actor.OrganizationID, input)
+	if err != nil {
+		return domain.Organization{}, err
+	}
+	s.audit(ctx, actor, "organization.update", "organization", &actor.OrganizationID, nil, nil)
+	return org, nil
 }
 
 // SetMemberRole changes a member's role. Members cannot change their own

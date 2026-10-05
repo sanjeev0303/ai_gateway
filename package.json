@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "description": "AI Governance SaaS — monorepo (Next.js web + Go backend + shared TS packages)",
   "workspaces": [
-    "apps/*",
+    "app",
     "packages/*"
   ],
   "packageManager": "npm@11.12.1",
@@ -14,5 +14,8 @@
   "scripts": {
     "generate": "npm run generate --workspace=@ai-governance/contracts",
     "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "next": "^16.3.7"
   }
 }

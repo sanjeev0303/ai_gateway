@@ -220,9 +220,12 @@ type stubProviderHealth struct {
 	states []domain.ProviderHealthState
 }
 
+// Get defaults to ErrNotFound ("never checked") rather than panicking, because
+// CheckHealth always reads the prior state to decide whether an observation is a
+// transition. Tests that exercise transitions set get explicitly.
 func (s *stubProviderHealth) Get(ctx context.Context, providerKind string) (domain.ProviderHealthState, error) {
 	if s.get == nil {
-		notConfigured("stubProviderHealth.Get")
+		return domain.ProviderHealthState{}, repositories.ErrNotFound
 	}
 	return s.get(ctx, providerKind)
 }

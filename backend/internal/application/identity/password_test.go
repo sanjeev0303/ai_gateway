@@ -196,12 +196,12 @@ func TestRegisterSurfacesDuplicateEmail(t *testing.T) {
 	attempts := 0
 	st.auth.register = func(context.Context, domain.Registration) (domain.User, domain.Organization, error) {
 		attempts++
-		return domain.User{}, domain.Organization{}, repositories.ErrConflict
+		return domain.User{}, domain.Organization{}, repositories.ErrEmailTaken
 	}
 	_, err := svc.Register(context.Background(), "owner@example.com", "Owner", "", testPassword)
-	requireErrIs(t, err, repositories.ErrConflict)
-	if attempts != maxRegistrationAttempts {
-		t.Fatalf("attempts = %d, want %d", attempts, maxRegistrationAttempts)
+	requireErrIs(t, err, repositories.ErrEmailTaken)
+	if attempts != 1 {
+		t.Fatalf("attempts = %d, want 1 (an existing email is not retryable)", attempts)
 	}
 }
 

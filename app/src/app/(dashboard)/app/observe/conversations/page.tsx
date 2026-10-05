@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 
-import { BarChart, DonutChart } from "@/components/charts";
 import {
   DataTable,
   PageShell,
@@ -14,49 +13,43 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  formatCompact,
-  formatNumber,
-  formatRelative,
-  formatUsd,
-} from "@/lib/format";
-import { NOW, conversations, models } from "@/lib/mock-data";
+import { formatNumber, formatRelative } from "@/lib/format";
+import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
 
 export const metadata: Metadata = {
   title: "Conversations · Sentinel",
-  description: "Every gateway session with its turn count, token cost, and redactor verdict.",
+  description:
+    "Recorded chat sessions, with message counts, token totals, and the privacy mode each one resolves to.",
 };
-
-const modalityById = new Map(models.map((model) => [model.id, model.modality]));
-
-const MODALITY_TONE: Record<string, StatusTone> = {
-  text: "info",
-  vision: "success",
-  audio: "warning",
-  embedding: "neutral",
-  multimodal: "danger",
-};
-
-const modalityOf = (modelId: string) => modalityById.get(modelId) ?? "text";
 
 interface ConversationRow {
   id: string;
   title: string;
   user: string;
-  project: string;
-  model: string;
-  modality: string;
-  modalityTone: StatusTone;
-  started: string;
-  turns: string;
-  turnCount: number;
-  tokens: string;
-  cost: string;
-  costValue: number;
-  review: string;
-  reviewTone: StatusTone;
+  routing: string;
+  messages: number;
+  requests: number;
+  tokens: number;
+  lastActivity: string;
+  privacy: string;
+  privacyTone: StatusTone;
+}
+
+/**
+ * Privacy modes form a redaction ladder: the more turns a mode returns, the
+ * more is exposed, so the strictest mode is the reassuring one. OFF and
+ * FULL_CONTENT both return every turn, so they share the warning tone.
+ */
+const PRIVACY: Record<string, { privacy: string; privacyTone: StatusTone }> = {
+  METADATA_ONLY: { privacy: "Metadata only", privacyTone: "success" },
+  PROMPT_ONLY: { privacy: "Prompt only", privacyTone: "info" },
+  FULL_CONTENT: { privacy: "Full content", privacyTone: "warning" },
+  OFF: { privacy: "No redaction", privacyTone: "warning" },
+};
+
+function privacyBadge(state: string): { privacy: string; privacyTone: StatusTone } {
+  return PRIVACY[state] ?? { privacy: state, privacyTone: "neutral" };
 }
 
 const conversationColumns: readonly Column<ConversationRow>[] = [
@@ -64,174 +57,105 @@ const conversationColumns: readonly Column<ConversationRow>[] = [
     key: "title",
     header: "Conversation",
     primary: "title",
-    secondary: "project",
+    secondary: "routing",
     sort: "title",
   },
   { key: "user", header: "User", primary: "user", sort: "user" },
-  { key: "model", header: "Model", primary: "model", sort: "model" },
-  { key: "modality", header: "Modality", primary: "modality", tone: "modalityTone", sort: "modality" },
-  { key: "started", header: "Started", primary: "started", sort: "started" },
   {
-    key: "turns",
-    header: "Turns",
-    primary: "turns",
+    key: "messages",
+    header: "Messages",
+    primary: "messages",
+    format: "number",
+    sort: "messages",
     align: "right",
-    sort: "turnCount",
   },
-  { key: "tokens", header: "Tokens", primary: "tokens", align: "right" },
   {
-    key: "cost",
-    header: "Cost",
-    primary: "cost",
-    format: "usd",
+    key: "requests",
+    header: "Requests",
+    primary: "requests",
+    format: "number",
+    sort: "requests",
     align: "right",
-    sort: "costValue",
   },
-  { key: "review", header: "Review", primary: "review", tone: "reviewTone", sort: "review" },
+  {
+    key: "tokens",
+    header: "Tokens",
+    primary: "tokens",
+    format: "compact",
+    sort: "tokens",
+    align: "right",
+  },
+  {
+    key: "lastActivity",
+    header: "Last activity",
+    primary: "lastActivity",
+    sort: "lastActivity",
+  },
+  {
+    key: "privacy",
+    header: "Privacy",
+    primary: "privacy",
+    tone: "privacyTone",
+  },
 ];
 
-const rows: ConversationRow[] = [...conversations]
-  .sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1))
-  .map((conversation) => {
-    const modality = modalityOf(conversation.modelId);
-    return {
-      id: conversation.id,
-      title: conversation.title,
-      user: conversation.userName,
-      project: conversation.projectName,
-      model: conversation.modelName,
-      modality,
-      modalityTone: MODALITY_TONE[modality] ?? "neutral",
-      started: formatRelative(conversation.startedAt, NOW),
-      turns: formatNumber(conversation.turnCount),
-      turnCount: conversation.turnCount,
-      tokens: formatCompact(conversation.inputTokens + conversation.outputTokens),
-      cost: formatUsd(conversation.cost),
-      costValue: conversation.cost,
-      review: conversation.flagged ? "Flagged" : "Clear",
-      reviewTone: conversation.flagged ? "danger" : "success",
-    };
-  });
+export default async function ConversationsPage() {
+  const { conversations } = await getApiClient();
+  const { items } = await conversations.list();
 
-const flagged = conversations.filter((conversation) => conversation.flagged);
-const totalCost = conversations.reduce((acc, conversation) => acc + conversation.cost, 0);
-const totalTokens = conversations.reduce(
-  (acc, conversation) => acc + conversation.inputTokens + conversation.outputTokens,
-  0,
-);
+  const totalMessages = items.reduce((sum, c) => sum + c.message_count, 0);
+  const totalRequests = items.reduce((sum, c) => sum + c.request_count, 0);
+  const totalTokens = items.reduce((sum, c) => sum + c.total_tokens, 0);
 
-const modalitySet = [...new Set(conversations.map((c) => modalityOf(c.modelId)))];
-const modalityTotals = modalitySet.map((modality) => ({
-  label: modality,
-  value: conversations
-    .filter((conversation) => modalityOf(conversation.modelId) === modality)
-    .reduce((acc, conversation) => acc + conversation.cost, 0),
-}));
+  const rows: ConversationRow[] = items.map((c) => ({
+    id: c.id,
+    title: c.title || "Untitled",
+    user: c.user_id,
+    routing: [c.provider, c.model].filter(Boolean).join(" · ") || "Provider not recorded",
+    messages: c.message_count,
+    requests: c.request_count,
+    tokens: c.total_tokens,
+    lastActivity: formatRelative(c.last_activity_at ?? c.started_at),
+    ...privacyBadge(c.privacy_state),
+  }));
 
-const costliest = [...conversations]
-  .sort((a, b) => b.cost - a.cost)
-  .slice(0, 8)
-  .map((conversation) => ({ label: conversation.title, value: conversation.cost }));
-
-export default function ConversationsPage() {
   return (
     <div className="p-4 sm:p-6">
       <PageShell
         title="Conversations"
-        description="Every session the gateway proxied, with the token cost it incurred and whether the redactor held."
+        description="The sessions behind the token spend — how many turns each one holds, and how much of its content the privacy mode lets you read."
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Conversations"
-            value={formatNumber(conversations.length)}
-            hint="Trailing 24 hours"
+            value={formatNumber(rows.length)}
+            hint="First page of results"
           />
           <StatCard
-            label="Cost"
-            value={formatUsd(totalCost)}
-            hint={`${formatUsd(totalCost / Math.max(1, conversations.length))} average`}
+            label="Messages"
+            value={formatNumber(totalMessages)}
+            hint="Across the page"
           />
           <StatCard
-            label="Tokens"
-            value={formatCompact(totalTokens)}
-            hint={`${formatCompact(conversations.reduce((acc, c) => acc + c.outputTokens, 0))} output`}
+            label="Requests"
+            value={formatNumber(totalRequests)}
+            hint="Assistant turns only"
           />
-          <StatCard
-            label="Held for review"
-            value={formatNumber(flagged.length)}
-            tone={flagged.length > 0 ? "danger" : "success"}
-            hint="Matched a detector"
-          />
+          <StatCard label="Tokens" value={formatNumber(totalTokens)} hint="Across the page" />
         </section>
-
-        <section className="grid gap-4 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Costliest conversations</CardTitle>
-              <CardDescription>
-                Long agentic runs dominate spend far more than single calls.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <BarChart data={costliest} formatValue={formatUsd} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Spend by modality</CardTitle>
-              <CardDescription>Audio and vision remain a rounding error.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DonutChart
-                data={modalityTotals}
-                centerLabel={formatCompact(totalCost)}
-                formatValue={formatUsd}
-              />
-            </CardContent>
-          </Card>
-        </section>
-
-        {flagged.length > 0 ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Redactor holds</CardTitle>
-              <CardDescription>
-                Content matched a PII or jailbreak detector. The turn text is
-                withheld until a reviewer clears it.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {flagged.map((conversation) => (
-                <div
-                  key={conversation.id}
-                  className="flex flex-col gap-2 rounded-lg border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {conversation.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {conversation.flagReason}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="text-xs text-muted-foreground">
-                      {formatRelative(conversation.startedAt, NOW)}
-                    </span>
-                    <Badge variant="destructive">Held</Badge>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        ) : null}
 
         <Card>
           <CardHeader>
-            <CardTitle>All conversations</CardTitle>
+            <CardTitle>Conversations</CardTitle>
             <CardDescription>
-              Newest first. Tool turns are counted but billed at zero.
+              Users are identified by ID. Requests counts assistant turns, so it runs lower than the
+              message count. Per-conversation spend is absent because{" "}
+              <code className="font-mono text-xs">conversation_messages</code> carries no link to{" "}
+              <code className="font-mono text-xs">llm_requests</code> — the API returns{" "}
+              <code className="font-mono text-xs">cost_micros</code> as null until that link exists.
+              Transcript content is served per conversation by{" "}
+              <code className="font-mono text-xs">/v1/conversations/&#123;id&#125;/messages</code> and
+              is redacted server-side to the privacy mode shown here.
             </CardDescription>
           </CardHeader>
           <CardContent>

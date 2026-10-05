@@ -54,6 +54,7 @@ type testStubs struct {
 	auth         *stubAuth
 	refresh      *stubRefreshTokens
 	passwords    *stubPasswords
+	subs         *stubSubscriptions
 }
 
 // newTestService wires a Service against the stubs with a fixed clock and a
@@ -78,6 +79,7 @@ func newTestService() (*Service, *testStubs) {
 		auth:         &stubAuth{},
 		refresh:      &stubRefreshTokens{},
 		passwords:    &stubPasswords{},
+		subs:         &stubSubscriptions{},
 	}
 	svc := NewService(ServiceDeps{
 		Orgs:               st.orgs,
@@ -94,6 +96,7 @@ func newTestService() (*Service, *testStubs) {
 		Audits:             st.audits,
 		Auth:               st.auth,
 		RefreshTokens:      st.refresh,
+		Subs:               st.subs,
 		Issuer:             st.issuer,
 		Verifier:           st.verifier,
 		Hasher:             st.hasher,
@@ -155,7 +158,8 @@ func requireAudit(t *testing.T, st *testStubs, action string) {
 
 type stubOrgs struct {
 	repositories.OrganizationRepository
-	create func(context.Context, domain.NewOrganization) (domain.Organization, error)
+	create  func(context.Context, domain.NewOrganization) (domain.Organization, error)
+	getByID func(context.Context, uuid.UUID) (domain.Organization, error)
 }
 
 func (s *stubOrgs) Create(ctx context.Context, in domain.NewOrganization) (domain.Organization, error) {
@@ -163,6 +167,13 @@ func (s *stubOrgs) Create(ctx context.Context, in domain.NewOrganization) (domai
 		notConfigured("stubOrgs.Create")
 	}
 	return s.create(ctx, in)
+}
+
+func (s *stubOrgs) GetByID(ctx context.Context, id uuid.UUID) (domain.Organization, error) {
+	if s.getByID == nil {
+		notConfigured("stubOrgs.GetByID")
+	}
+	return s.getByID(ctx, id)
 }
 
 type stubUsers struct {
@@ -561,4 +572,16 @@ func (s *stubGatewayCredentials) Revoke(ctx context.Context, orgID, id uuid.UUID
 		notConfigured("stubGatewayCredentials.Revoke")
 	}
 	return s.revoke(ctx, orgID, id)
+}
+
+type stubSubscriptions struct {
+	repositories.SubscriptionRepository
+	activeWithPlan func(context.Context, uuid.UUID) (domain.OrganizationPlan, error)
+}
+
+func (s *stubSubscriptions) ActiveWithPlan(ctx context.Context, orgID uuid.UUID) (domain.OrganizationPlan, error) {
+	if s.activeWithPlan == nil {
+		notConfigured("stubSubscriptions.ActiveWithPlan")
+	}
+	return s.activeWithPlan(ctx, orgID)
 }

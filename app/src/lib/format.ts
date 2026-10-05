@@ -20,6 +20,12 @@ export function formatUsdExact(value: number): string {
   });
 }
 
+export const MICROS_PER_USD = 1_000_000;
+
+export function microsToUsd(micros: number): number {
+  return micros / MICROS_PER_USD;
+}
+
 /** Token counts stay readable past a million: 1.2M tokens. */
 export function formatCompact(value: number): string {
   if (Math.abs(value) >= 1_000_000)

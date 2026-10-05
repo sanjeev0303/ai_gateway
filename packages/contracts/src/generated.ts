@@ -212,6 +212,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/organizations/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the caller's organization
+         * @description Alias of GET /v1/organization. Carries the caller's plan and billing state only when an active or trialing subscription row exists; both are null otherwise. No derived metrics are synthesized.
+         */
+        get: operations["getv1organizationsme"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the caller's organization
+         * @description Returns the caller's organization. plan and billing are populated only when the organization has an active or trialing subscription.
+         */
+        get: operations["getv1organization"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update the caller's organization
+         * @description Updates the writable organization fields. Only name and slug are mutable. plan and billing come back null because this write path does not re-read the subscription.
+         */
+        patch: operations["patchv1organization"];
+        trace?: never;
+    };
     "/v1/members": {
         parameters: {
             query?: never;
@@ -868,6 +912,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/usage/latency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getv1usagelatency"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/usage/recent": {
         parameters: {
             query?: never;
@@ -900,12 +960,603 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List conversations
+         * @description Returns conversations in the caller's organization with the aggregates derived from their messages. No query parameter influences how much transcript content is returned.
+         */
+        get: operations["getv1conversations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/conversations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one conversation */
+        get: operations["getv1conversationsid"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/conversations/{id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the turns of one conversation
+         * @description content is omitted from a turn whose content the effective privacy mode withholds, so a redacted turn carries no content key at all.
+         */
+        get: operations["getv1conversationsidmessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List audit records
+         * @description Returns the caller's organization audit ledger, newest first. Audit records are append-only: this API exposes no way to modify or remove one. Requires the audit.read permission.
+         */
+        get: operations["getv1auditlogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/audit-logs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one audit record
+         * @description Requires the audit.read permission. A record belonging to another organization is reported as not found rather than forbidden.
+         */
+        get: operations["getv1auditlogsid"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/security-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List security events
+         * @description Returns the caller's organization security feed, newest first. Events are produced by the platform rather than by any user action and are append-only: this API exposes no way to modify or remove one. Two categories exist — provider_incident for a provider's observed reachability changing, and pipeline_failure for a background job failing — so the feed covers the platform itself, not gateway request activity. Requires the security_events.read permission.
+         */
+        get: operations["getv1securityevents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List alert rules
+         * @description Returns the caller's organization alert rules. Listing a rule reports only its configuration; no rule is evaluated by this API. Requires the alerts.read permission.
+         */
+        get: operations["getvalerts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/alerts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one alert rule
+         * @description Requires the alerts.read permission. A rule belonging to another organization is reported as not found rather than forbidden.
+         */
+        get: operations["getvalertsid"];
+        /**
+         * Replace an alert rule
+         * @description Replaces the mutable fields of an alert rule in full; every field is required. alert_type is fixed at creation and cannot be changed. The configuration must be a JSON object. Requires the alerts.manage permission.
+         */
+        put: operations["putvalertsid"];
+        post?: never;
+        /**
+         * Delete an alert rule
+         * @description Deletes the rule. Requires the alerts.manage permission.
+         */
+        delete: operations["deletevalertsid"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/alerts/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate an alert rule's configuration
+         * @description Returns the rule's declared configuration and whether it is muted. No evaluator is wired to any alert rule type, so this never reports whether a rule would fire and never sends a notification: notification_sent is always false. Requires the alerts.manage permission.
+         */
+        post: operations["postvalertsidtest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List sellable plans
+         * @description Returns every plan in the catalog. Plans are global, so this list is identical for all organizations. No price is returned because no price is stored anywhere in this service. Requires the billing.read permission.
+         */
+        get: operations["getv1billingplans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the organization's current plan and billing cycle
+         * @description Returns the organization's stored subscription. An organization with no subscription is reported as not found rather than as an empty object. Requires the billing.read permission.
+         */
+        get: operations["getv1billingsubscription"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get recorded cost and request totals for a window
+         * @description Returns the same aggregated usage summary as /v1/usage/summary, scoped to the caller's organization. All values are measured from recorded requests; nothing here is estimated or forecast. Requires the billing.read permission.
+         */
+        get: operations["getv1billingusage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the organization's invoices
+         * @description Returns the organization's invoices newest issued first, each with its itemisation lines. These are locally computed statements only: no payment processor is integrated, so no invoice is ever marked paid and no field references a charge, payment, or PDF. Requires the billing.read permission.
+         */
+        get: operations["getv1billinginvoices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         EmptyResponse: Record<string, never>;
         PaginatedResponse: Record<string, never>;
+        /** @description The error body returned by every endpoint. */
+        ErrorEnvelope: {
+            error: {
+                /** @description Stable machine-readable code, e.g. not_found or invalid_argument. */
+                code: string;
+                /** @description Human-readable summary; safe to surface to an end user. */
+                message: string;
+                /** @description Correlates the response with server logs. */
+                request_id?: string;
+                /** @description Optional structured context; shape depends on code. */
+                details?: unknown;
+            };
+        };
+        /**
+         * @description How much transcript content may be returned for a conversation. A conversation's own privacy_state always wins; otherwise the server applies AIGW_CONVERSATION_PRIVACY_DEFAULT and fails closed to METADATA_ONLY when that is unset or unrecognized. No query parameter can widen this.
+         * @enum {string}
+         */
+        ConversationPrivacyMode: "OFF" | "METADATA_ONLY" | "PROMPT_ONLY" | "FULL_CONTENT";
+        /** @description One conversation plus the aggregates derived from its messages. request_count counts assistant turns, not messages, so it can be lower than message_count. */
+        ConversationSummary: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: uuid */
+            user_id: string;
+            /** Format: uuid */
+            project_id?: string | null;
+            provider?: string | null;
+            model?: string | null;
+            /** Format: date-time */
+            started_at: string;
+            /**
+             * Format: date-time
+             * @description Null when the conversation has no messages.
+             */
+            last_activity_at?: string | null;
+            /** Format: int32 */
+            request_count: number;
+            /** Format: int32 */
+            message_count: number;
+            /** Format: int32 */
+            total_tokens: number;
+            /**
+             * Format: int64
+             * @description Always null today: conversation_messages carries no link to llm_requests, so per-conversation spend cannot be derived. The field is present so cost can be filled in without a breaking change.
+             */
+            cost_micros?: number | null;
+            privacy_state: components["schemas"]["ConversationPrivacyMode"];
+        };
+        /** @description One stored turn. content is deliberately not required: a turn whose content the effective privacy mode withholds carries no content key at all rather than an empty string, so a client can tell redacted from genuinely empty. */
+        ConversationMessage: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            conversation_id: string;
+            /** @description system, user, assistant, or tool. PROMPT_ONLY keeps content only for system and user turns. */
+            role: string;
+            /** @description Absent when the effective privacy mode withholds it. */
+            content?: string;
+            /** Format: int32 */
+            tokens: number;
+            tool_name?: string | null;
+            provider_message_id?: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ConversationListResponse: {
+            items: components["schemas"]["ConversationSummary"][];
+        };
+        ConversationMessagesResponse: {
+            items: components["schemas"]["ConversationMessage"][];
+        };
+        /** @description One immutable audit record. Audit records are written by the server and can never be edited or deleted through the API. actor_type reports which of the two actor id columns is populated. */
+        AuditLog: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            actor_type: "user" | "service_account";
+            /** Format: uuid */
+            actor_user_id?: string | null;
+            /** Format: uuid */
+            actor_service_account_id?: string | null;
+            /** @description Dotted action name, e.g. organization.update. */
+            action: string;
+            resource_type: string;
+            /** Format: uuid */
+            resource_id?: string | null;
+            /** @description State before the change; an empty object when not recorded. */
+            before: {
+                [key: string]: unknown;
+            };
+            /** @description State after the change; an empty object when not recorded. */
+            after: {
+                [key: string]: unknown;
+            };
+            ip_address?: string | null;
+            request_id?: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AuditLogListResponse: {
+            items: components["schemas"]["AuditLog"][];
+        };
+        /** @description One platform-originated security event. Events are written by background jobs and health probes, never by a user request, and can never be edited or deleted through the API. */
+        SecurityEvent: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            category: "provider_incident" | "pipeline_failure";
+            /** @enum {string} */
+            severity: "info" | "warning" | "critical";
+            /** @description Short human-readable summary of what changed. */
+            title: string;
+            /** @description Structured context for the event, e.g. the provider kind and the from/to status for a provider_incident, or the failing stage for a pipeline_failure. An empty object when nothing was recorded. */
+            detail: {
+                [key: string]: unknown;
+            };
+            /** @description Originating subsystem, e.g. provider_health or usage_rollup. */
+            source: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        SecurityEventListResponse: {
+            items: components["schemas"]["SecurityEvent"][];
+        };
+        /** @description One configured alert rule. Reading a rule exposes only what it declares: no evaluator is wired to any rule type, so last_triggered_at stays null and nothing here implies the rule fires. */
+        Alert: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            alert_type: "spend_limit" | "rate_limit" | "error_rate" | "anomaly";
+            name: string;
+            /** @enum {string} */
+            severity: "info" | "warning" | "critical";
+            /** @description Rule thresholds and options; an empty object when unset. */
+            configuration: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            status: "active" | "muted";
+            /**
+             * Format: date-time
+             * @description Always null today, because nothing evaluates alert rules.
+             */
+            last_triggered_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AlertListResponse: {
+            items: components["schemas"]["Alert"][];
+        };
+        /** @description Full replacement of an alert rule's mutable fields; all four are required. alert_type is not writable. */
+        UpdateAlertRequest: {
+            name: string;
+            /** @enum {string} */
+            severity: "info" | "warning" | "critical";
+            configuration: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            status: "active" | "muted";
+        };
+        /** @description The outcome of validating a rule's configuration. There is deliberately no would-fire field: no evaluator exists to produce one. */
+        AlertTestResult: {
+            /** Format: uuid */
+            alert_id: string;
+            /** @enum {string} */
+            alert_type: "spend_limit" | "rate_limit" | "error_rate" | "anomaly";
+            /** @enum {string} */
+            severity: "info" | "warning" | "critical";
+            /** @enum {string} */
+            status: "active" | "muted";
+            configuration: {
+                [key: string]: unknown;
+            };
+            status_is_muted: boolean;
+            /** @description Always false; no notifier is invoked. */
+            notification_sent: boolean;
+            message: string;
+        };
+        /** @description An organization. Only persisted columns are exposed. MRR, seat counts, billing contact email and region are deliberately absent because no such data is stored for an organization. */
+        Organization: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            /** @enum {string} */
+            status: "active" | "suspended";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** @description Null when the organization has no active or trialing subscription. */
+            plan: components["schemas"]["OrganizationPlan"] | null;
+            /** @description Null when the organization has no active or trialing subscription. */
+            billing: components["schemas"]["OrganizationBilling"] | null;
+        };
+        /** @description The plan on the organization's active or trialing subscription. */
+        OrganizationPlan: {
+            code: string;
+            name: string;
+        };
+        /** @description Billing state of the organization's active or trialing subscription. Period timestamps are empty strings when the stored column is NULL. */
+        OrganizationBilling: {
+            /**
+             * @description Only active or trialing subscriptions are surfaced; other states leave plan and billing null.
+             * @enum {string}
+             */
+            status: "active" | "trialing";
+            /** @description RFC3339 timestamp, or an empty string when NULL. */
+            current_period_start: string;
+            /** @description RFC3339 timestamp, or an empty string when NULL. */
+            current_period_end: string;
+            cancel_at_period_end: boolean;
+        };
+        /** @description Writable organization fields. Both are optional; a blank name or slug is rejected. status is read-only. */
+        UpdateOrganizationRequest: {
+            name?: string;
+            slug?: string;
+        };
+        /** @description One sellable plan from the global catalog. No price, seat count, or billing contact is included because none is stored in this service. */
+        Plan: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            description: string;
+            /** @enum {string} */
+            status: "active" | "inactive";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PlanListResponse: {
+            items: components["schemas"]["Plan"][];
+        };
+        /** @description The organization's current plan and billing cycle, built from stored columns only. */
+        Subscription: {
+            plan_code: string;
+            plan_name: string;
+            /**
+             * @description Mirrors the stored subscription status; not narrowed to the states the organization endpoint surfaces.
+             * @enum {string}
+             */
+            status: "active" | "trialing" | "canceled" | "past_due" | "incomplete";
+            /** Format: date-time */
+            current_period_start: string | null;
+            /** Format: date-time */
+            current_period_end: string | null;
+            cancel_at_period_end: boolean;
+        };
+        /** @description One itemisation row behind an invoice total. */
+        InvoiceLine: {
+            /** Format: uuid */
+            id: string;
+            description: string;
+            /** Format: int64 */
+            quantity: number;
+            /**
+             * Format: int64
+             * @description Price per unit in millionths of the currency's major unit.
+             */
+            unit_micros: number;
+            /** Format: int64 */
+            amount_micros: number;
+        };
+        /** @description One locally computed invoice statement. There is deliberately no paid status, charge id, processor reference, or PDF URL, because no payment processor is integrated and no field here may imply money moved. */
+        Invoice: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            subscription_id: string | null;
+            /** @description Human-readable invoice reference. */
+            number: string;
+            /** @enum {string} */
+            status: "open" | "void";
+            currency: string;
+            /**
+             * Format: int64
+             * @description Invoice total in millionths of the currency's major unit.
+             */
+            total_micros: number;
+            /** Format: date-time */
+            period_start: string;
+            /** Format: date-time */
+            period_end: string;
+            /** Format: date-time */
+            issued_at: string;
+            lines: components["schemas"]["InvoiceLine"][];
+        };
+        InvoiceListResponse: {
+            items: components["schemas"]["Invoice"][];
+        };
+        /** @description Recorded usage totals for a window, identical to the body of /v1/usage/summary. Field names are the Go field names the handler serializes today; averages and last activity stay null or zero when the window held no requests, so no fabricated measurement is reported. */
+        BillingUsageSummary: {
+            /** Format: int64 */
+            Requests: number;
+            /** Format: int64 */
+            InputTokens: number;
+            /** Format: int64 */
+            OutputTokens: number;
+            /** Format: int64 */
+            CachedTokens: number;
+            /** Format: int64 */
+            TotalTokens: number;
+            /**
+             * Format: int64
+             * @description Recorded cost in millionths of the currency's major unit.
+             */
+            TotalCostMicros: number;
+            /** Format: int64 */
+            Errors: number;
+            /**
+             * Format: double
+             * @description Null when the window held no requests.
+             */
+            AvgLatencyMs: number | null;
+            /**
+             * Format: date-time
+             * @description Zero time when the window held no requests.
+             */
+            LastActivityAt: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -1165,6 +1816,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getv1organizationsme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Organization"];
+                };
+            };
+        };
+    };
+    getv1organization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Organization"];
+                };
+            };
+        };
+    };
+    patchv1organization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateOrganizationRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Organization"];
                 };
             };
         };
@@ -2257,6 +2972,26 @@ export interface operations {
             };
         };
     };
+    getv1usagelatency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     getv1usagerecent: {
         parameters: {
             query?: never;
@@ -2293,6 +3028,647 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getv1conversations: {
+        parameters: {
+            query?: {
+                user_id?: string;
+                team_id?: string;
+                project_id?: string;
+                provider?: string;
+                model?: string;
+                /** @description Only conversations started at or after this RFC3339 timestamp. */
+                from?: string;
+                /** @description Only conversations started at or before this RFC3339 timestamp. */
+                to?: string;
+                /** @description Page size, 1 to 200. */
+                limit?: number;
+                /** @description Rows to skip; must be zero or greater. */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationListResponse"];
+                };
+            };
+            /** @description A filter or pagination value is malformed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getv1conversationsid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationSummary"];
+                };
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such conversation in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getv1conversationsidmessages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationMessagesResponse"];
+                };
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such conversation in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getv1auditlogs: {
+        parameters: {
+            query?: {
+                /** @description Matches a record written by either the user or the service account with this id. Combine with actor_type to disambiguate. */
+                actor_id?: string;
+                actor_type?: "user" | "service_account";
+                /** @description Exact action name, e.g. organization.update. */
+                action?: string;
+                resource_type?: string;
+                resource_id?: string;
+                /** @description Only records created at or after this RFC3339 timestamp. */
+                from?: string;
+                /** @description Only records created before this RFC3339 timestamp. */
+                to?: string;
+                /** @description Page size, 1 to 200. */
+                limit?: number;
+                /** @description Rows to skip; must be zero or greater. */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditLogListResponse"];
+                };
+            };
+            /** @description A filter or pagination value is malformed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant audit.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getv1auditlogsid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditLog"];
+                };
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant audit.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such audit record in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getv1securityevents: {
+        parameters: {
+            query?: {
+                category?: "provider_incident" | "pipeline_failure";
+                severity?: "info" | "warning" | "critical";
+                /** @description Only events created at or after this RFC3339 timestamp. */
+                from?: string;
+                /** @description Only events created before this RFC3339 timestamp. */
+                to?: string;
+                /** @description Page size, 1 to 200. */
+                limit?: number;
+                /** @description Rows to skip; must be zero or greater. */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityEventListResponse"];
+                };
+            };
+            /** @description A filter or pagination value is malformed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant security_events.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getvalerts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant alerts.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getvalertsid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alert"];
+                };
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant alerts.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such alert rule in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    putvalertsid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAlertRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alert"];
+                };
+            };
+            /** @description The id is not a UUID, the body is malformed, the name is blank, the severity or status is not a known value, or the configuration is not a JSON object. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant alerts.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such alert rule in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    deletevalertsid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant alerts.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such alert rule in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    postvalertsidtest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertTestResult"];
+                };
+            };
+            /** @description The id is not a UUID, or the stored configuration is not a JSON object. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant alerts.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such alert rule in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getv1billingplans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant billing.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getv1billingsubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Subscription"];
+                };
+            };
+            /** @description The caller's role does not grant billing.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The organization has no subscription. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getv1billingusage: {
+        parameters: {
+            query?: {
+                /** @description Inclusive RFC3339 start. Defaults to 30 days ago. */
+                from?: string;
+                /** @description Exclusive RFC3339 end. Defaults to now. */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingUsageSummary"];
+                };
+            };
+            /** @description from or to is not RFC3339, or from is not before to. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant billing.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getv1billinginvoices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant billing.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };

@@ -1,15 +1,8 @@
 import type { Metadata } from "next";
-import { Download } from "lucide-react";
 
-import { BarChart } from "@/components/charts";
-import {
-  DataTable,
-  PageShell,
-  StatCard,
-  StatusBadge,
-  type Column,
-} from "@/components/dashboard";
-import { Button } from "@/components/ui/button";
+import type { Invoice, InvoiceStatus } from "@ai-governance/api-client";
+
+import { EmptyState, PageShell, StatusBadge } from "@/components/dashboard";
 import {
   Card,
   CardContent,
@@ -17,187 +10,141 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatDate, formatUsd } from "@/lib/format";
-import { invoices } from "@/lib/mock-data";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { formatDate, formatNumber, formatUsd, microsToUsd } from "@/lib/format";
+import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
 
 export const metadata: Metadata = {
   title: "Invoices · Sentinel",
-  description: "Statements for every completed billing period, with line-item detail.",
+  description: "Invoices recorded for this organization, with their itemised lines.",
 };
 
-const INVOICE_STATUS_TONE: Record<string, StatusTone> = {
-  paid: "success",
-  open: "info",
-  past_due: "danger",
+const INVOICE_TONE: Record<InvoiceStatus, StatusTone> = {
+  open: "warning",
   void: "neutral",
 };
 
-interface InvoiceRow {
-  id: string;
-  number: string;
-  issued: string;
-  issuedTs: number;
-  due: string;
-  status: string;
-  statusTone: StatusTone;
-  subtotal: number;
-  tax: number;
-  total: number;
-  lines: number;
+async function loadInvoices(): Promise<Invoice[]> {
+  const { billing } = await getApiClient();
+  return (await billing.listInvoices()).items;
 }
 
-const COLUMNS: readonly Column<InvoiceRow>[] = [
-  { key: "number", header: "Invoice", primary: "number", sort: "number" },
-  { key: "status", header: "Status", primary: "status", tone: "statusTone" },
-  { key: "issued", header: "Issued", primary: "issued", align: "right", sort: "issuedTs" },
-  { key: "due", header: "Due", primary: "due", align: "right" },
-  { key: "lines", header: "Lines", primary: "lines", align: "right" },
-  { key: "subtotal", header: "Subtotal", primary: "subtotal", format: "usd", align: "right" },
-  { key: "tax", header: "Tax", primary: "tax", format: "usd", align: "right" },
-  { key: "total", header: "Total", primary: "total", format: "usd", align: "right", sort: "total" },
-];
+function InvoiceLines({ invoice }: { invoice: Invoice }) {
+  if (invoice.lines.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        This invoice has no itemised lines.
+      </p>
+    );
+  }
 
-export default function InvoicesPage() {
-  const rows: InvoiceRow[] = invoices.map((invoice) => ({
-    id: invoice.id,
-    number: invoice.number,
-    issued: formatDate(invoice.issuedAt),
-    due: formatDate(invoice.dueAt),
-    issuedTs: Date.parse(invoice.issuedAt),
-    status: invoice.status,
-    statusTone: INVOICE_STATUS_TONE[invoice.status] ?? "neutral",
-    subtotal: invoice.subtotal,
-    tax: invoice.tax,
-    total: invoice.total,
-    lines: invoice.lines.length,
-  }));
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Description</TableHead>
+          <TableHead className="text-right">Quantity</TableHead>
+          <TableHead className="text-right">Unit</TableHead>
+          <TableHead className="text-right">Amount</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {invoice.lines.map((line) => (
+          <TableRow key={line.id}>
+            <TableCell>{line.description}</TableCell>
+            <TableCell className="text-right tabular-nums">
+              {formatNumber(line.quantity)}
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              {formatUsd(microsToUsd(line.unit_micros))}
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              {formatUsd(microsToUsd(line.amount_micros))}
+            </TableCell>
+          </TableRow>
+        ))}
+        <TableRow>
+          <TableCell colSpan={3} className="text-right font-medium">
+            Total ({invoice.currency})
+          </TableCell>
+          <TableCell className="text-right font-medium tabular-nums">
+            {formatUsd(microsToUsd(invoice.total_micros))}
+          </TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
+  );
+}
 
-  const open = invoices.filter((invoice) => invoice.status === "open");
-  const paidTotal = invoices
-    .filter((invoice) => invoice.status === "paid")
-    .reduce((sum, invoice) => sum + invoice.total, 0);
-  const average =
-    invoices.reduce((sum, invoice) => sum + invoice.total, 0) / invoices.length;
+export default async function InvoicesPage() {
+  const invoices = await loadInvoices();
 
   return (
     <div className="p-4 sm:p-6">
       <PageShell
         title="Invoices"
-        description="A statement per billing period. The current cycle remains open until it closes."
+        description="Invoices recorded for this organization, with their itemised lines."
       >
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Invoices" value={String(invoices.length)} hint="Most recent periods" />
-          <StatCard
-            label="Open"
-            value={String(open.length)}
-            tone={open.length > 0 ? "info" : "neutral"}
-            hint={open[0] ? `${open[0].number} is still accruing` : "Nothing outstanding"}
-          />
-          <StatCard
-            label="Paid to date"
-            value={formatUsd(paidTotal)}
-            tone="success"
-            hint="Across settled periods"
-          />
-          <StatCard
-            label="Average invoice"
-            value={formatUsd(average)}
-            hint="Platform fee plus metered usage"
-          />
-        </section>
-
         <Card>
           <CardHeader>
-            <CardTitle>All invoices</CardTitle>
+            <CardTitle>What an invoice here is</CardTitle>
             <CardDescription>
-              Statements are immutable once issued; corrections appear as credit notes.
+              A record of priced usage, not a request for payment.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <DataTable
-              columns={COLUMNS}
-              rows={rows}
-              rowKey="id"
-              toolbar={
-                <div className="flex flex-wrap items-center gap-2">
-                  {Object.entries(INVOICE_STATUS_TONE)
-                    .filter(([status]) => invoices.some((invoice) => invoice.status === status))
-                    .map(([status, tone]) => (
-                      <StatusBadge key={status} tone={tone}>
-                        {invoices.filter((invoice) => invoice.status === status).length} {status}
-                      </StatusBadge>
-                    ))}
-                </div>
-              }
-              emptyMessage="No invoices issued yet."
-            />
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>
+              Each invoice is a row in this control plane holding a billing period and
+              its itemised lines. No payment processor is integrated, so an invoice is
+              only ever <span className="font-medium">open</span> or{" "}
+              <span className="font-medium">void</span> — there is no paid state,
+              no card, no charge, and no downloadable document.
+            </p>
+            <p>
+              Figures are derived from recorded requests priced by the worker. See
+              Billing → Usage for the underlying consumption.
+            </p>
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        {invoices.length === 0 ? (
           <Card>
-            <CardHeader>
-              <CardTitle>Invoice total by period</CardTitle>
-              <CardDescription>What each billing period actually charged.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <BarChart
-                data={[...invoices]
-                  .sort((a, b) => a.issuedAt.localeCompare(b.issuedAt))
-                  .map((invoice) => ({ label: invoice.number, value: invoice.total }))}
-                formatValue={(value) => formatUsd(value)}
+            <CardContent className="pt-6">
+              <EmptyState
+                title="No invoices yet"
+                description="An invoice is only recorded once a billing period has been closed for this organization, so there is nothing to itemise. Recorded consumption is still available under Billing → Usage."
               />
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Line items</CardTitle>
-              <CardDescription>
-                The two components that make up every statement.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {invoices.slice(0, 2).map((invoice) => (
-                <div key={invoice.id} className="rounded-lg border">
-                  <div className="flex items-center justify-between gap-3 border-b p-3">
-                    <p className="font-mono text-sm font-medium">{invoice.number}</p>
-                    <StatusBadge tone={INVOICE_STATUS_TONE[invoice.status] ?? "neutral"}>
-                      {invoice.status}
-                    </StatusBadge>
-                  </div>
-                  <ul className="divide-y text-sm">
-                    {invoice.lines.map((line) => (
-                      <li key={line.id} className="flex items-center justify-between gap-4 p-3">
-                        <div className="min-w-0">
-                          <p className="truncate">{line.description}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {line.quantity} × {formatUsd(line.unitPrice)}
-                          </p>
-                        </div>
-                        <span className="tabular-nums font-medium">{formatUsd(line.amount)}</span>
-                      </li>
-                    ))}
-                    <li className="flex items-center justify-between gap-4 p-3">
-                      <span className="text-muted-foreground">Tax</span>
-                      <span className="tabular-nums">{formatUsd(invoice.tax)}</span>
-                    </li>
-                    <li className="flex items-center justify-between gap-4 p-3">
-                      <span className="font-medium">Total</span>
-                      <span className="tabular-nums font-semibold">{formatUsd(invoice.total)}</span>
-                    </li>
-                  </ul>
-                  <div className="border-t p-3">
-                    <Button size="sm" variant="outline">
-                      <Download aria-hidden /> Download PDF
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
+        ) : (
+          invoices.map((invoice) => (
+            <Card key={invoice.id}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  {invoice.number}
+                  <StatusBadge tone={INVOICE_TONE[invoice.status]}>
+                    {invoice.status}
+                  </StatusBadge>
+                </CardTitle>
+                <CardDescription>
+                  {formatDate(invoice.period_start)} – {formatDate(invoice.period_end)} ·{" "}
+                  issued {formatDate(invoice.issued_at)}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <InvoiceLines invoice={invoice} />
+              </CardContent>
+            </Card>
+          ))
+        )}
       </PageShell>
     </div>
   );

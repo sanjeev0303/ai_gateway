@@ -24,7 +24,9 @@ func notConfigured(method string) {
 
 type stubOrgs struct {
 	repositories.OrganizationRepository
-	create func(context.Context, domain.NewOrganization) (domain.Organization, error)
+	create  func(context.Context, domain.NewOrganization) (domain.Organization, error)
+	getByID func(context.Context, uuid.UUID) (domain.Organization, error)
+	update  func(context.Context, uuid.UUID, domain.UpdateOrganization) (domain.Organization, error)
 }
 
 func (s *stubOrgs) Create(ctx context.Context, in domain.NewOrganization) (domain.Organization, error) {
@@ -32,6 +34,20 @@ func (s *stubOrgs) Create(ctx context.Context, in domain.NewOrganization) (domai
 		notConfigured("stubOrgs.Create")
 	}
 	return s.create(ctx, in)
+}
+
+func (s *stubOrgs) GetByID(ctx context.Context, id uuid.UUID) (domain.Organization, error) {
+	if s.getByID == nil {
+		notConfigured("stubOrgs.GetByID")
+	}
+	return s.getByID(ctx, id)
+}
+
+func (s *stubOrgs) Update(ctx context.Context, id uuid.UUID, in domain.UpdateOrganization) (domain.Organization, error) {
+	if s.update == nil {
+		notConfigured("stubOrgs.Update")
+	}
+	return s.update(ctx, id, in)
 }
 
 type stubUsers struct {
@@ -466,9 +482,12 @@ type stubProviderHealth struct {
 	states []domain.ProviderHealthState
 }
 
+// Get defaults to ErrNotFound ("never probed") rather than panicking, because
+// CheckHealth reads the prior state on every call to detect a transition. Tests
+// that exercise transitions set get explicitly.
 func (s *stubProviderHealth) Get(ctx context.Context, providerKind string) (domain.ProviderHealthState, error) {
 	if s.get == nil {
-		notConfigured("stubProviderHealth.Get")
+		return domain.ProviderHealthState{}, repositories.ErrNotFound
 	}
 	return s.get(ctx, providerKind)
 }
@@ -747,4 +766,18 @@ func (s *stubPasswords) Verify(ctx context.Context, encoded, password string) er
 func (s *stubPasswords) DecoyDigest() string {
 	s.decoyHits++
 	return testPasswordDigest
+}
+
+type stubSubscriptions struct {
+	repositories.SubscriptionRepository
+	activeWithPlanFn func(context.Context, uuid.UUID) (domain.OrganizationPlan, error)
+}
+
+// ActiveWithPlan defaults to ErrNotFound — the state of every organization that
+// has never subscribed — so plan-less responses need no per-test setup.
+func (s *stubSubscriptions) ActiveWithPlan(ctx context.Context, orgID uuid.UUID) (domain.OrganizationPlan, error) {
+	if s.activeWithPlanFn != nil {
+		return s.activeWithPlanFn(ctx, orgID)
+	}
+	return domain.OrganizationPlan{}, repositories.ErrNotFound
 }

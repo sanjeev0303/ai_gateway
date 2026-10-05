@@ -137,18 +137,33 @@ ON CONFLICT (organization_id, project_id, model, bucket_start) DO UPDATE SET
 
 
 -- name: GetUsageSummary :one
-SELECT COALESCE(sum(requests), 0)::bigint as total_requests,
-       COALESCE(sum(prompt_tokens), 0)::bigint as input_tokens,
-       COALESCE(sum(completion_tokens), 0)::bigint as output_tokens,
-       COALESCE(sum(cached_input_tokens), 0)::bigint as cached_tokens,
-       COALESCE(sum(total_tokens), 0)::bigint as total_tokens,
-       COALESCE(sum(cost_micros), 0)::bigint as total_cost_micros
-FROM usage_daily
-WHERE organization_id = sqlc.arg(organization_id)
-  AND bucket_start >= sqlc.arg(from_ts)
-  AND bucket_start < sqlc.arg(to_ts)
-  AND (sqlc.narg(project_id)::uuid IS NULL OR project_id = sqlc.narg(project_id))
-  AND (sqlc.narg(model)::text IS NULL OR model = sqlc.narg(model));
+SELECT COUNT(*)::bigint as total_requests,
+       COALESCE(SUM(r.prompt_tokens), 0)::bigint as input_tokens,
+       COALESCE(SUM(r.completion_tokens), 0)::bigint as output_tokens,
+       COALESCE(SUM(r.cached_input_tokens), 0)::bigint as cached_tokens,
+       COALESCE(SUM(r.total_tokens), 0)::bigint as total_tokens,
+       COALESCE(SUM(r.cost_micros), 0)::bigint as total_cost_micros,
+       COUNT(*) FILTER (WHERE r.status = 'failed')::bigint as errors,
+       COALESCE(AVG(r.latency_ms), 0)::float8 as avg_latency_ms,
+       -- An ungrouped aggregate always returns one row, so an empty window makes
+       -- MAX() NULL. Coalesce to Go's zero time so the scan cannot fail; the
+       -- repository detects "no requests" from TotalRequests.
+       COALESCE(MAX(r.created_at)::timestamptz, '0001-01-01 00:00:00+00'::timestamptz)::timestamptz as last_activity_at
+FROM llm_requests r
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND r.created_at >= sqlc.arg(from_ts)
+  AND r.created_at < sqlc.arg(to_ts)
+  AND (sqlc.narg(project_id)::uuid IS NULL OR r.project_id = sqlc.narg(project_id))
+  AND (sqlc.narg(user_id)::uuid IS NULL OR r.user_id = sqlc.narg(user_id))
+  AND (sqlc.narg(team_id)::uuid IS NULL OR EXISTS (
+        SELECT 1
+        FROM team_members tm
+        WHERE tm.team_id = sqlc.narg(team_id)
+          AND tm.user_id = r.user_id
+          AND tm.organization_id = r.organization_id))
+  AND (sqlc.narg(provider)::text IS NULL OR r.provider_kind = sqlc.narg(provider))
+  AND (sqlc.narg(model)::text IS NULL OR r.model = sqlc.narg(model))
+  AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status));
 
 -- name: GetUsageTimeSeries :many
 SELECT bucket_start,
@@ -164,16 +179,33 @@ GROUP BY bucket_start
 ORDER BY bucket_start ASC;
 
 -- name: GetUsageByProject :many
-SELECT project_id,
-       COALESCE(sum(requests), 0)::bigint as requests,
-       COALESCE(sum(total_tokens), 0)::bigint as total_tokens,
-       COALESCE(sum(cost_micros), 0)::bigint as cost_micros
-FROM usage_daily
-WHERE organization_id = sqlc.arg(organization_id)
-  AND bucket_start >= sqlc.arg(from_ts)
-  AND bucket_start < sqlc.arg(to_ts)
-  AND project_id IS NOT NULL
-GROUP BY project_id
+SELECT r.project_id,
+       p.name,
+       COUNT(*)::bigint as requests,
+       COALESCE(SUM(r.prompt_tokens), 0)::bigint as input_tokens,
+       COALESCE(SUM(r.completion_tokens), 0)::bigint as output_tokens,
+       COALESCE(SUM(r.total_tokens), 0)::bigint as total_tokens,
+       COALESCE(SUM(r.cost_micros), 0)::bigint as cost_micros,
+       COUNT(*) FILTER (WHERE r.status = 'failed')::bigint as errors,
+       COALESCE(AVG(r.latency_ms), 0)::float8 as avg_latency_ms,
+       MAX(r.created_at)::timestamptz as last_activity_at
+FROM llm_requests r
+JOIN projects p ON p.id = r.project_id
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND r.created_at >= sqlc.arg(from_ts)
+  AND r.created_at < sqlc.arg(to_ts)
+  AND r.project_id IS NOT NULL
+  AND (sqlc.narg(user_id)::uuid IS NULL OR r.user_id = sqlc.narg(user_id))
+  AND (sqlc.narg(team_id)::uuid IS NULL OR EXISTS (
+        SELECT 1
+        FROM team_members tm
+        WHERE tm.team_id = sqlc.narg(team_id)
+          AND tm.user_id = r.user_id
+          AND tm.organization_id = r.organization_id))
+  AND (sqlc.narg(provider)::text IS NULL OR r.provider_kind = sqlc.narg(provider))
+  AND (sqlc.narg(model)::text IS NULL OR r.model = sqlc.narg(model))
+  AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status))
+GROUP BY r.project_id, p.name
 ORDER BY total_tokens DESC;
 
 -- name: GetUsageByModel :many
@@ -202,29 +234,59 @@ GROUP BY provider_kind
 ORDER BY total_tokens DESC;
 
 -- name: GetUsageByUser :many
-SELECT user_id,
-       COUNT(*) as requests,
-       COALESCE(SUM(total_tokens), 0)::bigint as total_tokens,
-       COALESCE(SUM(cost_micros), 0)::bigint as cost_micros
-FROM llm_requests
-WHERE organization_id = sqlc.arg(organization_id)
-  AND created_at >= sqlc.arg(from_ts)
-  AND created_at < sqlc.arg(to_ts)
-  AND user_id IS NOT NULL
-GROUP BY user_id
+SELECT r.user_id,
+       u.email,
+       u.display_name,
+       COUNT(*)::bigint as requests,
+       COALESCE(SUM(r.prompt_tokens), 0)::bigint as input_tokens,
+       COALESCE(SUM(r.completion_tokens), 0)::bigint as output_tokens,
+       COALESCE(SUM(r.total_tokens), 0)::bigint as total_tokens,
+       COALESCE(SUM(r.cost_micros), 0)::bigint as cost_micros,
+       COUNT(*) FILTER (WHERE r.status = 'failed')::bigint as errors,
+       COALESCE(AVG(r.latency_ms), 0)::float8 as avg_latency_ms,
+       MAX(r.created_at)::timestamptz as last_activity_at
+FROM llm_requests r
+JOIN users u ON u.id = r.user_id
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND r.created_at >= sqlc.arg(from_ts)
+  AND r.created_at < sqlc.arg(to_ts)
+  AND r.user_id IS NOT NULL
+  AND (sqlc.narg(project_id)::uuid IS NULL OR r.project_id = sqlc.narg(project_id))
+  AND (sqlc.narg(team_id)::uuid IS NULL OR EXISTS (
+        SELECT 1
+        FROM team_members tm
+        WHERE tm.team_id = sqlc.narg(team_id)
+          AND tm.user_id = r.user_id
+          AND tm.organization_id = r.organization_id))
+  AND (sqlc.narg(provider)::text IS NULL OR r.provider_kind = sqlc.narg(provider))
+  AND (sqlc.narg(model)::text IS NULL OR r.model = sqlc.narg(model))
+  AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status))
+GROUP BY r.user_id, u.email, u.display_name
 ORDER BY total_tokens DESC;
 
 -- name: GetUsageByTeam :many
 SELECT tm.team_id,
-       COUNT(r.id)::int as requests,
+       t.name,
+       COUNT(r.id)::bigint as requests,
+       COALESCE(SUM(r.prompt_tokens), 0)::bigint as input_tokens,
+       COALESCE(SUM(r.completion_tokens), 0)::bigint as output_tokens,
        COALESCE(SUM(r.total_tokens), 0)::bigint as total_tokens,
-       COALESCE(SUM(r.cost_micros), 0)::bigint as cost_micros
+       COALESCE(SUM(r.cost_micros), 0)::bigint as cost_micros,
+       COUNT(r.id) FILTER (WHERE r.status = 'failed')::bigint as errors,
+       COALESCE(AVG(r.latency_ms), 0)::float8 as avg_latency_ms,
+       MAX(r.created_at)::timestamptz as last_activity_at
 FROM llm_requests r
-JOIN team_members tm ON r.user_id = tm.user_id
+JOIN team_members tm ON tm.user_id = r.user_id AND tm.organization_id = r.organization_id
+JOIN teams t ON t.id = tm.team_id
 WHERE r.organization_id = sqlc.arg(organization_id)
   AND r.created_at >= sqlc.arg(from_ts)
   AND r.created_at < sqlc.arg(to_ts)
-GROUP BY tm.team_id
+  AND (sqlc.narg(project_id)::uuid IS NULL OR r.project_id = sqlc.narg(project_id))
+  AND (sqlc.narg(user_id)::uuid IS NULL OR r.user_id = sqlc.narg(user_id))
+  AND (sqlc.narg(provider)::text IS NULL OR r.provider_kind = sqlc.narg(provider))
+  AND (sqlc.narg(model)::text IS NULL OR r.model = sqlc.narg(model))
+  AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status))
+GROUP BY tm.team_id, t.name
 ORDER BY total_tokens DESC;
 
 -- name: GetRecentUsage :many
@@ -236,9 +298,78 @@ LIMIT 50;
 
 -- name: GetUsageRequests :many
 SELECT id, request_id, project_id, user_id, provider_kind, model, status, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms
-FROM llm_requests
-WHERE organization_id = sqlc.arg(organization_id)
-  AND created_at >= sqlc.arg(from_ts)
-  AND created_at < sqlc.arg(to_ts)
-ORDER BY created_at DESC
+FROM llm_requests r
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND r.created_at >= sqlc.arg(from_ts)
+  AND r.created_at < sqlc.arg(to_ts)
+  AND (sqlc.narg(project_id)::uuid IS NULL OR r.project_id = sqlc.narg(project_id))
+  AND (sqlc.narg(user_id)::uuid IS NULL OR r.user_id = sqlc.narg(user_id))
+  AND (sqlc.narg(team_id)::uuid IS NULL OR EXISTS (
+        SELECT 1
+        FROM team_members tm
+        WHERE tm.team_id = sqlc.narg(team_id)
+          AND tm.user_id = r.user_id
+          AND tm.organization_id = r.organization_id))
+  AND (sqlc.narg(provider)::text IS NULL OR r.provider_kind = sqlc.narg(provider))
+  AND (sqlc.narg(model)::text IS NULL OR r.model = sqlc.narg(model))
+  AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status))
+ORDER BY r.created_at DESC
 LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
+
+-- name: GetUsageLatencyOverall :one
+SELECT COUNT(r.time_to_first_token_ms)::bigint as ttft_samples,
+       COUNT(r.total_latency_ms)::bigint as total_samples,
+       COALESCE(AVG(r.time_to_first_token_ms), 0)::float8 as avg_ttft_ms,
+       COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY r.time_to_first_token_ms), 0)::float8 as p50_ttft_ms,
+       COALESCE(percentile_cont(0.95) WITHIN GROUP (ORDER BY r.time_to_first_token_ms), 0)::float8 as p95_ttft_ms,
+       COALESCE(percentile_cont(0.99) WITHIN GROUP (ORDER BY r.time_to_first_token_ms), 0)::float8 as p99_ttft_ms,
+       COALESCE(AVG(r.total_latency_ms), 0)::float8 as avg_total_ms,
+       COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY r.total_latency_ms), 0)::float8 as p50_total_ms,
+       COALESCE(percentile_cont(0.95) WITHIN GROUP (ORDER BY r.total_latency_ms), 0)::float8 as p95_total_ms,
+       COALESCE(percentile_cont(0.99) WITHIN GROUP (ORDER BY r.total_latency_ms), 0)::float8 as p99_total_ms
+FROM llm_requests r
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND r.created_at >= sqlc.arg(from_ts)
+  AND r.created_at < sqlc.arg(to_ts)
+  AND (sqlc.narg(project_id)::uuid IS NULL OR r.project_id = sqlc.narg(project_id))
+  AND (sqlc.narg(user_id)::uuid IS NULL OR r.user_id = sqlc.narg(user_id))
+  AND (sqlc.narg(team_id)::uuid IS NULL OR EXISTS (
+        SELECT 1
+        FROM team_members tm
+        WHERE tm.team_id = sqlc.narg(team_id)
+          AND tm.user_id = r.user_id
+          AND tm.organization_id = r.organization_id))
+  AND (sqlc.narg(provider)::text IS NULL OR r.provider_kind = sqlc.narg(provider))
+  AND (sqlc.narg(model)::text IS NULL OR r.model = sqlc.narg(model))
+  AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status));
+
+-- name: GetUsageLatencyByProviderModel :many
+SELECT r.provider_kind as provider,
+       r.model,
+       COUNT(r.time_to_first_token_ms)::bigint as ttft_samples,
+       COUNT(r.total_latency_ms)::bigint as total_samples,
+       COALESCE(AVG(r.time_to_first_token_ms), 0)::float8 as avg_ttft_ms,
+       COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY r.time_to_first_token_ms), 0)::float8 as p50_ttft_ms,
+       COALESCE(percentile_cont(0.95) WITHIN GROUP (ORDER BY r.time_to_first_token_ms), 0)::float8 as p95_ttft_ms,
+       COALESCE(percentile_cont(0.99) WITHIN GROUP (ORDER BY r.time_to_first_token_ms), 0)::float8 as p99_ttft_ms,
+       COALESCE(AVG(r.total_latency_ms), 0)::float8 as avg_total_ms,
+       COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY r.total_latency_ms), 0)::float8 as p50_total_ms,
+       COALESCE(percentile_cont(0.95) WITHIN GROUP (ORDER BY r.total_latency_ms), 0)::float8 as p95_total_ms,
+       COALESCE(percentile_cont(0.99) WITHIN GROUP (ORDER BY r.total_latency_ms), 0)::float8 as p99_total_ms
+FROM llm_requests r
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND r.created_at >= sqlc.arg(from_ts)
+  AND r.created_at < sqlc.arg(to_ts)
+  AND (sqlc.narg(project_id)::uuid IS NULL OR r.project_id = sqlc.narg(project_id))
+  AND (sqlc.narg(user_id)::uuid IS NULL OR r.user_id = sqlc.narg(user_id))
+  AND (sqlc.narg(team_id)::uuid IS NULL OR EXISTS (
+        SELECT 1
+        FROM team_members tm
+        WHERE tm.team_id = sqlc.narg(team_id)
+          AND tm.user_id = r.user_id
+          AND tm.organization_id = r.organization_id))
+  AND (sqlc.narg(provider)::text IS NULL OR r.provider_kind = sqlc.narg(provider))
+  AND (sqlc.narg(model)::text IS NULL OR r.model = sqlc.narg(model))
+  AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status))
+GROUP BY r.provider_kind, r.model
+ORDER BY total_samples DESC;

@@ -84,6 +84,49 @@ func (q *Queries) CreateSubscription(ctx context.Context, arg CreateSubscription
 	return i, err
 }
 
+const getActiveSubscriptionWithPlan = `-- name: GetActiveSubscriptionWithPlan :one
+SELECT
+  s.status::text          AS subscription_status,
+  s.current_period_start  AS current_period_start,
+  s.current_period_end    AS current_period_end,
+  s.cancel_at_period_end  AS cancel_at_period_end,
+  p.code                  AS plan_code,
+  p.name                  AS plan_name
+FROM subscriptions s
+JOIN plans p ON p.id = s.plan_id
+WHERE s.organization_id = $1
+  AND s.status IN ('active', 'trialing')
+ORDER BY s.created_at DESC
+LIMIT 1
+`
+
+type GetActiveSubscriptionWithPlanRow struct {
+	SubscriptionStatus string     `json:"subscription_status"`
+	CurrentPeriodStart *time.Time `json:"current_period_start"`
+	CurrentPeriodEnd   *time.Time `json:"current_period_end"`
+	CancelAtPeriodEnd  bool       `json:"cancel_at_period_end"`
+	PlanCode           string     `json:"plan_code"`
+	PlanName           string     `json:"plan_name"`
+}
+
+// The organization's current plan: its active (or trialing) subscription
+// joined to the plan catalog. Filters to the same statuses as
+// subscriptions_one_active_per_org, so at most one row is ever returned.
+// Columns are aliased from both tables because both carry id/status/created_at.
+func (q *Queries) GetActiveSubscriptionWithPlan(ctx context.Context, organizationID uuid.UUID) (GetActiveSubscriptionWithPlanRow, error) {
+	row := q.db.QueryRow(ctx, getActiveSubscriptionWithPlan, organizationID)
+	var i GetActiveSubscriptionWithPlanRow
+	err := row.Scan(
+		&i.SubscriptionStatus,
+		&i.CurrentPeriodStart,
+		&i.CurrentPeriodEnd,
+		&i.CancelAtPeriodEnd,
+		&i.PlanCode,
+		&i.PlanName,
+	)
+	return i, err
+}
+
 const getBillingEvent = `-- name: GetBillingEvent :one
 SELECT id, organization_id, billing_event_id, event_type, amount_micros, currency, status, payload, created_at FROM billing_events
 WHERE organization_id = $1 AND billing_event_id = $2
@@ -107,6 +150,36 @@ func (q *Queries) GetBillingEvent(ctx context.Context, arg GetBillingEventParams
 		&i.Status,
 		&i.Payload,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getInvoice = `-- name: GetInvoice :one
+SELECT id, organization_id, subscription_id, number, status, currency, total_micros, period_start, period_end, issued_at, created_at, updated_at FROM invoices
+WHERE organization_id = $1 AND id = $2
+`
+
+type GetInvoiceParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ID             uuid.UUID `json:"id"`
+}
+
+func (q *Queries) GetInvoice(ctx context.Context, arg GetInvoiceParams) (Invoice, error) {
+	row := q.db.QueryRow(ctx, getInvoice, arg.OrganizationID, arg.ID)
+	var i Invoice
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.SubscriptionID,
+		&i.Number,
+		&i.Status,
+		&i.Currency,
+		&i.TotalMicros,
+		&i.PeriodStart,
+		&i.PeriodEnd,
+		&i.IssuedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -136,6 +209,85 @@ func (q *Queries) GetSubscription(ctx context.Context, arg GetSubscriptionParams
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listInvoiceLines = `-- name: ListInvoiceLines :many
+SELECT id, organization_id, invoice_id, description, quantity, unit_micros, amount_micros, created_at FROM invoice_lines
+WHERE organization_id = $1 AND invoice_id = $2
+ORDER BY created_at, id
+`
+
+type ListInvoiceLinesParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	InvoiceID      uuid.UUID `json:"invoice_id"`
+}
+
+func (q *Queries) ListInvoiceLines(ctx context.Context, arg ListInvoiceLinesParams) ([]InvoiceLine, error) {
+	rows, err := q.db.Query(ctx, listInvoiceLines, arg.OrganizationID, arg.InvoiceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InvoiceLine{}
+	for rows.Next() {
+		var i InvoiceLine
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.InvoiceID,
+			&i.Description,
+			&i.Quantity,
+			&i.UnitMicros,
+			&i.AmountMicros,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInvoices = `-- name: ListInvoices :many
+SELECT id, organization_id, subscription_id, number, status, currency, total_micros, period_start, period_end, issued_at, created_at, updated_at FROM invoices
+WHERE organization_id = $1
+ORDER BY issued_at DESC, id DESC
+`
+
+func (q *Queries) ListInvoices(ctx context.Context, organizationID uuid.UUID) ([]Invoice, error) {
+	rows, err := q.db.Query(ctx, listInvoices, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Invoice{}
+	for rows.Next() {
+		var i Invoice
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.SubscriptionID,
+			&i.Number,
+			&i.Status,
+			&i.Currency,
+			&i.TotalMicros,
+			&i.PeriodStart,
+			&i.PeriodEnd,
+			&i.IssuedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listPlans = `-- name: ListPlans :many

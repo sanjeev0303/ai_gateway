@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	uuid "github.com/google/uuid"
 )
@@ -62,4 +63,139 @@ func (q *Queries) AppendAuditLog(ctx context.Context, arg AppendAuditLogParams) 
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const getAuditLog = `-- name: GetAuditLog :one
+SELECT a.id,
+       a.organization_id,
+       a.actor_user_id,
+       a.actor_service_account_id,
+       a.action,
+       a.resource_type,
+       a.resource_id,
+       a.before,
+       a.after,
+       a.ip_address,
+       a.request_id,
+       a.created_at
+FROM audit_logs a
+WHERE a.organization_id = $1
+  AND a.id = $2
+`
+
+type GetAuditLogParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ID             uuid.UUID `json:"id"`
+}
+
+func (q *Queries) GetAuditLog(ctx context.Context, arg GetAuditLogParams) (AuditLog, error) {
+	row := q.db.QueryRow(ctx, getAuditLog, arg.OrganizationID, arg.ID)
+	var i AuditLog
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.ActorUserID,
+		&i.ActorServiceAccountID,
+		&i.Action,
+		&i.ResourceType,
+		&i.ResourceID,
+		&i.Before,
+		&i.After,
+		&i.IpAddress,
+		&i.RequestID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const listAuditLogs = `-- name: ListAuditLogs :many
+SELECT a.id,
+       a.organization_id,
+       a.actor_user_id,
+       a.actor_service_account_id,
+       a.action,
+       a.resource_type,
+       a.resource_id,
+       a.before,
+       a.after,
+       a.ip_address,
+       a.request_id,
+       a.created_at
+FROM audit_logs a
+WHERE a.organization_id = $1
+  AND ($2::uuid IS NULL
+       OR a.actor_user_id = $2::uuid
+       OR a.actor_service_account_id = $2::uuid)
+  AND ($3::text IS NULL
+       OR ($3::text = 'user' AND a.actor_user_id IS NOT NULL)
+       OR ($3::text = 'service_account' AND a.actor_service_account_id IS NOT NULL))
+  AND ($4::text IS NULL OR a.action = $4::text)
+  AND ($5::text IS NULL OR a.resource_type = $5::text)
+  AND ($6::uuid IS NULL OR a.resource_id = $6::uuid)
+  AND ($7::timestamptz IS NULL OR a.created_at >= $7::timestamptz)
+  AND ($8::timestamptz IS NULL OR a.created_at < $8::timestamptz)
+ORDER BY a.created_at DESC, a.id DESC
+LIMIT $10::int OFFSET $9::int
+`
+
+type ListAuditLogsParams struct {
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	ActorID        *uuid.UUID `json:"actor_id"`
+	ActorType      *string    `json:"actor_type"`
+	Action         *string    `json:"action"`
+	ResourceType   *string    `json:"resource_type"`
+	ResourceID     *uuid.UUID `json:"resource_id"`
+	FromTs         *time.Time `json:"from_ts"`
+	ToTs           *time.Time `json:"to_ts"`
+	OffsetCount    int32      `json:"offset_count"`
+	LimitCount     int32      `json:"limit_count"`
+}
+
+// Read-only projection of the append-only ledger. Append-only is preserved
+// structurally: this file is the only place that names audit_logs, and it
+// contains no UPDATE or DELETE statement, so no code path can rewrite history.
+// `actor_id` matches either actor column; `actor_type` then narrows to the
+// column that is actually populated.
+func (q *Queries) ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]AuditLog, error) {
+	rows, err := q.db.Query(ctx, listAuditLogs,
+		arg.OrganizationID,
+		arg.ActorID,
+		arg.ActorType,
+		arg.Action,
+		arg.ResourceType,
+		arg.ResourceID,
+		arg.FromTs,
+		arg.ToTs,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AuditLog{}
+	for rows.Next() {
+		var i AuditLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.ActorUserID,
+			&i.ActorServiceAccountID,
+			&i.Action,
+			&i.ResourceType,
+			&i.ResourceID,
+			&i.Before,
+			&i.After,
+			&i.IpAddress,
+			&i.RequestID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
