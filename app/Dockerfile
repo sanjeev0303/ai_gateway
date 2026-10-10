@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 
 # Multi-stage build for Next.js app (ai-gateway-web).
 # Context MUST be the repo root so root .dockerignore applies.

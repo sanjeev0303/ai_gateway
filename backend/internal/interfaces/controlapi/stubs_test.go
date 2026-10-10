@@ -616,6 +616,94 @@ var (
 	_ ports.TokenHasher                         = (*stubHasher)(nil)
 )
 
+type stubPolicyRepo struct {
+	repositories.PolicyRepository
+	create   func(context.Context, uuid.UUID, domain.NewPolicy) (domain.Policy, error)
+	get      func(context.Context, uuid.UUID, uuid.UUID) (domain.Policy, error)
+	list     func(context.Context, uuid.UUID) ([]domain.Policy, error)
+	update   func(context.Context, uuid.UUID, uuid.UUID, domain.UpdatePolicy) (domain.Policy, error)
+	delete   func(context.Context, uuid.UUID, uuid.UUID) error
+}
+
+func (s *stubPolicyRepo) Create(ctx context.Context, orgID uuid.UUID, in domain.NewPolicy) (domain.Policy, error) {
+	if s.create == nil {
+		notConfigured("stubPolicyRepo.Create")
+	}
+	return s.create(ctx, orgID, in)
+}
+
+func (s *stubPolicyRepo) Get(ctx context.Context, orgID, id uuid.UUID) (domain.Policy, error) {
+	if s.get == nil {
+		notConfigured("stubPolicyRepo.Get")
+	}
+	return s.get(ctx, orgID, id)
+}
+
+func (s *stubPolicyRepo) List(ctx context.Context, orgID uuid.UUID) ([]domain.Policy, error) {
+	if s.list == nil {
+		notConfigured("stubPolicyRepo.List")
+	}
+	return s.list(ctx, orgID)
+}
+
+func (s *stubPolicyRepo) Update(ctx context.Context, orgID, id uuid.UUID, in domain.UpdatePolicy) (domain.Policy, error) {
+	if s.update == nil {
+		notConfigured("stubPolicyRepo.Update")
+	}
+	return s.update(ctx, orgID, id, in)
+}
+
+func (s *stubPolicyRepo) Delete(ctx context.Context, orgID, id uuid.UUID) error {
+	if s.delete == nil {
+		notConfigured("stubPolicyRepo.Delete")
+	}
+	return s.delete(ctx, orgID, id)
+}
+
+type stubPolicyRuleRepo struct {
+	repositories.PolicyRuleRepository
+	create   func(context.Context, uuid.UUID, domain.NewPolicyRule) (domain.PolicyRule, error)
+	get      func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (domain.PolicyRule, error)
+	list     func(context.Context, uuid.UUID, uuid.UUID) ([]domain.PolicyRule, error)
+	update   func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, domain.UpdatePolicyRule) (domain.PolicyRule, error)
+	delete   func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error
+}
+
+func (s *stubPolicyRuleRepo) Create(ctx context.Context, orgID uuid.UUID, in domain.NewPolicyRule) (domain.PolicyRule, error) {
+	if s.create == nil {
+		notConfigured("stubPolicyRuleRepo.Create")
+	}
+	return s.create(ctx, orgID, in)
+}
+
+func (s *stubPolicyRuleRepo) Get(ctx context.Context, orgID, policyID, id uuid.UUID) (domain.PolicyRule, error) {
+	if s.get == nil {
+		notConfigured("stubPolicyRuleRepo.Get")
+	}
+	return s.get(ctx, orgID, policyID, id)
+}
+
+func (s *stubPolicyRuleRepo) List(ctx context.Context, orgID, policyID uuid.UUID) ([]domain.PolicyRule, error) {
+	if s.list == nil {
+		notConfigured("stubPolicyRuleRepo.List")
+	}
+	return s.list(ctx, orgID, policyID)
+}
+
+func (s *stubPolicyRuleRepo) Update(ctx context.Context, orgID, policyID, id uuid.UUID, in domain.UpdatePolicyRule) (domain.PolicyRule, error) {
+	if s.update == nil {
+		notConfigured("stubPolicyRuleRepo.Update")
+	}
+	return s.update(ctx, orgID, policyID, id, in)
+}
+
+func (s *stubPolicyRuleRepo) Delete(ctx context.Context, orgID, policyID, id uuid.UUID) error {
+	if s.delete == nil {
+		notConfigured("stubPolicyRuleRepo.Delete")
+	}
+	return s.delete(ctx, orgID, policyID, id)
+}
+
 // requireNoErr and requireEqual are local copies of the identity package
 // helpers; each test package owns its assertions.
 func requireNoErr(t *testing.T, err error) {
@@ -781,3 +869,138 @@ func (s *stubSubscriptions) ActiveWithPlan(ctx context.Context, orgID uuid.UUID)
 	}
 	return domain.OrganizationPlan{}, repositories.ErrNotFound
 }
+
+type stubBudgets struct {
+	repositories.BudgetRepository
+	create func(context.Context, uuid.UUID, domain.NewBudget) (domain.Budget, error)
+	get    func(context.Context, uuid.UUID, uuid.UUID) (domain.Budget, error)
+	list   func(context.Context, uuid.UUID, repositories.BudgetFilter) ([]domain.Budget, error)
+	update func(context.Context, uuid.UUID, uuid.UUID, domain.UpdateBudget) (domain.Budget, error)
+	delete func(context.Context, uuid.UUID, uuid.UUID) error
+}
+
+func (s *stubBudgets) Create(ctx context.Context, orgID uuid.UUID, in domain.NewBudget) (domain.Budget, error) {
+	if s.create == nil {
+		notConfigured("stubBudgets.Create")
+	}
+	return s.create(ctx, orgID, in)
+}
+
+func (s *stubBudgets) Get(ctx context.Context, orgID, id uuid.UUID) (domain.Budget, error) {
+	if s.get == nil {
+		notConfigured("stubBudgets.Get")
+	}
+	return s.get(ctx, orgID, id)
+}
+
+func (s *stubBudgets) List(ctx context.Context, orgID uuid.UUID, filter repositories.BudgetFilter) ([]domain.Budget, error) {
+	if s.list == nil {
+		notConfigured("stubBudgets.List")
+	}
+	return s.list(ctx, orgID, filter)
+}
+
+func (s *stubBudgets) Update(ctx context.Context, orgID, id uuid.UUID, in domain.UpdateBudget) (domain.Budget, error) {
+	if s.update == nil {
+		notConfigured("stubBudgets.Update")
+	}
+	return s.update(ctx, orgID, id, in)
+}
+
+func (s *stubBudgets) Delete(ctx context.Context, orgID, id uuid.UUID) error {
+	if s.delete == nil {
+		notConfigured("stubBudgets.Delete")
+	}
+	return s.delete(ctx, orgID, id)
+}
+
+type stubPolicy struct {
+	createPolicy   func(context.Context, uuid.UUID, domain.NewPolicy) (domain.Policy, error)
+	getPolicy      func(context.Context, uuid.UUID, uuid.UUID) (domain.Policy, error)
+	listPolicies   func(context.Context, uuid.UUID) ([]domain.Policy, error)
+	updatePolicy   func(context.Context, uuid.UUID, uuid.UUID, domain.UpdatePolicy) (domain.Policy, error)
+	deletePolicy   func(context.Context, uuid.UUID, uuid.UUID) error
+	CreateStub     func(context.Context, uuid.UUID, domain.NewPolicy) (domain.Policy, error)
+	createRule     func(context.Context, uuid.UUID, domain.NewPolicyRule) (domain.PolicyRule, error)
+	getRule        func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (domain.PolicyRule, error)
+	listRules      func(context.Context, uuid.UUID, uuid.UUID) ([]domain.PolicyRule, error)
+	updateRule     func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, domain.UpdatePolicyRule) (domain.PolicyRule, error)
+	deleteRule     func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error
+	invalidator    func(uuid.UUID)
+	auditFn        func(context.Context, uuid.UUID, domain.NewAuditLog) error
+}
+
+func (s *stubPolicy) Create(ctx context.Context, orgID uuid.UUID, in domain.NewPolicy) (domain.Policy, error) {
+	if s.createPolicy == nil {
+		notConfigured("stubPolicy.Create")
+	}
+	return s.createPolicy(ctx, orgID, in)
+}
+
+func (s *stubPolicy) Get(ctx context.Context, orgID, id uuid.UUID) (domain.Policy, error) {
+	if s.getPolicy == nil {
+		notConfigured("stubPolicy.Get")
+	}
+	return s.getPolicy(ctx, orgID, id)
+}
+
+func (s *stubPolicy) List(ctx context.Context, orgID uuid.UUID) ([]domain.Policy, error) {
+	if s.listPolicies == nil {
+		notConfigured("stubPolicy.List")
+	}
+	return s.listPolicies(ctx, orgID)
+}
+
+func (s *stubPolicy) Update(ctx context.Context, orgID, id uuid.UUID, in domain.UpdatePolicy) (domain.Policy, error) {
+	if s.updatePolicy == nil {
+		notConfigured("stubPolicy.Update")
+	}
+	return s.updatePolicy(ctx, orgID, id, in)
+}
+
+func (s *stubPolicy) Delete(ctx context.Context, orgID, id uuid.UUID) error {
+	if s.deletePolicy == nil {
+		notConfigured("stubPolicy.Delete")
+	}
+	return s.deletePolicy(ctx, orgID, id)
+}
+
+func (s *stubPolicy) CreateRule(ctx context.Context, orgID uuid.UUID, in domain.NewPolicyRule) (domain.PolicyRule, error) {
+	if s.createRule == nil {
+		notConfigured("stubPolicy.CreateRule")
+	}
+	return s.createRule(ctx, orgID, in)
+}
+
+func (s *stubPolicy) GetRule(ctx context.Context, orgID, policyID, id uuid.UUID) (domain.PolicyRule, error) {
+	if s.getRule == nil {
+		notConfigured("stubPolicy.GetRule")
+	}
+	return s.getRule(ctx, orgID, policyID, id)
+}
+
+func (s *stubPolicy) ListRules(ctx context.Context, orgID, policyID uuid.UUID) ([]domain.PolicyRule, error) {
+	if s.listRules == nil {
+		notConfigured("stubPolicy.ListRules")
+	}
+	return s.listRules(ctx, orgID, policyID)
+}
+
+func (s *stubPolicy) UpdateRule(ctx context.Context, orgID, policyID, id uuid.UUID, in domain.UpdatePolicyRule) (domain.PolicyRule, error) {
+	if s.updateRule == nil {
+		notConfigured("stubPolicy.UpdateRule")
+	}
+	return s.updateRule(ctx, orgID, policyID, id, in)
+}
+
+func (s *stubPolicy) DeleteRule(ctx context.Context, orgID, policyID, id uuid.UUID) error {
+	if s.deleteRule == nil {
+		notConfigured("stubPolicy.DeleteRule")
+	}
+	return s.deleteRule(ctx, orgID, policyID, id)
+}
+
+// stubInvalidator is a test invalidator that does nothing
+type stubInvalidator struct{}
+
+func (stubInvalidator) Invalidate(uuid.UUID) {}

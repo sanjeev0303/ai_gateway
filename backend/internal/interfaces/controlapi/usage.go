@@ -16,8 +16,8 @@ func registerUsageRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("GET /v1/usage/timeseries", a.requireAuth(a.getUsageTimeSeries))
 	mux.Handle("GET /v1/usage/by-project", a.requireAuth(a.getUsageByProject))
 	mux.Handle("GET /v1/usage/by-model", a.requireAuth(a.getUsageByModel))
-	mux.Handle("GET /v1/usage/by-provider", a.requireAuth(a.getUsageByProvider))
 	mux.Handle("GET /v1/usage/by-user", a.requireAuth(a.getUsageByUser))
+	mux.Handle("GET /v1/usage/by-service-account", a.requireAuth(a.getUsageByServiceAccount))
 	mux.Handle("GET /v1/usage/by-team", a.requireAuth(a.getUsageByTeam))
 	mux.Handle("GET /v1/usage/latency", a.requireAuth(a.getUsageLatency))
 	mux.Handle("GET /v1/usage/recent", a.requireAuth(a.getUsageRecent))
@@ -132,6 +132,24 @@ func (a *api) getUsageByUser(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": results})
 }
 
+func (a *api) getUsageByServiceAccount(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	actor, _ := actorFrom(ctx)
+
+	filter, err := parseUsageFilter(r, 30*24*time.Hour)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+
+	results, err := a.usage.GetByServiceAccount(ctx, actor, filter)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": results})
+}
+
 func (a *api) getUsageByTeam(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	actor, _ := actorFrom(ctx)
@@ -203,12 +221,12 @@ func (a *api) getUsageRequests(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := a.usage.GetRequests(ctx, actor, filter, int32(limit), int32(offset))
+	results, hasMore, err := a.usage.GetRequests(ctx, actor, filter, int32(limit), int32(offset))
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": results})
+	httpx.WriteJSON(w, http.StatusOK, listDTO{Items: results, HasMore: &hasMore})
 }
 
 // parseUsageFilter reads the filter every usage endpoint shares. An unknown
@@ -231,6 +249,10 @@ func parseUsageFilter(r *http.Request, defaultWindow time.Duration) (domain.Usag
 	if err != nil {
 		return domain.UsageFilter{}, err
 	}
+	serviceAccountID, err := parseOptionalUUIDParam(r, "service_account_id")
+	if err != nil {
+		return domain.UsageFilter{}, err
+	}
 	teamID, err := parseOptionalUUIDParam(r, "team_id")
 	if err != nil {
 		return domain.UsageFilter{}, err
@@ -240,11 +262,12 @@ func parseUsageFilter(r *http.Request, defaultWindow time.Duration) (domain.Usag
 		return domain.UsageFilter{}, invalidQuery("invalid value for status")
 	}
 	return domain.UsageFilter{
-		From:      from,
-		To:        to,
-		ProjectID: projectID,
-		UserID:    userID,
-		TeamID:    teamID,
+		From:             from,
+		To:               to,
+		ProjectID:        projectID,
+		UserID:           userID,
+		ServiceAccountID: serviceAccountID,
+		TeamID:           teamID,
 		Provider:  parseOptionalString(r, "provider"),
 		Model:     parseOptionalString(r, "model"),
 		Status:    status,

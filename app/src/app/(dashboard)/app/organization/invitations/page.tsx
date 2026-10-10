@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { MailPlus } from "lucide-react";
 
-import { DataTable, PageShell, StatCard, StatusBadge, type Column } from "@/components/dashboard";
+import { PageShell, StatCard, StatusBadge } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,6 +14,7 @@ import { formatDate, formatRelative } from "@/lib/format";
 import { ROLE_ORDER, ROLE_TONE, toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
+import { InviteDialog, InvitationsClient, type InviteRow } from "./invitations-client";
 
 export const metadata: Metadata = {
   title: "Invitations · Sentinel",
@@ -32,25 +33,7 @@ const DAY_MS = 86_400_000;
 const lapsingWithin = (expiresAt: string, days: number, now: Date = new Date()): boolean =>
   Date.parse(expiresAt) - now.getTime() <= days * DAY_MS;
 
-interface InviteRow {
-  id: string;
-  email: string;
-  role: string;
-  roleTone: StatusTone;
-  state: string;
-  stateTone: StatusTone;
-  sent: string;
-  sentTs: number;
-  expires: string;
-}
 
-const COLUMNS: readonly Column<InviteRow>[] = [
-  { key: "email", header: "Invitee", primary: "email", sort: "email" },
-  { key: "role", header: "Role", primary: "role", tone: "roleTone" },
-  { key: "state", header: "State", primary: "state", tone: "stateTone" },
-  { key: "sent", header: "Sent", primary: "sent", align: "right", sort: "sentTs" },
-  { key: "expires", header: "Expires", primary: "expires", align: "right" },
-];
 
 export default async function InvitationsPage() {
   const { invitations } = await getApiClient();
@@ -90,9 +73,11 @@ export default async function InvitationsPage() {
         title="Invitations"
         description="Access that has been offered but not yet accepted. Invitations lapse after two weeks."
         actions={
-          <Button size="sm">
-            <MailPlus aria-hidden /> Invite people
-          </Button>
+          <InviteDialog>
+            <Button size="sm">
+              <MailPlus aria-hidden /> Invite people
+            </Button>
+          </InviteDialog>
         }
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -124,18 +109,9 @@ export default async function InvitationsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <DataTable
-              columns={COLUMNS}
-              rows={rows}
-              rowKey="id"
-              toolbar={
-                oldest !== null && (
-                  <p className="text-sm text-muted-foreground">
-                    Oldest invitation sent {formatRelative(oldest)}.
-                  </p>
-                )
-              }
-              emptyMessage="No open invitations."
+            <InvitationsClient
+              initialRows={rows}
+              oldestStr={oldest !== null ? formatRelative(oldest) : null}
             />
           </CardContent>
         </Card>

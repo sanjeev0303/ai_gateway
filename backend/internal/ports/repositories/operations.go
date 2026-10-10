@@ -56,6 +56,7 @@ type UsageRollupRepository interface {
 	GetByModel(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByModel, error)
 	GetByProvider(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByProvider, error)
 	GetByUser(ctx context.Context, orgID uuid.UUID, filter domain.UsageFilter) ([]domain.UsageByUser, error)
+	GetByServiceAccount(ctx context.Context, orgID uuid.UUID, filter domain.UsageFilter) ([]domain.UsageByServiceAccount, error)
 	GetByTeam(ctx context.Context, orgID uuid.UUID, filter domain.UsageFilter) ([]domain.UsageByTeam, error)
 	// GetLatency returns percentile timings for the whole filtered set, and
 	// GetLatencyByProviderModel breaks the same percentiles down per provider

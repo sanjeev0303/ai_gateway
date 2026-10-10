@@ -4,6 +4,7 @@ package gatewayv2
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -127,7 +128,7 @@ func (p *PolicyResolverImpl) buildSnapshot(ctx context.Context, orgID uuid.UUID)
 			})
 
 			// Extract rate limit and budget configs from rule
-			p.extractConfigs(conditions, parameters, &rateLimits, &budgets)
+			p.extractConfigs(conditions, parameters, &rateLimits, &budgets, rule.RuleType)
 		}
 	}
 
@@ -145,29 +146,56 @@ func (p *PolicyResolverImpl) buildSnapshot(ctx context.Context, orgID uuid.UUID)
 }
 
 // extractConfigs extracts rate limit and budget configs from a rule.
-func (p *PolicyResolverImpl) extractConfigs(conditions, parameters map[string]any, rateLimits *map[string]RateLimitConfig, budgets *map[string]BudgetConfig) {
-	switch conditions["type"] {
+func (p *PolicyResolverImpl) extractConfigs(conditions, parameters map[string]any, rateLimits *map[string]RateLimitConfig, budgets *map[string]BudgetConfig, ruleType string) {
+	switch ruleType {
 	case "rate_limit":
 		if key, ok := conditions["key"].(string); ok {
 			(*rateLimits)[key] = RateLimitConfig{
 				Key:        key,
-				Limit:      int(parameters["limit"].(float64)),
-				Window:     time.Duration(parameters["window_seconds"].(float64)) * time.Second,
-				Scope:      parameters["scope"].(string),
-				BurstAllow: int(parameters["burst"].(float64)),
+				Limit:      int(toFloat64(parameters["limit"])),
+				Window:     time.Duration(toFloat64(parameters["window_seconds"])) * time.Second,
+				Scope:      toString(parameters["scope"]),
+				BurstAllow: int(toFloat64(parameters["burst"])),
 			}
 		}
 	case "budget":
 		if key, ok := conditions["key"].(string); ok {
 			(*budgets)[key] = BudgetConfig{
 				Key:     key,
-				Limit:   parameters["limit"].(float64),
-				Window:  time.Duration(parameters["window_seconds"].(float64)) * time.Second,
-				Scope:   parameters["scope"].(string),
-				AlertAt: parameters["alert_at"].(float64),
+				Limit:   toFloat64(parameters["limit"]),
+				Window:  time.Duration(toFloat64(parameters["window_seconds"])) * time.Second,
+				Scope:   toString(parameters["scope"]),
+				AlertAt: toFloat64(parameters["alert_at"]),
 			}
 		}
 	}
+}
+
+// toFloat64 safely converts various numeric types to float64
+func toFloat64(v any) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case float32:
+		return float64(n)
+	case int64:
+		return float64(n)
+	case int:
+		return float64(n)
+	case json.Number:
+		f, _ := n.Float64()
+		return f
+	default:
+		return 0
+	}
+}
+
+// toString safely converts various types to string
+func toString(v any) string {
+	if v == nil {
+		return ""
+	}
+	return fmt.Sprintf("%v", v)
 }
 
 // Invalidate removes a policy snapshot from the cache.

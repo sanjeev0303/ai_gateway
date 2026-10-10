@@ -271,6 +271,8 @@ export function createTransport(settings: ApiClientOptions): Transport {
 /** Envelope shared by every list endpoint. `items` is always an array, never `null`. */
 export interface ListResponse<TItem> {
   items: TItem[];
+  has_more?: boolean;
+  next_cursor?: string;
 }
 
 /** One page of client-side pagination. */

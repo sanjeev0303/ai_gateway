@@ -27,7 +27,7 @@ export interface ActionDialogProps {
   action: (state: ActionState, formData: FormData) => Promise<ActionState>;
   submitLabel?: string;
   submitVariant?: "default" | "destructive";
-  onSuccess?: () => void;
+  onSuccess?: (state?: any) => void;
 }
 
 export function ActionDialog({
@@ -48,7 +48,7 @@ export function ActionDialog({
   React.useEffect(() => {
     if (state.success && !pending) {
       onOpenChange(false);
-      onSuccess?.();
+      onSuccess?.(state);
     }
   }, [state.success, pending, onOpenChange, onSuccess]);
 
@@ -91,10 +91,11 @@ export function ActionDialog({
   );
 }
 
-export interface FormDialogProps extends Omit<ActionDialogProps, "description" | "action"> {
+export interface FormDialogProps extends Omit<ActionDialogProps, "description" | "action" | "onSuccess"> {
   description?: React.ReactNode;
   children: React.ReactNode;
-  action: (state: unknown, formData: FormData) => Promise<unknown>;
+  action: (state: any, formData: FormData) => Promise<any>;
+  onSuccess?: (state: any) => void;
 }
 
 export function FormDialog({
@@ -128,7 +129,7 @@ export function FormDialog({
           <div className="space-y-4 py-4">{children}</div>
           <DialogFooter className="gap-2 sm:justify-between items-center w-full">
             <div className="flex-1">
-              {state.error && <StatusBadge tone="danger">{state.error}</StatusBadge>}
+              {state?.error && <StatusBadge tone="danger">{state.error}</StatusBadge>}
             </div>
             <div className="flex gap-2">
               <Button

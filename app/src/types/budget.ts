@@ -2,7 +2,7 @@ import type { ID, ISODateString, StatusTone } from "./common";
 
 export type BudgetPeriod = "daily" | "weekly" | "monthly";
 
-export type BudgetScope = "organization" | "team" | "project";
+export type BudgetScope = "organization" | "team" | "project" | "gateway_credential" | "service_account";
 
 /** Action taken once a budget's limit is reached. */
 export type BudgetAction = "alert" | "throttle" | "hard_stop";

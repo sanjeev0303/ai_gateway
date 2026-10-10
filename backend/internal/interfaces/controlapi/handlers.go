@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,8 +15,11 @@ import (
 	"ai-governance-saas/backend/internal/application/alert"
 	"ai-governance-saas/backend/internal/application/auditlog"
 	"ai-governance-saas/backend/internal/application/billing"
+	"ai-governance-saas/backend/internal/application/budget"
 	"ai-governance-saas/backend/internal/application/conversation"
+	"ai-governance-saas/backend/internal/application/guardrails"
 	"ai-governance-saas/backend/internal/application/identity"
+	"ai-governance-saas/backend/internal/application/policy"
 	"ai-governance-saas/backend/internal/application/provider"
 	"ai-governance-saas/backend/internal/application/securityevent"
 	"ai-governance-saas/backend/internal/application/usage"
@@ -39,6 +44,10 @@ type api struct {
 	alerts         *alert.Service
 	securityEvents *securityevent.Service
 	billing        *billing.Service
+	budget         *budget.Service
+	policy         *policy.Service
+	guardrails     *guardrails.Service
+	guardrailsEval *guardrails.Evaluator
 
 	sessionCookieName   string
 	sessionCookieSecure bool
@@ -58,6 +67,10 @@ func newAPI(deps Deps) *api {
 		alerts:              deps.Alerts,
 		securityEvents:      deps.SecurityEvents,
 		billing:             deps.Billing,
+		budget:              deps.Budget,
+		policy:              deps.Policy,
+		guardrails:          deps.Guardrails,
+		guardrailsEval:      deps.GuardrailsEval,
 		sessionCookieName:   deps.SessionCookieName,
 		sessionCookieSecure: deps.SessionCookieSecure,
 		csrfEnabled:         deps.CSRFEnabled,
@@ -103,7 +116,12 @@ type organizationDTO struct {
 	Slug      string                  `json:"slug"`
 	Status    string                  `json:"status"`
 	CreatedAt string                  `json:"created_at"`
-	UpdatedAt string                  `json:"updated_at"`
+	UpdatedAt                  string                  `json:"updated_at"`
+	PrivacyDefault             string                  `json:"privacy_default"`
+	RetentionConversationsDays int                     `json:"retention_conversations_days"`
+	RetentionUsageDays         int                     `json:"retention_usage_days"`
+	RetentionAuditsDays        int                     `json:"retention_audits_days"`
+	RetentionBillingDays       int                     `json:"retention_billing_days"`
 	Plan      *organizationPlanDTO    `json:"plan"`
 	Billing   *organizationBillingDTO `json:"billing"`
 }
@@ -216,7 +234,9 @@ type createCredentialResponse struct {
 }
 
 type listDTO struct {
-	Items any `json:"items"`
+	Items      any     `json:"items"`
+	NextCursor *string `json:"next_cursor,omitempty"`
+	HasMore    *bool   `json:"has_more,omitempty"`
 }
 
 // ---- request bodies ------------------------------------------------------
@@ -249,6 +269,17 @@ type createTeamRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 }
+
+type updateProjectRequest struct {
+	Name        *string `json:"name"`
+	Description *string `json:"description"`
+}
+
+type updateTeamRequest struct {
+	Name        *string `json:"name"`
+	Description *string `json:"description"`
+}
+
 
 type addMemberRequest struct {
 	UserID string `json:"user_id"`
@@ -338,7 +369,12 @@ func toOrganizationDTO(o domain.Organization, plan *domain.OrganizationPlan) org
 		Slug:      o.Slug,
 		Status:    o.Status,
 		CreatedAt: ts(o.CreatedAt),
-		UpdatedAt: ts(o.UpdatedAt),
+		UpdatedAt:                  ts(o.UpdatedAt),
+		PrivacyDefault:             string(o.PrivacyDefault),
+		RetentionConversationsDays: o.RetentionConversationsDays,
+		RetentionUsageDays:         o.RetentionUsageDays,
+		RetentionAuditsDays:        o.RetentionAuditsDays,
+		RetentionBillingDays:       o.RetentionBillingDays,
 	}
 	if plan == nil {
 		return dto
@@ -566,8 +602,13 @@ func (a *api) getOrganization(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateOrganizationRequest struct {
-	Name *string `json:"name"`
-	Slug *string `json:"slug"`
+	Name                       *string `json:"name"`
+	Slug                       *string `json:"slug"`
+	PrivacyDefault             *string `json:"privacy_default"`
+	RetentionConversationsDays *int32  `json:"retention_conversations_days"`
+	RetentionUsageDays         *int32  `json:"retention_usage_days"`
+	RetentionAuditsDays        *int32  `json:"retention_audits_days"`
+	RetentionBillingDays       *int32  `json:"retention_billing_days"`
 }
 
 func (a *api) updateOrganization(w http.ResponseWriter, r *http.Request) {
@@ -578,8 +619,13 @@ func (a *api) updateOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	org, err := a.svc.UpdateOrganization(r.Context(), actor, domain.UpdateOrganization{
-		Name: req.Name,
-		Slug: req.Slug,
+		Name:                       req.Name,
+		Slug:                       req.Slug,
+		PrivacyDefault:             req.PrivacyDefault,
+		RetentionConversationsDays: req.RetentionConversationsDays,
+		RetentionUsageDays:         req.RetentionUsageDays,
+		RetentionAuditsDays:        req.RetentionAuditsDays,
+		RetentionBillingDays:       req.RetentionBillingDays,
 	})
 	if err != nil {
 		writeServiceError(w, r, err)
@@ -751,6 +797,53 @@ func (a *api) getProject(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, toProjectDTO(project))
 }
 
+func (a *api) updateProject(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	id, err := pathUUID(r, "id")
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	var req updateProjectRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	project, err := a.svc.UpdateProject(r.Context(), actor, id, domain.UpdateProject{
+		Name:        req.Name,
+		Description: req.Description,
+	})
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toProjectDTO(project))
+}
+
+type setProjectStatusRequest struct {
+	Status string `json:"status"`
+}
+
+func (a *api) setProjectStatus(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	id, err := pathUUID(r, "id")
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	var req setProjectStatusRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	project, err := a.svc.SetProjectStatus(r.Context(), actor, id, req.Status)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toProjectDTO(project))
+}
+
 func (a *api) addProjectMember(w http.ResponseWriter, r *http.Request) {
 	actor, _ := actorFrom(r.Context())
 	projectID, err := pathUUID(r, "id")
@@ -860,6 +953,29 @@ func (a *api) getTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	team, err := a.svc.GetTeam(r.Context(), actor, id)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toTeamDTO(team))
+}
+
+func (a *api) updateTeam(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	id, err := pathUUID(r, "id")
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	var req updateTeamRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	team, err := a.svc.UpdateTeam(r.Context(), actor, id, domain.UpdateTeam{
+		Name:        req.Name,
+		Description: req.Description,
+	})
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -1033,4 +1149,261 @@ func (a *api) revokeCredential(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ---- search handler ------------------------------------------------------
+
+type searchResultType string
+
+const (
+	SearchTypeRequest        searchResultType = "request"
+	SearchTypeUser           searchResultType = "user"
+	SearchTypeTeam           searchResultType = "team"
+	SearchTypeProject        searchResultType = "project"
+	SearchTypePolicy         searchResultType = "policy"
+	SearchTypeModel          searchResultType = "model"
+	SearchTypeProvider       searchResultType = "provider"
+	SearchTypeConversation   searchResultType = "conversation"
+	SearchTypeGatewayCredential searchResultType = "gateway_credential"
+)
+
+type searchResultItem struct {
+	Type        searchResultType `json:"type"`
+	ID          string           `json:"id"`
+	Name        string           `json:"name"`
+	Description string           `json:"description,omitempty"`
+	URL         string           `json:"url"`
+}
+
+type searchResponse struct {
+	Results []searchResultItem `json:"results"`
+	Total   int                `json:"total"`
+}
+
+type searchRequest struct {
+	Query  string   `json:"q" form:"q"`
+	Types  []string `json:"types" form:"types"`
+	Limit  int      `json:"limit" form:"limit"`
+}
+
+func (a *api) search(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		httpx.WriteJSON(w, http.StatusOK, searchResponse{Results: []searchResultItem{}, Total: 0})
+		return
+	}
+
+	limit := 20
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+			limit = parsed
+		}
+	}
+
+	typesParam := r.URL.Query()["types"]
+	allowedTypes := map[string]bool{
+		"request": true, "user": true, "team": true, "project": true,
+		"policy": true, "model": true, "provider": true,
+		"conversation": true, "gateway_credential": true,
+	}
+	requestedTypes := make(map[string]bool)
+	for _, t := range typesParam {
+		if allowedTypes[t] {
+			requestedTypes[t] = true
+		}
+	}
+	if len(requestedTypes) == 0 {
+		for k := range allowedTypes {
+			requestedTypes[k] = true
+		}
+	}
+
+	results := make([]searchResultItem, 0, limit)
+	ctx := r.Context()
+
+	if requestedTypes["user"] {
+		members, err := a.svc.ListMembers(ctx, actor)
+		if err == nil {
+			for _, m := range members {
+				if strings.Contains(strings.ToLower(m.User.DisplayName), strings.ToLower(query)) ||
+					strings.Contains(strings.ToLower(m.User.Email), strings.ToLower(query)) {
+					results = append(results, searchResultItem{
+						Type:        SearchTypeUser,
+						ID:          m.User.ID.String(),
+						Name:        m.User.DisplayName,
+						Description: m.User.Email,
+						URL:         "/observe/users/" + m.User.ID.String(),
+					})
+					if len(results) >= limit {
+						break
+					}
+				}
+			}
+		}
+	}
+
+	if len(results) < limit && requestedTypes["team"] {
+		teams, err := a.svc.ListTeams(ctx, actor)
+		if err == nil {
+			for _, t := range teams {
+				if strings.Contains(strings.ToLower(t.Name), strings.ToLower(query)) ||
+					strings.Contains(strings.ToLower(t.Description), strings.ToLower(query)) {
+					results = append(results, searchResultItem{
+						Type:        SearchTypeTeam,
+						ID:          t.ID.String(),
+						Name:        t.Name,
+						Description: t.Description,
+						URL:         "/observe/teams/" + t.ID.String(),
+					})
+					if len(results) >= limit {
+						break
+					}
+				}
+			}
+		}
+	}
+
+	if len(results) < limit && requestedTypes["project"] {
+		projects, err := a.svc.ListProjects(ctx, actor)
+		if err == nil {
+			for _, p := range projects {
+				if strings.Contains(strings.ToLower(p.Name), strings.ToLower(query)) ||
+					strings.Contains(strings.ToLower(p.Slug), strings.ToLower(query)) ||
+					strings.Contains(strings.ToLower(p.Description), strings.ToLower(query)) {
+					results = append(results, searchResultItem{
+						Type:        SearchTypeProject,
+						ID:          p.ID.String(),
+						Name:        p.Name,
+						Description: p.Description,
+						URL:         "/observe/projects/" + p.ID.String(),
+					})
+					if len(results) >= limit {
+						break
+					}
+				}
+			}
+		}
+	}
+
+	if len(results) < limit && requestedTypes["policy"] && a.policy != nil {
+		policies, err := a.policy.ListPolicies(ctx, actor.OrganizationID)
+		if err == nil {
+			for _, p := range policies {
+				if strings.Contains(strings.ToLower(p.Name), strings.ToLower(query)) ||
+					strings.Contains(strings.ToLower(p.Description), strings.ToLower(query)) {
+					results = append(results, searchResultItem{
+						Type:        SearchTypePolicy,
+						ID:          p.ID.String(),
+						Name:        p.Name,
+						Description: p.Description,
+						URL:         "/govern/policies/" + p.ID.String(),
+					})
+					if len(results) >= limit {
+						break
+					}
+				}
+			}
+		}
+	}
+
+	if len(results) < limit && requestedTypes["model"] && a.providers != nil {
+		models, err := a.providers.ListModels(ctx, actor)
+		if err == nil {
+			for _, m := range models {
+				if strings.Contains(strings.ToLower(m.DisplayName), strings.ToLower(query)) ||
+					strings.Contains(strings.ToLower(m.ModelSlug), strings.ToLower(query)) ||
+					strings.Contains(strings.ToLower(m.ProviderKind), strings.ToLower(query)) {
+					results = append(results, searchResultItem{
+						Type:        SearchTypeModel,
+						ID:          m.ID.String(),
+						Name:        m.DisplayName,
+						Description: m.ProviderKind + " · " + m.ModelSlug,
+						URL:         "/platform/model-registry",
+					})
+					if len(results) >= limit {
+						break
+					}
+				}
+			}
+		}
+	}
+
+	if len(results) < limit && requestedTypes["provider"] && a.providers != nil {
+		accounts, err := a.providers.ListAccounts(ctx, actor)
+		if err == nil {
+			for _, acc := range accounts {
+				if strings.Contains(strings.ToLower(acc.Name), strings.ToLower(query)) ||
+					strings.Contains(strings.ToLower(acc.ProviderKind), strings.ToLower(query)) {
+					results = append(results, searchResultItem{
+						Type:        SearchTypeProvider,
+						ID:          acc.ID.String(),
+						Name:        acc.Name,
+						Description: acc.ProviderKind,
+						URL:         "/platform/provider-accounts/" + acc.ID.String(),
+					})
+					if len(results) >= limit {
+						break
+					}
+				}
+			}
+		}
+	}
+
+	if len(results) < limit && requestedTypes["conversation"] && a.conversations != nil {
+		convs, _, err := a.conversations.List(ctx, actor, domain.ConversationFilter{}, int32(limit), 0)
+		if err == nil {
+			for _, c := range convs {
+				if strings.Contains(strings.ToLower(c.Title), strings.ToLower(query)) {
+					results = append(results, searchResultItem{
+						Type:        SearchTypeConversation,
+						ID:          c.ID.String(),
+						Name:        c.Title,
+						Description: derefString(c.Model),
+						URL:         "/observe/conversations/" + c.ID.String(),
+					})
+					if len(results) >= limit {
+						break
+					}
+				}
+			}
+		}
+	}
+
+	if len(results) < limit && requestedTypes["gateway_credential"] {
+		creds, err := a.svc.ListGatewayCredentials(ctx, actor)
+		if err == nil {
+			for _, c := range creds {
+				if strings.Contains(strings.ToLower(c.Name), strings.ToLower(query)) ||
+					strings.Contains(strings.ToLower(c.KeyPrefix), strings.ToLower(query)) {
+					results = append(results, searchResultItem{
+						Type:        SearchTypeGatewayCredential,
+						ID:          c.ID.String(),
+						Name:        c.Name,
+						Description: "Gateway Credential · " + c.KeyPrefix,
+						URL:         "/platform/gateway-credentials",
+					})
+					if len(results) >= limit {
+						break
+					}
+				}
+			}
+		}
+	}
+
+	total := len(results)
+	if total > limit {
+		results = results[:limit]
+		total = limit
+	}
+
+	httpx.WriteJSON(w, http.StatusOK, searchResponse{Results: results, Total: total})
+}
+
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

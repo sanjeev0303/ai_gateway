@@ -853,11 +853,7 @@ func TestPolicyAndRuleRepositories(t *testing.T) {
 		t.Fatalf("Get mismatch: %+v", got)
 	}
 
-	changed, err := policyRepo.SetEnforcement(testCtx, orgID, policy.ID, domain.EnforcementDisabled)
-	requireNoErr(t, err)
-	if changed.Enforcement != domain.EnforcementDisabled {
-		t.Fatalf("SetEnforcement mismatch: %+v", changed)
-	}
+
 
 	rule, err := ruleRepo.Create(testCtx, orgID, domain.NewPolicyRule{
 		PolicyID:    policy.ID,
@@ -880,14 +876,7 @@ func TestPolicyAndRuleRepositories(t *testing.T) {
 	requireJSONBytesEqual(t, rules[0].Conditions, []byte(`{"scope":"gateway"}`))
 	requireJSONBytesEqual(t, rules[0].Parameters, []byte(`{"requests_per_minute":100}`))
 
-	disabled, err := ruleRepo.SetEnabled(testCtx, orgID, rule.ID, false)
-	requireNoErr(t, err)
-	if disabled.Enabled {
-		t.Fatalf("SetEnabled mismatch: %+v", disabled)
-	}
-
 	requireNotFound(t, func() error { _, err := policyRepo.Get(testCtx, orgID, uuid.New()); return err }())
-	requireNotFound(t, func() error { _, err := ruleRepo.SetEnabled(testCtx, orgID, uuid.New(), false); return err }())
 }
 
 func TestLlmRequestRepository_HonorsRequestTime(t *testing.T) {

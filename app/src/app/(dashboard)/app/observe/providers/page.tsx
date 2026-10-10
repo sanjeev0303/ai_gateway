@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { BarChart, LineChart, chartColor } from "@/components/charts";
 import {
   DataTable,
+  ObserveFilters,
   PageShell,
   StatCard,
   StatusBadge,
@@ -58,10 +59,11 @@ interface ProviderRow {
   share: string;
   shareFraction: number;
   spend: number;
+  detailUrl: string;
 }
 
 const providerColumns: readonly Column<ProviderRow>[] = [
-  { key: "name", header: "Connection", primary: "name", secondary: "kind", sort: "name" },
+  { key: "name", header: "Connection", primary: "name", secondary: "kind", sort: "name", href: "detailUrl" },
   { key: "status", header: "Status", primary: "status", tone: "statusTone", sort: "status" },
   {
     key: "health",
@@ -112,9 +114,23 @@ function trailingWindow() {
   return { from: new Date(Date.now() - 30 * DAY) };
 }
 
-export default async function ProvidersPage() {
+export default async function ProvidersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const filters = {
+    project_id: typeof params.project_id === "string" ? params.project_id : undefined,
+    user_id: typeof params.user_id === "string" ? params.user_id : undefined,
+    team_id: typeof params.team_id === "string" ? params.team_id : undefined,
+    provider: typeof params.provider === "string" ? params.provider : undefined,
+    model: typeof params.model === "string" ? params.model : undefined,
+    status: typeof params.status === "string" ? params.status : undefined,
+  };
+
   const { providers, usage } = await getApiClient();
-  const window = trailingWindow();
+  const window = { ...trailingWindow(), ...filters };
   const [accounts, health, providerUsage, series] = await Promise.all([
     providers.listAccounts(),
     providers.health(),
@@ -155,6 +171,7 @@ export default async function ProvidersPage() {
       share: formatPercent(shareFraction),
       shareFraction,
       spend,
+      detailUrl: `/app/platform/provider-accounts/${account.id}`,
     };
   });
 
@@ -173,6 +190,7 @@ export default async function ProvidersPage() {
         title="Providers"
         description="Upstream connections, what the last probe said, and what each one costs."
       >
+        <ObserveFilters />
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Connections"

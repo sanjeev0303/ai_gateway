@@ -33,21 +33,7 @@ const STATUS_TONE: Record<string, StatusTone> = {
   failed: "danger",
 };
 
-interface LiveRow {
-  id: string;
-  when: string;
-  whenTs: number;
-  requestId: string;
-  who: string;
-  project: string;
-  team: string;
-  model: string;
-  provider: string;
-  state: string;
-  stateTone: StatusTone;
-  status: string;
-  statusTone: StatusTone;
-}
+import { LiveActivityDrawer, type LiveRow } from "./live-activity-drawer";
 
 const liveColumns: readonly Column<LiveRow>[] = [
   { key: "when", header: "When", primary: "when", sort: "whenTs" },
@@ -94,6 +80,7 @@ function toRow(event: LiveActivityEvent, now: Date): LiveRow {
   const whenTs = Date.parse(event.started_at);
   return {
     id: event.request_id,
+    href: `/app/observe/live-activity/${event.request_id}`,
     when: Number.isNaN(whenTs) ? event.started_at : formatRelative(event.started_at, now),
     whenTs: Number.isNaN(whenTs) ? 0 : whenTs,
     requestId: event.request_id,
@@ -182,6 +169,7 @@ export function LiveActivityContent({
             rowKey="id"
             pageSize={12}
             emptyMessage="No requests recorded yet."
+            actions={(row) => <LiveActivityDrawer row={row} />}
           />
         </CardContent>
       </Card>

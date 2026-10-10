@@ -13,6 +13,7 @@ type ProjectRepository interface {
 	Create(ctx context.Context, orgID uuid.UUID, input domain.NewProject) (domain.Project, error)
 	Get(ctx context.Context, orgID, id uuid.UUID) (domain.Project, error)
 	List(ctx context.Context, orgID uuid.UUID) ([]domain.Project, error)
+	Update(ctx context.Context, orgID, id uuid.UUID, input domain.UpdateProject) (domain.Project, error)
 	SetStatus(ctx context.Context, orgID, id uuid.UUID, status string) (domain.Project, error)
 }
 
@@ -21,6 +22,7 @@ type TeamRepository interface {
 	Create(ctx context.Context, orgID uuid.UUID, input domain.NewTeam) (domain.Team, error)
 	Get(ctx context.Context, orgID, id uuid.UUID) (domain.Team, error)
 	List(ctx context.Context, orgID uuid.UUID) ([]domain.Team, error)
+	Update(ctx context.Context, orgID, id uuid.UUID, input domain.UpdateTeam) (domain.Team, error)
 }
 
 // TeamMemberRepository manages team_members rows, joining the user profile
@@ -108,12 +110,34 @@ type PolicyRepository interface {
 	Create(ctx context.Context, orgID uuid.UUID, input domain.NewPolicy) (domain.Policy, error)
 	Get(ctx context.Context, orgID, id uuid.UUID) (domain.Policy, error)
 	List(ctx context.Context, orgID uuid.UUID) ([]domain.Policy, error)
-	SetEnforcement(ctx context.Context, orgID, id uuid.UUID, enforcement string) (domain.Policy, error)
+	Update(ctx context.Context, orgID, id uuid.UUID, input domain.UpdatePolicy) (domain.Policy, error)
+	Delete(ctx context.Context, orgID, id uuid.UUID) error
 }
 
 // PolicyRuleRepository manages the individual rules of a policy.
 type PolicyRuleRepository interface {
 	Create(ctx context.Context, orgID uuid.UUID, input domain.NewPolicyRule) (domain.PolicyRule, error)
+	Get(ctx context.Context, orgID, policyID, id uuid.UUID) (domain.PolicyRule, error)
 	List(ctx context.Context, orgID, policyID uuid.UUID) ([]domain.PolicyRule, error)
-	SetEnabled(ctx context.Context, orgID, id uuid.UUID, enabled bool) (domain.PolicyRule, error)
+	Update(ctx context.Context, orgID, policyID, id uuid.UUID, input domain.UpdatePolicyRule) (domain.PolicyRule, error)
+	Delete(ctx context.Context, orgID, policyID, id uuid.UUID) error
+}
+
+// BudgetRepository manages spend/token/request budgets enforced on the gateway.
+type BudgetRepository interface {
+	Create(ctx context.Context, orgID uuid.UUID, input domain.NewBudget) (domain.Budget, error)
+	Get(ctx context.Context, orgID, id uuid.UUID) (domain.Budget, error)
+	List(ctx context.Context, orgID uuid.UUID, filter BudgetFilter) ([]domain.Budget, error)
+	Update(ctx context.Context, orgID, id uuid.UUID, input domain.UpdateBudget) (domain.Budget, error)
+	Delete(ctx context.Context, orgID, id uuid.UUID) error
+}
+
+// BudgetFilter filters budget queries.
+type BudgetFilter struct {
+	Scope      *domain.BudgetScope
+	ScopeID    *uuid.UUID
+	LimitType  *domain.BudgetLimitType
+	Enabled    *bool
+	Limit      int
+	Offset     int
 }

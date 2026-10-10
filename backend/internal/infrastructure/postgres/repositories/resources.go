@@ -10,7 +10,29 @@ import (
 	"ai-governance-saas/backend/internal/infrastructure/postgres"
 	db "ai-governance-saas/backend/internal/infrastructure/postgres/sqlc"
 	ports "ai-governance-saas/backend/internal/ports/repositories"
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+func floatToNumeric(f float64) pgtype.Numeric {
+	var n pgtype.Numeric
+	_ = n.Scan(fmt.Sprintf("%f", f))
+	return n
+}
+
+func floatPtrToNumeric(f *float64) pgtype.Numeric {
+	if f == nil {
+		return pgtype.Numeric{Valid: false}
+	}
+	return floatToNumeric(*f)
+}
+
+func floatPtrToNumericPtr(f *float64) *pgtype.Numeric {
+	if f == nil {
+		return nil
+	}
+	n := floatToNumeric(*f)
+	return &n
+}
 
 type projectRepo struct {
 	store *postgres.Store
@@ -67,6 +89,24 @@ func (r *projectRepo) List(ctx context.Context, orgID uuid.UUID) ([]domain.Proje
 		return nil
 	})
 	return projects, err
+}
+
+func (r *projectRepo) Update(ctx context.Context, orgID, id uuid.UUID, input domain.UpdateProject) (domain.Project, error) {
+	var project domain.Project
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.UpdateProject(ctx, db.UpdateProjectParams{
+			OrganizationID: orgID,
+			ID:             id,
+			Name:           input.Name,
+			Description:    input.Description,
+		})
+		if err != nil {
+			return err
+		}
+		project = toProject(row)
+		return nil
+	})
+	return project, mapUniqueViolation(mapNotFound(err))
 }
 
 func (r *projectRepo) SetStatus(ctx context.Context, orgID, id uuid.UUID, status string) (domain.Project, error) {
@@ -132,6 +172,24 @@ func (r *teamRepo) List(ctx context.Context, orgID uuid.UUID) ([]domain.Team, er
 		return nil
 	})
 	return teams, err
+}
+
+func (r *teamRepo) Update(ctx context.Context, orgID, id uuid.UUID, input domain.UpdateTeam) (domain.Team, error) {
+	var team domain.Team
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.UpdateTeam(ctx, db.UpdateTeamParams{
+			OrganizationID: orgID,
+			ID:             id,
+			Name:           input.Name,
+			Description:    input.Description,
+		})
+		if err != nil {
+			return err
+		}
+		team = toTeam(row)
+		return nil
+	})
+	return team, mapUniqueViolation(mapNotFound(err))
 }
 
 type teamMemberRepo struct {
@@ -547,10 +605,17 @@ func (r *policyRepo) List(ctx context.Context, orgID uuid.UUID) ([]domain.Policy
 	return policies, err
 }
 
-func (r *policyRepo) SetEnforcement(ctx context.Context, orgID, id uuid.UUID, enforcement string) (domain.Policy, error) {
+func (r *policyRepo) Update(ctx context.Context, orgID, id uuid.UUID, input domain.UpdatePolicy) (domain.Policy, error) {
 	var policy domain.Policy
 	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
-		row, err := q.SetPolicyEnforcement(ctx, db.SetPolicyEnforcementParams{OrganizationID: orgID, ID: id, Enforcement: enforcement})
+		row, err := q.UpdatePolicy(ctx, db.UpdatePolicyParams{
+			OrganizationID: orgID,
+			ID:             id,
+			Name:           input.Name,
+			Description:    input.Description,
+			Enforcement:    input.Enforcement,
+			Priority:       input.Priority,
+		})
 		if err != nil {
 			return err
 		}
@@ -558,6 +623,15 @@ func (r *policyRepo) SetEnforcement(ctx context.Context, orgID, id uuid.UUID, en
 		return nil
 	})
 	return policy, mapNotFound(err)
+}
+
+func (r *policyRepo) Delete(ctx context.Context, orgID, id uuid.UUID) error {
+	return r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		return q.DeletePolicy(ctx, db.DeletePolicyParams{
+			OrganizationID: orgID,
+			ID:             id,
+		})
+	})
 }
 
 type policyRuleRepo struct {
@@ -607,10 +681,10 @@ func (r *policyRuleRepo) List(ctx context.Context, orgID, policyID uuid.UUID) ([
 	return rules, err
 }
 
-func (r *policyRuleRepo) SetEnabled(ctx context.Context, orgID, id uuid.UUID, enabled bool) (domain.PolicyRule, error) {
+func (r *policyRuleRepo) Get(ctx context.Context, orgID, policyID, id uuid.UUID) (domain.PolicyRule, error) {
 	var rule domain.PolicyRule
 	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
-		row, err := q.SetPolicyRuleEnabled(ctx, db.SetPolicyRuleEnabledParams{OrganizationID: orgID, ID: id, Enabled: enabled})
+		row, err := q.GetPolicyRule(ctx, db.GetPolicyRuleParams{OrganizationID: orgID, PolicyID: policyID, ID: id})
 		if err != nil {
 			return err
 		}
@@ -618,6 +692,37 @@ func (r *policyRuleRepo) SetEnabled(ctx context.Context, orgID, id uuid.UUID, en
 		return nil
 	})
 	return rule, mapNotFound(err)
+}
+
+func (r *policyRuleRepo) Update(ctx context.Context, orgID, policyID, id uuid.UUID, input domain.UpdatePolicyRule) (domain.PolicyRule, error) {
+	var rule domain.PolicyRule
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.UpdatePolicyRule(ctx, db.UpdatePolicyRuleParams{
+			OrganizationID: orgID,
+			PolicyID:       policyID,
+			ID:             id,
+			Description:    input.Description,
+			Conditions:     input.Conditions,
+			Parameters:     input.Parameters,
+			Enabled:        input.Enabled,
+		})
+		if err != nil {
+			return err
+		}
+		rule = toPolicyRule(row)
+		return nil
+	})
+	return rule, mapNotFound(err)
+}
+
+func (r *policyRuleRepo) Delete(ctx context.Context, orgID, policyID, id uuid.UUID) error {
+	return r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		return q.DeletePolicyRule(ctx, db.DeletePolicyRuleParams{
+			OrganizationID: orgID,
+			PolicyID:       policyID,
+			ID:             id,
+		})
+	})
 }
 
 func toProject(p db.Project) domain.Project {
@@ -1040,4 +1145,146 @@ func toProviderHealthState(h db.ProviderHealth) domain.ProviderHealthState {
 		LastError:    h.LastError,
 		CheckedAt:    h.CheckedAt,
 	}
+}
+
+func toBudget(b db.Budget) domain.Budget {
+	return domain.Budget{
+		ID:             b.ID,
+		OrganizationID: b.OrganizationID,
+		Name:           b.Name,
+		Description:    b.Description,
+		Scope:          domain.BudgetScope(b.Scope),
+		ScopeID:        b.ScopeID,
+		LimitType:      domain.BudgetLimitType(b.LimitType),
+		LimitAmount:    floatFromNumeric(b.LimitAmount),
+		Window:         domain.BudgetWindow(b.Window),
+		AlertThreshold: floatFromNumeric(b.AlertThreshold),
+		Enabled:        b.Enabled,
+		CreatedAt:      b.CreatedAt,
+		UpdatedAt:      b.UpdatedAt,
+	}
+}
+
+func floatFromNumeric(n interface{}) float64 {
+	switch v := n.(type) {
+	case float64:
+		return v
+	case float32:
+		return float64(v)
+	case int64:
+		return float64(v)
+	case int:
+		return float64(v)
+	case pgtype.Numeric:
+		f, _ := v.Float64Value()
+		return f.Float64
+	default:
+		return 0
+	}
+}
+
+type budgetRepo struct {
+	store *postgres.Store
+}
+
+// NewBudgetRepository returns a BudgetRepository backed by the store.
+func NewBudgetRepository(store *postgres.Store) ports.BudgetRepository {
+	return &budgetRepo{store: store}
+}
+
+func (r *budgetRepo) Create(ctx context.Context, orgID uuid.UUID, input domain.NewBudget) (domain.Budget, error) {
+	var budget domain.Budget
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.CreateBudget(ctx, db.CreateBudgetParams{
+			OrganizationID:  orgID,
+			Name:            input.Name,
+			Description:     input.Description,
+			Scope:           string(input.Scope),
+			ScopeID:         input.ScopeID,
+			LimitType:       string(input.LimitType),
+			LimitAmount:     floatToNumeric(input.LimitAmount),
+			Window:          string(input.Window),
+			AlertThreshold:  floatToNumeric(input.AlertThreshold),
+			Enabled:         input.Enabled,
+		})
+		if err != nil {
+			return err
+		}
+		budget = toBudget(row)
+		return nil
+	})
+	return budget, err
+}
+
+func (r *budgetRepo) Get(ctx context.Context, orgID, id uuid.UUID) (domain.Budget, error) {
+	var budget domain.Budget
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.GetBudget(ctx, db.GetBudgetParams{OrganizationID: orgID, ID: id})
+		if err != nil {
+			return err
+		}
+		budget = toBudget(row)
+		return nil
+	})
+	return budget, mapNotFound(err)
+}
+
+func (r *budgetRepo) List(ctx context.Context, orgID uuid.UUID, filter ports.BudgetFilter) ([]domain.Budget, error) {
+	var budgets []domain.Budget
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		var rows []db.Budget
+		var err error
+
+		if filter.Scope != nil && filter.ScopeID != nil {
+			rows, err = q.ListBudgetsByScope(ctx, db.ListBudgetsByScopeParams{
+				OrganizationID: orgID,
+				Scope:          string(*filter.Scope),
+				ScopeID:        *filter.ScopeID,
+			})
+		} else if filter.Scope != nil {
+			rows, err = q.ListBudgetsByScopeType(ctx, db.ListBudgetsByScopeTypeParams{
+				OrganizationID: orgID,
+				Scope:          string(*filter.Scope),
+			})
+		} else {
+			rows, err = q.ListBudgets(ctx, orgID)
+		}
+
+		if err != nil {
+			return err
+		}
+		budgets = make([]domain.Budget, 0, len(rows))
+		for _, row := range rows {
+			budgets = append(budgets, toBudget(row))
+		}
+		return nil
+	})
+	return budgets, err
+}
+
+func (r *budgetRepo) Update(ctx context.Context, orgID, id uuid.UUID, input domain.UpdateBudget) (domain.Budget, error) {
+	var budget domain.Budget
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.UpdateBudget(ctx, db.UpdateBudgetParams{
+			OrganizationID:  orgID,
+			ID:              id,
+			Name:            input.Name,
+			Description:     input.Description,
+			LimitAmount:     floatPtrToNumeric(input.LimitAmount),
+			AlertThreshold:  floatPtrToNumeric(input.AlertThreshold),
+			Enabled:         input.Enabled,
+		})
+		if err != nil {
+			return err
+		}
+		budget = toBudget(row)
+		return nil
+	})
+	return budget, mapNotFound(err)
+}
+
+func (r *budgetRepo) Delete(ctx context.Context, orgID, id uuid.UUID) error {
+	return r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		return q.DeleteBudget(ctx, db.DeleteBudgetParams{OrganizationID: orgID, ID: id})
+	})
 }

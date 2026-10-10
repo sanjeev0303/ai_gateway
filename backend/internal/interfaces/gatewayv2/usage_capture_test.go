@@ -185,7 +185,7 @@ func TestSink_PublishesRequestAndTokenUsage(t *testing.T) {
 	requireTrue(t, req.PromptTokens == 1200 && req.CompletionTokens == 450, "token mapping mismatch")
 	requireTrue(t, req.TotalTokens == 1650, "total token mismatch: %d", req.TotalTokens)
 	requireTrue(t, req.CachedInputTokens == 300, "cached token mismatch")
-	requireTrue(t, req.APICredentialID != nil && *req.APICredentialID == credID, "credential id must be recorded")
+	requireTrue(t, req.GatewayCredentialID != nil && *req.GatewayCredentialID == credID, "credential id must be recorded")
 
 	ev := msg.Usage
 	requireTrue(t, ev.EventType == domain.UsageEventTypeTokenUsage, "event type mismatch: %s", ev.EventType)

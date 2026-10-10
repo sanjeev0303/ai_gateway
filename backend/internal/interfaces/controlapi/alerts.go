@@ -12,6 +12,7 @@ import (
 func registerAlertRoutes(mux *http.ServeMux, deps Deps) {
 	a := newAPI(deps)
 	mux.Handle("GET /v1/alerts", a.requireAuth(a.listAlerts))
+	mux.Handle("POST /v1/alerts", a.requireAuth(a.createAlert))
 	mux.Handle("GET /v1/alerts/{id}", a.requireAuth(a.getAlert))
 	mux.Handle("PUT /v1/alerts/{id}", a.requireAuth(a.updateAlert))
 	mux.Handle("DELETE /v1/alerts/{id}", a.requireAuth(a.deleteAlert))
@@ -36,6 +37,13 @@ type updateAlertRequest struct {
 	Severity      string          `json:"severity"`
 	Configuration json.RawMessage `json:"configuration"`
 	Status        string          `json:"status"`
+}
+
+type createAlertRequest struct {
+	AlertType     string          `json:"alert_type"`
+	Name          string          `json:"name"`
+	Severity      string          `json:"severity"`
+	Configuration json.RawMessage `json:"configuration"`
 }
 
 func (a *api) listAlerts(w http.ResponseWriter, r *http.Request) {
@@ -67,6 +75,28 @@ func (a *api) getAlert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, toAlertDTO(entry))
+}
+
+func (a *api) createAlert(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+
+	var req createAlertRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	
+	entry, err := a.alerts.Create(r.Context(), actor, domain.NewAlert{
+		AlertType:     req.AlertType,
+		Name:          req.Name,
+		Severity:      req.Severity,
+		Configuration: req.Configuration,
+	})
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, toAlertDTO(entry))
 }
 
 func (a *api) updateAlert(w http.ResponseWriter, r *http.Request) {

@@ -88,6 +88,37 @@ func (q *Queries) CreatePolicyRule(ctx context.Context, arg CreatePolicyRulePara
 	return i, err
 }
 
+const deletePolicy = `-- name: DeletePolicy :exec
+DELETE FROM policies
+WHERE organization_id = $1 AND id = $2
+`
+
+type DeletePolicyParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ID             uuid.UUID `json:"id"`
+}
+
+func (q *Queries) DeletePolicy(ctx context.Context, arg DeletePolicyParams) error {
+	_, err := q.db.Exec(ctx, deletePolicy, arg.OrganizationID, arg.ID)
+	return err
+}
+
+const deletePolicyRule = `-- name: DeletePolicyRule :exec
+DELETE FROM policy_rules
+WHERE organization_id = $1 AND policy_id = $2 AND id = $3
+`
+
+type DeletePolicyRuleParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	PolicyID       uuid.UUID `json:"policy_id"`
+	ID             uuid.UUID `json:"id"`
+}
+
+func (q *Queries) DeletePolicyRule(ctx context.Context, arg DeletePolicyRuleParams) error {
+	_, err := q.db.Exec(ctx, deletePolicyRule, arg.OrganizationID, arg.PolicyID, arg.ID)
+	return err
+}
+
 const getPolicy = `-- name: GetPolicy :one
 SELECT id, organization_id, name, description, enforcement, priority, created_at, updated_at FROM policies
 WHERE organization_id = $1 AND id = $2
@@ -110,6 +141,34 @@ func (q *Queries) GetPolicy(ctx context.Context, arg GetPolicyParams) (Policy, e
 		&i.Priority,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getPolicyRule = `-- name: GetPolicyRule :one
+SELECT id, policy_id, organization_id, rule_type, description, conditions, parameters, enabled, created_at FROM policy_rules
+WHERE organization_id = $1 AND policy_id = $2 AND id = $3
+`
+
+type GetPolicyRuleParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	PolicyID       uuid.UUID `json:"policy_id"`
+	ID             uuid.UUID `json:"id"`
+}
+
+func (q *Queries) GetPolicyRule(ctx context.Context, arg GetPolicyRuleParams) (PolicyRule, error) {
+	row := q.db.QueryRow(ctx, getPolicyRule, arg.OrganizationID, arg.PolicyID, arg.ID)
+	var i PolicyRule
+	err := row.Scan(
+		&i.ID,
+		&i.PolicyID,
+		&i.OrganizationID,
+		&i.RuleType,
+		&i.Description,
+		&i.Conditions,
+		&i.Parameters,
+		&i.Enabled,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -190,21 +249,34 @@ func (q *Queries) ListPolicyRules(ctx context.Context, arg ListPolicyRulesParams
 	return items, nil
 }
 
-const setPolicyEnforcement = `-- name: SetPolicyEnforcement :one
+const updatePolicy = `-- name: UpdatePolicy :one
 UPDATE policies
-SET enforcement = $3
+SET name = COALESCE($3, name),
+    description = COALESCE($4, description),
+    enforcement = COALESCE($5, enforcement),
+    priority = COALESCE($6, priority)
 WHERE organization_id = $1 AND id = $2
 RETURNING id, organization_id, name, description, enforcement, priority, created_at, updated_at
 `
 
-type SetPolicyEnforcementParams struct {
+type UpdatePolicyParams struct {
 	OrganizationID uuid.UUID `json:"organization_id"`
 	ID             uuid.UUID `json:"id"`
-	Enforcement    string    `json:"enforcement"`
+	Name           *string   `json:"name"`
+	Description    *string   `json:"description"`
+	Enforcement    *string   `json:"enforcement"`
+	Priority       *int32    `json:"priority"`
 }
 
-func (q *Queries) SetPolicyEnforcement(ctx context.Context, arg SetPolicyEnforcementParams) (Policy, error) {
-	row := q.db.QueryRow(ctx, setPolicyEnforcement, arg.OrganizationID, arg.ID, arg.Enforcement)
+func (q *Queries) UpdatePolicy(ctx context.Context, arg UpdatePolicyParams) (Policy, error) {
+	row := q.db.QueryRow(ctx, updatePolicy,
+		arg.OrganizationID,
+		arg.ID,
+		arg.Name,
+		arg.Description,
+		arg.Enforcement,
+		arg.Priority,
+	)
 	var i Policy
 	err := row.Scan(
 		&i.ID,
@@ -219,21 +291,36 @@ func (q *Queries) SetPolicyEnforcement(ctx context.Context, arg SetPolicyEnforce
 	return i, err
 }
 
-const setPolicyRuleEnabled = `-- name: SetPolicyRuleEnabled :one
+const updatePolicyRule = `-- name: UpdatePolicyRule :one
 UPDATE policy_rules
-SET enabled = $3
-WHERE organization_id = $1 AND id = $2
+SET description = COALESCE($4, description),
+    conditions = COALESCE($5::jsonb, conditions),
+    parameters = COALESCE($6::jsonb, parameters),
+    enabled = COALESCE($7, enabled)
+WHERE organization_id = $1 AND policy_id = $2 AND id = $3
 RETURNING id, policy_id, organization_id, rule_type, description, conditions, parameters, enabled, created_at
 `
 
-type SetPolicyRuleEnabledParams struct {
+type UpdatePolicyRuleParams struct {
 	OrganizationID uuid.UUID `json:"organization_id"`
+	PolicyID       uuid.UUID `json:"policy_id"`
 	ID             uuid.UUID `json:"id"`
-	Enabled        bool      `json:"enabled"`
+	Description    *string   `json:"description"`
+	Conditions     []byte    `json:"conditions"`
+	Parameters     []byte    `json:"parameters"`
+	Enabled        *bool     `json:"enabled"`
 }
 
-func (q *Queries) SetPolicyRuleEnabled(ctx context.Context, arg SetPolicyRuleEnabledParams) (PolicyRule, error) {
-	row := q.db.QueryRow(ctx, setPolicyRuleEnabled, arg.OrganizationID, arg.ID, arg.Enabled)
+func (q *Queries) UpdatePolicyRule(ctx context.Context, arg UpdatePolicyRuleParams) (PolicyRule, error) {
+	row := q.db.QueryRow(ctx, updatePolicyRule,
+		arg.OrganizationID,
+		arg.PolicyID,
+		arg.ID,
+		arg.Description,
+		arg.Conditions,
+		arg.Parameters,
+		arg.Enabled,
+	)
 	var i PolicyRule
 	err := row.Scan(
 		&i.ID,

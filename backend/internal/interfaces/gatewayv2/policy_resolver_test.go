@@ -37,7 +37,7 @@ func budgetRule() domain.PolicyRule {
 	return domain.PolicyRule{
 		ID:         mustUUIDs[2],
 		PolicyID:   mustUUIDs[0],
-		RuleType:   domain.RuleTypeTokenBudget,
+		RuleType:   domain.RuleTypeBudget,
 		Enabled:    true,
 		Conditions: []byte(`{"type":"budget","key":"org:budget"}`),
 		Parameters: []byte(`{"limit":1000,"window_seconds":3600,"scope":"organization","alert_at":0.8}`),

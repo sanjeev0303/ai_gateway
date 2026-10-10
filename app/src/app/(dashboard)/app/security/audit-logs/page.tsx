@@ -14,6 +14,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getApiClient } from "@/lib/session";
+import { AuditLogActions } from "./client";
+import { AuditFilters } from "./filters";
 
 export const metadata: Metadata = {
   title: "Audit logs · Sentinel",
@@ -30,6 +32,7 @@ interface AuditRow {
   changes: string;
   origin: string;
   occurredAt: string;
+  rawAlert: AuditLog;
 }
 
 /**
@@ -68,6 +71,7 @@ function toRow(record: AuditLog): AuditRow {
         : `${changed} field${changed === 1 ? "" : "s"} changed`,
     origin: [record.ip_address, record.request_id].filter(Boolean).join(" · ") || "—",
     occurredAt: record.created_at,
+    rawAlert: record,
   };
 }
 
@@ -92,14 +96,43 @@ const columns: readonly Column<AuditRow>[] = [
   },
 ];
 
-async function loadAuditLogs() {
+async function loadAuditLogs(params: { [key: string]: string | string[] | undefined }) {
   const { auditLogs } = await getApiClient();
-  return auditLogs.list({ limit: 200 });
+  const limit = typeof params.limit === "string" ? parseInt(params.limit, 10) : 25;
+  const offset = typeof params.offset === "string" ? parseInt(params.offset, 10) : 0;
+  const res = await auditLogs.list({
+    limit,
+    offset,
+    actor_id: typeof params.actor_id === "string" ? params.actor_id : undefined,
+    action: typeof params.action === "string" ? params.action : undefined,
+    resource_type: typeof params.resource_type === "string" ? params.resource_type : undefined,
+  });
+  return { ...res, limit, offset };
 }
 
-export default async function AuditLogsPage() {
-  const { items } = await loadAuditLogs();
+export default async function AuditLogsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const { items, has_more, limit, offset } = await loadAuditLogs(params);
   const rows = items.map(toRow);
+
+  const currentPage = Math.floor(offset / limit);
+
+  const buildPageUrl = (newOffset: number) => {
+    const p = new URLSearchParams();
+    if (typeof params.actor_id === "string") p.set("actor_id", params.actor_id);
+    if (typeof params.action === "string") p.set("action", params.action);
+    if (typeof params.resource_type === "string") p.set("resource_type", params.resource_type);
+    p.set("limit", limit.toString());
+    p.set("offset", newOffset.toString());
+    return `/app/security/audit-logs?${p.toString()}`;
+  };
+
+  const nextHref = buildPageUrl(offset + limit);
+  const prevHref = buildPageUrl(Math.max(0, offset - limit));
 
   return (
     <div className="p-4 sm:p-6">
@@ -107,6 +140,7 @@ export default async function AuditLogsPage() {
         title="Audit logs"
         description="Append-only record of every actor, action, and resource touched in the console."
       >
+        <AuditFilters />
         <Card>
           <CardHeader>
             <CardTitle>Actor and action history</CardTitle>
@@ -115,17 +149,18 @@ export default async function AuditLogsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <DataTable
+              <DataTable
               columns={columns}
               rows={rows}
               rowKey="id"
-              pageSize={25}
+              pageSize={limit}
               emptyMessage="No audit records yet"
-              toolbar={
-                <p className="text-muted-foreground text-sm">
-                  {rows.length} record{rows.length === 1 ? "" : "s"}
-                </p>
-              }
+              actions={(row) => <AuditLogActions record={(row as any).rawAlert} />}
+              serverPaginated
+              hasMore={has_more}
+              currentPage={currentPage}
+              nextHref={nextHref}
+              prevHref={prevHref}
             />
           </CardContent>
         </Card>

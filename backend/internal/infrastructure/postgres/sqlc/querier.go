@@ -20,6 +20,7 @@ type Querier interface {
 	CountOrgMembersByRole(ctx context.Context, arg CountOrgMembersByRoleParams) (int64, error)
 	CreateAPICredential(ctx context.Context, arg CreateAPICredentialParams) (ApiCredential, error)
 	CreateAlert(ctx context.Context, arg CreateAlertParams) (Alert, error)
+	CreateBudget(ctx context.Context, arg CreateBudgetParams) (Budget, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
 	CreateConversationMessage(ctx context.Context, arg CreateConversationMessageParams) (ConversationMessage, error)
 	CreateGatewayCredential(ctx context.Context, arg CreateGatewayCredentialParams) (GatewayCredential, error)
@@ -42,6 +43,9 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserWithPassword(ctx context.Context, arg CreateUserWithPasswordParams) (User, error)
 	DeleteAlert(ctx context.Context, arg DeleteAlertParams) (int64, error)
+	DeleteBudget(ctx context.Context, arg DeleteBudgetParams) error
+	DeletePolicy(ctx context.Context, arg DeletePolicyParams) error
+	DeletePolicyRule(ctx context.Context, arg DeletePolicyRuleParams) error
 	DeleteUsageDailyInWindow(ctx context.Context, arg DeleteUsageDailyInWindowParams) error
 	DeleteUsageHourlyInWindow(ctx context.Context, arg DeleteUsageHourlyInWindowParams) error
 	DeleteUsageMonthlyInWindow(ctx context.Context, arg DeleteUsageMonthlyInWindowParams) error
@@ -53,6 +57,7 @@ type Querier interface {
 	GetAlert(ctx context.Context, arg GetAlertParams) (Alert, error)
 	GetAuditLog(ctx context.Context, arg GetAuditLogParams) (AuditLog, error)
 	GetBillingEvent(ctx context.Context, arg GetBillingEventParams) (BillingEvent, error)
+	GetBudget(ctx context.Context, arg GetBudgetParams) (Budget, error)
 	GetConversation(ctx context.Context, arg GetConversationParams) (Conversation, error)
 	GetGatewayCredential(ctx context.Context, arg GetGatewayCredentialParams) (GatewayCredential, error)
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
@@ -63,6 +68,7 @@ type Querier interface {
 	GetOrganizationByID(ctx context.Context, id uuid.UUID) (Organization, error)
 	GetOrganizationBySlug(ctx context.Context, slug string) (Organization, error)
 	GetPolicy(ctx context.Context, arg GetPolicyParams) (Policy, error)
+	GetPolicyRule(ctx context.Context, arg GetPolicyRuleParams) (PolicyRule, error)
 	GetProject(ctx context.Context, arg GetProjectParams) (Project, error)
 	GetProjectMember(ctx context.Context, arg GetProjectMemberParams) (ProjectMember, error)
 	GetProviderAccount(ctx context.Context, arg GetProviderAccountParams) (ProviderAccount, error)
@@ -76,6 +82,7 @@ type Querier interface {
 	GetUsageByModel(ctx context.Context, arg GetUsageByModelParams) ([]GetUsageByModelRow, error)
 	GetUsageByProject(ctx context.Context, arg GetUsageByProjectParams) ([]GetUsageByProjectRow, error)
 	GetUsageByProvider(ctx context.Context, arg GetUsageByProviderParams) ([]GetUsageByProviderRow, error)
+	GetUsageByServiceAccount(ctx context.Context, arg GetUsageByServiceAccountParams) ([]GetUsageByServiceAccountRow, error)
 	GetUsageByTeam(ctx context.Context, arg GetUsageByTeamParams) ([]GetUsageByTeamRow, error)
 	GetUsageByUser(ctx context.Context, arg GetUsageByUserParams) ([]GetUsageByUserRow, error)
 	GetUsageEvent(ctx context.Context, arg GetUsageEventParams) (UsageEvent, error)
@@ -99,6 +106,9 @@ type Querier interface {
 	// `actor_id` matches either actor column; `actor_type` then narrows to the
 	// column that is actually populated.
 	ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]AuditLog, error)
+	ListBudgets(ctx context.Context, organizationID uuid.UUID) ([]Budget, error)
+	ListBudgetsByScope(ctx context.Context, arg ListBudgetsByScopeParams) ([]Budget, error)
+	ListBudgetsByScopeType(ctx context.Context, arg ListBudgetsByScopeTypeParams) ([]Budget, error)
 	ListConversationMessages(ctx context.Context, arg ListConversationMessagesParams) ([]ConversationMessage, error)
 	// Aggregates come from conversation_messages because llm_requests has no
 	// conversation key: an assistant turn is the only evidence of a provider
@@ -162,14 +172,17 @@ type Querier interface {
 	RevokeRefreshToken(ctx context.Context, tokenHash string) (int64, error)
 	RevokeServiceAccount(ctx context.Context, arg RevokeServiceAccountParams) (ServiceAccount, error)
 	SetOrgMemberRole(ctx context.Context, arg SetOrgMemberRoleParams) (OrganizationMember, error)
-	SetPolicyEnforcement(ctx context.Context, arg SetPolicyEnforcementParams) (Policy, error)
-	SetPolicyRuleEnabled(ctx context.Context, arg SetPolicyRuleEnabledParams) (PolicyRule, error)
 	SetProjectStatus(ctx context.Context, arg SetProjectStatusParams) (Project, error)
 	SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) error
 	TouchUserLastLogin(ctx context.Context, id uuid.UUID) error
 	UpdateAlert(ctx context.Context, arg UpdateAlertParams) (Alert, error)
+	UpdateBudget(ctx context.Context, arg UpdateBudgetParams) (Budget, error)
 	UpdateGatewayCredentialStatus(ctx context.Context, arg UpdateGatewayCredentialStatusParams) (GatewayCredential, error)
 	UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error)
+	UpdatePolicy(ctx context.Context, arg UpdatePolicyParams) (Policy, error)
+	UpdatePolicyRule(ctx context.Context, arg UpdatePolicyRuleParams) (PolicyRule, error)
+	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
+	UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error)
 	UpsertModel(ctx context.Context, arg UpsertModelParams) (Model, error)
 	UpsertPricingModel(ctx context.Context, arg UpsertPricingModelParams) (PricingModel, error)
 	UpsertProviderHealth(ctx context.Context, arg UpsertProviderHealthParams) (ProviderHealth, error)

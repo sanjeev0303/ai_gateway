@@ -16,7 +16,7 @@ import {
 import { ActionDialog, FormDialog } from "@/components/dashboard/dialogs";
 import { createServiceAccount, removeServiceAccount } from "./actions";
 
-export function ServiceAccountActions({ account }: { account: Record<string, unknown> }) {
+export function ServiceAccountActions({ account }: { account: any }) {
   const [removeOpen, setRemoveOpen] = React.useState(false);
   const isRevoked = account.status === "revoked";
 

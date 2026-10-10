@@ -28,11 +28,20 @@ func NewService(deps ServiceDeps) *Service {
 	return &Service{audits: deps.Audits, log: deps.Log}
 }
 
-func (s *Service) List(ctx context.Context, actor domain.Actor, filter domain.AuditLogFilter, limit, offset int32) ([]domain.AuditLog, error) {
+func (s *Service) List(ctx context.Context, actor domain.Actor, filter domain.AuditLogFilter, limit, offset int32) ([]domain.AuditLog, bool, error) {
 	if err := require(actor); err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return s.audits.List(ctx, actor.OrganizationID, filter, limit, offset)
+	logs, err := s.audits.List(ctx, actor.OrganizationID, filter, limit+1, offset)
+	if err != nil {
+		return nil, false, err
+	}
+	hasMore := false
+	if len(logs) > int(limit) {
+		hasMore = true
+		logs = logs[:limit]
+	}
+	return logs, hasMore, nil
 }
 
 func (s *Service) Get(ctx context.Context, actor domain.Actor, id uuid.UUID) (domain.AuditLog, error) {

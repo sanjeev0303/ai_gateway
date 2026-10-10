@@ -128,10 +128,9 @@ paths:
     get:
       operationId: getv1organizationsme
       summary: Get the caller's organization
-      description: >-
-        Alias of GET /v1/organization. Carries the caller's plan and billing
-        state only when an active or trialing subscription row exists; both are
-        null otherwise. No derived metrics are synthesized.
+      description: Alias of GET /v1/organization. Carries the caller's plan and billing
+        state only when an active or trialing subscription row exists; both are null
+        otherwise. No derived metrics are synthesized.
       responses:
         '200':
           description: Success
@@ -143,9 +142,8 @@ paths:
     get:
       operationId: getv1organization
       summary: Get the caller's organization
-      description: >-
-        Returns the caller's organization. plan and billing are populated only
-        when the organization has an active or trialing subscription.
+      description: Returns the caller's organization. plan and billing are populated
+        only when the organization has an active or trialing subscription.
       responses:
         '200':
           description: Success
@@ -156,10 +154,9 @@ paths:
     patch:
       operationId: patchv1organization
       summary: Update the caller's organization
-      description: >-
-        Updates the writable organization fields. Only name and slug are
-        mutable. plan and billing come back null because this write path does
-        not re-read the subscription.
+      description: Updates the writable organization fields. Only name and slug are
+        mutable. plan and billing come back null because this write path does not
+        re-read the subscription.
       requestBody:
         required: true
         content:
@@ -820,6 +817,16 @@ paths:
             application/json:
               schema:
                 type: object
+  /v1/usage/by-service-account:
+    get:
+      operationId: getv1usagebyserviceaccount
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
   /v1/usage/by-team:
     get:
       operationId: getv1usagebyteam
@@ -864,10 +871,9 @@ paths:
     get:
       operationId: getv1conversations
       summary: List conversations
-      description: >-
-        Returns conversations in the caller's organization with the aggregates
-        derived from their messages. No query parameter influences how much
-        transcript content is returned.
+      description: Returns conversations in the caller's organization with the aggregates
+        derived from their messages. No query parameter influences how much transcript
+        content is returned.
       responses:
         '200':
           description: Success
@@ -975,9 +981,8 @@ paths:
     get:
       operationId: getv1conversationsidmessages
       summary: List the turns of one conversation
-      description: >-
-        content is omitted from a turn whose content the effective privacy mode
-        withholds, so a redacted turn carries no content key at all.
+      description: content is omitted from a turn whose content the effective privacy
+        mode withholds, so a redacted turn carries no content key at all.
       responses:
         '200':
           description: Success
@@ -1008,10 +1013,9 @@ paths:
     get:
       operationId: getv1auditlogs
       summary: List audit records
-      description: >-
-        Returns the caller's organization audit ledger, newest first. Audit
-        records are append-only: this API exposes no way to modify or remove
-        one. Requires the audit.read permission.
+      description: 'Returns the caller''s organization audit ledger, newest first.
+        Audit records are append-only: this API exposes no way to modify or remove
+        one. Requires the audit.read permission.'
       responses:
         '200':
           description: Success
@@ -1035,8 +1039,7 @@ paths:
       - name: actor_id
         in: query
         required: false
-        description: >-
-          Matches a record written by either the user or the service account
+        description: Matches a record written by either the user or the service account
           with this id. Combine with actor_type to disambiguate.
         schema:
           type: string
@@ -1101,8 +1104,7 @@ paths:
     get:
       operationId: getv1auditlogsid
       summary: Get one audit record
-      description: >-
-        Requires the audit.read permission. A record belonging to another
+      description: Requires the audit.read permission. A record belonging to another
         organization is reported as not found rather than forbidden.
       responses:
         '200':
@@ -1140,14 +1142,13 @@ paths:
     get:
       operationId: getv1securityevents
       summary: List security events
-      description: >-
-        Returns the caller's organization security feed, newest first. Events are
-        produced by the platform rather than by any user action and are
-        append-only: this API exposes no way to modify or remove one. Two
-        categories exist — provider_incident for a provider's observed
-        reachability changing, and pipeline_failure for a background job failing
-        — so the feed covers the platform itself, not gateway request activity.
-        Requires the security_events.read permission.
+      description: "Returns the caller's organization security feed, newest first.\
+        \ Events are produced by the platform rather than by any user action and are\
+        \ append-only: this API exposes no way to modify or remove one. Two categories\
+        \ exist \u2014 provider_incident for a provider's observed reachability changing,\
+        \ and pipeline_failure for a background job failing \u2014 so the feed covers\
+        \ the platform itself, not gateway request activity. Requires the security_events.read\
+        \ permission."
       responses:
         '200':
           description: Success
@@ -1220,10 +1221,9 @@ paths:
     get:
       operationId: getvalerts
       summary: List alert rules
-      description: >-
-        Returns the caller's organization alert rules. Listing a rule reports
-        only its configuration; no rule is evaluated by this API. Requires the
-        alerts.read permission.
+      description: Returns the caller's organization alert rules. Listing a rule reports
+        only its configuration; no rule is evaluated by this API. Requires the alerts.read
+        permission.
       responses:
         '200':
           description: Success
@@ -1241,8 +1241,7 @@ paths:
     get:
       operationId: getvalertsid
       summary: Get one alert rule
-      description: >-
-        Requires the alerts.read permission. A rule belonging to another
+      description: Requires the alerts.read permission. A rule belonging to another
         organization is reported as not found rather than forbidden.
       responses:
         '200':
@@ -1279,11 +1278,9 @@ paths:
     put:
       operationId: putvalertsid
       summary: Replace an alert rule
-      description: >-
-        Replaces the mutable fields of an alert rule in full; every field is
-        required. alert_type is fixed at creation and cannot be changed. The
-        configuration must be a JSON object. Requires the alerts.manage
-        permission.
+      description: Replaces the mutable fields of an alert rule in full; every field
+        is required. alert_type is fixed at creation and cannot be changed. The configuration
+        must be a JSON object. Requires the alerts.manage permission.
       requestBody:
         required: true
         content:
@@ -1298,9 +1295,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/Alert'
         '400':
-          description: >-
-            The id is not a UUID, the body is malformed, the name is blank, the
-            severity or status is not a known value, or the configuration is not
+          description: The id is not a UUID, the body is malformed, the name is blank,
+            the severity or status is not a known value, or the configuration is not
             a JSON object.
           content:
             application/json:
@@ -1328,8 +1324,7 @@ paths:
     delete:
       operationId: deletevalertsid
       summary: Delete an alert rule
-      description: >-
-        Deletes the rule. Requires the alerts.manage permission.
+      description: Deletes the rule. Requires the alerts.manage permission.
       responses:
         '204':
           description: Deleted
@@ -1362,11 +1357,10 @@ paths:
     post:
       operationId: postvalertsidtest
       summary: Validate an alert rule's configuration
-      description: >-
-        Returns the rule's declared configuration and whether it is muted. No
-        evaluator is wired to any alert rule type, so this never reports whether
-        a rule would fire and never sends a notification: notification_sent is
-        always false. Requires the alerts.manage permission.
+      description: 'Returns the rule''s declared configuration and whether it is muted.
+        No evaluator is wired to any alert rule type, so this never reports whether
+        a rule would fire and never sends a notification: notification_sent is always
+        false. Requires the alerts.manage permission.'
       responses:
         '200':
           description: Success
@@ -1375,7 +1369,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/AlertTestResult'
         '400':
-          description: The id is not a UUID, or the stored configuration is not a JSON object.
+          description: The id is not a UUID, or the stored configuration is not a
+            JSON object.
           content:
             application/json:
               schema:
@@ -1403,11 +1398,9 @@ paths:
     get:
       operationId: getv1billingplans
       summary: List sellable plans
-      description: >-
-        Returns every plan in the catalog. Plans are global, so this list is
-        identical for all organizations. No price is returned because no price
-        is stored anywhere in this service. Requires the billing.read
-        permission.
+      description: Returns every plan in the catalog. Plans are global, so this list
+        is identical for all organizations. No price is returned because no price
+        is stored anywhere in this service. Requires the billing.read permission.
       responses:
         '200':
           description: Success
@@ -1425,10 +1418,9 @@ paths:
     get:
       operationId: getv1billingsubscription
       summary: Get the organization's current plan and billing cycle
-      description: >-
-        Returns the organization's stored subscription. An organization with
-        no subscription is reported as not found rather than as an empty
-        object. Requires the billing.read permission.
+      description: Returns the organization's stored subscription. An organization
+        with no subscription is reported as not found rather than as an empty object.
+        Requires the billing.read permission.
       responses:
         '200':
           description: Success
@@ -1452,11 +1444,10 @@ paths:
     get:
       operationId: getv1billingusage
       summary: Get recorded cost and request totals for a window
-      description: >-
-        Returns the same aggregated usage summary as /v1/usage/summary, scoped
-        to the caller's organization. All values are measured from recorded
-        requests; nothing here is estimated or forecast. Requires the
-        billing.read permission.
+      description: Returns the same aggregated usage summary as /v1/usage/summary,
+        scoped to the caller's organization. All values are measured from recorded
+        requests; nothing here is estimated or forecast. Requires the billing.read
+        permission.
       parameters:
       - name: from
         in: query
@@ -1495,12 +1486,10 @@ paths:
     get:
       operationId: getv1billinginvoices
       summary: List the organization's invoices
-      description: >-
-        Returns the organization's invoices newest issued first, each with its
-        itemisation lines. These are locally computed statements only: no
-        payment processor is integrated, so no invoice is ever marked paid and
-        no field references a charge, payment, or PDF. Requires the billing.read
-        permission.
+      description: 'Returns the organization''s invoices newest issued first, each
+        with its itemisation lines. These are locally computed statements only: no
+        payment processor is integrated, so no invoice is ever marked paid and no
+        field references a charge, payment, or PDF. Requires the billing.read permission.'
       responses:
         '200':
           description: Success
@@ -1510,6 +1499,345 @@ paths:
                 $ref: '#/components/schemas/InvoiceListResponse'
         '403':
           description: The caller's role does not grant billing.read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/policies:
+    get:
+      tags:
+      - policies
+      operationId: listPolicies
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyList'
+    post:
+      tags:
+      - policies
+      operationId: createPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePolicyRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+  /v1/policies/{id}:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    get:
+      tags:
+      - policies
+      operationId: getPolicy
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+    patch:
+      tags:
+      - policies
+      operationId: updatePolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePolicyRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+    delete:
+      tags:
+      - policies
+      operationId: deletePolicy
+      responses:
+        '204':
+          description: No Content
+  /v1/policies/{id}/rules:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    get:
+      tags:
+      - policies
+      operationId: listPolicyRules
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyRuleList'
+    post:
+      tags:
+      - policies
+      operationId: createPolicyRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePolicyRuleRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyRule'
+  /v1/policies/{id}/rules/{ruleId}:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - name: ruleId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    patch:
+      tags:
+      - policies
+      operationId: updatePolicyRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePolicyRuleRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyRule'
+    delete:
+      tags:
+      - policies
+      operationId: deletePolicyRule
+      responses:
+        '204':
+          description: No Content
+  /v1/policies/preview:
+    post:
+      tags:
+      - policies
+      operationId: previewPolicy
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /v1/policies/{id}/validate:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      tags:
+      - policies
+      operationId: validatePolicy
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /v1/model-access:
+    get:
+      tags:
+      - model-access
+      operationId: listModelAccess
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelAccessList'
+    put:
+      tags:
+      - model-access
+      operationId: updateModelAccess
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateModelAccessRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+    post:
+      tags:
+      - model-access
+      operationId: previewModelAccess
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelAccessPreviewRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelAccessPreviewResponse'
+  /v1/budgets:
+    get:
+      tags:
+      - budgets
+      operationId: listBudgets
+      parameters:
+      - name: scope
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [organization, team, project, gateway_credential, service_account]
+      - name: scope_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: limit_type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [spend, tokens, requests]
+      - name: enabled
+        in: query
+        required: false
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetList'
+    post:
+      tags:
+      - budgets
+      operationId: createBudget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBudgetRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+  /v1/budgets/{id}:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    get:
+      tags:
+      - budgets
+      operationId: getBudget
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+    patch:
+      tags:
+      - budgets
+      operationId: updateBudget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBudgetRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+    delete:
+      tags:
+      - budgets
+      operationId: deleteBudget
+      responses:
+        '204':
+          description: No Content
+        '404':
+          description: Not Found
           content:
             application/json:
               schema:
@@ -1545,23 +1873,20 @@ components:
               description: Optional structured context; shape depends on code.
     ConversationPrivacyMode:
       type: string
-      description: >-
-        How much transcript content may be returned for a conversation. A
-        conversation's own privacy_state always wins; otherwise the server
-        applies AIGW_CONVERSATION_PRIVACY_DEFAULT and fails closed to
-        METADATA_ONLY when that is unset or unrecognized. No query parameter
-        can widen this.
+      description: How much transcript content may be returned for a conversation.
+        A conversation's own privacy_state always wins; otherwise the server applies
+        AIGW_CONVERSATION_PRIVACY_DEFAULT and fails closed to METADATA_ONLY when that
+        is unset or unrecognized. No query parameter can widen this.
       enum:
-      - OFF
+      - false
       - METADATA_ONLY
       - PROMPT_ONLY
       - FULL_CONTENT
     ConversationSummary:
       type: object
-      description: >-
-        One conversation plus the aggregates derived from its messages.
-        request_count counts assistant turns, not messages, so it can be lower
-        than message_count.
+      description: One conversation plus the aggregates derived from its messages.
+        request_count counts assistant turns, not messages, so it can be lower than
+        message_count.
       required:
       - id
       - title
@@ -1611,19 +1936,17 @@ components:
           type: integer
           format: int64
           nullable: true
-          description: >-
-            Always null today: conversation_messages carries no link to
-            llm_requests, so per-conversation spend cannot be derived. The field
-            is present so cost can be filled in without a breaking change.
+          description: 'Always null today: conversation_messages carries no link to
+            llm_requests, so per-conversation spend cannot be derived. The field is
+            present so cost can be filled in without a breaking change.'
         privacy_state:
           $ref: '#/components/schemas/ConversationPrivacyMode'
     ConversationMessage:
       type: object
-      description: >-
-        One stored turn. content is deliberately not required: a turn whose
-        content the effective privacy mode withholds carries no content key at
-        all rather than an empty string, so a client can tell redacted from
-        genuinely empty.
+      description: 'One stored turn. content is deliberately not required: a turn
+        whose content the effective privacy mode withholds carries no content key
+        at all rather than an empty string, so a client can tell redacted from genuinely
+        empty.'
       required:
       - id
       - conversation_id
@@ -1639,9 +1962,8 @@ components:
           format: uuid
         role:
           type: string
-          description: >-
-            system, user, assistant, or tool. PROMPT_ONLY keeps content only for
-            system and user turns.
+          description: system, user, assistant, or tool. PROMPT_ONLY keeps content
+            only for system and user turns.
         content:
           type: string
           description: Absent when the effective privacy mode withholds it.
@@ -1677,10 +1999,9 @@ components:
             $ref: '#/components/schemas/ConversationMessage'
     AuditLog:
       type: object
-      description: >-
-        One immutable audit record. Audit records are written by the server and
-        can never be edited or deleted through the API. actor_type reports
-        which of the two actor id columns is populated.
+      description: One immutable audit record. Audit records are written by the server
+        and can never be edited or deleted through the API. actor_type reports which
+        of the two actor id columns is populated.
       required:
       - id
       - actor_type
@@ -1743,10 +2064,9 @@ components:
             $ref: '#/components/schemas/AuditLog'
     SecurityEvent:
       type: object
-      description: >-
-        One platform-originated security event. Events are written by background
-        jobs and health probes, never by a user request, and can never be edited
-        or deleted through the API.
+      description: One platform-originated security event. Events are written by background
+        jobs and health probes, never by a user request, and can never be edited or
+        deleted through the API.
       required:
       - id
       - category
@@ -1776,14 +2096,12 @@ components:
         detail:
           type: object
           additionalProperties: true
-          description: >-
-            Structured context for the event, e.g. the provider kind and the
-            from/to status for a provider_incident, or the failing stage for a
+          description: Structured context for the event, e.g. the provider kind and
+            the from/to status for a provider_incident, or the failing stage for a
             pipeline_failure. An empty object when nothing was recorded.
         source:
           type: string
-          description: >-
-            Originating subsystem, e.g. provider_health or usage_rollup.
+          description: Originating subsystem, e.g. provider_health or usage_rollup.
         created_at:
           type: string
           format: date-time
@@ -1798,10 +2116,9 @@ components:
             $ref: '#/components/schemas/SecurityEvent'
     Alert:
       type: object
-      description: >-
-        One configured alert rule. Reading a rule exposes only what it declares:
-        no evaluator is wired to any rule type, so last_triggered_at stays null
-        and nothing here implies the rule fires.
+      description: 'One configured alert rule. Reading a rule exposes only what it
+        declares: no evaluator is wired to any rule type, so last_triggered_at stays
+        null and nothing here implies the rule fires.'
       required:
       - id
       - alert_type
@@ -1862,8 +2179,7 @@ components:
             $ref: '#/components/schemas/Alert'
     UpdateAlertRequest:
       type: object
-      description: >-
-        Full replacement of an alert rule's mutable fields; all four are
+      description: Full replacement of an alert rule's mutable fields; all four are
         required. alert_type is not writable.
       required:
       - name
@@ -1890,9 +2206,8 @@ components:
           - muted
     AlertTestResult:
       type: object
-      description: >-
-        The outcome of validating a rule's configuration. There is deliberately
-        no would-fire field: no evaluator exists to produce one.
+      description: 'The outcome of validating a rule''s configuration. There is deliberately
+        no would-fire field: no evaluator exists to produce one.'
       required:
       - alert_id
       - alert_type
@@ -1936,9 +2251,8 @@ components:
           type: string
     Organization:
       type: object
-      description: >-
-        An organization. Only persisted columns are exposed. MRR, seat counts,
-        billing contact email and region are deliberately absent because no
+      description: An organization. Only persisted columns are exposed. MRR, seat
+        counts, billing contact email and region are deliberately absent because no
         such data is stored for an organization.
       required:
       - id
@@ -1991,8 +2305,7 @@ components:
           type: string
     OrganizationBilling:
       type: object
-      description: >-
-        Billing state of the organization's active or trialing subscription.
+      description: Billing state of the organization's active or trialing subscription.
         Period timestamps are empty strings when the stored column is NULL.
       required:
       - status
@@ -2002,8 +2315,7 @@ components:
       properties:
         status:
           type: string
-          description: >-
-            Only active or trialing subscriptions are surfaced; other states
+          description: Only active or trialing subscriptions are surfaced; other states
             leave plan and billing null.
           enum:
           - active
@@ -2018,9 +2330,8 @@ components:
           type: boolean
     UpdateOrganizationRequest:
       type: object
-      description: >-
-        Writable organization fields. Both are optional; a blank name or slug
-        is rejected. status is read-only.
+      description: Writable organization fields. Both are optional; a blank name or
+        slug is rejected. status is read-only.
       properties:
         name:
           type: string
@@ -2030,9 +2341,8 @@ components:
           minLength: 1
     Plan:
       type: object
-      description: >-
-        One sellable plan from the global catalog. No price, seat count, or
-        billing contact is included because none is stored in this service.
+      description: One sellable plan from the global catalog. No price, seat count,
+        or billing contact is included because none is stored in this service.
       required:
       - id
       - code
@@ -2073,8 +2383,7 @@ components:
             $ref: '#/components/schemas/Plan'
     Subscription:
       type: object
-      description: >-
-        The organization's current plan and billing cycle, built from stored
+      description: The organization's current plan and billing cycle, built from stored
         columns only.
       required:
       - plan_code
@@ -2090,9 +2399,8 @@ components:
           type: string
         status:
           type: string
-          description: >-
-            Mirrors the stored subscription status; not narrowed to the states
-            the organization endpoint surfaces.
+          description: Mirrors the stored subscription status; not narrowed to the
+            states the organization endpoint surfaces.
           enum:
           - active
           - trialing
@@ -2136,9 +2444,8 @@ components:
           format: int64
     Invoice:
       type: object
-      description: >-
-        One locally computed invoice statement. There is deliberately no paid
-        status, charge id, processor reference, or PDF URL, because no payment
+      description: One locally computed invoice statement. There is deliberately no
+        paid status, charge id, processor reference, or PDF URL, because no payment
         processor is integrated and no field here may imply money moved.
       required:
       - id
@@ -2197,11 +2504,10 @@ components:
             $ref: '#/components/schemas/Invoice'
     BillingUsageSummary:
       type: object
-      description: >-
-        Recorded usage totals for a window, identical to the body of
-        /v1/usage/summary. Field names are the Go field names the handler
-        serializes today; averages and last activity stay null or zero when the
-        window held no requests, so no fabricated measurement is reported.
+      description: Recorded usage totals for a window, identical to the body of /v1/usage/summary.
+        Field names are the Go field names the handler serializes today; averages
+        and last activity stay null or zero when the window held no requests, so no
+        fabricated measurement is reported.
       required:
       - Requests
       - InputTokens
@@ -2244,3 +2550,335 @@ components:
           type: string
           format: date-time
           description: Zero time when the window held no requests.
+    Policy:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        enforcement:
+          type: string
+          enum:
+          - active
+          - disabled
+          - permissive
+        priority:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    PolicyRule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        policy_id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        rule_type:
+          type: string
+        description:
+          type: string
+        conditions:
+          type: object
+          additionalProperties: true
+        parameters:
+          type: object
+          additionalProperties: true
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+    CreatePolicyRequest:
+      type: object
+      required:
+      - name
+      - enforcement
+      - priority
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        enforcement:
+          type: string
+          enum:
+          - active
+          - disabled
+          - permissive
+        priority:
+          type: integer
+    UpdatePolicyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        enforcement:
+          type: string
+          enum:
+          - active
+          - disabled
+          - permissive
+        priority:
+          type: integer
+    CreatePolicyRuleRequest:
+      type: object
+      required:
+      - rule_type
+      - enabled
+      properties:
+        rule_type:
+          type: string
+        description:
+          type: string
+        conditions:
+          type: object
+          additionalProperties: true
+        parameters:
+          type: object
+          additionalProperties: true
+        enabled:
+          type: boolean
+    UpdatePolicyRuleRequest:
+      type: object
+      properties:
+        description:
+          type: string
+        conditions:
+          type: object
+          additionalProperties: true
+        parameters:
+          type: object
+          additionalProperties: true
+        enabled:
+          type: boolean
+    PolicyList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Policy'
+    PolicyRuleList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PolicyRule'
+    ModelAccessEntry:
+      type: object
+      properties:
+        provider:
+          type: string
+        model:
+          type: string
+        allowed:
+          type: boolean
+        source:
+          type: string
+        policy_id:
+          type: string
+          format: uuid
+        rule_id:
+          type: string
+          format: uuid
+        priority:
+          type: integer
+        effective:
+          type: boolean
+    ModelAccessList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelAccessEntry'
+    UpdateModelAccessRequest:
+      type: object
+      required:
+      - entries
+      properties:
+        entries:
+          type: array
+          items:
+            type: object
+            required:
+            - provider
+            - model
+            - action
+            properties:
+              provider:
+                type: string
+              model:
+                type: string
+              action:
+                type: string
+                enum: [allow, block]
+    ModelAccessPreviewRequest:
+      type: object
+      required:
+      - provider
+      - model
+      - action
+      properties:
+        provider:
+          type: string
+        model:
+          type: string
+        action:
+          type: string
+          enum: [allow, block]
+    ModelAccessPreviewResponse:
+      type: object
+      properties:
+        provider:
+          type: string
+        model:
+          type: string
+        current_decision:
+          type: string
+          enum: [allow, block]
+        preview_decision:
+          type: string
+          enum: [allow, block]
+        would_change:
+          type: boolean
+        blocking_rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelAccessEntry'
+        allowing_rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelAccessEntry'
+    Budget:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        scope:
+          type: string
+          enum: [organization, team, project, gateway_credential, service_account]
+        scope_id:
+          type: string
+          format: uuid
+        limit_type:
+          type: string
+          enum: [spend, tokens, requests]
+        limit_amount:
+          type: number
+          format: double
+        window:
+          type: string
+          enum: [hourly, daily, weekly, monthly]
+        alert_threshold:
+          type: number
+          format: double
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        current_spend:
+          type: number
+          format: double
+        current_tokens:
+          type: integer
+          format: int64
+        current_requests:
+          type: integer
+          format: int64
+        window_start:
+          type: string
+          format: date-time
+        window_end:
+          type: string
+          format: date-time
+        percentage_used:
+          type: number
+          format: double
+    BudgetList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Budget'
+    CreateBudgetRequest:
+      type: object
+      required:
+      - name
+      - scope
+      - scope_id
+      - limit_type
+      - limit_amount
+      - window
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        scope:
+          type: string
+          enum: [organization, team, project, gateway_credential, service_account]
+        scope_id:
+          type: string
+          format: uuid
+        limit_type:
+          type: string
+          enum: [spend, tokens, requests]
+        limit_amount:
+          type: number
+          format: double
+        window:
+          type: string
+          enum: [hourly, daily, weekly, monthly]
+        alert_threshold:
+          type: number
+          format: double
+        enabled:
+          type: boolean
+    UpdateBudgetRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        limit_amount:
+          type: number
+          format: double
+        alert_threshold:
+          type: number
+          format: double
+        enabled:
+          type: boolean

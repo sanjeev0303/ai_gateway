@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/card";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
+import { SecurityEventActions } from "./client";
 
 export const metadata: Metadata = {
   title: "Events · Sentinel",
@@ -35,6 +36,7 @@ interface EventRow {
   source: string;
   detail: string;
   occurredAt: string;
+  rawEvent: SecurityEvent;
 }
 
 const SEVERITY_TONE: Record<SecurityEventSeverity, StatusTone> = {
@@ -69,6 +71,7 @@ function toRow(event: SecurityEvent): EventRow {
     source: event.source,
     detail: summarizeDetail(event.detail),
     occurredAt: event.created_at,
+    rawEvent: event,
   };
 }
 
@@ -104,9 +107,12 @@ const columns: readonly Column<EventRow>[] = [
   },
 ];
 
-async function loadSecurityEvents() {
+async function loadSecurityEvents(params: { [key: string]: string | string[] | undefined }) {
   const { securityEvents } = await getApiClient();
-  return securityEvents.list({ limit: 200 });
+  const limit = typeof params.limit === "string" ? parseInt(params.limit, 10) : 25;
+  const offset = typeof params.offset === "string" ? parseInt(params.offset, 10) : 0;
+  const res = await securityEvents.list({ limit, offset });
+  return { ...res, limit, offset };
 }
 
 /**
@@ -114,9 +120,26 @@ async function loadSecurityEvents() {
  * deliberately read-only: there is no control here that could acknowledge,
  * edit, or remove an event, matching the API.
  */
-export default async function EventsPage() {
-  const { items } = await loadSecurityEvents();
+export default async function EventsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const { items, has_more, limit, offset } = await loadSecurityEvents(params);
   const rows = items.map(toRow);
+
+  const currentPage = Math.floor(offset / limit);
+
+  const buildPageUrl = (newOffset: number) => {
+    const p = new URLSearchParams();
+    p.set("limit", limit.toString());
+    p.set("offset", newOffset.toString());
+    return `/app/security/events?${p.toString()}`;
+  };
+
+  const nextHref = buildPageUrl(offset + limit);
+  const prevHref = buildPageUrl(Math.max(0, offset - limit));
 
   return (
     <div className="p-4 sm:p-6">
@@ -135,7 +158,7 @@ export default async function EventsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {rows.length === 0 ? (
+            {rows.length === 0 && offset === 0 ? (
               <EmptyState
                 title="No incidents recorded"
                 description="Nothing has failed since events began being captured, so there is nothing to list. Provider incidents appear here when a provider's reachability changes, and pipeline failures appear when a usage rollup cannot be completed. Gateway request activity is a different thing and is live under Observe → Live activity; current provider reachability is under Govern → Provider health."
@@ -145,13 +168,14 @@ export default async function EventsPage() {
                 columns={columns}
                 rows={rows}
                 rowKey="id"
-                pageSize={25}
+                pageSize={limit}
                 emptyMessage="No incidents recorded"
-                toolbar={
-                  <p className="text-muted-foreground text-sm">
-                    {rows.length} event{rows.length === 1 ? "" : "s"}
-                  </p>
-                }
+                actions={(row) => <SecurityEventActions event={(row as any).rawEvent} />}
+                serverPaginated
+                hasMore={has_more}
+                currentPage={currentPage}
+                nextHref={nextHref}
+                prevHref={prevHref}
               />
             )}
           </CardContent>

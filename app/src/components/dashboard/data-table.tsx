@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { StatusBadge } from "@/components/dashboard/status-badge";
@@ -96,6 +97,8 @@ export interface Column<T> {
   meterMax?: number;
   /** Field to sort on; defaults to `primary`. */
   sort?: Field<T>;
+  /** Optional custom cell renderer. */
+  render?: (row: T) => React.ReactNode;
 }
 
 interface DataTableProps<T> {
@@ -109,6 +112,15 @@ interface DataTableProps<T> {
   toolbar?: React.ReactNode;
   /** Optional render function for a trailing actions cell. */
   actions?: (row: T) => React.ReactNode;
+  loading?: boolean;
+  /** If true, pagination is managed by the caller. */
+  serverPaginated?: boolean;
+  /** True if there is a next page (for serverPaginated). */
+  hasMore?: boolean;
+  /** Caller-provided page number (for serverPaginated, 0-indexed). */
+  currentPage?: number;
+  nextHref?: string;
+  prevHref?: string;
 }
 
 function cellText(row: Record<string, unknown>, field: string, format: CellFormat): string {
@@ -127,10 +139,16 @@ export function DataTable<T>({
   emptyMessage = "No records found.",
   toolbar,
   actions,
+  serverPaginated = false,
+  hasMore = false,
+  currentPage: serverPage = 0,
+  nextHref,
+  prevHref,
 }: DataTableProps<T>) {
+  const router = useRouter();
   const [sortKey, setSortKey] = React.useState<string | null>(null);
   const [ascending, setAscending] = React.useState(true);
-  const [page, setPage] = React.useState(0);
+  const [localPage, setLocalPage] = React.useState(0);
 
   const sorted = React.useMemo(() => {
     const column = columns.find((entry) => entry.key === sortKey);
@@ -152,9 +170,9 @@ export function DataTable<T>({
     return copy as T[];
   }, [rows, columns, sortKey, ascending]);
 
-  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const currentPage = Math.min(page, pageCount - 1);
-  const visible = sorted.slice(
+  const pageCount = serverPaginated ? Math.max(1, serverPage + (hasMore ? 2 : 1)) : Math.max(1, Math.ceil(sorted.length / pageSize));
+  const currentPage = serverPaginated ? serverPage : Math.min(localPage, pageCount - 1);
+  const visible = serverPaginated ? sorted : sorted.slice(
     currentPage * pageSize,
     currentPage * pageSize + pageSize,
   );
@@ -243,6 +261,14 @@ export function DataTable<T>({
                       );
                     }
 
+                    if (column.render) {
+                      return (
+                        <TableCell key={column.key} className={cn(alignRight && "text-right")}>
+                          {column.render(row)}
+                        </TableCell>
+                      );
+                    }
+
                     const primaryText = cellText(record, column.primary, format);
                     const href = column.href ? record[column.href] : undefined;
                     const secondaryText = column.secondary
@@ -320,26 +346,43 @@ export function DataTable<T>({
       {pageCount > 1 && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
           <span className="tabular-nums">
-            {currentPage * pageSize + 1}–
-            {Math.min(sorted.length, (currentPage + 1) * pageSize)} of {sorted.length}
+            {serverPaginated ? (
+              <>Page {currentPage + 1}</>
+            ) : (
+              <>{currentPage * pageSize + 1}–{Math.min(sorted.length, (currentPage + 1) * pageSize)} of {sorted.length}</>
+            )}
           </span>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              disabled={currentPage === 0}
-              onClick={() => setPage(Math.max(0, currentPage - 1))}
+              disabled={serverPaginated ? !prevHref : currentPage === 0}
+              onClick={() => {
+                if (serverPaginated && prevHref) {
+                  router.push(prevHref);
+                } else if (!serverPaginated) {
+                  setLocalPage(Math.max(0, currentPage - 1));
+                }
+              }}
             >
               <ChevronLeft className="size-4" aria-hidden /> Previous
             </Button>
-            <span className="tabular-nums">
-              Page {currentPage + 1} of {pageCount}
-            </span>
+            {!serverPaginated && (
+              <span className="tabular-nums">
+                Page {currentPage + 1} of {pageCount}
+              </span>
+            )}
             <Button
               variant="outline"
               size="sm"
-              disabled={currentPage >= pageCount - 1}
-              onClick={() => setPage(Math.min(pageCount - 1, currentPage + 1))}
+              disabled={serverPaginated ? !nextHref : currentPage >= pageCount - 1}
+              onClick={() => {
+                if (serverPaginated && nextHref) {
+                  router.push(nextHref);
+                } else if (!serverPaginated) {
+                  setLocalPage(Math.min(pageCount - 1, currentPage + 1));
+                }
+              }}
             >
               Next <ChevronRight className="size-4" aria-hidden />
             </Button>

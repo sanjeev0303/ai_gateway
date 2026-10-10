@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ActionDialog, FormDialog } from "@/components/dashboard/dialogs";
+import { ActionDialog, FormDialog, OneTimeSecretDialog } from "@/components/dashboard";
 import { toast } from "sonner";
 import {
   createGatewayCredential,
@@ -24,7 +24,7 @@ import {
   type CreateCredentialState,
 } from "./actions";
 
-export function GatewayCredentialActions({ credential }: { credential: Record<string, unknown> }) {
+export function GatewayCredentialActions({ credential }: { credential: any }) {
   const [revokeOpen, setRevokeOpen] = React.useState(false);
   const [rotateOpen, setRotateOpen] = React.useState(false);
   const [expireOpen, setExpireOpen] = React.useState(false);
@@ -126,7 +126,7 @@ export function GatewayCredentialActions({ credential }: { credential: Record<st
         }}
       />
 
-      <FormDialog
+      <OneTimeSecretDialog
         open={!!secret}
         onOpenChange={(open) => {
           if (!open) {
@@ -134,26 +134,8 @@ export function GatewayCredentialActions({ credential }: { credential: Record<st
             setRotateOpen(false);
           }
         }}
-        title="New Secret Generated"
-        description="Copy this secret now. It will not be shown again."
-        action={async () => ({ success: true })}
-        submitLabel="Done"
-      >
-        <div className="flex items-center gap-2">
-          <Input readOnly value={secret || ""} />
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              navigator.clipboard.writeText(secret || "");
-              toast.success("Copied to clipboard");
-            }}
-          >
-            <Copy className="h-4 w-4" />
-          </Button>
-        </div>
-      </FormDialog>
+        secret={secret}
+      />
     </>
   );
 }
@@ -164,7 +146,7 @@ export function CreateCredentialButton() {
 
   if (secret) {
     return (
-      <FormDialog
+      <OneTimeSecretDialog
         open={true}
         onOpenChange={(isOpen) => {
           if (!isOpen) {
@@ -172,26 +154,10 @@ export function CreateCredentialButton() {
             setOpen(false);
           }
         }}
+        secret={secret}
         title="Credential Created"
-        description="Copy your new secret key now. It will not be shown again."
-        action={async () => ({ success: true })}
-        submitLabel="Done"
-      >
-        <div className="flex items-center gap-2">
-          <Input readOnly value={secret} />
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              navigator.clipboard.writeText(secret);
-              toast.success("Copied to clipboard");
-            }}
-          >
-            <Copy className="h-4 w-4" />
-          </Button>
-        </div>
-      </FormDialog>
+        description="Copy your new secret key now. It will not be shown again. It cannot be recovered later."
+      />
     );
   }
 
@@ -227,6 +193,20 @@ export function CreateCredentialButton() {
             <div className="grid gap-2">
               <Label htmlFor="subject_id">Subject ID</Label>
               <Input id="subject_id" name="subject_id" required />
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="scopes">Scopes (comma-separated)</Label>
+            <Input id="scopes" name="scopes" placeholder="e.g. models.invoke, audit.read" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="team_id">Team ID (Optional)</Label>
+              <Input id="team_id" name="team_id" placeholder="Optional" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="project_id">Project ID (Optional)</Label>
+              <Input id="project_id" name="project_id" placeholder="Optional" />
             </div>
           </div>
           <div className="grid gap-2">

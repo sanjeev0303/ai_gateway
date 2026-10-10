@@ -24,10 +24,11 @@ import {
 import { toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
+import { ModelRegistryClient } from "./client";
 
 export const metadata: Metadata = {
   title: "Model registry · Sentinel",
-  description: "Every model the gateway can route to, per provider.",
+  description: "Every model the gateway can route to, per provider, with sync capability.",
 };
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -45,36 +46,12 @@ const display = (kind: string) =>
 
 interface ModelRow {
   id: string;
-  displayName: string;
-  slug: string;
-  provider: string;
-  status: string;
-  tone: StatusTone;
-  spend: string;
-  requests: string;
-  updated: string;
+  display_name: string;
+  model_slug: string;
+  provider_kind: string;
+  is_active: boolean;
+  updated_at: string;
 }
-
-const COLUMNS: readonly Column<ModelRow>[] = [
-  {
-    key: "model",
-    header: "Model",
-    primary: "displayName",
-    secondary: "slug",
-    sort: "displayName",
-  },
-  { key: "provider", header: "Provider", primary: "provider", sort: "provider" },
-  { key: "status", header: "Status", primary: "status", tone: "tone", sort: "status" },
-  { key: "spend", header: "Spend 30d", primary: "spend", align: "right" },
-  { key: "requests", header: "Requests 30d", primary: "requests", align: "right" },
-  {
-    key: "updated",
-    header: "Updated",
-    primary: "updated",
-    sort: "updated",
-    align: "right",
-  },
-];
 
 async function loadModelRegistry() {
   const client = await getApiClient();
@@ -96,14 +73,11 @@ async function loadModelRegistry() {
       const status = model.is_active ? "active" : "inactive";
       return {
         id: model.id,
-        displayName: model.display_name,
-        slug: model.model_slug,
-        provider: display(model.provider_kind),
-        status,
-        tone: toneFor(ACTIVE_TONE, status),
-        spend: stats ? formatUsd(microsToUsd(stats.CostMicros)) : "—",
-        requests: stats ? formatCompact(stats.Requests) : "—",
-        updated: formatDate(model.updated_at),
+        display_name: model.display_name,
+        model_slug: model.model_slug,
+        provider_kind: model.provider_kind,
+        is_active: model.is_active,
+        updated_at: model.updated_at,
       };
     });
 
@@ -131,7 +105,7 @@ async function loadModelRegistry() {
     rows,
     topSpend,
     registered: rows.length,
-    active: rows.filter((row) => row.status === "active").length,
+    active: rows.filter((row) => row.is_active).length,
     providers: kindCounts.size,
     byProvider: [...kindCounts.entries()]
       .map(([label, value]) => ({ label, value }))
@@ -203,24 +177,7 @@ export default async function ModelRegistryPage() {
           </Card>
         </section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Registered models</CardTitle>
-            <CardDescription>
-              Spend and request counts come from the usage rollups over the same
-              trailing 30 days.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DataTable
-              columns={COLUMNS}
-              rows={rows}
-              rowKey="id"
-              pageSize={10}
-              emptyMessage="No models registered."
-            />
-          </CardContent>
-        </Card>
+        <ModelRegistryClient initialRows={rows} />
 
         <Card>
           <CardHeader>

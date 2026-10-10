@@ -10,7 +10,16 @@ import type { ListResponse, RequestOptions, Transport } from "./client";
  * would fire and without sending a notification.
  */
 
-export type AlertType = "spend_limit" | "rate_limit" | "error_rate" | "anomaly";
+export type AlertType =
+  | "spend_threshold"
+  | "spend_exceeded"
+  | "request_rate_spike"
+  | "error_rate_spike"
+  | "provider_failure"
+  | "credential_failure"
+  | "policy_violation"
+  | "rate_limit_spike"
+  | "usage_anomaly";
 
 export type AlertSeverity = "info" | "warning" | "critical";
 
@@ -30,6 +39,13 @@ export interface Alert {
   created_at: string;
   /** RFC3339. */
   updated_at: string;
+}
+
+export interface CreateAlertInput {
+  name: string;
+  alert_type: AlertType;
+  severity: AlertSeverity;
+  configuration: Record<string, unknown>;
 }
 
 /** Full replacement of an alert rule's mutable fields; all four are required. */
@@ -56,6 +72,7 @@ export interface AlertTestResult {
 export interface AlertsModule {
   list(options?: RequestOptions): Promise<ListResponse<Alert>>;
   get(alertId: string, options?: RequestOptions): Promise<Alert>;
+  create(input: CreateAlertInput, options?: RequestOptions): Promise<Alert>;
   update(
     alertId: string,
     input: UpdateAlertInput,
@@ -70,6 +87,12 @@ export function createAlertsModule(transport: Transport): AlertsModule {
     list: (options) => transport.request<ListResponse<Alert>>("/v1/alerts", options),
     get: (alertId, options) =>
       transport.requestAt<Alert>(`/v1/alerts/${encodeURIComponent(alertId)}`, options),
+    create: (input, options) =>
+      transport.requestAt<Alert>("/v1/alerts", {
+        ...options,
+        method: "POST",
+        body: input,
+      }),
     update: (alertId, input, options) =>
       transport.requestAt<Alert>(`/v1/alerts/${encodeURIComponent(alertId)}`, {
         ...options,

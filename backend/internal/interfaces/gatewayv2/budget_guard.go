@@ -3,19 +3,22 @@ package gatewayv2
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 )
 
 // BudgetGuardImpl implements budget tracking and enforcement.
 type BudgetGuardImpl struct {
-	mu      sync.RWMutex
-	budgets map[string]*budgetTracker
-	clock   func() time.Time
+	mu          sync.RWMutex
+	budgets     map[string]*budgetTracker
+	policyResolver PolicyResolver
+	clock       func() time.Time
 }
 
 type budgetTracker struct {
 	key         string
+	scope       string
 	limit       float64
 	window      time.Duration
 	spent       float64
@@ -32,13 +35,66 @@ func NewBudgetGuard() *BudgetGuardImpl {
 	}
 }
 
+// NewBudgetGuardWithResolver creates a new budget guard that loads budgets from policy snapshots.
+func NewBudgetGuardWithResolver(policyResolver PolicyResolver) *BudgetGuardImpl {
+	return &BudgetGuardImpl{
+		budgets:        make(map[string]*budgetTracker),
+		policyResolver: policyResolver,
+		clock:          time.Now,
+	}
+}
+
 // Check verifies if the estimated cost fits within the budget.
 func (b *BudgetGuardImpl) Check(ctx context.Context, key string, limit float64, window time.Duration, estimatedCost float64) BudgetResult {
+	// If we have a policy resolver, try to load budget config from snapshot
+	if b.policyResolver != nil && limit == 0 && window == 0 {
+		// Try to get budget config from policy snapshot
+		// The key should be the budget key from the policy rule
+		if budgetConfig, ok := b.getBudgetConfigFromSnapshot(ctx, key); ok {
+			limit = budgetConfig.Limit
+			window = budgetConfig.Window
+		}
+	}
+	
 	tracker := b.getOrCreateTracker(key, limit, window, 0.8*limit) // default alert at 80%
 	return tracker.check(estimatedCost)
 }
 
+// getBudgetConfigFromSnapshot retrieves budget config from the already-synced
+// snapshot by matching the budget key directly.
+func (b *BudgetGuardImpl) getBudgetConfigFromSnapshot(ctx context.Context, key string) (BudgetConfig, bool) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	// Direct lookup by key in the internal budgets map (populated by SyncFromSnapshot)
+	if tracker, ok := b.budgets[key]; ok {
+		tracker.mu.Lock()
+		config := BudgetConfig{
+			Key:     tracker.key,
+			Limit:   tracker.limit,
+			Window:  tracker.window,
+			Scope:   tracker.scope,
+			AlertAt: tracker.alertAt,
+		}
+		tracker.mu.Unlock()
+		return config, true
+	}
+
+	return BudgetConfig{}, false
+}
+
+// normalizeScope maps short scope names to their full names
+func normalizeScope(scope string) string {
+	switch scope {
+	case "org":
+		return "organization"
+	default:
+		return scope
+	}
+}
+
 // getOrCreateTracker retrieves or creates a budget tracker.
+// If key is a scope-based key (e.g., "org:xxx"), parse the scope from it.
 func (b *BudgetGuardImpl) getOrCreateTracker(key string, limit float64, window time.Duration, alertAt float64) *budgetTracker {
 	b.mu.RLock()
 	tracker, ok := b.budgets[key]
@@ -55,8 +111,16 @@ func (b *BudgetGuardImpl) getOrCreateTracker(key string, limit float64, window t
 		return tracker
 	}
 
+	// Parse scope from key if it's a scope-based key
+	scope := ""
+	parts := strings.SplitN(key, ":", 2)
+	if len(parts) == 2 {
+		scope = parts[0]
+	}
+
 	tracker = &budgetTracker{
 		key:         key,
+		scope:       scope,
 		limit:       limit,
 		window:      window,
 		spent:       0,
@@ -88,7 +152,7 @@ func (t *budgetTracker) check(estimatedCost float64) BudgetResult {
 		Limit:     t.limit,
 		Projected: projected,
 		AlertAt:   t.alertAt,
-		Scope:     "organization", // default
+		Scope:     t.scope,
 		Key:       t.key,
 	}
 }
@@ -139,4 +203,33 @@ func (b *BudgetGuardImpl) Close() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.budgets = make(map[string]*budgetTracker)
+}
+
+// SyncFromSnapshot loads budget configurations from a policy snapshot.
+func (b *BudgetGuardImpl) SyncFromSnapshot(snapshot PolicySnapshot) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	for key, config := range snapshot.Budgets {
+		if tracker, ok := b.budgets[key]; ok {
+			// Update existing tracker with new config
+			tracker.mu.Lock()
+			tracker.limit = config.Limit
+			tracker.window = config.Window
+			tracker.alertAt = config.AlertAt
+			tracker.scope = config.Scope
+			tracker.mu.Unlock()
+		} else {
+			// Create new tracker with config from snapshot
+			b.budgets[key] = &budgetTracker{
+				key:         key,
+				scope:       config.Scope,
+				limit:       config.Limit,
+				window:      config.Window,
+				spent:       0,
+				windowStart: b.clock(),
+				alertAt:     config.AlertAt,
+			}
+		}
+	}
 }

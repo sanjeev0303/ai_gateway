@@ -491,7 +491,7 @@ func TestExecutePipeline_BudgetExceeded(t *testing.T) {
 	requireTrue(t, res.Context != nil && !res.Context.BudgetResult.Allowed, "BudgetResult not preserved")
 
 	cred := gatewayCredFixture()
-	requireTrue(t, stubs.budget.lastKey == "org:"+cred.OrganizationID.String(), "budget key mismatch: %s", stubs.budget.lastKey)
+	requireTrue(t, stubs.budget.lastKey == "service_account:"+cred.SubjectID.String(), "budget key mismatch: %s", stubs.budget.lastKey)
 	requireTrue(t, stubs.budget.lastLimit == DefaultGatewayConfig().DefaultBudgetLimit, "budget limit mismatch")
 	requireTrue(t, stubs.budget.lastWindow == DefaultGatewayConfig().DefaultBudgetWindow, "budget window mismatch")
 
@@ -630,7 +630,7 @@ func TestBuildPipelineKeys(t *testing.T) {
 	requireTrue(t, rateKey == "cred:"+cred.ID.String(), "rate key mismatch: %s", rateKey)
 
 	budgetKey := g.buildBudgetKey(cred, ResolvedUpstream{})
-	requireTrue(t, budgetKey == "org:"+cred.OrganizationID.String(), "budget key mismatch: %s", budgetKey)
+	requireTrue(t, budgetKey == "service_account:"+cred.SubjectID.String(), "budget key mismatch: %s", budgetKey)
 }
 
 // estimateCostForFixture returns the expected cost for the fixture hints

@@ -70,6 +70,11 @@ func (r *organizationRepo) Update(ctx context.Context, id uuid.UUID, input domai
 			ID:   id,
 			Name: input.Name,
 			Slug: input.Slug,
+			PrivacyDefault:             input.PrivacyDefault,
+			RetentionConversationsDays: input.RetentionConversationsDays,
+			RetentionUsageDays:         input.RetentionUsageDays,
+			RetentionAuditsDays:        input.RetentionAuditsDays,
+			RetentionBillingDays:       input.RetentionBillingDays,
 		})
 		if err != nil {
 			return err
@@ -404,12 +409,17 @@ func (r *orgMemberRepo) List(ctx context.Context, orgID uuid.UUID) ([]domain.Org
 
 func toOrganization(o db.Organization) domain.Organization {
 	return domain.Organization{
-		ID:        o.ID,
-		Name:      o.Name,
-		Slug:      o.Slug,
-		Status:    o.Status,
-		CreatedAt: o.CreatedAt,
-		UpdatedAt: o.UpdatedAt,
+		ID:                         o.ID,
+		Name:                       o.Name,
+		Slug:                       o.Slug,
+		Status:                     o.Status,
+		PrivacyDefault:             domain.PrivacyMode(o.PrivacyDefault),
+		RetentionConversationsDays: int(o.RetentionConversationsDays),
+		RetentionUsageDays:         int(o.RetentionUsageDays),
+		RetentionAuditsDays:        int(o.RetentionAuditsDays),
+		RetentionBillingDays:       int(o.RetentionBillingDays),
+		CreatedAt:                  o.CreatedAt,
+		UpdatedAt:                  o.UpdatedAt,
 	}
 }
 

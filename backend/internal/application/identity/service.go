@@ -356,6 +356,11 @@ func (s *Service) UpdateOrganization(ctx context.Context, actor domain.Actor, in
 		}
 		input.Slug = &slug
 	}
+	if input.PrivacyDefault != nil {
+		if _, ok := domain.ParsePrivacyMode(*input.PrivacyDefault); !ok {
+			return domain.Organization{}, repositories.ErrInvalid
+		}
+	}
 	org, err := s.orgs.Update(ctx, actor.OrganizationID, input)
 	if err != nil {
 		return domain.Organization{}, err
@@ -461,6 +466,38 @@ func (s *Service) ListProjects(ctx context.Context, actor domain.Actor) ([]domai
 	return s.projects.List(ctx, actor.OrganizationID)
 }
 
+// UpdateProject updates a project's details.
+func (s *Service) UpdateProject(ctx context.Context, actor domain.Actor, id uuid.UUID, input domain.UpdateProject) (domain.Project, error) {
+	if err := s.RequirePermission(actor, domain.PermissionProjectsManage); err != nil {
+		return domain.Project{}, err
+	}
+	if input.Name != nil && strings.TrimSpace(*input.Name) == "" {
+		return domain.Project{}, repositories.ErrInvalid
+	}
+	project, err := s.projects.Update(ctx, actor.OrganizationID, id, input)
+	if err != nil {
+		return domain.Project{}, err
+	}
+	s.audit(ctx, actor, "project.update", "project", &project.ID, nil, nil)
+	return project, nil
+}
+
+// SetProjectStatus archives or unarchives a project.
+func (s *Service) SetProjectStatus(ctx context.Context, actor domain.Actor, id uuid.UUID, status string) (domain.Project, error) {
+	if err := s.RequirePermission(actor, domain.PermissionProjectsManage); err != nil {
+		return domain.Project{}, err
+	}
+	if status != "active" && status != "archived" {
+		return domain.Project{}, repositories.ErrInvalid
+	}
+	project, err := s.projects.SetStatus(ctx, actor.OrganizationID, id, status)
+	if err != nil {
+		return domain.Project{}, err
+	}
+	s.audit(ctx, actor, "project.status.update", "project", &project.ID, nil, nil)
+	return project, nil
+}
+
 // CreateTeam creates a team inside the actor's organization.
 func (s *Service) CreateTeam(ctx context.Context, actor domain.Actor, input domain.NewTeam) (domain.Team, error) {
 	if err := s.RequirePermission(actor, domain.PermissionTeamsManage); err != nil {
@@ -474,6 +511,22 @@ func (s *Service) CreateTeam(ctx context.Context, actor domain.Actor, input doma
 		return domain.Team{}, err
 	}
 	s.audit(ctx, actor, "team.create", "team", &team.ID, nil, nil)
+	return team, nil
+}
+
+// UpdateTeam updates a team's details.
+func (s *Service) UpdateTeam(ctx context.Context, actor domain.Actor, id uuid.UUID, input domain.UpdateTeam) (domain.Team, error) {
+	if err := s.RequirePermission(actor, domain.PermissionTeamsManage); err != nil {
+		return domain.Team{}, err
+	}
+	if input.Name != nil && strings.TrimSpace(*input.Name) == "" {
+		return domain.Team{}, repositories.ErrInvalid
+	}
+	team, err := s.teams.Update(ctx, actor.OrganizationID, id, input)
+	if err != nil {
+		return domain.Team{}, err
+	}
+	s.audit(ctx, actor, "team.update", "team", &team.ID, nil, nil)
 	return team, nil
 }
 

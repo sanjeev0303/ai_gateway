@@ -291,7 +291,9 @@ func newLlmRequestFrom(record UsageRecord, providerKind, status string) domain.N
 	return domain.NewLlmRequest{
 		ProjectID:          record.ProjectID,
 		UserID:             subjectUserID(record),
-		APICredentialID:    &record.CredentialID,
+		ServiceAccountID:    subjectServiceAccountID(record),
+		TeamID:              record.TeamID,
+		GatewayCredentialID: &record.CredentialID,
 		RequestID:          record.RequestID,
 		ProviderKind:       providerKind,
 		Model:              record.Model,
@@ -312,6 +314,13 @@ func newLlmRequestFrom(record UsageRecord, providerKind, status string) domain.N
 
 func subjectUserID(record UsageRecord) *uuid.UUID {
 	if domain.SubjectType(record.SubjectType) != domain.SubjectTypeUser {
+		return nil
+	}
+	return &record.SubjectID
+}
+
+func subjectServiceAccountID(record UsageRecord) *uuid.UUID {
+	if domain.SubjectType(record.SubjectType) != domain.SubjectTypeServiceAccount {
 		return nil
 	}
 	return &record.SubjectID

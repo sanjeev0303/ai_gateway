@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { BarChart } from "@/components/charts";
 import {
   DataTable,
+  ObserveFilters,
   PageShell,
   StatCard,
   type Column,
@@ -32,10 +33,11 @@ interface TeamRow {
   share: string;
   shareFraction: number;
   spend: number;
+  detailUrl: string;
 }
 
 const teamColumns: readonly Column<TeamRow>[] = [
-  { key: "name", header: "Team", primary: "name", secondary: "description", sort: "name" },
+  { key: "name", header: "Team", primary: "name", secondary: "description", sort: "name", href: "detailUrl" },
   {
     key: "members",
     header: "Members",
@@ -79,9 +81,23 @@ const teamColumns: readonly Column<TeamRow>[] = [
   },
 ];
 
-export default async function TeamsPage() {
+export default async function TeamsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const filters = {
+    project_id: typeof params.project_id === "string" ? params.project_id : undefined,
+    user_id: typeof params.user_id === "string" ? params.user_id : undefined,
+    team_id: typeof params.team_id === "string" ? params.team_id : undefined,
+    provider: typeof params.provider === "string" ? params.provider : undefined,
+    model: typeof params.model === "string" ? params.model : undefined,
+    status: typeof params.status === "string" ? params.status : undefined,
+  };
+
   const { teams, usage } = await getApiClient();
-  const [teamList, teamUsage] = await Promise.all([teams.list(), usage.byTeam()]);
+  const [teamList, teamUsage] = await Promise.all([teams.list(), usage.byTeam(filters)]);
 
   const spendByTeam = new Map(teamUsage.items.map((row) => [row.TeamID, row]));
   const memberCounts = new Map(
@@ -113,6 +129,7 @@ export default async function TeamsPage() {
       share: formatPercent(shareFraction),
       shareFraction,
       spend,
+      detailUrl: `/app/organization/teams/${team.id}`,
     };
   });
 
@@ -126,6 +143,7 @@ export default async function TeamsPage() {
         title="Teams"
         description="Who owns which spend. One team holding most of the bill is the thing to look at."
       >
+        <ObserveFilters />
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Teams"

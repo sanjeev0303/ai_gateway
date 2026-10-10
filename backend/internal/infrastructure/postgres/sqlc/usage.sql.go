@@ -101,7 +101,7 @@ func (q *Queries) DeleteUsageMonthlyInWindow(ctx context.Context, arg DeleteUsag
 }
 
 const getLLMRequestByRequestID = `-- name: GetLLMRequestByRequestID :one
-SELECT id, organization_id, project_id, user_id, api_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms FROM llm_requests
+SELECT id, organization_id, project_id, user_id, gateway_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms, service_account_id, team_id FROM llm_requests
 WHERE organization_id = $1 AND request_id = $2
 `
 
@@ -118,7 +118,7 @@ func (q *Queries) GetLLMRequestByRequestID(ctx context.Context, arg GetLLMReques
 		&i.OrganizationID,
 		&i.ProjectID,
 		&i.UserID,
-		&i.ApiCredentialID,
+		&i.GatewayCredentialID,
 		&i.RequestID,
 		&i.ProviderRequestID,
 		&i.ProviderKind,
@@ -137,12 +137,14 @@ func (q *Queries) GetLLMRequestByRequestID(ctx context.Context, arg GetLLMReques
 		&i.CompletedAt,
 		&i.TimeToFirstTokenMs,
 		&i.TotalLatencyMs,
+		&i.ServiceAccountID,
+		&i.TeamID,
 	)
 	return i, err
 }
 
 const getRecentUsage = `-- name: GetRecentUsage :many
-SELECT id, request_id, project_id, user_id, provider_kind, model, status, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms
+SELECT id, request_id, project_id, user_id, provider_kind, model, status, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms, service_account_id, team_id, gateway_credential_id
 FROM llm_requests
 WHERE organization_id = $1
 ORDER BY created_at DESC
@@ -150,22 +152,25 @@ LIMIT 50
 `
 
 type GetRecentUsageRow struct {
-	ID                 uuid.UUID  `json:"id"`
-	RequestID          string     `json:"request_id"`
-	ProjectID          *uuid.UUID `json:"project_id"`
-	UserID             *uuid.UUID `json:"user_id"`
-	ProviderKind       string     `json:"provider_kind"`
-	Model              string     `json:"model"`
-	Status             string     `json:"status"`
-	TotalTokens        int32      `json:"total_tokens"`
-	LatencyMs          int32      `json:"latency_ms"`
-	CostMicros         int64      `json:"cost_micros"`
-	CreatedAt          time.Time  `json:"created_at"`
-	RequestStartedAt   *time.Time `json:"request_started_at"`
-	FirstTokenAt       *time.Time `json:"first_token_at"`
-	CompletedAt        *time.Time `json:"completed_at"`
-	TimeToFirstTokenMs *int32     `json:"time_to_first_token_ms"`
-	TotalLatencyMs     *int32     `json:"total_latency_ms"`
+	ID                  uuid.UUID  `json:"id"`
+	RequestID           string     `json:"request_id"`
+	ProjectID           *uuid.UUID `json:"project_id"`
+	UserID              *uuid.UUID `json:"user_id"`
+	ProviderKind        string     `json:"provider_kind"`
+	Model               string     `json:"model"`
+	Status              string     `json:"status"`
+	TotalTokens         int32      `json:"total_tokens"`
+	LatencyMs           int32      `json:"latency_ms"`
+	CostMicros          int64      `json:"cost_micros"`
+	CreatedAt           time.Time  `json:"created_at"`
+	RequestStartedAt    *time.Time `json:"request_started_at"`
+	FirstTokenAt        *time.Time `json:"first_token_at"`
+	CompletedAt         *time.Time `json:"completed_at"`
+	TimeToFirstTokenMs  *int32     `json:"time_to_first_token_ms"`
+	TotalLatencyMs      *int32     `json:"total_latency_ms"`
+	ServiceAccountID    *uuid.UUID `json:"service_account_id"`
+	TeamID              *uuid.UUID `json:"team_id"`
+	GatewayCredentialID *uuid.UUID `json:"gateway_credential_id"`
 }
 
 func (q *Queries) GetRecentUsage(ctx context.Context, organizationID uuid.UUID) ([]GetRecentUsageRow, error) {
@@ -194,6 +199,9 @@ func (q *Queries) GetRecentUsage(ctx context.Context, organizationID uuid.UUID) 
 			&i.CompletedAt,
 			&i.TimeToFirstTokenMs,
 			&i.TotalLatencyMs,
+			&i.ServiceAccountID,
+			&i.TeamID,
+			&i.GatewayCredentialID,
 		); err != nil {
 			return nil, err
 		}
@@ -275,28 +283,27 @@ WHERE r.organization_id = $1
   AND r.created_at < $3
   AND r.project_id IS NOT NULL
   AND ($4::uuid IS NULL OR r.user_id = $4)
-  AND ($5::uuid IS NULL OR EXISTS (
-        SELECT 1
-        FROM team_members tm
-        WHERE tm.team_id = $5
-          AND tm.user_id = r.user_id
-          AND tm.organization_id = r.organization_id))
-  AND ($6::text IS NULL OR r.provider_kind = $6)
-  AND ($7::text IS NULL OR r.model = $7)
-  AND ($8::text IS NULL OR r.status = $8)
+  AND ($5::uuid IS NULL OR r.team_id = $5)
+  AND ($6::uuid IS NULL OR r.service_account_id = $6)
+  AND ($7::uuid IS NULL OR r.gateway_credential_id = $7)
+  AND ($8::text IS NULL OR r.provider_kind = $8)
+  AND ($9::text IS NULL OR r.model = $9)
+  AND ($10::text IS NULL OR r.status = $10)
 GROUP BY r.project_id, p.name
 ORDER BY total_tokens DESC
 `
 
 type GetUsageByProjectParams struct {
-	OrganizationID uuid.UUID  `json:"organization_id"`
-	FromTs         time.Time  `json:"from_ts"`
-	ToTs           time.Time  `json:"to_ts"`
-	UserID         *uuid.UUID `json:"user_id"`
-	TeamID         *uuid.UUID `json:"team_id"`
-	Provider       *string    `json:"provider"`
-	Model          *string    `json:"model"`
-	Status         *string    `json:"status"`
+	OrganizationID      uuid.UUID  `json:"organization_id"`
+	FromTs              time.Time  `json:"from_ts"`
+	ToTs                time.Time  `json:"to_ts"`
+	UserID              *uuid.UUID `json:"user_id"`
+	TeamID              *uuid.UUID `json:"team_id"`
+	ServiceAccountID    *uuid.UUID `json:"service_account_id"`
+	GatewayCredentialID *uuid.UUID `json:"gateway_credential_id"`
+	Provider            *string    `json:"provider"`
+	Model               *string    `json:"model"`
+	Status              *string    `json:"status"`
 }
 
 type GetUsageByProjectRow struct {
@@ -319,6 +326,8 @@ func (q *Queries) GetUsageByProject(ctx context.Context, arg GetUsageByProjectPa
 		arg.ToTs,
 		arg.UserID,
 		arg.TeamID,
+		arg.ServiceAccountID,
+		arg.GatewayCredentialID,
 		arg.Provider,
 		arg.Model,
 		arg.Status,
@@ -403,8 +412,95 @@ func (q *Queries) GetUsageByProvider(ctx context.Context, arg GetUsageByProvider
 	return items, nil
 }
 
+const getUsageByServiceAccount = `-- name: GetUsageByServiceAccount :many
+SELECT r.service_account_id,
+       sa.name,
+       COUNT(*)::bigint as requests,
+       COALESCE(SUM(r.prompt_tokens), 0)::bigint as input_tokens,
+       COALESCE(SUM(r.completion_tokens), 0)::bigint as output_tokens,
+       COALESCE(SUM(r.total_tokens), 0)::bigint as total_tokens,
+       COALESCE(SUM(r.cost_micros), 0)::bigint as cost_micros,
+       COUNT(*) FILTER (WHERE r.status = 'failed')::bigint as errors,
+       COALESCE(AVG(r.latency_ms), 0)::float8 as avg_latency_ms,
+       MAX(r.created_at)::timestamptz as last_activity_at
+FROM llm_requests r
+JOIN service_accounts sa ON sa.id = r.service_account_id
+WHERE r.organization_id = $1
+  AND r.created_at >= $2
+  AND r.created_at < $3
+  AND r.service_account_id IS NOT NULL
+  AND ($4::uuid IS NULL OR r.project_id = $4)
+  AND ($5::text IS NULL OR r.provider_kind = $5)
+  AND ($6::text IS NULL OR r.model = $6)
+  AND ($7::text IS NULL OR r.status = $7)
+GROUP BY r.service_account_id, sa.name
+ORDER BY total_tokens DESC
+`
+
+type GetUsageByServiceAccountParams struct {
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	FromTs         time.Time  `json:"from_ts"`
+	ToTs           time.Time  `json:"to_ts"`
+	ProjectID      *uuid.UUID `json:"project_id"`
+	Provider       *string    `json:"provider"`
+	Model          *string    `json:"model"`
+	Status         *string    `json:"status"`
+}
+
+type GetUsageByServiceAccountRow struct {
+	ServiceAccountID *uuid.UUID `json:"service_account_id"`
+	Name             string     `json:"name"`
+	Requests         int64      `json:"requests"`
+	InputTokens      int64      `json:"input_tokens"`
+	OutputTokens     int64      `json:"output_tokens"`
+	TotalTokens      int64      `json:"total_tokens"`
+	CostMicros       int64      `json:"cost_micros"`
+	Errors           int64      `json:"errors"`
+	AvgLatencyMs     float64    `json:"avg_latency_ms"`
+	LastActivityAt   time.Time  `json:"last_activity_at"`
+}
+
+func (q *Queries) GetUsageByServiceAccount(ctx context.Context, arg GetUsageByServiceAccountParams) ([]GetUsageByServiceAccountRow, error) {
+	rows, err := q.db.Query(ctx, getUsageByServiceAccount,
+		arg.OrganizationID,
+		arg.FromTs,
+		arg.ToTs,
+		arg.ProjectID,
+		arg.Provider,
+		arg.Model,
+		arg.Status,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUsageByServiceAccountRow{}
+	for rows.Next() {
+		var i GetUsageByServiceAccountRow
+		if err := rows.Scan(
+			&i.ServiceAccountID,
+			&i.Name,
+			&i.Requests,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.TotalTokens,
+			&i.CostMicros,
+			&i.Errors,
+			&i.AvgLatencyMs,
+			&i.LastActivityAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUsageByTeam = `-- name: GetUsageByTeam :many
-SELECT tm.team_id,
+SELECT r.team_id,
        t.name,
        COUNT(r.id)::bigint as requests,
        COALESCE(SUM(r.prompt_tokens), 0)::bigint as input_tokens,
@@ -415,42 +511,46 @@ SELECT tm.team_id,
        COALESCE(AVG(r.latency_ms), 0)::float8 as avg_latency_ms,
        MAX(r.created_at)::timestamptz as last_activity_at
 FROM llm_requests r
-JOIN team_members tm ON tm.user_id = r.user_id AND tm.organization_id = r.organization_id
-JOIN teams t ON t.id = tm.team_id
+JOIN teams t ON t.id = r.team_id
 WHERE r.organization_id = $1
   AND r.created_at >= $2
   AND r.created_at < $3
+  AND r.team_id IS NOT NULL
   AND ($4::uuid IS NULL OR r.project_id = $4)
   AND ($5::uuid IS NULL OR r.user_id = $5)
-  AND ($6::text IS NULL OR r.provider_kind = $6)
-  AND ($7::text IS NULL OR r.model = $7)
-  AND ($8::text IS NULL OR r.status = $8)
-GROUP BY tm.team_id, t.name
+  AND ($6::uuid IS NULL OR r.service_account_id = $6)
+  AND ($7::uuid IS NULL OR r.gateway_credential_id = $7)
+  AND ($8::text IS NULL OR r.provider_kind = $8)
+  AND ($9::text IS NULL OR r.model = $9)
+  AND ($10::text IS NULL OR r.status = $10)
+GROUP BY r.team_id, t.name
 ORDER BY total_tokens DESC
 `
 
 type GetUsageByTeamParams struct {
-	OrganizationID uuid.UUID  `json:"organization_id"`
-	FromTs         time.Time  `json:"from_ts"`
-	ToTs           time.Time  `json:"to_ts"`
-	ProjectID      *uuid.UUID `json:"project_id"`
-	UserID         *uuid.UUID `json:"user_id"`
-	Provider       *string    `json:"provider"`
-	Model          *string    `json:"model"`
-	Status         *string    `json:"status"`
+	OrganizationID      uuid.UUID  `json:"organization_id"`
+	FromTs              time.Time  `json:"from_ts"`
+	ToTs                time.Time  `json:"to_ts"`
+	ProjectID           *uuid.UUID `json:"project_id"`
+	UserID              *uuid.UUID `json:"user_id"`
+	ServiceAccountID    *uuid.UUID `json:"service_account_id"`
+	GatewayCredentialID *uuid.UUID `json:"gateway_credential_id"`
+	Provider            *string    `json:"provider"`
+	Model               *string    `json:"model"`
+	Status              *string    `json:"status"`
 }
 
 type GetUsageByTeamRow struct {
-	TeamID         uuid.UUID `json:"team_id"`
-	Name           string    `json:"name"`
-	Requests       int64     `json:"requests"`
-	InputTokens    int64     `json:"input_tokens"`
-	OutputTokens   int64     `json:"output_tokens"`
-	TotalTokens    int64     `json:"total_tokens"`
-	CostMicros     int64     `json:"cost_micros"`
-	Errors         int64     `json:"errors"`
-	AvgLatencyMs   float64   `json:"avg_latency_ms"`
-	LastActivityAt time.Time `json:"last_activity_at"`
+	TeamID         *uuid.UUID `json:"team_id"`
+	Name           string     `json:"name"`
+	Requests       int64      `json:"requests"`
+	InputTokens    int64      `json:"input_tokens"`
+	OutputTokens   int64      `json:"output_tokens"`
+	TotalTokens    int64      `json:"total_tokens"`
+	CostMicros     int64      `json:"cost_micros"`
+	Errors         int64      `json:"errors"`
+	AvgLatencyMs   float64    `json:"avg_latency_ms"`
+	LastActivityAt time.Time  `json:"last_activity_at"`
 }
 
 func (q *Queries) GetUsageByTeam(ctx context.Context, arg GetUsageByTeamParams) ([]GetUsageByTeamRow, error) {
@@ -460,6 +560,8 @@ func (q *Queries) GetUsageByTeam(ctx context.Context, arg GetUsageByTeamParams) 
 		arg.ToTs,
 		arg.ProjectID,
 		arg.UserID,
+		arg.ServiceAccountID,
+		arg.GatewayCredentialID,
 		arg.Provider,
 		arg.Model,
 		arg.Status,
@@ -512,28 +614,27 @@ WHERE r.organization_id = $1
   AND r.created_at < $3
   AND r.user_id IS NOT NULL
   AND ($4::uuid IS NULL OR r.project_id = $4)
-  AND ($5::uuid IS NULL OR EXISTS (
-        SELECT 1
-        FROM team_members tm
-        WHERE tm.team_id = $5
-          AND tm.user_id = r.user_id
-          AND tm.organization_id = r.organization_id))
-  AND ($6::text IS NULL OR r.provider_kind = $6)
-  AND ($7::text IS NULL OR r.model = $7)
-  AND ($8::text IS NULL OR r.status = $8)
+  AND ($5::uuid IS NULL OR r.team_id = $5)
+  AND ($6::uuid IS NULL OR r.service_account_id = $6)
+  AND ($7::uuid IS NULL OR r.gateway_credential_id = $7)
+  AND ($8::text IS NULL OR r.provider_kind = $8)
+  AND ($9::text IS NULL OR r.model = $9)
+  AND ($10::text IS NULL OR r.status = $10)
 GROUP BY r.user_id, u.email, u.display_name
 ORDER BY total_tokens DESC
 `
 
 type GetUsageByUserParams struct {
-	OrganizationID uuid.UUID  `json:"organization_id"`
-	FromTs         time.Time  `json:"from_ts"`
-	ToTs           time.Time  `json:"to_ts"`
-	ProjectID      *uuid.UUID `json:"project_id"`
-	TeamID         *uuid.UUID `json:"team_id"`
-	Provider       *string    `json:"provider"`
-	Model          *string    `json:"model"`
-	Status         *string    `json:"status"`
+	OrganizationID      uuid.UUID  `json:"organization_id"`
+	FromTs              time.Time  `json:"from_ts"`
+	ToTs                time.Time  `json:"to_ts"`
+	ProjectID           *uuid.UUID `json:"project_id"`
+	TeamID              *uuid.UUID `json:"team_id"`
+	ServiceAccountID    *uuid.UUID `json:"service_account_id"`
+	GatewayCredentialID *uuid.UUID `json:"gateway_credential_id"`
+	Provider            *string    `json:"provider"`
+	Model               *string    `json:"model"`
+	Status              *string    `json:"status"`
 }
 
 type GetUsageByUserRow struct {
@@ -557,6 +658,8 @@ func (q *Queries) GetUsageByUser(ctx context.Context, arg GetUsageByUserParams) 
 		arg.ToTs,
 		arg.ProjectID,
 		arg.TeamID,
+		arg.ServiceAccountID,
+		arg.GatewayCredentialID,
 		arg.Provider,
 		arg.Model,
 		arg.Status,
@@ -592,7 +695,7 @@ func (q *Queries) GetUsageByUser(ctx context.Context, arg GetUsageByUserParams) 
 }
 
 const getUsageEvent = `-- name: GetUsageEvent :one
-SELECT id, organization_id, request_id, event_type, quantity, unit, metadata, created_at FROM usage_events
+SELECT id, organization_id, request_id, event_type, quantity, unit, metadata, created_at, user_id, service_account_id, team_id, project_id, gateway_credential_id FROM usage_events
 WHERE organization_id = $1 AND request_id = $2 AND event_type = $3
 `
 
@@ -614,6 +717,11 @@ func (q *Queries) GetUsageEvent(ctx context.Context, arg GetUsageEventParams) (U
 		&i.Unit,
 		&i.Metadata,
 		&i.CreatedAt,
+		&i.UserID,
+		&i.ServiceAccountID,
+		&i.TeamID,
+		&i.ProjectID,
+		&i.GatewayCredentialID,
 	)
 	return i, err
 }
@@ -802,7 +910,7 @@ func (q *Queries) GetUsageLatencyOverall(ctx context.Context, arg GetUsageLatenc
 }
 
 const getUsageRequests = `-- name: GetUsageRequests :many
-SELECT id, request_id, project_id, user_id, provider_kind, model, status, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms
+SELECT id, request_id, project_id, user_id, provider_kind, model, status, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms, service_account_id, team_id, gateway_credential_id
 FROM llm_requests r
 WHERE r.organization_id = $1
   AND r.created_at >= $2
@@ -837,22 +945,25 @@ type GetUsageRequestsParams struct {
 }
 
 type GetUsageRequestsRow struct {
-	ID                 uuid.UUID  `json:"id"`
-	RequestID          string     `json:"request_id"`
-	ProjectID          *uuid.UUID `json:"project_id"`
-	UserID             *uuid.UUID `json:"user_id"`
-	ProviderKind       string     `json:"provider_kind"`
-	Model              string     `json:"model"`
-	Status             string     `json:"status"`
-	TotalTokens        int32      `json:"total_tokens"`
-	LatencyMs          int32      `json:"latency_ms"`
-	CostMicros         int64      `json:"cost_micros"`
-	CreatedAt          time.Time  `json:"created_at"`
-	RequestStartedAt   *time.Time `json:"request_started_at"`
-	FirstTokenAt       *time.Time `json:"first_token_at"`
-	CompletedAt        *time.Time `json:"completed_at"`
-	TimeToFirstTokenMs *int32     `json:"time_to_first_token_ms"`
-	TotalLatencyMs     *int32     `json:"total_latency_ms"`
+	ID                  uuid.UUID  `json:"id"`
+	RequestID           string     `json:"request_id"`
+	ProjectID           *uuid.UUID `json:"project_id"`
+	UserID              *uuid.UUID `json:"user_id"`
+	ProviderKind        string     `json:"provider_kind"`
+	Model               string     `json:"model"`
+	Status              string     `json:"status"`
+	TotalTokens         int32      `json:"total_tokens"`
+	LatencyMs           int32      `json:"latency_ms"`
+	CostMicros          int64      `json:"cost_micros"`
+	CreatedAt           time.Time  `json:"created_at"`
+	RequestStartedAt    *time.Time `json:"request_started_at"`
+	FirstTokenAt        *time.Time `json:"first_token_at"`
+	CompletedAt         *time.Time `json:"completed_at"`
+	TimeToFirstTokenMs  *int32     `json:"time_to_first_token_ms"`
+	TotalLatencyMs      *int32     `json:"total_latency_ms"`
+	ServiceAccountID    *uuid.UUID `json:"service_account_id"`
+	TeamID              *uuid.UUID `json:"team_id"`
+	GatewayCredentialID *uuid.UUID `json:"gateway_credential_id"`
 }
 
 func (q *Queries) GetUsageRequests(ctx context.Context, arg GetUsageRequestsParams) ([]GetUsageRequestsRow, error) {
@@ -893,6 +1004,9 @@ func (q *Queries) GetUsageRequests(ctx context.Context, arg GetUsageRequestsPara
 			&i.CompletedAt,
 			&i.TimeToFirstTokenMs,
 			&i.TotalLatencyMs,
+			&i.ServiceAccountID,
+			&i.TeamID,
+			&i.GatewayCredentialID,
 		); err != nil {
 			return nil, err
 		}
@@ -923,27 +1037,26 @@ WHERE r.organization_id = $1
   AND r.created_at < $3
   AND ($4::uuid IS NULL OR r.project_id = $4)
   AND ($5::uuid IS NULL OR r.user_id = $5)
-  AND ($6::uuid IS NULL OR EXISTS (
-        SELECT 1
-        FROM team_members tm
-        WHERE tm.team_id = $6
-          AND tm.user_id = r.user_id
-          AND tm.organization_id = r.organization_id))
-  AND ($7::text IS NULL OR r.provider_kind = $7)
-  AND ($8::text IS NULL OR r.model = $8)
-  AND ($9::text IS NULL OR r.status = $9)
+  AND ($6::uuid IS NULL OR r.team_id = $6)
+  AND ($7::uuid IS NULL OR r.service_account_id = $7)
+  AND ($8::uuid IS NULL OR r.gateway_credential_id = $8)
+  AND ($9::text IS NULL OR r.provider_kind = $9)
+  AND ($10::text IS NULL OR r.model = $10)
+  AND ($11::text IS NULL OR r.status = $11)
 `
 
 type GetUsageSummaryParams struct {
-	OrganizationID uuid.UUID  `json:"organization_id"`
-	FromTs         time.Time  `json:"from_ts"`
-	ToTs           time.Time  `json:"to_ts"`
-	ProjectID      *uuid.UUID `json:"project_id"`
-	UserID         *uuid.UUID `json:"user_id"`
-	TeamID         *uuid.UUID `json:"team_id"`
-	Provider       *string    `json:"provider"`
-	Model          *string    `json:"model"`
-	Status         *string    `json:"status"`
+	OrganizationID      uuid.UUID  `json:"organization_id"`
+	FromTs              time.Time  `json:"from_ts"`
+	ToTs                time.Time  `json:"to_ts"`
+	ProjectID           *uuid.UUID `json:"project_id"`
+	UserID              *uuid.UUID `json:"user_id"`
+	TeamID              *uuid.UUID `json:"team_id"`
+	ServiceAccountID    *uuid.UUID `json:"service_account_id"`
+	GatewayCredentialID *uuid.UUID `json:"gateway_credential_id"`
+	Provider            *string    `json:"provider"`
+	Model               *string    `json:"model"`
+	Status              *string    `json:"status"`
 }
 
 type GetUsageSummaryRow struct {
@@ -966,6 +1079,8 @@ func (q *Queries) GetUsageSummary(ctx context.Context, arg GetUsageSummaryParams
 		arg.ProjectID,
 		arg.UserID,
 		arg.TeamID,
+		arg.ServiceAccountID,
+		arg.GatewayCredentialID,
 		arg.Provider,
 		arg.Model,
 		arg.Status,
@@ -1044,7 +1159,7 @@ func (q *Queries) GetUsageTimeSeries(ctx context.Context, arg GetUsageTimeSeries
 }
 
 const listLLMRequests = `-- name: ListLLMRequests :many
-SELECT id, organization_id, project_id, user_id, api_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms FROM llm_requests
+SELECT id, organization_id, project_id, user_id, gateway_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms, service_account_id, team_id FROM llm_requests
 WHERE organization_id = $1 AND created_at >= $2 AND created_at < $3
 ORDER BY created_at DESC
 `
@@ -1069,7 +1184,7 @@ func (q *Queries) ListLLMRequests(ctx context.Context, arg ListLLMRequestsParams
 			&i.OrganizationID,
 			&i.ProjectID,
 			&i.UserID,
-			&i.ApiCredentialID,
+			&i.GatewayCredentialID,
 			&i.RequestID,
 			&i.ProviderRequestID,
 			&i.ProviderKind,
@@ -1088,6 +1203,8 @@ func (q *Queries) ListLLMRequests(ctx context.Context, arg ListLLMRequestsParams
 			&i.CompletedAt,
 			&i.TimeToFirstTokenMs,
 			&i.TotalLatencyMs,
+			&i.ServiceAccountID,
+			&i.TeamID,
 		); err != nil {
 			return nil, err
 		}
@@ -1100,7 +1217,7 @@ func (q *Queries) ListLLMRequests(ctx context.Context, arg ListLLMRequestsParams
 }
 
 const listUsageEventsByRequest = `-- name: ListUsageEventsByRequest :many
-SELECT id, organization_id, request_id, event_type, quantity, unit, metadata, created_at FROM usage_events
+SELECT id, organization_id, request_id, event_type, quantity, unit, metadata, created_at, user_id, service_account_id, team_id, project_id, gateway_credential_id FROM usage_events
 WHERE organization_id = $1 AND request_id = $2
 ORDER BY created_at
 `
@@ -1128,6 +1245,11 @@ func (q *Queries) ListUsageEventsByRequest(ctx context.Context, arg ListUsageEve
 			&i.Unit,
 			&i.Metadata,
 			&i.CreatedAt,
+			&i.UserID,
+			&i.ServiceAccountID,
+			&i.TeamID,
+			&i.ProjectID,
+			&i.GatewayCredentialID,
 		); err != nil {
 			return nil, err
 		}
@@ -1237,41 +1359,43 @@ func (q *Queries) RecomputeUsageMonthly(ctx context.Context, arg RecomputeUsageM
 
 const recordLLMRequest = `-- name: RecordLLMRequest :one
 INSERT INTO llm_requests (
-    organization_id, project_id, user_id, api_credential_id, request_id,
+    organization_id, project_id, user_id, gateway_credential_id, request_id,
     provider_request_id, provider_kind, model, status, error_code,
     prompt_tokens, completion_tokens, cached_input_tokens, total_tokens,
     latency_ms, cost_micros, created_at,
     request_started_at, first_token_at, completed_at,
-    time_to_first_token_ms, total_latency_ms
+    time_to_first_token_ms, total_latency_ms, service_account_id, team_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
 ON CONFLICT (organization_id, request_id) DO NOTHING
-RETURNING id, organization_id, project_id, user_id, api_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms
+RETURNING id, organization_id, project_id, user_id, gateway_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms, service_account_id, team_id
 `
 
 type RecordLLMRequestParams struct {
-	OrganizationID     uuid.UUID  `json:"organization_id"`
-	ProjectID          *uuid.UUID `json:"project_id"`
-	UserID             *uuid.UUID `json:"user_id"`
-	ApiCredentialID    *uuid.UUID `json:"api_credential_id"`
-	RequestID          string     `json:"request_id"`
-	ProviderRequestID  *string    `json:"provider_request_id"`
-	ProviderKind       string     `json:"provider_kind"`
-	Model              string     `json:"model"`
-	Status             string     `json:"status"`
-	ErrorCode          *string    `json:"error_code"`
-	PromptTokens       int32      `json:"prompt_tokens"`
-	CompletionTokens   int32      `json:"completion_tokens"`
-	CachedInputTokens  int32      `json:"cached_input_tokens"`
-	TotalTokens        int32      `json:"total_tokens"`
-	LatencyMs          int32      `json:"latency_ms"`
-	CostMicros         int64      `json:"cost_micros"`
-	CreatedAt          time.Time  `json:"created_at"`
-	RequestStartedAt   *time.Time `json:"request_started_at"`
-	FirstTokenAt       *time.Time `json:"first_token_at"`
-	CompletedAt        *time.Time `json:"completed_at"`
-	TimeToFirstTokenMs *int32     `json:"time_to_first_token_ms"`
-	TotalLatencyMs     *int32     `json:"total_latency_ms"`
+	OrganizationID      uuid.UUID  `json:"organization_id"`
+	ProjectID           *uuid.UUID `json:"project_id"`
+	UserID              *uuid.UUID `json:"user_id"`
+	GatewayCredentialID *uuid.UUID `json:"gateway_credential_id"`
+	RequestID           string     `json:"request_id"`
+	ProviderRequestID   *string    `json:"provider_request_id"`
+	ProviderKind        string     `json:"provider_kind"`
+	Model               string     `json:"model"`
+	Status              string     `json:"status"`
+	ErrorCode           *string    `json:"error_code"`
+	PromptTokens        int32      `json:"prompt_tokens"`
+	CompletionTokens    int32      `json:"completion_tokens"`
+	CachedInputTokens   int32      `json:"cached_input_tokens"`
+	TotalTokens         int32      `json:"total_tokens"`
+	LatencyMs           int32      `json:"latency_ms"`
+	CostMicros          int64      `json:"cost_micros"`
+	CreatedAt           time.Time  `json:"created_at"`
+	RequestStartedAt    *time.Time `json:"request_started_at"`
+	FirstTokenAt        *time.Time `json:"first_token_at"`
+	CompletedAt         *time.Time `json:"completed_at"`
+	TimeToFirstTokenMs  *int32     `json:"time_to_first_token_ms"`
+	TotalLatencyMs      *int32     `json:"total_latency_ms"`
+	ServiceAccountID    *uuid.UUID `json:"service_account_id"`
+	TeamID              *uuid.UUID `json:"team_id"`
 }
 
 func (q *Queries) RecordLLMRequest(ctx context.Context, arg RecordLLMRequestParams) (LlmRequest, error) {
@@ -1279,7 +1403,7 @@ func (q *Queries) RecordLLMRequest(ctx context.Context, arg RecordLLMRequestPara
 		arg.OrganizationID,
 		arg.ProjectID,
 		arg.UserID,
-		arg.ApiCredentialID,
+		arg.GatewayCredentialID,
 		arg.RequestID,
 		arg.ProviderRequestID,
 		arg.ProviderKind,
@@ -1298,6 +1422,8 @@ func (q *Queries) RecordLLMRequest(ctx context.Context, arg RecordLLMRequestPara
 		arg.CompletedAt,
 		arg.TimeToFirstTokenMs,
 		arg.TotalLatencyMs,
+		arg.ServiceAccountID,
+		arg.TeamID,
 	)
 	var i LlmRequest
 	err := row.Scan(
@@ -1305,7 +1431,7 @@ func (q *Queries) RecordLLMRequest(ctx context.Context, arg RecordLLMRequestPara
 		&i.OrganizationID,
 		&i.ProjectID,
 		&i.UserID,
-		&i.ApiCredentialID,
+		&i.GatewayCredentialID,
 		&i.RequestID,
 		&i.ProviderRequestID,
 		&i.ProviderKind,
@@ -1324,24 +1450,34 @@ func (q *Queries) RecordLLMRequest(ctx context.Context, arg RecordLLMRequestPara
 		&i.CompletedAt,
 		&i.TimeToFirstTokenMs,
 		&i.TotalLatencyMs,
+		&i.ServiceAccountID,
+		&i.TeamID,
 	)
 	return i, err
 }
 
 const recordUsageEvent = `-- name: RecordUsageEvent :one
-INSERT INTO usage_events (organization_id, request_id, event_type, quantity, unit, metadata)
-VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+INSERT INTO usage_events (
+    organization_id, request_id, event_type, quantity, unit, metadata,
+    user_id, service_account_id, team_id, project_id, gateway_credential_id
+)
+VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11)
 ON CONFLICT (organization_id, request_id, event_type) DO NOTHING
-RETURNING id, organization_id, request_id, event_type, quantity, unit, metadata, created_at
+RETURNING id, organization_id, request_id, event_type, quantity, unit, metadata, created_at, user_id, service_account_id, team_id, project_id, gateway_credential_id
 `
 
 type RecordUsageEventParams struct {
-	OrganizationID uuid.UUID `json:"organization_id"`
-	RequestID      string    `json:"request_id"`
-	EventType      string    `json:"event_type"`
-	Quantity       int64     `json:"quantity"`
-	Unit           string    `json:"unit"`
-	Column6        []byte    `json:"column_6"`
+	OrganizationID      uuid.UUID  `json:"organization_id"`
+	RequestID           string     `json:"request_id"`
+	EventType           string     `json:"event_type"`
+	Quantity            int64      `json:"quantity"`
+	Unit                string     `json:"unit"`
+	Column6             []byte     `json:"column_6"`
+	UserID              *uuid.UUID `json:"user_id"`
+	ServiceAccountID    *uuid.UUID `json:"service_account_id"`
+	TeamID              *uuid.UUID `json:"team_id"`
+	ProjectID           *uuid.UUID `json:"project_id"`
+	GatewayCredentialID *uuid.UUID `json:"gateway_credential_id"`
 }
 
 func (q *Queries) RecordUsageEvent(ctx context.Context, arg RecordUsageEventParams) (UsageEvent, error) {
@@ -1352,6 +1488,11 @@ func (q *Queries) RecordUsageEvent(ctx context.Context, arg RecordUsageEventPara
 		arg.Quantity,
 		arg.Unit,
 		arg.Column6,
+		arg.UserID,
+		arg.ServiceAccountID,
+		arg.TeamID,
+		arg.ProjectID,
+		arg.GatewayCredentialID,
 	)
 	var i UsageEvent
 	err := row.Scan(
@@ -1363,6 +1504,11 @@ func (q *Queries) RecordUsageEvent(ctx context.Context, arg RecordUsageEventPara
 		&i.Unit,
 		&i.Metadata,
 		&i.CreatedAt,
+		&i.UserID,
+		&i.ServiceAccountID,
+		&i.TeamID,
+		&i.ProjectID,
+		&i.GatewayCredentialID,
 	)
 	return i, err
 }

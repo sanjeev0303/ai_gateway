@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Plus } from "lucide-react";
 
-import { EmptyState, PageShell } from "@/components/dashboard";
+import { DataTable, PageShell, type Column } from "@/components/dashboard";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -8,31 +10,70 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getApiClient } from "@/lib/session";
+import { CreatePolicyDialog } from "./policies-client";
 
 export const metadata: Metadata = {
   title: "Policies · Sentinel",
-  description: "Model allow and block rules are enforced on every request; there is no API to author them yet.",
+  description: "Global AI gateway policies.",
 };
 
-export default function PoliciesPage() {
+interface PolicyRow {
+  id: string;
+  name: string;
+  description: string;
+  enforcement: string;
+  priority: number;
+  detailUrl: string;
+}
+
+const COLUMNS: readonly Column<PolicyRow>[] = [
+  { key: "name", header: "Policy", primary: "name", secondary: "description", sort: "name", href: "detailUrl" },
+  { key: "enforcement", header: "Enforcement", primary: "enforcement", align: "left", sort: "enforcement" },
+  { key: "priority", header: "Priority", primary: "priority", format: "number", align: "right", sort: "priority" },
+];
+
+export default async function PoliciesPage() {
+  const { policies } = await getApiClient();
+  const policyList = await policies.list();
+
+  const rows: PolicyRow[] = (policyList.items || []).map((pol) => {
+    return {
+      id: pol.id ?? "",
+      name: pol.name ?? "",
+      description: pol.description ?? "",
+      enforcement: pol.enforcement ?? "",
+      priority: pol.priority ?? 0,
+      detailUrl: `/app/govern/policies/${pol.id}`,
+    };
+  });
+
   return (
     <div className="p-4 sm:p-6">
       <PageShell
         title="Policies"
-        description="Model allow and block rules are enforced on every request; there is no API to author them yet."
+        description="Global organizational AI gateway policies."
+        actions={
+          <CreatePolicyDialog>
+            <Button size="sm">
+              <Plus aria-hidden /> New policy
+            </Button>
+          </CreatePolicyDialog>
+        }
       >
         <Card>
           <CardHeader>
-            <CardTitle>No policy authoring</CardTitle>
+            <CardTitle>All policies</CardTitle>
             <CardDescription>
-              Rules are enforced, but the control API exposes no endpoint to create,
-              edit, or list them.
+              Policies are evaluated in priority order.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <EmptyState
-              title="Rules are enforced, not editable here"
-              description="The gateway authorizes every request against a compiled snapshot of the organization's policy, applying model allow and block rules under deny-overrides, and refuses a blocked model with a 403 before spending rate or budget quota. Those rules reach the gateway from policy and rule records in the database; no control-plane endpoint exposes them, so there is nothing to list, inspect, or edit on this page. The provider and credential configuration a rule references is real and lives under Govern → Provider accounts and Credentials."
+            <DataTable
+              columns={COLUMNS}
+              rows={rows}
+              rowKey="id"
+              emptyMessage="No policies created yet."
             />
           </CardContent>
         </Card>

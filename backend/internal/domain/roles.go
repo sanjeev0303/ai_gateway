@@ -42,6 +42,8 @@ const (
 	// written only by the components that detect a condition, so there is no
 	// caller-side mutation to authorize.
 	PermissionSecurityEventsRead = "security_events.read"
+	PermissionGuardrailsRead     = "guardrails.read"
+	PermissionGuardrailsManage   = "guardrails.manage"
 )
 
 // rolePermissions maps each role to the permissions it grants.
@@ -70,6 +72,8 @@ var rolePermissions = map[string]map[string]bool{
 		PermissionAuditRead:          true,
 		PermissionAlertsRead:         true,
 		PermissionAlertsManage:       true,
+		PermissionGuardrailsRead:     true,
+		PermissionGuardrailsManage:   true,
 		PermissionSecurityEventsRead: true,
 		PermissionBillingRead:        true,
 	},
@@ -83,6 +87,7 @@ var rolePermissions = map[string]map[string]bool{
 		PermissionUsageRead:          true,
 		PermissionAuditRead:          true,
 		PermissionAlertsRead:         true,
+		PermissionGuardrailsRead:     true,
 		PermissionSecurityEventsRead: true,
 		PermissionBillingRead:        true,
 	},
@@ -131,6 +136,8 @@ func allPermissions() map[string]bool {
 		PermissionBillingManage:      true,
 		PermissionAlertsRead:         true,
 		PermissionAlertsManage:       true,
+		PermissionGuardrailsRead:     true,
+		PermissionGuardrailsManage:   true,
 		PermissionSecurityEventsRead: true,
 	}
 }

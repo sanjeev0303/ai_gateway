@@ -18,10 +18,16 @@ export interface TeamMemberRow {
   member_since: string;
 }
 
+export interface TeamUpdateInput {
+  name?: string;
+  description?: string;
+}
+
 export interface TeamsModule {
   create(input: { name: string; description: string }, options?: RequestOptions): Promise<Team>;
   list(options?: RequestOptions): Promise<ListResponse<Team>>;
   get(teamId: string, options?: RequestOptions): Promise<Team>;
+  update(teamId: string, input: TeamUpdateInput, options?: RequestOptions): Promise<Team>;
   addMember(
     teamId: string,
     input: { user_id: string; role: string },
@@ -38,6 +44,12 @@ export function createTeamsModule(transport: Transport): TeamsModule {
     list: (options) => transport.request<ListResponse<Team>>("/v1/teams", options),
     get: (teamId, options) =>
       transport.requestAt<Team>(`/v1/teams/${encodeURIComponent(teamId)}`, options),
+    update: (teamId, input, options) =>
+      transport.requestAt<Team>(`/v1/teams/${encodeURIComponent(teamId)}`, {
+        ...options,
+        method: "PATCH",
+        body: input,
+      }),
     addMember: (teamId, input, options) =>
       transport.requestAt<TeamMemberRow>(`/v1/teams/${encodeURIComponent(teamId)}/members`, {
         ...options,

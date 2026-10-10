@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { formatNumber, formatUsd, microsToUsd } from "@/lib/format";
 import { getApiClient } from "@/lib/session";
+import { CreateTeamDialog } from "./teams-client";
 
 export const metadata: Metadata = {
   title: "Teams · Sentinel",
@@ -27,10 +28,11 @@ interface TeamRow {
   requests: number;
   tokens: number;
   spend: number;
+  detailUrl: string;
 }
 
 const COLUMNS: readonly Column<TeamRow>[] = [
-  { key: "name", header: "Team", primary: "name", secondary: "description", sort: "name" },
+  { key: "name", header: "Team", primary: "name", secondary: "description", sort: "name", href: "detailUrl" },
   { key: "members", header: "Members", primary: "members", format: "number", align: "right", sort: "members" },
   { key: "requests", header: "Requests", primary: "requests", format: "compact", align: "right", sort: "requests" },
   { key: "tokens", header: "Tokens", primary: "tokens", format: "compact", align: "right", sort: "tokens" },
@@ -50,7 +52,7 @@ export default async function TeamsPage() {
     ),
   );
 
-  const rows: TeamRow[] = teamList.items.map((team) => {
+const rows: TeamRow[] = teamList.items.map((team) => {
     const attributed = spendByTeam.get(team.id);
     return {
       id: team.id,
@@ -60,6 +62,7 @@ export default async function TeamsPage() {
       requests: attributed?.Requests ?? 0,
       tokens: attributed?.TotalTokens ?? 0,
       spend: microsToUsd(attributed?.CostMicros ?? 0),
+      detailUrl: `/app/organization/teams/${team.id}`,
     };
   });
 
@@ -74,9 +77,11 @@ export default async function TeamsPage() {
         title="Teams"
         description="Groups that own projects and are the unit of accountability for spend."
         actions={
-          <Button size="sm">
-            <Plus aria-hidden /> New team
-          </Button>
+          <CreateTeamDialog>
+            <Button size="sm">
+              <Plus aria-hidden /> New team
+            </Button>
+          </CreateTeamDialog>
         }
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

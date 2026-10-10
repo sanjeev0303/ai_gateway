@@ -53,7 +53,7 @@ export async function createGatewayCredential(
     
     revalidatePath("/app/platform/gateway-credentials");
     // Return the one-time secret
-    return { success: true, secret: result.secret };
+    return { success: true, secret: result.key_prefix };
   } catch (error) {
     return {
       error: error instanceof ApiError ? error.message : "Failed to create credential.",
@@ -89,9 +89,9 @@ export async function rotateGatewayCredential(
 
   try {
     const { credentials } = await getApiClient();
-    const result = await credentials.rotateGateway(id);
+    const result = await credentials.rotateGateway(id, {});
     revalidatePath("/app/platform/gateway-credentials");
-    return { success: true, secret: result.secret };
+    return { success: true, secret: result.key_prefix };
   } catch (error) {
     return {
       error: error instanceof ApiError ? error.message : "Failed to rotate credential.",

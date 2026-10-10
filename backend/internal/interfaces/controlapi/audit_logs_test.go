@@ -108,8 +108,8 @@ func TestListAuditLogsParsesFilters(t *testing.T) {
 	if repo.gotFilter.From.IsZero() || repo.gotFilter.To.IsZero() {
 		t.Error("from/to not parsed")
 	}
-	if repo.gotLimit != 10 || repo.gotOffset != 5 {
-		t.Errorf("pagination = (%d, %d), want (10, 5)", repo.gotLimit, repo.gotOffset)
+	if repo.gotLimit != 11 || repo.gotOffset != 5 {
+		t.Errorf("pagination = (%d, %d), want (11, 5)", repo.gotLimit, repo.gotOffset)
 	}
 }
 
@@ -117,8 +117,8 @@ func TestListAuditLogsDefaultsPagination(t *testing.T) {
 	st := newControlStubs()
 	repo := &fakeAuditRepo{}
 	getAudit(t, st, repo, "owner", "/v1/audit-logs")
-	if repo.gotLimit != 50 || repo.gotOffset != 0 {
-		t.Errorf("default pagination = (%d, %d), want (50, 0)", repo.gotLimit, repo.gotOffset)
+	if repo.gotLimit != 51 || repo.gotOffset != 0 {
+		t.Errorf("default pagination = (%d, %d), want (51, 0)", repo.gotLimit, repo.gotOffset)
 	}
 }
 

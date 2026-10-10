@@ -74,6 +74,11 @@ export interface UsageByTeam extends UsageTotals {
   Name: string;
 }
 
+export interface UsageByServiceAccount extends UsageTotals {
+  ServiceAccountID: string;
+  Name: string;
+}
+
 /**
  * A percentile summary computed in Postgres. `Provider`/`Model` are absent for
  * the single overall row. `TtftSamples` and `TotalSamples` are counted
@@ -131,6 +136,7 @@ export interface UsageQuery {
   model?: string;
   /** One of `succeeded`, `failed`, `cancelled`. */
   status?: string;
+  service_account_id?: string;
 }
 
 export interface UsageRequestQuery extends UsageQuery {
@@ -152,6 +158,7 @@ export interface UsageModule {
   byProvider(query?: UsageQuery, options?: RequestOptions): Promise<ListResponse<UsageByProvider>>;
   byUser(query?: UsageQuery, options?: RequestOptions): Promise<ListResponse<UsageByUser>>;
   byTeam(query?: UsageQuery, options?: RequestOptions): Promise<ListResponse<UsageByTeam>>;
+  byServiceAccount(query?: UsageQuery, options?: RequestOptions): Promise<ListResponse<UsageByServiceAccount>>;
   latency(query?: UsageLatencyQuery, options?: RequestOptions): Promise<ListResponse<UsageLatency>>;
   recent(options?: RequestOptions): Promise<ListResponse<LlmRequest>>;
   requests(query?: UsageRequestQuery, options?: RequestOptions): Promise<ListResponse<LlmRequest>>;
@@ -170,6 +177,7 @@ function filtered(query: UsageQuery | undefined): Query {
     provider: query?.provider,
     model: query?.model,
     status: query?.status,
+    service_account_id: query?.service_account_id,
   };
 }
 
@@ -195,6 +203,8 @@ export function createUsageModule(transport: Transport): UsageModule {
       transport.request<ListResponse<UsageByUser>>("/v1/usage/by-user", { ...options, query: filtered(query) }),
     byTeam: (query, options) =>
       transport.request<ListResponse<UsageByTeam>>("/v1/usage/by-team", { ...options, query: filtered(query) }),
+    byServiceAccount: (query, options) =>
+      transport.request<ListResponse<UsageByServiceAccount>>("/v1/usage/by-service-account", { ...options, query: filtered(query) }),
     latency: (query, options) =>
       transport.request<ListResponse<UsageLatency>>("/v1/usage/latency", {
         ...options,

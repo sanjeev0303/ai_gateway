@@ -15,6 +15,7 @@ import { formatNumber, formatUsd, microsToUsd } from "@/lib/format";
 import { toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
+import { CreateProjectDialog } from "./projects-client";
 
 export const metadata: Metadata = {
   title: "Projects · Sentinel",
@@ -36,10 +37,11 @@ interface ProjectRow {
   requests: number;
   tokens: number;
   spend: number;
+  detailUrl: string;
 }
 
 const COLUMNS: readonly Column<ProjectRow>[] = [
-  { key: "name", header: "Project", primary: "name", secondary: "slug", sort: "name" },
+  { key: "name", header: "Project", primary: "name", secondary: "slug", sort: "name", href: "detailUrl" },
   { key: "status", header: "Status", primary: "status", tone: "statusTone" },
   { key: "requests", header: "Requests", primary: "requests", format: "compact", align: "right", sort: "requests" },
   { key: "tokens", header: "Tokens", primary: "tokens", format: "compact", align: "right", sort: "tokens" },
@@ -55,7 +57,7 @@ export default async function ProjectsPage() {
 
   const spendByProject = new Map(projectUsage.items.map((row) => [row.ProjectID, row]));
 
-  const rows: ProjectRow[] = projectList.items.map((project) => {
+const rows: ProjectRow[] = projectList.items.map((project) => {
     const attributed = spendByProject.get(project.id);
     return {
       id: project.id,
@@ -67,6 +69,7 @@ export default async function ProjectsPage() {
       requests: attributed?.Requests ?? 0,
       tokens: attributed?.TotalTokens ?? 0,
       spend: microsToUsd(attributed?.CostMicros ?? 0),
+      detailUrl: `/app/organization/projects/${project.id}`,
     };
   });
 
@@ -86,9 +89,11 @@ export default async function ProjectsPage() {
         title="Projects"
         description="Each project is a workload scope and the unit that spend is attributed to."
         actions={
-          <Button size="sm">
-            <Plus aria-hidden /> New project
-          </Button>
+          <CreateProjectDialog>
+            <Button size="sm">
+              <Plus aria-hidden /> New project
+            </Button>
+          </CreateProjectDialog>
         }
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

@@ -30,8 +30,8 @@ func TestBudgetGuard_AllowsUnderLimit(t *testing.T) {
 	if res.AlertAt != 80 {
 		t.Fatalf("expected default alert threshold 80 (80%% of limit), got %v", res.AlertAt)
 	}
-	if res.Scope != "organization" {
-		t.Fatalf("expected default scope organization, got %q", res.Scope)
+	if res.Scope != "org" {
+		t.Fatalf("expected default scope org, got %q", res.Scope)
 	}
 	if res.Key != budgetKey {
 		t.Fatalf("expected key %q, got %q", budgetKey, res.Key)

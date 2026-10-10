@@ -78,6 +78,12 @@ func (s *stubPolicyRepo) List(ctx context.Context, orgID uuid.UUID) ([]domain.Po
 func (s *stubPolicyRepo) SetEnforcement(context.Context, uuid.UUID, uuid.UUID, string) (domain.Policy, error) {
 	panic("stubPolicyRepo.SetEnforcement not configured")
 }
+func (s *stubPolicyRepo) Update(context.Context, uuid.UUID, uuid.UUID, domain.UpdatePolicy) (domain.Policy, error) {
+	panic("stubPolicyRepo.Update not configured")
+}
+func (s *stubPolicyRepo) Delete(context.Context, uuid.UUID, uuid.UUID) error {
+	panic("stubPolicyRepo.Delete not configured")
+}
 
 type stubPolicyRuleRepo struct {
 	listFn func(ctx context.Context, orgID, policyID uuid.UUID) ([]domain.PolicyRule, error)
@@ -97,7 +103,15 @@ func (s *stubPolicyRuleRepo) List(ctx context.Context, orgID, policyID uuid.UUID
 func (s *stubPolicyRuleRepo) SetEnabled(context.Context, uuid.UUID, uuid.UUID, bool) (domain.PolicyRule, error) {
 	panic("stubPolicyRuleRepo.SetEnabled not configured")
 }
-
+func (s *stubPolicyRuleRepo) Get(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (domain.PolicyRule, error) {
+	panic("stubPolicyRuleRepo.Get not configured")
+}
+func (s *stubPolicyRuleRepo) Update(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, domain.UpdatePolicyRule) (domain.PolicyRule, error) {
+	panic("stubPolicyRuleRepo.Update not configured")
+}
+func (s *stubPolicyRuleRepo) Delete(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error {
+	panic("stubPolicyRuleRepo.Delete not configured")
+}
 type stubSecretStore struct {
 	values map[string]string
 	getErr error

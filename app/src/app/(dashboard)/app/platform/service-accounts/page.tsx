@@ -8,7 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatDate, formatNumber } from "@/lib/format";
+import { formatDate, formatNumber, microsToUsd, formatUsd } from "@/lib/format";
 import { toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
@@ -30,40 +30,56 @@ interface ServiceAccountRow {
   description: string;
   status: string;
   tone: StatusTone;
+  requests: number;
+  spend: number;
   created: string;
+  detailUrl: string;
 }
 
 const COLUMNS: readonly Column<ServiceAccountRow>[] = [
-  { key: "name", header: "Service account", primary: "name", secondary: "description", sort: "name" },
+  { key: "name", header: "Service account", primary: "name", secondary: "description", sort: "name", href: "detailUrl" },
   { key: "status", header: "Status", primary: "status", tone: "tone", sort: "status" },
+  { key: "requests", header: "Requests", primary: "requests", format: "compact", align: "right", sort: "requests" },
+  { key: "spend", header: "Spend (30d)", primary: "spend", format: "usd", align: "right", sort: "spend" },
   { key: "created", header: "Created", primary: "created", sort: "created" },
 ];
 
 async function loadServiceAccounts() {
-  const { serviceAccounts } = await getApiClient();
-  const list = await serviceAccounts.list();
+  const { serviceAccounts, usage } = await getApiClient();
+  const [list, accountUsage] = await Promise.all([serviceAccounts.list(), usage.byServiceAccount()]);
 
-  const rows: ServiceAccountRow[] = [...list.items]
+  const spendByAccount = new Map(accountUsage.items.map((row) => [row.ServiceAccountID, row]));
+
+  const rows = [...list.items]
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((account) => ({
-      id: account.id,
-      name: account.name,
-      description: account.description || "No description",
-      status: account.status,
-      tone: toneFor(SERVICE_ACCOUNT_TONE, account.status),
-      created: formatDate(account.created_at),
-    }));
+    .map((account) => {
+      const attributed = spendByAccount.get(account.id);
+      return {
+        id: account.id,
+        name: account.name,
+        description: account.description || "No description",
+        status: account.status,
+        tone: toneFor(SERVICE_ACCOUNT_TONE, account.status),
+        requests: attributed?.Requests ?? 0,
+        spend: microsToUsd(attributed?.CostMicros ?? 0),
+        created: formatDate(account.created_at),
+        detailUrl: `/app/platform/service-accounts/${account.id}`,
+      };
+    });
+
+  const totalRequests = rows.reduce((sum, row) => sum + row.requests, 0);
 
   return {
     rows,
     total: rows.length,
     active: rows.filter((row) => row.status === "active").length,
     described: list.items.filter((item) => Boolean(item.description)).length,
+    totalRequests,
   };
 }
 
 export default async function ServiceAccountsPage() {
-  const { rows, total, active, described } = await loadServiceAccounts();
+  const { rows, total, active, described, totalRequests } = await loadServiceAccounts();
 
   return (
     <div className="p-4 sm:p-6">
@@ -84,11 +100,10 @@ export default async function ServiceAccountsPage() {
             hint="No longer usable"
           />
           <StatCard
-            label="Described"
-            value={formatNumber(described)}
-            hint="Have a description on file"
+            label="Requests"
+            value={formatNumber(totalRequests)}
+            hint="Trailing 30 days"
           />
-          <StatCard label="Organization" value="1" hint="Accounts are org-wide" />
         </section>
 
         <Card>
@@ -119,13 +134,12 @@ export default async function ServiceAccountsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Usage and rotation</CardTitle>
-            <CardDescription>Not reported by the control API today.</CardDescription>
+            <CardDescription>Accounts accrue telemetry</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p>
-              A service account record carries no last-used timestamp, no key
-              expiry, and no count of the projects using it, so this page cannot
-              flag unused identities or schedule rotation.
+              Service account telemetry tracks the total API usage of 
+              identities over a 30-day trailing period.
             </p>
             <p>
               Expiry and owning team or project are recorded on the gateway

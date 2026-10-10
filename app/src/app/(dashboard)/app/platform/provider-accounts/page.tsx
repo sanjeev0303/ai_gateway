@@ -39,10 +39,11 @@ interface AccountRow {
   status: string;
   tone: StatusTone;
   created: string;
+  detailUrl: string;
 }
 
 const COLUMNS: readonly Column<AccountRow>[] = [
-  { key: "name", header: "Account", primary: "name", secondary: "kind", sort: "name" },
+  { key: "name", header: "Account", primary: "name", secondary: "kind", sort: "name", href: "detailUrl" },
   { key: "baseUrl", header: "Base URL", primary: "baseUrl", sort: "baseUrl" },
   { key: "status", header: "Status", primary: "status", tone: "tone", sort: "status" },
   {
@@ -68,6 +69,7 @@ async function loadProviderAccounts() {
       status: account.status,
       tone: toneFor(PROVIDER_TONE, account.status),
       created: formatDate(account.created_at),
+      detailUrl: `/app/platform/provider-accounts/${account.id}`,
     }));
 
   const kindCounts = new Map<string, number>();

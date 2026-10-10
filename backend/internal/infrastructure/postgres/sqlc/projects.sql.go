@@ -134,3 +134,40 @@ func (q *Queries) SetProjectStatus(ctx context.Context, arg SetProjectStatusPara
 	)
 	return i, err
 }
+
+const updateProject = `-- name: UpdateProject :one
+UPDATE projects
+SET 
+  name = COALESCE($3, name),
+  description = COALESCE($4, description)
+WHERE organization_id = $1 AND id = $2
+RETURNING id, organization_id, name, slug, description, status, created_at, updated_at
+`
+
+type UpdateProjectParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ID             uuid.UUID `json:"id"`
+	Name           *string   `json:"name"`
+	Description    *string   `json:"description"`
+}
+
+func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error) {
+	row := q.db.QueryRow(ctx, updateProject,
+		arg.OrganizationID,
+		arg.ID,
+		arg.Name,
+		arg.Description,
+	)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

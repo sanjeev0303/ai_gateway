@@ -38,7 +38,7 @@ x-backend-env: &backend-env
   AIGW_DATABASE_CONN_MAX_LIFETIME: 5m
   AIGW_DATABASE_CONNECT_TIMEOUT: 5s
 
-  AIGW_REDIS_ENABLED: "false" # flip to "true" with the Redis milestone
+  AIGW_REDIS_ENABLED: "true" # flip to "true" with the Redis milestone
   AIGW_REDIS_ADDR: redis:6379
   AIGW_REDIS_PASSWORD: ${REDIS_PASSWORD:-change-me}
   AIGW_REDIS_DB: "0"
@@ -94,7 +94,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: redis-server --requirepass $${REDIS_PASSWORD}
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-change-me}
     ports:

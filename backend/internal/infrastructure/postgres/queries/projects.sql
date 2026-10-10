@@ -16,4 +16,10 @@ ORDER BY created_at;
 UPDATE projects
 SET status = $3
 WHERE organization_id = $1 AND id = $2
+RETURNING *;-- name: UpdateProject :one
+UPDATE projects
+SET 
+  name = COALESCE(sqlc.narg('name'), name),
+  description = COALESCE(sqlc.narg('description'), description)
+WHERE organization_id = $1 AND id = $2
 RETURNING *;

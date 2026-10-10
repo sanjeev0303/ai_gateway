@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 
 # Multi-stage build producing a single image with all six backend binaries
 # (gateway, gateway-v2, control-api, worker, migrate, seed). Compose services

@@ -25,7 +25,7 @@ func TestUsageEventMessageJSONRoundTrip(t *testing.T) {
 		Request: domain.NewLlmRequest{
 			ProjectID:         &projectID,
 			UserID:            &userID,
-			APICredentialID:   &credentialID,
+			GatewayCredentialID: &credentialID,
 			RequestID:         "req-1",
 			ProviderRequestID: &providerReqID,
 			ProviderKind:      domain.ProviderKindOpenAI,
@@ -70,8 +70,8 @@ func TestUsageEventMessageJSONRoundTrip(t *testing.T) {
 	if decoded.Request.ProjectID == nil || *decoded.Request.ProjectID != projectID {
 		t.Fatalf("ProjectID did not survive the wire: %v", decoded.Request.ProjectID)
 	}
-	if decoded.Request.APICredentialID == nil || *decoded.Request.APICredentialID != credentialID {
-		t.Fatalf("APICredentialID did not survive the wire: %v", decoded.Request.APICredentialID)
+	if decoded.Request.GatewayCredentialID == nil || *decoded.Request.GatewayCredentialID != credentialID {
+		t.Fatalf("GatewayCredentialID did not survive the wire: %v", decoded.Request.GatewayCredentialID)
 	}
 	if decoded.Request.ProviderRequestID == nil || *decoded.Request.ProviderRequestID != providerReqID {
 		t.Fatalf("ProviderRequestID did not survive the wire: %v", decoded.Request.ProviderRequestID)

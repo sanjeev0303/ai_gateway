@@ -896,6 +896,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/usage/by-service-account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getv1usagebyserviceaccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/usage/by-team": {
         parameters: {
             query?: never;
@@ -1225,6 +1241,161 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listPolicies"];
+        put?: never;
+        post: operations["createPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/policies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getPolicy"];
+        put?: never;
+        post?: never;
+        delete: operations["deletePolicy"];
+        options?: never;
+        head?: never;
+        patch: operations["updatePolicy"];
+        trace?: never;
+    };
+    "/v1/policies/{id}/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["listPolicyRules"];
+        put?: never;
+        post: operations["createPolicyRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/policies/{id}/rules/{ruleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                ruleId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deletePolicyRule"];
+        options?: never;
+        head?: never;
+        patch: operations["updatePolicyRule"];
+        trace?: never;
+    };
+    "/v1/policies/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/policies/{id}/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["validatePolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/model-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listModelAccess"];
+        put: operations["updateModelAccess"];
+        post: operations["previewModelAccess"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listBudgets"];
+        put?: never;
+        post: operations["createBudget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/budgets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getBudget"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteBudget"];
+        options?: never;
+        head?: never;
+        patch: operations["updateBudget"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1248,7 +1419,7 @@ export interface components {
          * @description How much transcript content may be returned for a conversation. A conversation's own privacy_state always wins; otherwise the server applies AIGW_CONVERSATION_PRIVACY_DEFAULT and fails closed to METADATA_ONLY when that is unset or unrecognized. No query parameter can widen this.
          * @enum {string}
          */
-        ConversationPrivacyMode: "OFF" | "METADATA_ONLY" | "PROMPT_ONLY" | "FULL_CONTENT";
+        ConversationPrivacyMode: false | "METADATA_ONLY" | "PROMPT_ONLY" | "FULL_CONTENT";
         /** @description One conversation plus the aggregates derived from its messages. request_count counts assistant turns, not messages, so it can be lower than message_count. */
         ConversationSummary: {
             /** Format: uuid */
@@ -1556,6 +1727,187 @@ export interface components {
              * @description Zero time when the window held no requests.
              */
             LastActivityAt: string;
+        };
+        Policy: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            organization_id?: string;
+            name?: string;
+            description?: string;
+            /** @enum {string} */
+            enforcement?: "active" | "disabled" | "permissive";
+            priority?: number;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        PolicyRule: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            policy_id?: string;
+            /** Format: uuid */
+            organization_id?: string;
+            rule_type?: string;
+            description?: string;
+            conditions?: {
+                [key: string]: unknown;
+            };
+            parameters?: {
+                [key: string]: unknown;
+            };
+            enabled?: boolean;
+            /** Format: date-time */
+            created_at?: string;
+        };
+        CreatePolicyRequest: {
+            name: string;
+            description?: string;
+            /** @enum {string} */
+            enforcement: "active" | "disabled" | "permissive";
+            priority: number;
+        };
+        UpdatePolicyRequest: {
+            name?: string;
+            description?: string;
+            /** @enum {string} */
+            enforcement?: "active" | "disabled" | "permissive";
+            priority?: number;
+        };
+        CreatePolicyRuleRequest: {
+            rule_type: string;
+            description?: string;
+            conditions?: {
+                [key: string]: unknown;
+            };
+            parameters?: {
+                [key: string]: unknown;
+            };
+            enabled: boolean;
+        };
+        UpdatePolicyRuleRequest: {
+            description?: string;
+            conditions?: {
+                [key: string]: unknown;
+            };
+            parameters?: {
+                [key: string]: unknown;
+            };
+            enabled?: boolean;
+        };
+        PolicyList: {
+            items?: components["schemas"]["Policy"][];
+        };
+        PolicyRuleList: {
+            items?: components["schemas"]["PolicyRule"][];
+        };
+        ModelAccessEntry: {
+            provider?: string;
+            model?: string;
+            allowed?: boolean;
+            source?: string;
+            /** Format: uuid */
+            policy_id?: string;
+            /** Format: uuid */
+            rule_id?: string;
+            priority?: number;
+            effective?: boolean;
+        };
+        ModelAccessList: {
+            items?: components["schemas"]["ModelAccessEntry"][];
+        };
+        UpdateModelAccessRequest: {
+            entries: {
+                provider: string;
+                model: string;
+                /** @enum {string} */
+                action: "allow" | "block";
+            }[];
+        };
+        ModelAccessPreviewRequest: {
+            provider: string;
+            model: string;
+            /** @enum {string} */
+            action: "allow" | "block";
+        };
+        ModelAccessPreviewResponse: {
+            provider?: string;
+            model?: string;
+            /** @enum {string} */
+            current_decision?: "allow" | "block";
+            /** @enum {string} */
+            preview_decision?: "allow" | "block";
+            would_change?: boolean;
+            blocking_rules?: components["schemas"]["ModelAccessEntry"][];
+            allowing_rules?: components["schemas"]["ModelAccessEntry"][];
+        };
+        Budget: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            organization_id?: string;
+            name?: string;
+            description?: string;
+            /** @enum {string} */
+            scope?: "organization" | "team" | "project" | "gateway_credential" | "service_account";
+            /** Format: uuid */
+            scope_id?: string;
+            /** @enum {string} */
+            limit_type?: "spend" | "tokens" | "requests";
+            /** Format: double */
+            limit_amount?: number;
+            /** @enum {string} */
+            window?: "hourly" | "daily" | "weekly" | "monthly";
+            /** Format: double */
+            alert_threshold?: number;
+            enabled?: boolean;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            /** Format: double */
+            current_spend?: number;
+            /** Format: int64 */
+            current_tokens?: number;
+            /** Format: int64 */
+            current_requests?: number;
+            /** Format: date-time */
+            window_start?: string;
+            /** Format: date-time */
+            window_end?: string;
+            /** Format: double */
+            percentage_used?: number;
+        };
+        BudgetList: {
+            items?: components["schemas"]["Budget"][];
+        };
+        CreateBudgetRequest: {
+            name: string;
+            description?: string;
+            /** @enum {string} */
+            scope: "organization" | "team" | "project" | "gateway_credential" | "service_account";
+            /** Format: uuid */
+            scope_id: string;
+            /** @enum {string} */
+            limit_type: "spend" | "tokens" | "requests";
+            /** Format: double */
+            limit_amount: number;
+            /** @enum {string} */
+            window: "hourly" | "daily" | "weekly" | "monthly";
+            /** Format: double */
+            alert_threshold?: number;
+            enabled?: boolean;
+        };
+        UpdateBudgetRequest: {
+            name?: string;
+            description?: string;
+            /** Format: double */
+            limit_amount?: number;
+            /** Format: double */
+            alert_threshold?: number;
+            enabled?: boolean;
         };
     };
     responses: never;
@@ -2952,6 +3304,26 @@ export interface operations {
             };
         };
     };
+    getv1usagebyserviceaccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     getv1usagebyteam: {
         parameters: {
             query?: never;
@@ -3664,6 +4036,472 @@ export interface operations {
             };
             /** @description The caller's role does not grant billing.read. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyList"];
+                };
+            };
+        };
+    };
+    createPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Policy"];
+                };
+            };
+        };
+    };
+    getPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Policy"];
+                };
+            };
+        };
+    };
+    deletePolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updatePolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Policy"];
+                };
+            };
+        };
+    };
+    listPolicyRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyRuleList"];
+                };
+            };
+        };
+    };
+    createPolicyRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePolicyRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyRule"];
+                };
+            };
+        };
+    };
+    deletePolicyRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                ruleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updatePolicyRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                ruleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePolicyRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyRule"];
+                };
+            };
+        };
+    };
+    previewPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    validatePolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    listModelAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelAccessList"];
+                };
+            };
+        };
+    };
+    updateModelAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateModelAccessRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    previewModelAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelAccessPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelAccessPreviewResponse"];
+                };
+            };
+        };
+    };
+    listBudgets: {
+        parameters: {
+            query?: {
+                scope?: "organization" | "team" | "project" | "gateway_credential" | "service_account";
+                scope_id?: string;
+                limit_type?: "spend" | "tokens" | "requests";
+                enabled?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetList"];
+                };
+            };
+        };
+    };
+    createBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBudgetRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+        };
+    };
+    getBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    deleteBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    updateBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBudgetRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

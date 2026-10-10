@@ -4,6 +4,7 @@ import { AreaChart, BarChart, DonutChart, chartColor } from "@/components/charts
 import {
   DataTable,
   EmptyState,
+  ObserveFilters,
   PageShell,
   RangeTabs,
   StatCard,
@@ -51,17 +52,18 @@ function periodChange(series: readonly { value: number }[]):
   };
 }
 
-interface ModelRow {
+interface UsageRow {
   id: string;
-  model: string;
+  name: string;
+  href: string;
   calls: number;
   tokens: number;
   shareFraction: number;
   cost: number;
 }
 
-const modelColumns: readonly Column<ModelRow>[] = [
-  { key: "model", header: "Model", primary: "model", sort: "model" },
+const createColumns = (header: string): readonly Column<UsageRow>[] => [
+  { key: "name", header, primary: "name", sort: "name", href: "href" },
   {
     key: "calls",
     header: "Requests",
@@ -98,6 +100,12 @@ const modelColumns: readonly Column<ModelRow>[] = [
   },
 ];
 
+const modelColumns = createColumns("Model");
+const providerColumns = createColumns("Provider");
+const projectColumns = createColumns("Project");
+const teamColumns = createColumns("Team");
+const userColumns = createColumns("User");
+
 const RANGE_MS: Record<DateRange, number> = {
   "24h": 24 * 60 * 60 * 1000,
   "7d": 7 * 24 * 60 * 60 * 1000,
@@ -105,10 +113,20 @@ const RANGE_MS: Record<DateRange, number> = {
   "90d": 90 * 24 * 60 * 60 * 1000,
 };
 
-async function loadUsage(range: DateRange) {
+async function loadUsage(
+  range: DateRange,
+  filters: {
+    project_id?: string;
+    user_id?: string;
+    team_id?: string;
+    provider?: string;
+    model?: string;
+    status?: string;
+  },
+) {
   const { usage, projects, teams } = await getApiClient();
   const to = new Date();
-  const query = { from: new Date(to.getTime() - RANGE_MS[range]), to };
+  const query = { from: new Date(to.getTime() - RANGE_MS[range]), to, ...filters };
 
   const [
     summary,
@@ -154,6 +172,15 @@ export default async function UsagePage({
   const raw = typeof params.range === "string" ? params.range : null;
   const range: DateRange = isDateRange(raw) ? raw : "30d";
 
+  const filters = {
+    project_id: typeof params.project_id === "string" ? params.project_id : undefined,
+    user_id: typeof params.user_id === "string" ? params.user_id : undefined,
+    team_id: typeof params.team_id === "string" ? params.team_id : undefined,
+    provider: typeof params.provider === "string" ? params.provider : undefined,
+    model: typeof params.model === "string" ? params.model : undefined,
+    status: typeof params.status === "string" ? params.status : undefined,
+  };
+
   const {
     summary,
     series,
@@ -164,7 +191,7 @@ export default async function UsagePage({
     byTeam,
     projectNames,
     teamNames,
-  } = await loadUsage(range);
+  } = await loadUsage(range, filters);
 
   const totalSpend = microsToUsd(summary.TotalCostMicros);
   const totalByModel = byModel.items.reduce((acc, row) => acc + microsToUsd(row.CostMicros), 0);
@@ -180,12 +207,73 @@ export default async function UsagePage({
   const tokenSeries = points.map((p) => ({ date: p.date, value: p.tokens }));
   const spendSeries = points.map((p) => ({ date: p.date, value: p.spend }));
 
-  const rows: ModelRow[] = byModel.items.map((row) => {
+  const modelRows: UsageRow[] = byModel.items.map((row) => {
     const cost = microsToUsd(row.CostMicros);
     const shareFraction = totalByModel > 0 ? cost / totalByModel : 0;
     return {
       id: row.Model,
-      model: row.Model,
+      name: row.Model,
+      href: `/app/observe/usage?model=${encodeURIComponent(row.Model)}`,
+      calls: row.Requests,
+      tokens: row.TotalTokens,
+      shareFraction,
+      cost,
+    };
+  });
+
+  const totalByProvider = byProvider.items.reduce((acc, row) => acc + microsToUsd(row.CostMicros), 0);
+  const providerRows: UsageRow[] = byProvider.items.map((row) => {
+    const cost = microsToUsd(row.CostMicros);
+    const shareFraction = totalByProvider > 0 ? cost / totalByProvider : 0;
+    return {
+      id: row.Provider,
+      name: row.Provider,
+      href: `/app/observe/usage?provider=${encodeURIComponent(row.Provider)}`,
+      calls: row.Requests,
+      tokens: row.TotalTokens,
+      shareFraction,
+      cost,
+    };
+  });
+
+  const totalByProject = byProject.items.reduce((acc, row) => acc + microsToUsd(row.CostMicros), 0);
+  const projectRows: UsageRow[] = byProject.items.map((row) => {
+    const cost = microsToUsd(row.CostMicros);
+    const shareFraction = totalByProject > 0 ? cost / totalByProject : 0;
+    return {
+      id: row.ProjectID,
+      name: projectNames.get(row.ProjectID) ?? row.ProjectID,
+      href: `/app/observe/projects/${encodeURIComponent(row.ProjectID)}`,
+      calls: row.Requests,
+      tokens: row.TotalTokens,
+      shareFraction,
+      cost,
+    };
+  });
+
+  const totalByTeam = byTeam.items.reduce((acc, row) => acc + microsToUsd(row.CostMicros), 0);
+  const teamRows: UsageRow[] = byTeam.items.map((row) => {
+    const cost = microsToUsd(row.CostMicros);
+    const shareFraction = totalByTeam > 0 ? cost / totalByTeam : 0;
+    return {
+      id: row.TeamID,
+      name: teamNames.get(row.TeamID) ?? row.TeamID,
+      href: `/app/observe/teams/${encodeURIComponent(row.TeamID)}`,
+      calls: row.Requests,
+      tokens: row.TotalTokens,
+      shareFraction,
+      cost,
+    };
+  });
+
+  const totalByUser = byUser.items.reduce((acc, row) => acc + microsToUsd(row.CostMicros), 0);
+  const userRows: UsageRow[] = byUser.items.map((row) => {
+    const cost = microsToUsd(row.CostMicros);
+    const shareFraction = totalByUser > 0 ? cost / totalByUser : 0;
+    return {
+      id: row.UserID,
+      name: row.UserID,
+      href: `/app/observe/users/${encodeURIComponent(row.UserID)}`,
       calls: row.Requests,
       tokens: row.TotalTokens,
       shareFraction,
@@ -200,6 +288,7 @@ export default async function UsagePage({
         description="Request and token volume across every route, with spend attribution."
         actions={<RangeTabs />}
       >
+        <ObserveFilters />
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Requests"
@@ -291,9 +380,9 @@ export default async function UsagePage({
             </CardHeader>
             <CardContent>
               <BarChart
-                data={[...rows]
+                data={[...modelRows]
                   .sort((a, b) => b.cost - a.cost)
-                  .map((row) => ({ label: row.model, value: row.cost }))}
+                  .map((row) => ({ label: row.name, value: row.cost }))}
                 formatValue={formatUsd}
               />
             </CardContent>
@@ -376,10 +465,74 @@ export default async function UsagePage({
           <CardContent>
             <DataTable
               columns={modelColumns}
-              rows={rows}
+              rows={modelRows}
               rowKey="id"
               pageSize={10}
               emptyMessage="No model usage recorded."
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Per-provider detail</CardTitle>
+            <CardDescription>Requests and spend by provider for the trailing window.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DataTable
+              columns={providerColumns}
+              rows={providerRows}
+              rowKey="id"
+              pageSize={10}
+              emptyMessage="No provider usage recorded."
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Per-project detail</CardTitle>
+            <CardDescription>Requests and spend by project for the trailing window.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DataTable
+              columns={projectColumns}
+              rows={projectRows}
+              rowKey="id"
+              pageSize={10}
+              emptyMessage="No project usage recorded."
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Per-team detail</CardTitle>
+            <CardDescription>Requests and spend by team for the trailing window.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DataTable
+              columns={teamColumns}
+              rows={teamRows}
+              rowKey="id"
+              pageSize={10}
+              emptyMessage="No team usage recorded."
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Per-user detail</CardTitle>
+            <CardDescription>Requests and spend by user for the trailing window.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DataTable
+              columns={userColumns}
+              rows={userRows}
+              rowKey="id"
+              pageSize={10}
+              emptyMessage="No user usage recorded."
             />
           </CardContent>
         </Card>

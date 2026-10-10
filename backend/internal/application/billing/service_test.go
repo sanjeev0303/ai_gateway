@@ -321,3 +321,6 @@ func TestListInvoicesRequiresBillingRead(t *testing.T) {
 		t.Fatalf("repository called %d times, want 0", inv.calls)
 	}
 }
+func (f *fakeRollups) GetByServiceAccount(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByServiceAccount, error) {
+	return nil, nil
+}

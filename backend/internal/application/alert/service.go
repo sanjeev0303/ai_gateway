@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"log/slog"
+
 	"github.com/google/uuid"
 
 	"ai-governance-saas/backend/internal/domain"
@@ -13,16 +15,24 @@ import (
 )
 
 type ServiceDeps struct {
+	Log    *slog.Logger
 	Alerts repositories.AlertRepository
+	Audits repositories.AuditLogRepository
 }
 
 // Service manages an organization's configured alert rules.
 type Service struct {
+	log    *slog.Logger
 	alerts repositories.AlertRepository
+	audits repositories.AuditLogRepository
 }
 
 func NewService(deps ServiceDeps) *Service {
-	return &Service{alerts: deps.Alerts}
+	return &Service{
+		log:    deps.Log,
+		alerts: deps.Alerts,
+		audits: deps.Audits,
+	}
 }
 
 func (s *Service) List(ctx context.Context, actor domain.Actor) ([]domain.Alert, error) {
@@ -37,6 +47,31 @@ func (s *Service) Get(ctx context.Context, actor domain.Actor, id uuid.UUID) (do
 		return domain.Alert{}, repositories.ErrForbidden
 	}
 	return s.alerts.Get(ctx, actor.OrganizationID, id)
+}
+
+func (s *Service) Create(ctx context.Context, actor domain.Actor, input domain.NewAlert) (domain.Alert, error) {
+	if !actor.Can(domain.PermissionAlertsManage) {
+		return domain.Alert{}, repositories.ErrForbidden
+	}
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return domain.Alert{}, fmt.Errorf("name must not be empty: %w", repositories.ErrInvalid)
+	}
+	if !domain.ValidAlertSeverity(input.Severity) {
+		return domain.Alert{}, fmt.Errorf("severity must be one of info, warning, critical: %w", repositories.ErrInvalid)
+	}
+	if input.AlertType == "" {
+		return domain.Alert{}, fmt.Errorf("alert type must not be empty: %w", repositories.ErrInvalid)
+	}
+	if err := validateConfiguration(input.Configuration); err != nil {
+		return domain.Alert{}, err
+	}
+	input.Name = name
+	alert, err := s.alerts.Create(ctx, actor.OrganizationID, input)
+	if err == nil {
+		s.audit(ctx, actor, "alert.create", "alert", &alert.ID, nil, nil)
+	}
+	return alert, err
 }
 
 func (s *Service) Update(ctx context.Context, actor domain.Actor, id uuid.UUID, input domain.AlertUpdate) (domain.Alert, error) {
@@ -57,14 +92,22 @@ func (s *Service) Update(ctx context.Context, actor domain.Actor, id uuid.UUID, 
 		return domain.Alert{}, err
 	}
 	input.Name = name
-	return s.alerts.Update(ctx, actor.OrganizationID, id, input)
+	alert, err := s.alerts.Update(ctx, actor.OrganizationID, id, input)
+	if err == nil {
+		s.audit(ctx, actor, "alert.update", "alert", &alert.ID, nil, nil) // omitting config changes to avoid exposing sensitive info or bloating
+	}
+	return alert, err
 }
 
 func (s *Service) Delete(ctx context.Context, actor domain.Actor, id uuid.UUID) error {
 	if !actor.Can(domain.PermissionAlertsManage) {
 		return repositories.ErrForbidden
 	}
-	return s.alerts.Delete(ctx, actor.OrganizationID, id)
+	err := s.alerts.Delete(ctx, actor.OrganizationID, id)
+	if err == nil {
+		s.audit(ctx, actor, "alert.delete", "alert", &id, nil, nil)
+	}
+	return err
 }
 
 // Test evaluates an alert rule's configuration. It reports what the rule
@@ -129,4 +172,25 @@ func validateConfiguration(configuration []byte) error {
 		return fmt.Errorf("configuration must be a JSON object: %w", repositories.ErrInvalid)
 	}
 	return nil
+}
+
+func (s *Service) audit(ctx context.Context, actor domain.Actor, action, resourceType string, resourceID *uuid.UUID, before, after []byte) {
+	entry := domain.NewAuditLog{
+		Action:       action,
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
+		Before:       before,
+		After:        after,
+	}
+	if actor.Kind == domain.ActorKindService {
+		entry.ActorServiceAccountID = &actor.UserID
+	} else {
+		entry.ActorUserID = &actor.UserID
+	}
+	if _, err := s.audits.Append(ctx, actor.OrganizationID, entry); err != nil {
+		if s.log != nil {
+			s.log.WarnContext(ctx, "alert: audit append failed",
+				"action", action, "resource_type", resourceType, "error", err)
+		}
+	}
 }

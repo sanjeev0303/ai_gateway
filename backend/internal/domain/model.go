@@ -44,12 +44,17 @@ type NewOrganization struct {
 // Organization is a tenant root. Global table: a small set of well-known
 // organizations, never tenant-scoped.
 type Organization struct {
-	ID        uuid.UUID
-	Name      string
-	Slug      string
-	Status    string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID                         uuid.UUID
+	Name                       string
+	Slug                       string
+	Status                     string
+	PrivacyDefault             PrivacyMode
+	RetentionConversationsDays int
+	RetentionUsageDays         int
+	RetentionAuditsDays        int
+	RetentionBillingDays       int
+	CreatedAt                  time.Time
+	UpdatedAt                  time.Time
 }
 
 // NewUser carries the caller-supplied fields for creating a user.
@@ -138,6 +143,12 @@ type Project struct {
 	UpdatedAt      time.Time
 }
 
+// UpdateProject carries the caller-supplied fields for updating a project.
+type UpdateProject struct {
+	Name        *string
+	Description *string
+}
+
 // NewTeam carries the caller-supplied fields for creating a team.
 type NewTeam struct {
 	Name        string
@@ -152,6 +163,12 @@ type Team struct {
 	Description    string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+// UpdateTeam carries the caller-supplied fields for updating a team.
+type UpdateTeam struct {
+	Name        *string
+	Description *string
 }
 
 // OrganizationMember is one row of the organization_members join table.
@@ -193,6 +210,11 @@ type UserOrganization struct {
 
 // UpdateOrganization carries partial updates to an organization.
 type UpdateOrganization struct {
-	Name *string
-	Slug *string
+	Name                       *string
+	Slug                       *string
+	PrivacyDefault             *string
+	RetentionConversationsDays *int32
+	RetentionUsageDays         *int32
+	RetentionAuditsDays        *int32
+	RetentionBillingDays       *int32
 }

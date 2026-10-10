@@ -69,7 +69,7 @@ func (a *api) listConversations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	summaries, err := a.conversations.List(ctx, actor, filter, limit, offset)
+	summaries, hasMore, err := a.conversations.List(ctx, actor, filter, limit, offset)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -78,7 +78,7 @@ func (a *api) listConversations(w http.ResponseWriter, r *http.Request) {
 	for _, s := range summaries {
 		items = append(items, toConversationSummaryDTO(s))
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+	httpx.WriteJSON(w, http.StatusOK, listDTO{Items: items, HasMore: &hasMore})
 }
 
 func (a *api) getConversation(w http.ResponseWriter, r *http.Request) {

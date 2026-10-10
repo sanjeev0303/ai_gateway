@@ -20,6 +20,15 @@ export interface ProjectMemberRow {
   member_since: string;
 }
 
+export interface ProjectUpdateInput {
+  name?: string;
+  description?: string;
+}
+
+export interface ProjectStatusInput {
+  status: string;
+}
+
 export interface ProjectsModule {
   create(
     input: { name: string; slug: string; description: string },
@@ -27,6 +36,8 @@ export interface ProjectsModule {
   ): Promise<Project>;
   list(options?: RequestOptions): Promise<ListResponse<Project>>;
   get(projectId: string, options?: RequestOptions): Promise<Project>;
+  update(projectId: string, input: ProjectUpdateInput, options?: RequestOptions): Promise<Project>;
+  setStatus(projectId: string, input: ProjectStatusInput, options?: RequestOptions): Promise<Project>;
   addMember(
     projectId: string,
     input: { user_id: string; role: string },
@@ -43,6 +54,19 @@ export function createProjectsModule(transport: Transport): ProjectsModule {
     list: (options) => transport.request<ListResponse<Project>>("/v1/projects", options),
     get: (projectId, options) =>
       transport.requestAt<Project>(`/v1/projects/${encodeURIComponent(projectId)}`, options),
+    update: (projectId, input, options) =>
+      transport.requestAt<Project>(`/v1/projects/${encodeURIComponent(projectId)}`, {
+        ...options,
+        method: "PATCH",
+        body: input,
+      }),
+    setStatus: (projectId, input, options) =>
+      transport.requestAt<Project>(`/v1/projects/${encodeURIComponent(projectId)}/status`, {
+        ...options,
+        method: "POST",
+        body: input,
+      }),
+
     addMember: (projectId, input, options) =>
       transport.requestAt<ProjectMemberRow>(
         `/v1/projects/${encodeURIComponent(projectId)}/members`,

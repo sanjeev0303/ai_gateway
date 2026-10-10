@@ -200,3 +200,38 @@ func (q *Queries) RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberPara
 	}
 	return result.RowsAffected(), nil
 }
+
+const updateTeam = `-- name: UpdateTeam :one
+UPDATE teams
+SET 
+  name = COALESCE($3, name),
+  description = COALESCE($4, description)
+WHERE organization_id = $1 AND id = $2
+RETURNING id, organization_id, name, description, created_at, updated_at
+`
+
+type UpdateTeamParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ID             uuid.UUID `json:"id"`
+	Name           *string   `json:"name"`
+	Description    *string   `json:"description"`
+}
+
+func (q *Queries) UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error) {
+	row := q.db.QueryRow(ctx, updateTeam,
+		arg.OrganizationID,
+		arg.ID,
+		arg.Name,
+		arg.Description,
+	)
+	var i Team
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.Name,
+		&i.Description,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

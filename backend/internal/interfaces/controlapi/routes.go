@@ -48,6 +48,8 @@ func registerV1Routes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("POST /v1/projects", a.requireAuth(a.createProject))
 	mux.Handle("GET /v1/projects", a.requireAuth(a.listProjects))
 	mux.Handle("GET /v1/projects/{id}", a.requireAuth(a.getProject))
+	mux.Handle("PATCH /v1/projects/{id}", a.requireAuth(a.updateProject))
+	mux.Handle("PATCH /v1/projects/{id}/status", a.requireAuth(a.setProjectStatus))
 	mux.Handle("POST /v1/projects/{id}/members", a.requireAuth(a.addProjectMember))
 	mux.Handle("GET /v1/projects/{id}/members", a.requireAuth(a.listProjectMembers))
 	mux.Handle("DELETE /v1/projects/{id}/members/{userID}", a.requireAuth(a.removeProjectMember))
@@ -56,6 +58,7 @@ func registerV1Routes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("POST /v1/teams", a.requireAuth(a.createTeam))
 	mux.Handle("GET /v1/teams", a.requireAuth(a.listTeams))
 	mux.Handle("GET /v1/teams/{id}", a.requireAuth(a.getTeam))
+	mux.Handle("PATCH /v1/teams/{id}", a.requireAuth(a.updateTeam))
 	mux.Handle("POST /v1/teams/{id}/members", a.requireAuth(a.addTeamMember))
 	mux.Handle("GET /v1/teams/{id}/members", a.requireAuth(a.listTeamMembers))
 	mux.Handle("DELETE /v1/teams/{id}/members/{userID}", a.requireAuth(a.removeTeamMember))
@@ -72,6 +75,19 @@ func registerV1Routes(mux *http.ServeMux, deps Deps) {
 
 	// gateway credentials
 	registerGatewayCredentialRoutes(mux, deps)
+
+	// policies
+	if deps.Policy != nil {
+		registerPolicyRoutes(mux, deps)
+	}
+
+	// model access
+	if deps.Policy != nil {
+		registerModelAccessRoutes(mux, deps)
+	}
+
+	// search
+	mux.Handle("GET /v1/search", a.requireAuth(a.search))
 }
 
 // registerGatewayCredentialRoutes wires the gateway credential surface onto mux.
@@ -84,6 +100,21 @@ func registerGatewayCredentialRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("POST /v1/gateway-credentials/{id}/rotate", a.requireAuth(a.rotateGatewayCredential))
 	mux.Handle("POST /v1/gateway-credentials/{id}/expire", a.requireAuth(a.expireGatewayCredential))
 	mux.Handle("POST /v1/gateway-credentials/{id}/restore", a.requireAuth(a.restoreGatewayCredential))
+}
+
+func registerPolicyRoutes(mux *http.ServeMux, deps Deps) {
+	a := newAPI(deps)
+	mux.Handle("POST /v1/policies", a.requireAuth(a.createPolicy))
+	mux.Handle("GET /v1/policies", a.requireAuth(a.listPolicies))
+	mux.Handle("GET /v1/policies/{id}", a.requireAuth(a.getPolicy))
+	mux.Handle("PATCH /v1/policies/{id}", a.requireAuth(a.updatePolicy))
+	mux.Handle("DELETE /v1/policies/{id}", a.requireAuth(a.deletePolicy))
+	mux.Handle("POST /v1/policies/{id}/rules", a.requireAuth(a.createPolicyRule))
+	mux.Handle("GET /v1/policies/{id}/rules", a.requireAuth(a.listPolicyRules))
+	mux.Handle("PATCH /v1/policies/{id}/rules/{ruleId}", a.requireAuth(a.updatePolicyRule))
+	mux.Handle("DELETE /v1/policies/{id}/rules/{ruleId}", a.requireAuth(a.deletePolicyRule))
+	mux.Handle("POST /v1/policies/preview", a.requireAuth(a.previewPolicy))
+	mux.Handle("POST /v1/policies/{id}/validate", a.requireAuth(a.validatePolicy))
 }
 
 // registerProviderRoutes wires the M4 provider surface onto mux. Every
@@ -113,4 +144,20 @@ func registerProviderRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("POST /v1/provider-credentials/validate", a.requireAuth(a.validateProviderCredential))
 	mux.Handle("POST /v1/provider-health/check", a.requireAuth(a.checkProviderHealth))
 	mux.Handle("GET /v1/provider-health", a.requireAuth(a.listProviderHealth))
+}
+
+func registerModelAccessRoutes(mux *http.ServeMux, deps Deps) {
+	a := newAPI(deps)
+	mux.Handle("GET /v1/model-access", a.requireAuth(a.listModelAccess))
+	mux.Handle("PUT /v1/model-access", a.requireAuth(a.updateModelAccess))
+	mux.Handle("POST /v1/model-access/preview", a.requireAuth(a.previewModelAccess))
+}
+
+func registerBudgetRoutes(mux *http.ServeMux, deps Deps) {
+	a := newAPI(deps)
+	mux.Handle("GET /v1/budgets", a.requireAuth(a.listBudgets))
+	mux.Handle("POST /v1/budgets", a.requireAuth(a.createBudget))
+	mux.Handle("GET /v1/budgets/{id}", a.requireAuth(a.getBudget))
+	mux.Handle("PATCH /v1/budgets/{id}", a.requireAuth(a.updateBudget))
+	mux.Handle("DELETE /v1/budgets/{id}", a.requireAuth(a.deleteBudget))
 }

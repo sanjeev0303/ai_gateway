@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { BarChart } from "@/components/charts";
 import {
   DataTable,
+  ObserveFilters,
   PageShell,
   RangeTabs,
   StatCard,
@@ -42,10 +43,11 @@ interface ModelUsageRow {
   share: string;
   shareFraction: number;
   spend: number;
+  detailUrl: string;
 }
 
 const modelColumns: readonly Column<ModelUsageRow>[] = [
-  { key: "name", header: "Model", primary: "name", secondary: "slug", sort: "name" },
+  { key: "name", header: "Model", primary: "name", secondary: "slug", sort: "name", href: "detailUrl" },
   { key: "provider", header: "Provider", primary: "provider", sort: "provider" },
   { key: "active", header: "Status", primary: "active", tone: "activeTone", sort: "active" },
   {
@@ -90,10 +92,11 @@ interface CatalogRow {
   provider: string;
   active: string;
   activeTone: StatusTone;
+  detailUrl: string;
 }
 
 const catalogColumns: readonly Column<CatalogRow>[] = [
-  { key: "name", header: "Model", primary: "name", secondary: "slug", sort: "name" },
+  { key: "name", header: "Model", primary: "name", secondary: "slug", sort: "name", href: "detailUrl" },
   { key: "provider", header: "Provider", primary: "provider", sort: "provider" },
   { key: "active", header: "Status", primary: "active", tone: "activeTone", sort: "active" },
 ];
@@ -131,8 +134,17 @@ export default async function ModelsPage({
 
   const { models, usage } = await getApiClient();
   
+  const filters = {
+    project_id: typeof params.project_id === "string" ? params.project_id : undefined,
+    user_id: typeof params.user_id === "string" ? params.user_id : undefined,
+    team_id: typeof params.team_id === "string" ? params.team_id : undefined,
+    provider: typeof params.provider === "string" ? params.provider : undefined,
+    model: typeof params.model === "string" ? params.model : undefined,
+    status: typeof params.status === "string" ? params.status : undefined,
+  };
+
   const to = new Date();
-  const query = { from: new Date(to.getTime() - RANGE_MS[range]), to };
+  const query = { from: new Date(to.getTime() - RANGE_MS[range]), to, ...filters };
 
   const [catalog, modelUsage] = await Promise.all([models.list(), usage.byModel(query)]);
 
@@ -169,6 +181,7 @@ export default async function ModelsPage({
       share: formatPercent(shareFraction),
       shareFraction,
       spend,
+      detailUrl: `/app/observe/usage?model=${encodeURIComponent(row.Model)}`,
     };
   });
 
@@ -181,6 +194,7 @@ export default async function ModelsPage({
       provider: model.provider_kind,
       active,
       activeTone,
+      detailUrl: `/app/observe/usage?model=${encodeURIComponent(model.model_slug)}`,
     };
   });
 
@@ -197,6 +211,7 @@ export default async function ModelsPage({
         description="Everything the gateway has routed, and the spend each one attracts."
         actions={<RangeTabs />}
       >
+        <ObserveFilters />
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Models in catalog"

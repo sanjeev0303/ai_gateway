@@ -56,6 +56,9 @@ func (f *fakeRollups) GetByProvider(context.Context, uuid.UUID, time.Time, time.
 func (f *fakeRollups) GetByUser(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByUser, error) {
 	return nil, nil
 }
+func (f *fakeRollups) GetByServiceAccount(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByServiceAccount, error) {
+	return nil, nil
+}
 func (f *fakeRollups) GetByTeam(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByTeam, error) {
 	return nil, nil
 }

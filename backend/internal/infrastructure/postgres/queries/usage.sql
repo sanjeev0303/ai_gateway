@@ -1,13 +1,13 @@
 -- name: RecordLLMRequest :one
 INSERT INTO llm_requests (
-    organization_id, project_id, user_id, api_credential_id, request_id,
+    organization_id, project_id, user_id, gateway_credential_id, request_id,
     provider_request_id, provider_kind, model, status, error_code,
     prompt_tokens, completion_tokens, cached_input_tokens, total_tokens,
     latency_ms, cost_micros, created_at,
     request_started_at, first_token_at, completed_at,
-    time_to_first_token_ms, total_latency_ms
+    time_to_first_token_ms, total_latency_ms, service_account_id, team_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
 ON CONFLICT (organization_id, request_id) DO NOTHING
 RETURNING *;
 
@@ -21,8 +21,11 @@ WHERE organization_id = $1 AND created_at >= $2 AND created_at < $3
 ORDER BY created_at DESC;
 
 -- name: RecordUsageEvent :one
-INSERT INTO usage_events (organization_id, request_id, event_type, quantity, unit, metadata)
-VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+INSERT INTO usage_events (
+    organization_id, request_id, event_type, quantity, unit, metadata,
+    user_id, service_account_id, team_id, project_id, gateway_credential_id
+)
+VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11)
 ON CONFLICT (organization_id, request_id, event_type) DO NOTHING
 RETURNING *;
 
@@ -155,12 +158,9 @@ WHERE r.organization_id = sqlc.arg(organization_id)
   AND r.created_at < sqlc.arg(to_ts)
   AND (sqlc.narg(project_id)::uuid IS NULL OR r.project_id = sqlc.narg(project_id))
   AND (sqlc.narg(user_id)::uuid IS NULL OR r.user_id = sqlc.narg(user_id))
-  AND (sqlc.narg(team_id)::uuid IS NULL OR EXISTS (
-        SELECT 1
-        FROM team_members tm
-        WHERE tm.team_id = sqlc.narg(team_id)
-          AND tm.user_id = r.user_id
-          AND tm.organization_id = r.organization_id))
+  AND (sqlc.narg(team_id)::uuid IS NULL OR r.team_id = sqlc.narg(team_id))
+  AND (sqlc.narg(service_account_id)::uuid IS NULL OR r.service_account_id = sqlc.narg(service_account_id))
+  AND (sqlc.narg(gateway_credential_id)::uuid IS NULL OR r.gateway_credential_id = sqlc.narg(gateway_credential_id))
   AND (sqlc.narg(provider)::text IS NULL OR r.provider_kind = sqlc.narg(provider))
   AND (sqlc.narg(model)::text IS NULL OR r.model = sqlc.narg(model))
   AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status));
@@ -196,12 +196,9 @@ WHERE r.organization_id = sqlc.arg(organization_id)
   AND r.created_at < sqlc.arg(to_ts)
   AND r.project_id IS NOT NULL
   AND (sqlc.narg(user_id)::uuid IS NULL OR r.user_id = sqlc.narg(user_id))
-  AND (sqlc.narg(team_id)::uuid IS NULL OR EXISTS (
-        SELECT 1
-        FROM team_members tm
-        WHERE tm.team_id = sqlc.narg(team_id)
-          AND tm.user_id = r.user_id
-          AND tm.organization_id = r.organization_id))
+  AND (sqlc.narg(team_id)::uuid IS NULL OR r.team_id = sqlc.narg(team_id))
+  AND (sqlc.narg(service_account_id)::uuid IS NULL OR r.service_account_id = sqlc.narg(service_account_id))
+  AND (sqlc.narg(gateway_credential_id)::uuid IS NULL OR r.gateway_credential_id = sqlc.narg(gateway_credential_id))
   AND (sqlc.narg(provider)::text IS NULL OR r.provider_kind = sqlc.narg(provider))
   AND (sqlc.narg(model)::text IS NULL OR r.model = sqlc.narg(model))
   AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status))
@@ -252,20 +249,41 @@ WHERE r.organization_id = sqlc.arg(organization_id)
   AND r.created_at < sqlc.arg(to_ts)
   AND r.user_id IS NOT NULL
   AND (sqlc.narg(project_id)::uuid IS NULL OR r.project_id = sqlc.narg(project_id))
-  AND (sqlc.narg(team_id)::uuid IS NULL OR EXISTS (
-        SELECT 1
-        FROM team_members tm
-        WHERE tm.team_id = sqlc.narg(team_id)
-          AND tm.user_id = r.user_id
-          AND tm.organization_id = r.organization_id))
+  AND (sqlc.narg(team_id)::uuid IS NULL OR r.team_id = sqlc.narg(team_id))
+  AND (sqlc.narg(service_account_id)::uuid IS NULL OR r.service_account_id = sqlc.narg(service_account_id))
+  AND (sqlc.narg(gateway_credential_id)::uuid IS NULL OR r.gateway_credential_id = sqlc.narg(gateway_credential_id))
   AND (sqlc.narg(provider)::text IS NULL OR r.provider_kind = sqlc.narg(provider))
   AND (sqlc.narg(model)::text IS NULL OR r.model = sqlc.narg(model))
   AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status))
 GROUP BY r.user_id, u.email, u.display_name
 ORDER BY total_tokens DESC;
 
+-- name: GetUsageByServiceAccount :many
+SELECT r.service_account_id,
+       sa.name,
+       COUNT(*)::bigint as requests,
+       COALESCE(SUM(r.prompt_tokens), 0)::bigint as input_tokens,
+       COALESCE(SUM(r.completion_tokens), 0)::bigint as output_tokens,
+       COALESCE(SUM(r.total_tokens), 0)::bigint as total_tokens,
+       COALESCE(SUM(r.cost_micros), 0)::bigint as cost_micros,
+       COUNT(*) FILTER (WHERE r.status = 'failed')::bigint as errors,
+       COALESCE(AVG(r.latency_ms), 0)::float8 as avg_latency_ms,
+       MAX(r.created_at)::timestamptz as last_activity_at
+FROM llm_requests r
+JOIN service_accounts sa ON sa.id = r.service_account_id
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND r.created_at >= sqlc.arg(from_ts)
+  AND r.created_at < sqlc.arg(to_ts)
+  AND r.service_account_id IS NOT NULL
+  AND (sqlc.narg(project_id)::uuid IS NULL OR r.project_id = sqlc.narg(project_id))
+  AND (sqlc.narg(provider)::text IS NULL OR r.provider_kind = sqlc.narg(provider))
+  AND (sqlc.narg(model)::text IS NULL OR r.model = sqlc.narg(model))
+  AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status))
+GROUP BY r.service_account_id, sa.name
+ORDER BY total_tokens DESC;
+
 -- name: GetUsageByTeam :many
-SELECT tm.team_id,
+SELECT r.team_id,
        t.name,
        COUNT(r.id)::bigint as requests,
        COALESCE(SUM(r.prompt_tokens), 0)::bigint as input_tokens,
@@ -276,28 +294,30 @@ SELECT tm.team_id,
        COALESCE(AVG(r.latency_ms), 0)::float8 as avg_latency_ms,
        MAX(r.created_at)::timestamptz as last_activity_at
 FROM llm_requests r
-JOIN team_members tm ON tm.user_id = r.user_id AND tm.organization_id = r.organization_id
-JOIN teams t ON t.id = tm.team_id
+JOIN teams t ON t.id = r.team_id
 WHERE r.organization_id = sqlc.arg(organization_id)
   AND r.created_at >= sqlc.arg(from_ts)
   AND r.created_at < sqlc.arg(to_ts)
+  AND r.team_id IS NOT NULL
   AND (sqlc.narg(project_id)::uuid IS NULL OR r.project_id = sqlc.narg(project_id))
   AND (sqlc.narg(user_id)::uuid IS NULL OR r.user_id = sqlc.narg(user_id))
+  AND (sqlc.narg(service_account_id)::uuid IS NULL OR r.service_account_id = sqlc.narg(service_account_id))
+  AND (sqlc.narg(gateway_credential_id)::uuid IS NULL OR r.gateway_credential_id = sqlc.narg(gateway_credential_id))
   AND (sqlc.narg(provider)::text IS NULL OR r.provider_kind = sqlc.narg(provider))
   AND (sqlc.narg(model)::text IS NULL OR r.model = sqlc.narg(model))
   AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status))
-GROUP BY tm.team_id, t.name
+GROUP BY r.team_id, t.name
 ORDER BY total_tokens DESC;
 
 -- name: GetRecentUsage :many
-SELECT id, request_id, project_id, user_id, provider_kind, model, status, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms
+SELECT id, request_id, project_id, user_id, provider_kind, model, status, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms, service_account_id, team_id, gateway_credential_id
 FROM llm_requests
 WHERE organization_id = sqlc.arg(organization_id)
 ORDER BY created_at DESC
 LIMIT 50;
 
 -- name: GetUsageRequests :many
-SELECT id, request_id, project_id, user_id, provider_kind, model, status, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms
+SELECT id, request_id, project_id, user_id, provider_kind, model, status, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms, service_account_id, team_id, gateway_credential_id
 FROM llm_requests r
 WHERE r.organization_id = sqlc.arg(organization_id)
   AND r.created_at >= sqlc.arg(from_ts)

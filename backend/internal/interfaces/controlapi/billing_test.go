@@ -93,6 +93,10 @@ func (f *fakeBillingRollups) GetByUser(context.Context, uuid.UUID, domain.UsageF
 	return nil, errors.New("unused")
 }
 
+func (f *fakeBillingRollups) GetByServiceAccount(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByServiceAccount, error) {
+	return nil, errors.New("unused")
+}
+
 func (f *fakeBillingRollups) GetByTeam(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByTeam, error) {
 	return nil, errors.New("unused")
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	uuid "github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type GatewayCredentialScope string
@@ -214,6 +215,22 @@ type BillingEvent struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+type Budget struct {
+	ID             uuid.UUID      `json:"id"`
+	OrganizationID uuid.UUID      `json:"organization_id"`
+	Name           string         `json:"name"`
+	Description    string         `json:"description"`
+	Scope          string         `json:"scope"`
+	ScopeID        uuid.UUID      `json:"scope_id"`
+	LimitType      string         `json:"limit_type"`
+	LimitAmount    pgtype.Numeric `json:"limit_amount"`
+	Window         string         `json:"window"`
+	AlertThreshold pgtype.Numeric `json:"alert_threshold"`
+	Enabled        bool           `json:"enabled"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+}
+
 type Conversation struct {
 	ID             uuid.UUID  `json:"id"`
 	OrganizationID uuid.UUID  `json:"organization_id"`
@@ -257,6 +274,33 @@ type GatewayCredential struct {
 	LastUsedAt     *time.Time               `json:"last_used_at"`
 	CreatedAt      time.Time                `json:"created_at"`
 	UpdatedAt      time.Time                `json:"updated_at"`
+}
+
+type Guardrail struct {
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	Name           string     `json:"name"`
+	Description    *string    `json:"description"`
+	TargetType     string     `json:"target_type"`
+	TargetID       *uuid.UUID `json:"target_id"`
+	Detector       string     `json:"detector"`
+	Action         string     `json:"action"`
+	Configuration  []byte     `json:"configuration"`
+	Enabled        bool       `json:"enabled"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
+type GuardrailEvent struct {
+	ID              uuid.UUID `json:"id"`
+	OrganizationID  uuid.UUID `json:"organization_id"`
+	GuardrailID     uuid.UUID `json:"guardrail_id"`
+	RequestID       string    `json:"request_id"`
+	Direction       string    `json:"direction"`
+	Detector        string    `json:"detector"`
+	Action          string    `json:"action"`
+	MatchedCategory string    `json:"matched_category"`
+	Timestamp       time.Time `json:"timestamp"`
 }
 
 type IdempotencyKey struct {
@@ -310,29 +354,31 @@ type InvoiceLine struct {
 }
 
 type LlmRequest struct {
-	ID                 uuid.UUID  `json:"id"`
-	OrganizationID     uuid.UUID  `json:"organization_id"`
-	ProjectID          *uuid.UUID `json:"project_id"`
-	UserID             *uuid.UUID `json:"user_id"`
-	ApiCredentialID    *uuid.UUID `json:"api_credential_id"`
-	RequestID          string     `json:"request_id"`
-	ProviderRequestID  *string    `json:"provider_request_id"`
-	ProviderKind       string     `json:"provider_kind"`
-	Model              string     `json:"model"`
-	Status             string     `json:"status"`
-	ErrorCode          *string    `json:"error_code"`
-	PromptTokens       int32      `json:"prompt_tokens"`
-	CompletionTokens   int32      `json:"completion_tokens"`
-	CachedInputTokens  int32      `json:"cached_input_tokens"`
-	TotalTokens        int32      `json:"total_tokens"`
-	LatencyMs          int32      `json:"latency_ms"`
-	CostMicros         int64      `json:"cost_micros"`
-	CreatedAt          time.Time  `json:"created_at"`
-	RequestStartedAt   *time.Time `json:"request_started_at"`
-	FirstTokenAt       *time.Time `json:"first_token_at"`
-	CompletedAt        *time.Time `json:"completed_at"`
-	TimeToFirstTokenMs *int32     `json:"time_to_first_token_ms"`
-	TotalLatencyMs     *int32     `json:"total_latency_ms"`
+	ID                  uuid.UUID  `json:"id"`
+	OrganizationID      uuid.UUID  `json:"organization_id"`
+	ProjectID           *uuid.UUID `json:"project_id"`
+	UserID              *uuid.UUID `json:"user_id"`
+	GatewayCredentialID *uuid.UUID `json:"gateway_credential_id"`
+	RequestID           string     `json:"request_id"`
+	ProviderRequestID   *string    `json:"provider_request_id"`
+	ProviderKind        string     `json:"provider_kind"`
+	Model               string     `json:"model"`
+	Status              string     `json:"status"`
+	ErrorCode           *string    `json:"error_code"`
+	PromptTokens        int32      `json:"prompt_tokens"`
+	CompletionTokens    int32      `json:"completion_tokens"`
+	CachedInputTokens   int32      `json:"cached_input_tokens"`
+	TotalTokens         int32      `json:"total_tokens"`
+	LatencyMs           int32      `json:"latency_ms"`
+	CostMicros          int64      `json:"cost_micros"`
+	CreatedAt           time.Time  `json:"created_at"`
+	RequestStartedAt    *time.Time `json:"request_started_at"`
+	FirstTokenAt        *time.Time `json:"first_token_at"`
+	CompletedAt         *time.Time `json:"completed_at"`
+	TimeToFirstTokenMs  *int32     `json:"time_to_first_token_ms"`
+	TotalLatencyMs      *int32     `json:"total_latency_ms"`
+	ServiceAccountID    *uuid.UUID `json:"service_account_id"`
+	TeamID              *uuid.UUID `json:"team_id"`
 }
 
 type Model struct {
@@ -353,12 +399,17 @@ type Model struct {
 }
 
 type Organization struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                         uuid.UUID `json:"id"`
+	Name                       string    `json:"name"`
+	Slug                       string    `json:"slug"`
+	Status                     string    `json:"status"`
+	CreatedAt                  time.Time `json:"created_at"`
+	UpdatedAt                  time.Time `json:"updated_at"`
+	PrivacyDefault             string    `json:"privacy_default"`
+	RetentionConversationsDays int32     `json:"retention_conversations_days"`
+	RetentionUsageDays         int32     `json:"retention_usage_days"`
+	RetentionAuditsDays        int32     `json:"retention_audits_days"`
+	RetentionBillingDays       int32     `json:"retention_billing_days"`
 }
 
 type OrganizationMember struct {
@@ -542,14 +593,19 @@ type UsageDaily struct {
 }
 
 type UsageEvent struct {
-	ID             uuid.UUID `json:"id"`
-	OrganizationID uuid.UUID `json:"organization_id"`
-	RequestID      string    `json:"request_id"`
-	EventType      string    `json:"event_type"`
-	Quantity       int64     `json:"quantity"`
-	Unit           string    `json:"unit"`
-	Metadata       []byte    `json:"metadata"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID                  uuid.UUID  `json:"id"`
+	OrganizationID      uuid.UUID  `json:"organization_id"`
+	RequestID           string     `json:"request_id"`
+	EventType           string     `json:"event_type"`
+	Quantity            int64      `json:"quantity"`
+	Unit                string     `json:"unit"`
+	Metadata            []byte     `json:"metadata"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UserID              *uuid.UUID `json:"user_id"`
+	ServiceAccountID    *uuid.UUID `json:"service_account_id"`
+	TeamID              *uuid.UUID `json:"team_id"`
+	ProjectID           *uuid.UUID `json:"project_id"`
+	GatewayCredentialID *uuid.UUID `json:"gateway_credential_id"`
 }
 
 type UsageHourly struct {

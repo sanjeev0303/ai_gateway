@@ -17,10 +17,11 @@ import { formatNumber, formatRelative } from "@/lib/format";
 import { toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
+import { ProviderHealthClient } from "./client";
 
 export const metadata: Metadata = {
   title: "Provider health · Sentinel",
-  description: "Result of the last health probe for each upstream provider.",
+  description: "Result of the last health probe for each upstream provider, with on-demand checking.",
 };
 
 const HEALTH_TONE: Record<string, StatusTone> = {
@@ -36,43 +37,25 @@ const display = (kind: string) =>
     .join(" ");
 
 interface HealthRow {
-  id: string;
-  provider: string;
+  provider_kind: string;
   status: string;
-  tone: StatusTone;
-  detail: string;
-  checked: string;
-  checkedSort: string;
+  status_reason?: string;
+  last_error?: string;
+  checked_at: string;
 }
-
-const COLUMNS: readonly Column<HealthRow>[] = [
-  { key: "provider", header: "Provider", primary: "provider", sort: "provider" },
-  { key: "status", header: "Status", primary: "status", tone: "tone", sort: "status" },
-  { key: "detail", header: "Reason", primary: "detail" },
-  {
-    key: "checked",
-    header: "Last probe",
-    primary: "checked",
-    sort: "checkedSort",
-    align: "right",
-  },
-];
 
 async function loadProviderHealth() {
   const { providers } = await getApiClient();
   const list = await providers.health();
-  const now = new Date();
 
   const rows: HealthRow[] = [...list.items]
     .sort((a, b) => a.provider_kind.localeCompare(b.provider_kind))
     .map((health) => ({
-      id: health.provider_kind,
-      provider: display(health.provider_kind),
+      provider_kind: health.provider_kind,
       status: health.status,
-      tone: toneFor(HEALTH_TONE, health.status),
-      detail: health.last_error ?? health.status_reason ?? "—",
-      checked: formatRelative(health.checked_at, now),
-      checkedSort: health.checked_at,
+      status_reason: health.status_reason,
+      last_error: health.last_error,
+      checked_at: health.checked_at,
     }));
 
   const count = (status: string) => rows.filter((row) => row.status === status).length;
@@ -121,42 +104,7 @@ export default async function ProviderHealthPage() {
           />
         </section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Probe results</CardTitle>
-            <CardDescription>
-              One row per provider, reflecting the latest probe rather than a
-              rolling window.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DataTable
-              columns={COLUMNS}
-              rows={rows}
-              rowKey="id"
-              pageSize={10}
-              emptyMessage="No provider health has been recorded yet."
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Configured providers and backend reachability</CardTitle>
-            <CardDescription>Not recorded by the control API today.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>
-              A health record holds one probe outcome, its reason, and when it ran.
-              It carries no uptime percentage, no latency percentile, and no error
-              rate, so this page cannot show a composite score or a latency trend.
-            </p>
-            <p>
-              Request volume and ingest freshness are not exposed either. Cost and
-              request counts per provider are available under Observe.
-            </p>
-          </CardContent>
-        </Card>
+        <ProviderHealthClient initialRows={rows} />
       </PageShell>
     </div>
   );

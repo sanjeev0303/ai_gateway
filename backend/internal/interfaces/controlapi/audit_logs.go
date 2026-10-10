@@ -49,7 +49,7 @@ func (a *api) listAuditLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries, err := a.auditLogs.List(r.Context(), actor, filter, limit, offset)
+	entries, hasMore, err := a.auditLogs.List(r.Context(), actor, filter, limit, offset)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -58,7 +58,7 @@ func (a *api) listAuditLogs(w http.ResponseWriter, r *http.Request) {
 	for _, entry := range entries {
 		items = append(items, toAuditLogDTO(entry))
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+	httpx.WriteJSON(w, http.StatusOK, listDTO{Items: items, HasMore: &hasMore})
 }
 
 func (a *api) getAuditLog(w http.ResponseWriter, r *http.Request) {

@@ -12,11 +12,18 @@ SELECT * FROM policies
 WHERE organization_id = $1
 ORDER BY priority, created_at;
 
--- name: SetPolicyEnforcement :one
+-- name: UpdatePolicy :one
 UPDATE policies
-SET enforcement = $3
+SET name = COALESCE(sqlc.narg('name'), name),
+    description = COALESCE(sqlc.narg('description'), description),
+    enforcement = COALESCE(sqlc.narg('enforcement'), enforcement),
+    priority = COALESCE(sqlc.narg('priority'), priority)
 WHERE organization_id = $1 AND id = $2
 RETURNING *;
+
+-- name: DeletePolicy :exec
+DELETE FROM policies
+WHERE organization_id = $1 AND id = $2;
 
 -- name: CreatePolicyRule :one
 INSERT INTO policy_rules (policy_id, organization_id, rule_type, description, conditions, parameters, enabled)
@@ -28,8 +35,19 @@ SELECT * FROM policy_rules
 WHERE organization_id = $1 AND policy_id = $2
 ORDER BY created_at;
 
--- name: SetPolicyRuleEnabled :one
+-- name: GetPolicyRule :one
+SELECT * FROM policy_rules
+WHERE organization_id = $1 AND policy_id = $2 AND id = $3;
+
+-- name: UpdatePolicyRule :one
 UPDATE policy_rules
-SET enabled = $3
-WHERE organization_id = $1 AND id = $2
+SET description = COALESCE(sqlc.narg('description'), description),
+    conditions = COALESCE(sqlc.narg('conditions')::jsonb, conditions),
+    parameters = COALESCE(sqlc.narg('parameters')::jsonb, parameters),
+    enabled = COALESCE(sqlc.narg('enabled'), enabled)
+WHERE organization_id = $1 AND policy_id = $2 AND id = $3
 RETURNING *;
+
+-- name: DeletePolicyRule :exec
+DELETE FROM policy_rules
+WHERE organization_id = $1 AND policy_id = $2 AND id = $3;

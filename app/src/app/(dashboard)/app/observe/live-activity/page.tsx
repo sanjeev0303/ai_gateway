@@ -17,6 +17,9 @@ export const metadata: Metadata = {
  * never talks to the database. Ongoing updates arrive over SSE in
  * `useLiveActivity`, which reconnects on its own.
  */
+
+import { ObserveFilters } from "@/components/dashboard";
+
 async function loadActivity() {
   const { activity } = await getApiClient();
 
@@ -33,7 +36,13 @@ async function loadActivity() {
   };
 }
 
-export default async function LiveActivityPage() {
+export default async function LiveActivityPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  // TODO: pass filters down to SSE / client component if we filter on client
   const { events, activeRequests, activeUsers } = await loadActivity();
 
   return (
@@ -42,6 +51,7 @@ export default async function LiveActivityPage() {
         title="Live activity"
         description="Requests the gateway is processing right now, newest first."
       >
+        <ObserveFilters />
         <LiveActivityContent
           initialEvents={events}
           initialActiveRequests={activeRequests}

@@ -15,7 +15,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -28,6 +27,8 @@ import { DATE_RANGES } from "@/lib/constants";
 import { initials } from "@/lib/format";
 import { useSession } from "@/lib/session-context";
 import { ORG_STATUS_LABELS, ORG_STATUS_TONE } from "@/types";
+import { CommandPaletteTrigger } from "./command-palette";
+import { useDateRange } from "@/hooks/use-date-range";
 
 /** Sun/moon/system switch. `useTheme` only mutates the DOM after mount. */
 function ThemeToggle() {
@@ -61,13 +62,8 @@ function ThemeToggle() {
   );
 }
 
-interface TopbarProps {
-  /** Default range; the picker is uncontrolled and page-local. */
-  defaultRange?: (typeof DATE_RANGES)[number];
-}
-
-export function Topbar({ defaultRange = "7d" }: TopbarProps) {
-  const [range, setRange] = React.useState<string>(defaultRange);
+export function Topbar() {
+  const { range, setRange } = useDateRange();
   const session = useSession();
   if (session.status !== "authenticated") return null;
   const { user, organization } = session.session;
@@ -86,18 +82,7 @@ export function Topbar({ defaultRange = "7d" }: TopbarProps) {
       </div>
 
       <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-        <div className="relative hidden md:block">
-          <Search
-            className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            type="search"
-            placeholder="Search requests, users, policies"
-            aria-label="Search"
-            className="w-64 pl-8"
-          />
-        </div>
+        <CommandPaletteTrigger />
 
         <Select value={range} onValueChange={setRange}>
           <SelectTrigger className="w-24" aria-label="Date range">

@@ -56,16 +56,21 @@ func (f *fakeMessageRepo) Create(context.Context, uuid.UUID, domain.NewConversat
 }
 
 func (f *fakeMessageRepo) List(context.Context, uuid.UUID, uuid.UUID) ([]domain.ConversationMessage, error) {
-	return f.messages, nil
+	out := make([]domain.ConversationMessage, len(f.messages))
+	copy(out, f.messages)
+	return out, nil
 }
 
 func newConversationServer(t *testing.T, st *controlStubs, conv *fakeConversationRepo, msg *fakeMessageRepo, mode domain.PrivacyMode) *httptest.Server {
 	t.Helper()
 	svc := identity.NewService(st.deps())
+	st.orgs.getByID = func(ctx context.Context, u uuid.UUID) (domain.Organization, error) {
+		return domain.Organization{PrivacyDefault: mode}, nil
+	}
 	csvc := conversation.NewService(conversation.ServiceDeps{
-		Conversations:  conv,
-		Messages:       msg,
-		DefaultPrivacy: mode,
+		Organizations: st.orgs,
+		Conversations: conv,
+		Messages:      msg,
 	})
 	return buildServer(t, Deps{Identity: svc, Conversations: csvc, DevLoginEnabled: true})
 }
@@ -120,8 +125,8 @@ func TestListConversationsParsesFilters(t *testing.T) {
 	if conv.gotFilter.From.IsZero() || conv.gotFilter.To.IsZero() {
 		t.Error("from/to not parsed")
 	}
-	if conv.gotLimit != 10 || conv.gotOffset != 5 {
-		t.Errorf("pagination = (%d, %d), want (10, 5)", conv.gotLimit, conv.gotOffset)
+	if conv.gotLimit != 11 || conv.gotOffset != 5 {
+		t.Errorf("pagination = (%d, %d), want (11, 5)", conv.gotLimit, conv.gotOffset)
 	}
 }
 
@@ -129,8 +134,8 @@ func TestListConversationsDefaultsPagination(t *testing.T) {
 	st := newControlStubs()
 	conv := &fakeConversationRepo{}
 	getConv(t, st, conv, &fakeMessageRepo{}, domain.PrivacyFullContent, "/v1/conversations")
-	if conv.gotLimit != 50 || conv.gotOffset != 0 {
-		t.Errorf("default pagination = (%d, %d), want (50, 0)", conv.gotLimit, conv.gotOffset)
+	if conv.gotLimit != 51 || conv.gotOffset != 0 {
+		t.Errorf("default pagination = (%d, %d), want (51, 0)", conv.gotLimit, conv.gotOffset)
 	}
 }
 
@@ -306,5 +311,38 @@ func TestConversationRoutesRequireAuth(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("unauthenticated status = %d, want 401", resp.StatusCode)
+	}
+}
+
+func TestConversationMessagesRedacted(t *testing.T) {
+	st := newControlStubs()
+	
+	msg := &fakeMessageRepo{
+		messages: []domain.ConversationMessage{
+			{ID: uuid.New(), Role: "user", Content: "Hello"},
+			{ID: uuid.New(), Role: "assistant", Content: "Hi"},
+		},
+	}
+	conv := &fakeConversationRepo{detail: domain.ConversationSummary{ID: uuid.New(), StartedAt: testNow}}
+	
+	// Test METADATA_ONLY (hides both user and assistant)
+	_, body := getConv(t, st, conv, msg, domain.PrivacyMetadataOnly, "/v1/conversations/"+uuid.New().String()+"/messages")
+	if strings.Contains(body, "Hello") || strings.Contains(body, "Hi") {
+		t.Errorf("METADATA_ONLY should redact all content, got: %s", body)
+	}
+
+	// Test PROMPT_ONLY (shows user, hides assistant)
+	_, body = getConv(t, st, conv, msg, domain.PrivacyPromptOnly, "/v1/conversations/"+uuid.New().String()+"/messages")
+	if !strings.Contains(body, "Hello") {
+		t.Errorf("PROMPT_ONLY should show user prompt, got: %s", body)
+	}
+	if strings.Contains(body, "Hi") {
+		t.Errorf("PROMPT_ONLY should redact assistant response, got: %s", body)
+	}
+
+	// Test FULL_CONTENT (shows all)
+	_, body = getConv(t, st, conv, msg, domain.PrivacyFullContent, "/v1/conversations/"+uuid.New().String()+"/messages")
+	if !strings.Contains(body, "Hello") || !strings.Contains(body, "Hi") {
+		t.Errorf("FULL_CONTENT should show all content, got: %s", body)
 	}
 }

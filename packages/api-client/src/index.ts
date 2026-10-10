@@ -18,6 +18,10 @@ import type { InvitationsModule } from "./invitations";
 import { createInvitationsModule } from "./invitations";
 import type { MembersModule } from "./members";
 import { createMembersModule } from "./members";
+import type { PoliciesModule } from "./policies";
+import { createPoliciesModule } from "./policies";
+import type { ModelAccessModule, BudgetsModule } from "./model_access_budget";
+import { createModelAccessModule, createBudgetsModule } from "./model_access_budget";
 import type { OrganizationModule } from "./organization";
 import { createOrganizationModule } from "./organization";
 import type { ModelsModule } from "./models";
@@ -34,6 +38,8 @@ import type { TeamsModule } from "./teams";
 import { createTeamsModule } from "./teams";
 import type { UsageModule } from "./usage";
 import { createUsageModule } from "./usage";
+import type { SearchModule } from "./search";
+import { createSearchModule } from "./search";
 
 export * from "./errors";
 export { createTransport, paginate } from "./client";
@@ -59,6 +65,8 @@ export * from "./conversations";
 export * from "./credentials";
 export * from "./invitations";
 export * from "./members";
+export * from "./policies";
+export * from "./model_access_budget";
 export * from "./organization";
 export * from "./models";
 export * from "./projects";
@@ -67,6 +75,7 @@ export * from "./security-events";
 export * from "./service-accounts";
 export * from "./teams";
 export * from "./usage";
+export * from "./search";
 
 /**
  * Transport plus one module per API area. Module names follow the REST nouns,
@@ -75,6 +84,9 @@ export * from "./usage";
  */
 export interface ApiClient extends Transport {
   readonly auth: AuthModule;
+  readonly policies: PoliciesModule;
+  readonly modelAccess: ModelAccessModule;
+  readonly budgets: BudgetsModule;
   readonly organization: OrganizationModule;
   readonly members: MembersModule;
   readonly invitations: InvitationsModule;
@@ -91,6 +103,7 @@ export interface ApiClient extends Transport {
   readonly securityEvents: SecurityEventsModule;
   readonly alerts: AlertsModule;
   readonly activity: ActivityModule;
+  readonly search: SearchModule;
 }
 
 export function createApiClient(options: ApiClientOptions): ApiClient {
@@ -98,6 +111,9 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   return {
     ...transport,
     auth: createAuthModule(transport),
+    policies: createPoliciesModule(transport),
+    modelAccess: createModelAccessModule(transport),
+    budgets: createBudgetsModule(transport),
     organization: createOrganizationModule(transport),
     members: createMembersModule(transport),
     invitations: createInvitationsModule(transport),
@@ -114,5 +130,6 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     securityEvents: createSecurityEventsModule(transport),
     alerts: createAlertsModule(transport),
     activity: createActivityModule(transport),
+    search: createSearchModule(transport),
   };
 }

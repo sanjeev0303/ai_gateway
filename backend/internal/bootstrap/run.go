@@ -10,15 +10,20 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
 	"ai-governance-saas/backend/internal/application/activity"
 	"ai-governance-saas/backend/internal/application/alert"
 	"ai-governance-saas/backend/internal/application/auditlog"
 	"ai-governance-saas/backend/internal/application/billing"
+	"ai-governance-saas/backend/internal/application/budget"
 	"ai-governance-saas/backend/internal/application/conversation"
+	"ai-governance-saas/backend/internal/application/guardrails"
 	"ai-governance-saas/backend/internal/application/identity"
+	"ai-governance-saas/backend/internal/application/policy"
 	"ai-governance-saas/backend/internal/application/provider"
 	"ai-governance-saas/backend/internal/application/securityevent"
 	"ai-governance-saas/backend/internal/application/usage"
@@ -170,6 +175,7 @@ func RunGatewayV2(ctx context.Context) error {
 			Secrets:             secretStore,
 			PolicyRepo:          repositories.NewPolicyRepository(store),
 			RuleRepo:            repositories.NewPolicyRuleRepository(store),
+			Guardrails:          repositories.NewGuardrailsRepository(store),
 			EventBus:            bus.EventBus,
 			Activity:            activityTracker,
 		})
@@ -193,10 +199,6 @@ func RunGatewayV2(ctx context.Context) error {
 		if err := gatewayV2.Start(); err != nil {
 			return fmt.Errorf("gateway-v2: start: %w", err)
 		}
-
-		// Register shutdown hook
-		// The serveHTTP function will handle graceful shutdown
-		_ = gatewayV2 // suppress unused warning for now
 
 		deps.Gateway = gatewayV2
 	}
@@ -245,6 +247,17 @@ func RunControlAPI(ctx context.Context) error {
 			return fmt.Errorf("control-api: token manager: %w", err)
 		}
 		hasher := auth.NewSHA256TokenHasher()
+
+		var bus usageBus
+		if cfg.Eventbus.Enabled {
+			bus, err = newUsageBus(ctx, &cfg.Eventbus, log)
+			if err != nil {
+				return fmt.Errorf("control-api: eventbus: %w", err)
+			}
+			defer bus.Close()
+		}
+
+
 
 		svc := identity.NewService(identity.ServiceDeps{
 			Orgs:        repositories.NewOrganizationRepository(store),
@@ -323,11 +336,11 @@ func RunControlAPI(ctx context.Context) error {
 			Log:         log,
 		})
 
-		privacyDefault, _ := domain.ParsePrivacyMode(cfg.Conversation.PrivacyDefault)
+
 		conversationSvc := conversation.NewService(conversation.ServiceDeps{
+			Organizations:  repositories.NewOrganizationRepository(store),
 			Conversations:  repositories.NewConversationRepository(store),
 			Messages:       repositories.NewConversationMessageRepository(store),
-			DefaultPrivacy: privacyDefault,
 			Log:            log,
 		})
 
@@ -337,7 +350,9 @@ func RunControlAPI(ctx context.Context) error {
 		})
 
 		alertSvc := alert.NewService(alert.ServiceDeps{
+			Log:    log,
 			Alerts: repositories.NewAlertRepository(store),
+			Audits: repositories.NewAuditLogRepository(store),
 		})
 
 		billingSvc := billing.NewService(billing.ServiceDeps{
@@ -345,6 +360,25 @@ func RunControlAPI(ctx context.Context) error {
 			Subscriptions: repositories.NewSubscriptionRepository(store),
 			Invoices:      repositories.NewInvoiceRepository(store),
 			Rollups:       repositories.NewUsageRollupRepository(store),
+		})
+
+		guardrailsSvc := guardrails.NewService(repositories.NewGuardrailsRepository(store))
+		guardrailsEval := guardrails.NewEvaluator()
+
+		policySvc := policy.NewService(
+			repositories.NewPolicyRepository(store),
+			repositories.NewPolicyRuleRepository(store),
+			repositories.NewAuditLogRepository(store),
+			dummyInvalidator{},
+			log,
+		)
+
+		budgetSvc := budget.NewService(budget.ServiceDeps{
+			Budgets:     repositories.NewBudgetRepository(store),
+			Policies:    repositories.NewPolicyRepository(store),
+			Rules:       repositories.NewPolicyRuleRepository(store),
+			Audits:      repositories.NewAuditLogRepository(store),
+			Invalidator: dummyInvalidator{},
 		})
 
 		deps = controlapi.Deps{
@@ -358,6 +392,10 @@ func RunControlAPI(ctx context.Context) error {
 			Alerts:              alertSvc,
 			SecurityEvents:      securityEventSvc,
 			Billing:             billingSvc,
+			Policy:              policySvc,
+			Budget:              budgetSvc,
+			Guardrails:          guardrailsSvc,
+			GuardrailsEval:      guardrailsEval,
 			DevLoginEnabled:     cfg.Auth.DevLoginEnabled,
 			SessionCookieName:   cfg.Auth.SessionCookieName,
 			SessionCookieSecure: cfg.Auth.SessionCookieSecure,
@@ -382,7 +420,7 @@ func providerAdapters() map[string]providerclient.Provider {
 	}
 }
 
-// RunWorker starts the async worker (health listener only for now) and blocks
+// RunWorker starts the async worker and blocks
 // until ctx is cancelled (graceful shutdown) or the server fails.
 func RunWorker(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
@@ -423,8 +461,39 @@ func RunWorker(ctx context.Context) error {
 			worker.RunRollup(ctx, rollups, log)
 		}()
 
-		// A single-process bus is already consumed beside its publisher in the
-		// data plane, so the worker only subscribes on a shared transport.
+		_ = alert.NewService(alert.ServiceDeps{
+			Log:    log,
+			Alerts: repositories.NewAlertRepository(store),
+			Audits: repositories.NewAuditLogRepository(store),
+		})
+		notifier := alert.NewInAppNotifier(log)
+		evaluator := alert.NewEvaluator(alert.EvaluatorDeps{
+			Log:          log,
+			Alerts:       repositories.NewAlertRepository(store),
+			Notifier:     notifier,
+			UsageRollups: repositories.NewUsageRollupRepository(store),
+		})
+		jobs.Add(1)
+		go func() {
+			defer jobs.Done()
+			ticker := time.NewTicker(1 * time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					log.Info("alert evaluator loop stopped")
+					return
+				case <-ticker.C:
+					orgIDs, err := repositories.NewOrganizationRepository(store).ListAllIDs(ctx)
+					if err != nil {
+						log.Error("failed to list organizations for alert evaluation", "error", err)
+						continue
+					}
+					evaluator.EvaluateAll(ctx, orgIDs)
+				}
+			}
+		}()
+
 		if cfg.Eventbus.Enabled {
 			bus, err := newUsageBus(ctx, &cfg.Eventbus, log)
 			if err != nil {
@@ -499,3 +568,5 @@ func serveHTTP(ctx context.Context, cfg *config.Config, h http.Handler, name str
 		return nil
 	}
 }
+type dummyInvalidator struct{}
+func (dummyInvalidator) Invalidate(orgID uuid.UUID) {}

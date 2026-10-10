@@ -165,6 +165,14 @@ func (s *Service) GetByUser(ctx context.Context, actor domain.Actor, filter doma
 	return s.rollups.GetByUser(ctx, actor.OrganizationID, filter)
 }
 
+// GetByServiceAccount returns usage grouped by service account.
+func (s *Service) GetByServiceAccount(ctx context.Context, actor domain.Actor, filter domain.UsageFilter) ([]domain.UsageByServiceAccount, error) {
+	if err := s.RequirePermission(actor, domain.PermissionUsageRead); err != nil {
+		return nil, err
+	}
+	return s.rollups.GetByServiceAccount(ctx, actor.OrganizationID, filter)
+}
+
 // GetByTeam returns usage grouped by team.
 func (s *Service) GetByTeam(ctx context.Context, actor domain.Actor, filter domain.UsageFilter) ([]domain.UsageByTeam, error) {
 	if err := s.RequirePermission(actor, domain.PermissionUsageRead); err != nil {
@@ -199,9 +207,9 @@ func (s *Service) GetRecent(ctx context.Context, actor domain.Actor) ([]domain.L
 }
 
 // GetRequests returns a paginated list of requests matching the filter.
-func (s *Service) GetRequests(ctx context.Context, actor domain.Actor, filter domain.UsageFilter, limit, offset int32) ([]domain.LlmRequest, error) {
+func (s *Service) GetRequests(ctx context.Context, actor domain.Actor, filter domain.UsageFilter, limit, offset int32) ([]domain.LlmRequest, bool, error) {
 	if err := s.RequirePermission(actor, domain.PermissionUsageRead); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if limit <= 0 || limit > 100 {
 		limit = 50
@@ -209,5 +217,14 @@ func (s *Service) GetRequests(ctx context.Context, actor domain.Actor, filter do
 	if offset < 0 {
 		offset = 0
 	}
-	return s.llmRequests.GetRequests(ctx, actor.OrganizationID, filter, limit, offset)
+	reqs, err := s.llmRequests.GetRequests(ctx, actor.OrganizationID, filter, limit+1, offset)
+	if err != nil {
+		return nil, false, err
+	}
+	hasMore := false
+	if len(reqs) > int(limit) {
+		hasMore = true
+		reqs = reqs[:limit]
+	}
+	return reqs, hasMore, nil
 }

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { BarChart, DonutChart } from "@/components/charts";
 import {
   DataTable,
+  ObserveFilters,
   PageShell,
   StatCard,
   type Column,
@@ -46,10 +47,11 @@ interface ProjectRow {
   share: string;
   shareFraction: number;
   spend: number;
+  detailUrl: string;
 }
 
 const projectColumns: readonly Column<ProjectRow>[] = [
-  { key: "name", header: "Project", primary: "name", secondary: "slug", sort: "name" },
+  { key: "name", header: "Project", primary: "name", secondary: "slug", sort: "name", href: "detailUrl" },
   { key: "status", header: "Status", primary: "status", tone: "statusTone", sort: "status" },
   {
     key: "requests",
@@ -86,11 +88,25 @@ const projectColumns: readonly Column<ProjectRow>[] = [
   },
 ];
 
-export default async function ProjectsPage() {
+export default async function ProjectsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const filters = {
+    project_id: typeof params.project_id === "string" ? params.project_id : undefined,
+    user_id: typeof params.user_id === "string" ? params.user_id : undefined,
+    team_id: typeof params.team_id === "string" ? params.team_id : undefined,
+    provider: typeof params.provider === "string" ? params.provider : undefined,
+    model: typeof params.model === "string" ? params.model : undefined,
+    status: typeof params.status === "string" ? params.status : undefined,
+  };
+
   const { projects, usage } = await getApiClient();
   const [projectList, projectUsage] = await Promise.all([
     projects.list(),
-    usage.byProject(),
+    usage.byProject(filters),
   ]);
 
   const spendByProject = new Map(projectUsage.items.map((row) => [row.ProjectID, row]));
@@ -116,6 +132,7 @@ export default async function ProjectsPage() {
       share: formatPercent(shareFraction),
       shareFraction,
       spend,
+      detailUrl: `/app/organization/projects/${project.id}`,
     };
   });
 
@@ -143,6 +160,7 @@ export default async function ProjectsPage() {
         title="Projects"
         description="Every project routed through the gateway, and how the bill divides between them."
       >
+        <ObserveFilters />
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Active projects"

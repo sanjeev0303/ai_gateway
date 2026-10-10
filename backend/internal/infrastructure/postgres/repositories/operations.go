@@ -173,11 +173,12 @@ func (r *llmRequestRepo) Record(ctx context.Context, orgID uuid.UUID, input doma
 		row, err := q.RecordLLMRequest(ctx, db.RecordLLMRequestParams{
 			OrganizationID:     orgID,
 			ProjectID:          input.ProjectID,
-			UserID:             input.UserID,
-			ApiCredentialID:    input.APICredentialID,
-			RequestID:          input.RequestID,
-			ProviderRequestID:  input.ProviderRequestID,
-			ProviderKind:       input.ProviderKind,
+			UserID:              input.UserID,
+			TeamID:              input.TeamID,
+			GatewayCredentialID: input.GatewayCredentialID,
+			RequestID:           input.RequestID,
+			ProviderRequestID:   input.ProviderRequestID,
+			ProviderKind:        input.ProviderKind,
 			Model:              input.Model,
 			Status:             input.Status,
 			ErrorCode:          input.ErrorCode,
@@ -193,6 +194,7 @@ func (r *llmRequestRepo) Record(ctx context.Context, orgID uuid.UUID, input doma
 			CompletedAt:        input.CompletedAt,
 			TimeToFirstTokenMs: input.TimeToFirstTokenMs,
 			TotalLatencyMs:     input.TotalLatencyMs,
+			ServiceAccountID:   input.ServiceAccountID,
 		})
 		if err != nil {
 			return err
@@ -253,6 +255,7 @@ func (r *llmRequestRepo) GetRecent(ctx context.Context, orgID uuid.UUID) ([]doma
 				OrganizationID:     orgID,
 				ProjectID:          row.ProjectID,
 				UserID:             row.UserID,
+				ServiceAccountID:   row.ServiceAccountID,
 				RequestID:          row.RequestID,
 				ProviderKind:       row.ProviderKind,
 				Model:              row.Model,
@@ -295,23 +298,26 @@ func (r *llmRequestRepo) GetRequests(ctx context.Context, orgID uuid.UUID, filte
 		llmRequests = make([]domain.LlmRequest, 0, len(rows))
 		for _, row := range rows {
 			llmRequests = append(llmRequests, domain.LlmRequest{
-				ID:                 row.ID,
-				OrganizationID:     orgID,
-				ProjectID:          row.ProjectID,
-				UserID:             row.UserID,
-				RequestID:          row.RequestID,
-				ProviderKind:       row.ProviderKind,
-				Model:              row.Model,
-				Status:             row.Status,
-				TotalTokens:        int32(row.TotalTokens),
-				LatencyMs:          int32(row.LatencyMs),
-				CostMicros:         row.CostMicros,
-				CreatedAt:          row.CreatedAt,
-				RequestStartedAt:   row.RequestStartedAt,
-				FirstTokenAt:       row.FirstTokenAt,
-				CompletedAt:        row.CompletedAt,
-				TimeToFirstTokenMs: row.TimeToFirstTokenMs,
-				TotalLatencyMs:     row.TotalLatencyMs,
+				ID:                  row.ID,
+				OrganizationID:      orgID,
+				ProjectID:           row.ProjectID,
+				UserID:              row.UserID,
+				ServiceAccountID:    row.ServiceAccountID,
+				TeamID:              row.TeamID,
+				GatewayCredentialID: row.GatewayCredentialID,
+				RequestID:           row.RequestID,
+				ProviderKind:        row.ProviderKind,
+				Model:               row.Model,
+				Status:              row.Status,
+				TotalTokens:         int32(row.TotalTokens),
+				LatencyMs:           int32(row.LatencyMs),
+				CostMicros:          row.CostMicros,
+				CreatedAt:           row.CreatedAt,
+				RequestStartedAt:    row.RequestStartedAt,
+				FirstTokenAt:        row.FirstTokenAt,
+				CompletedAt:         row.CompletedAt,
+				TimeToFirstTokenMs:  row.TimeToFirstTokenMs,
+				TotalLatencyMs:      row.TotalLatencyMs,
 			})
 		}
 		return nil
@@ -675,7 +681,7 @@ func (r *usageRollupRepo) GetByTeam(ctx context.Context, orgID uuid.UUID, filter
 		}
 		for _, row := range rows {
 			results = append(results, domain.UsageByTeam{
-				TeamID: row.TeamID,
+				TeamID: *row.TeamID,
 				Name:   row.Name,
 				UsageTotals: domain.UsageTotals{
 					Requests:       int64(row.Requests),
@@ -1408,7 +1414,9 @@ func toLlmRequest(row db.LlmRequest) domain.LlmRequest {
 		OrganizationID:     row.OrganizationID,
 		ProjectID:          row.ProjectID,
 		UserID:             row.UserID,
-		APICredentialID:    row.ApiCredentialID,
+		ServiceAccountID:    row.ServiceAccountID,
+		TeamID:              row.TeamID,
+		GatewayCredentialID: row.GatewayCredentialID,
 		RequestID:          row.RequestID,
 		ProviderRequestID:  row.ProviderRequestID,
 		ProviderKind:       row.ProviderKind,
@@ -1580,4 +1588,44 @@ func toAuditLog(row db.AuditLog) domain.AuditLog {
 		RequestID:             row.RequestID,
 		CreatedAt:             row.CreatedAt,
 	}
+}
+
+func (r *usageRollupRepo) GetByServiceAccount(ctx context.Context, orgID uuid.UUID, filter domain.UsageFilter) ([]domain.UsageByServiceAccount, error) {
+	var results []domain.UsageByServiceAccount
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		rows, err := q.GetUsageByServiceAccount(ctx, db.GetUsageByServiceAccountParams{
+			OrganizationID: orgID,
+			FromTs:         filter.From.UTC(),
+			ToTs:           filter.To.UTC(),
+			ProjectID:      filter.ProjectID,
+			Provider:       filter.Provider,
+			Model:          filter.Model,
+			Status:         filter.Status,
+		})
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			var saID uuid.UUID
+			if row.ServiceAccountID != nil {
+				saID = *row.ServiceAccountID
+			}
+			results = append(results, domain.UsageByServiceAccount{
+				ServiceAccountID: saID,
+				Name:             row.Name,
+				UsageTotals: domain.UsageTotals{
+					Requests:       row.Requests,
+					InputTokens:    row.InputTokens,
+					OutputTokens:   row.OutputTokens,
+					TotalTokens:    row.TotalTokens,
+					CostMicros:     row.CostMicros,
+					Errors:         row.Errors,
+					AvgLatencyMs:   avgLatencyPtr(row.Requests, row.AvgLatencyMs),
+					LastActivityAt: row.LastActivityAt,
+				},
+			})
+		}
+		return nil
+	})
+	return results, err
 }

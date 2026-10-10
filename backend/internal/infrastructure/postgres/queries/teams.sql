@@ -28,3 +28,11 @@ FROM team_members m
 JOIN users u ON u.id = m.user_id
 WHERE m.team_id = $1 AND m.organization_id = $2
 ORDER BY m.created_at;
+
+-- name: UpdateTeam :one
+UPDATE teams
+SET 
+  name = COALESCE(sqlc.narg('name'), name),
+  description = COALESCE(sqlc.narg('description'), description)
+WHERE organization_id = $1 AND id = $2
+RETURNING *;

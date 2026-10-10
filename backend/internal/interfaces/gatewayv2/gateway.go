@@ -54,6 +54,7 @@ type Gateway struct {
 	streamProxy      StreamProxy
 	telemetry        TelemetryEmitter
 	activity         *ActivityTracker
+	guardrails       *GuardrailEvaluator // Wrapper for the domain evaluator
 
 	// State
 	mu           sync.RWMutex
@@ -80,6 +81,7 @@ type GatewayDeps struct {
 	// Policy
 	PolicyRepo repositories.PolicyRepository
 	RuleRepo   repositories.PolicyRuleRepository
+	Guardrails repositories.GuardrailsRepository
 
 	// Usage accounting. The data plane derives usage and publishes it; the
 	// worker owns every ledger write.
@@ -134,7 +136,7 @@ func NewGateway(deps GatewayDeps) (*Gateway, error) {
 	// Budget guard
 	budgetGuard := deps.BudgetGuard
 	if budgetGuard == nil {
-		budgetGuard = NewBudgetGuard()
+		budgetGuard = NewBudgetGuardWithResolver(nil)
 	}
 
 	// Telemetry
@@ -147,6 +149,12 @@ func NewGateway(deps GatewayDeps) (*Gateway, error) {
 	authenticator := NewAuthenticator(deps.Hasher, deps.GatewayCredRepo, credCache)
 	tenantResolver := NewTenantResolver(deps.ProviderAccounts, deps.ProviderCredentials, deps.Secrets)
 	policyResolver := NewPolicyResolver(deps.PolicyRepo, deps.RuleRepo)
+	
+	// Update budget guard with policy resolver for snapshot sync
+	if bg, ok := budgetGuard.(*BudgetGuardImpl); ok {
+		bg.policyResolver = policyResolver
+	}
+	
 	requestInspector := NewRequestInspector()
 	providerRouter := NewProviderRouter("", "") // will use defaults
 	streamProxy := NewStreamProxy(nil, deps.Logger)
@@ -163,6 +171,7 @@ func NewGateway(deps GatewayDeps) (*Gateway, error) {
 		providerRouter:   providerRouter,
 		streamProxy:      streamProxy,
 		telemetry:        telemetry,
+		guardrails:       NewGuardrailEvaluator(deps.Guardrails),
 	}
 
 	return g, nil
@@ -266,6 +275,11 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 		return g.pipelineError("policy_resolver", err, http.StatusServiceUnavailable, "policy_unavailable")
 	}
 
+	// Sync budget configurations from policy snapshot
+	if bg, ok := g.budgetGuard.(*BudgetGuardImpl); ok {
+		bg.SyncFromSnapshot(policy)
+	}
+
 	// Stage 4: Inspect request for routing hints. The body must survive
 	// inspection, so it is buffered once under a bound and restored.
 	body, err := readAndRestoreBody(r)
@@ -278,6 +292,14 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 		g.logger.Warn("request inspection failed", "error", err)
 		// Continue with empty hints
 		hints = InspectorHints{}
+	}
+
+	// Stage 4.5: Guardrails
+	if g.guardrails != nil {
+		gResult := g.guardrails.CheckInput(ctx, body, cred.OrganizationID.String(), reqID, cred)
+		if gResult.Triggered && gResult.Action == domain.GuardrailActionBlock {
+			return g.pipelineError("guardrails", errors.New("blocked by guardrail: "+gResult.MatchedCategory), http.StatusForbidden, "guardrail_blocked")
+		}
 	}
 
 	// Stage 5: Authorize the requested model against policy. This runs before
@@ -374,9 +396,28 @@ func (g *Gateway) buildRateLimitKey(cred GatewayCredential, upstream ResolvedUps
 	return "cred:" + cred.ID.String()
 }
 
-// buildBudgetKey constructs the budget key.
+// buildBudgetKey constructs the budget key from credential and upstream.
+// The key format matches the budget rule key: scope:scope_id
 func (g *Gateway) buildBudgetKey(cred GatewayCredential, upstream ResolvedUpstream) string {
-	// Budget by organization
+	// Budget by credential scope - supports organization, team, project, gateway_credential, service_account
+	if cred.TeamID != nil {
+		return "team:" + cred.TeamID.String()
+	}
+	if cred.ProjectID != nil {
+		return "project:" + cred.ProjectID.String()
+	}
+	if cred.SubjectType == "service_account" {
+		return "service_account:" + cred.SubjectID.String()
+	}
+	// Gateway credential itself as scope
+	if len(cred.Scopes) > 0 {
+		for _, s := range cred.Scopes {
+			if s == "gateway" {
+				return "gateway_credential:" + cred.ID.String()
+			}
+		}
+	}
+	// Default to organization scope
 	return "org:" + cred.OrganizationID.String()
 }
 
@@ -533,6 +574,14 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 				usage.TimeToFirstTokenMs = &ttft
 			}
 		}
+		
+		// Record usage against local budget tracker
+		cost := (float64(usage.InputTokens)/1000*0.01) + (float64(usage.OutputTokens)/1000*0.03)
+		budgetKey := g.buildBudgetKey(result.Context.Credential, result.Context.Upstream)
+		if err := g.budgetGuard.RecordUsage(ctx, budgetKey, cost); err != nil {
+			g.logger.Warn("failed to record local budget usage", "error", err, "key", budgetKey)
+		}
+
 		g.telemetry.EmitUsage(ctx, usage)
 	} else {
 		// Error telemetry

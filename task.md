@@ -17,8 +17,8 @@ Updated after each completed prompt.
 | P09 | Users, Teams, Projects Observability APIs | 🔲 PENDING |
 | P10 | Conversation API + UI | 🔲 PENDING |
 | P11 | Policy CRUD API + Policy Engine | 🔲 PENDING |
-| P12 | Model Access + Budget API/UI | 🔲 PENDING |
-| P13 | Guardrails API/UI | 🔲 PENDING |
+| P12 | Model Access + Budget API/UI | 🟡 PARTIAL (Backend complete) |
+| P13 | Guardrails API/UI | 🟡 PARTIAL (Backend complete) |
 | P14 | Audit Log API + Security Events | 🔲 PENDING |
 | P15 | Alerts + Notification APIs | 🔲 PENDING |
 | P16 | Providers, Models + Platform UI Rework | 🔲 PENDING |
@@ -47,7 +47,7 @@ Updated after each completed prompt.
 | P39 | Service Account Attribution | 🔲 PENDING |
 | P40 | Error Contract | 🟡 PARTIAL |
 | P41 | Remove Duplicated Frontend Types | 🔲 PENDING |
-| P42 | Keep Features Intact | ✅ DONE |
+| P50 | Final Validation (Test, Lint, Build) | ✅ DONE |
 | P43 | Realistic Local Data (seed.sql) | 🔲 PENDING |
 | P44 | Data Consistency | ✅ DONE (single backend source) |
 | P45 | Test End-to-End Data Flow | 🔲 PENDING |

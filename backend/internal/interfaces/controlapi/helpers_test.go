@@ -8,12 +8,15 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 
+	"ai-governance-saas/backend/internal/application/budget"
 	"ai-governance-saas/backend/internal/application/identity"
+	"ai-governance-saas/backend/internal/application/policy"
 	"ai-governance-saas/backend/internal/application/provider"
 	"ai-governance-saas/backend/internal/domain"
 	"ai-governance-saas/backend/internal/platform/health"
@@ -155,12 +158,18 @@ type controlStubs struct {
 	passwords   *stubPasswords
 	subs        *stubSubscriptions
 
+	budgets  *stubBudgets
+	policy   *stubPolicy
+
 	providerAccounts    *stubProviderAccounts
 	providerCredentials *stubProviderCredentials
 	providerModels      *stubModels
 	providerHealth      *stubProviderHealth
 	providerSecrets     *stubSecrets
 	providerClient      *stubProvider
+
+	policyRepo  *stubPolicyRepo
+	policyRuleRepo *stubPolicyRuleRepo
 }
 
 func newControlStubs() *controlStubs {
@@ -185,6 +194,10 @@ func newControlStubs() *controlStubs {
 		refresh:   &stubRefreshTokens{},
 		passwords: &stubPasswords{},
 		subs:      &stubSubscriptions{},
+
+		budgets:        &stubBudgets{},
+		policyRepo:     &stubPolicyRepo{},
+		policyRuleRepo: &stubPolicyRuleRepo{},
 
 		providerAccounts:    &stubProviderAccounts{},
 		providerCredentials: &stubProviderCredentials{},
@@ -240,6 +253,17 @@ func (st *controlStubs) providerDeps() provider.ServiceDeps {
 	}
 }
 
+// budgetDeps wires the budget stubs into the budget service with a fixed clock.
+func (st *controlStubs) budgetDeps() budget.ServiceDeps {
+	return budget.ServiceDeps{
+		Budgets:     st.budgets,
+		Policies:    st.policyRepo,
+		Rules:       st.policyRuleRepo,
+		Audits:      st.audits,
+		Invalidator: stubInvalidator{},
+	}
+}
+
 // buildServer assembles the full handler stack (middleware, health registry)
 // around the given deps and serves it over real HTTP.
 func buildServer(t *testing.T, deps Deps) *httptest.Server {
@@ -247,11 +271,64 @@ func buildServer(t *testing.T, deps Deps) *httptest.Server {
 	return buildServerReg(t, deps, health.NewRegistry())
 }
 
+// newBudgetServer returns a server with the budget routes enabled.
+func newBudgetServer(t *testing.T, st *controlStubs) *httptest.Server {
+	t.Helper()
+
+	// Default mocks for budget-policy syncing to avoid panics
+	if st.policyRepo.list == nil {
+		st.policyRepo.list = func(context.Context, uuid.UUID) ([]domain.Policy, error) {
+			return []domain.Policy{{ID: testPolicyID, Name: "Budget Enforcement"}}, nil
+		}
+	}
+	if st.policyRuleRepo.list == nil {
+		st.policyRuleRepo.list = func(context.Context, uuid.UUID, uuid.UUID) ([]domain.PolicyRule, error) {
+			return nil, nil // No rules found
+		}
+	}
+	if st.policyRuleRepo.create == nil {
+		st.policyRuleRepo.create = func(_ context.Context, _ uuid.UUID, in domain.NewPolicyRule) (domain.PolicyRule, error) {
+			return domain.PolicyRule{ID: testRuleID}, nil
+		}
+	}
+	if st.policyRuleRepo.update == nil {
+		st.policyRuleRepo.update = func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ uuid.UUID, in domain.UpdatePolicyRule) (domain.PolicyRule, error) {
+			return domain.PolicyRule{ID: testRuleID}, nil
+		}
+	}
+	if st.policyRuleRepo.delete == nil {
+		st.policyRuleRepo.delete = func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error {
+			return nil
+		}
+	}
+
+	svc := identity.NewService(st.deps())
+	bSvc := budget.NewService(st.budgetDeps())
+	return buildServer(t, Deps{
+		Identity: svc,
+		Budget:   bSvc,
+		DevLoginEnabled: true,
+	})
+}
+
+// newPolicyServer returns a server with the model-access (policy) routes enabled.
+func newPolicyServer(t *testing.T, st *controlStubs) *httptest.Server {
+	t.Helper()
+	svc := identity.NewService(st.deps())
+	pSvc := policy.NewService(st.policyRepo, st.policyRuleRepo, st.audits, stubInvalidator{}, discardLog)
+	return buildServer(t, Deps{
+		Identity: svc,
+		Policy:   pSvc,
+		DevLoginEnabled: true,
+	})
+}
+
 // buildServerReg is buildServer with an externally supplied health registry,
 // for tests that must register failing checks.
 func buildServerReg(t *testing.T, deps Deps, reg *health.Registry) *httptest.Server {
 	t.Helper()
-	h := NewHandler(discardLog, httpx.NewMiddleware(discardLog, httpx.DefaultOptions()), reg, deps)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	h := NewHandler(logger, httpx.NewMiddleware(logger, httpx.DefaultOptions()), reg, deps)
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 	return srv
@@ -311,6 +388,8 @@ func newAuthServer(t *testing.T, csrfEnabled, secure bool) (*httptest.Server, *c
 		CSRFEnabled:         csrfEnabled,
 	}), st
 }
+
+
 
 // tokenClaimsFor returns fixture claims for the fixture user acting under the
 // given role; shared by the bearer and session-cookie auth helpers.

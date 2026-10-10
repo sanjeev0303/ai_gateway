@@ -14,7 +14,7 @@ import (
 const createOrganization = `-- name: CreateOrganization :one
 INSERT INTO organizations (name, slug)
 VALUES ($1, $2)
-RETURNING id, name, slug, status, created_at, updated_at
+RETURNING id, name, slug, status, created_at, updated_at, privacy_default, retention_conversations_days, retention_usage_days, retention_audits_days, retention_billing_days
 `
 
 type CreateOrganizationParams struct {
@@ -32,6 +32,11 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PrivacyDefault,
+		&i.RetentionConversationsDays,
+		&i.RetentionUsageDays,
+		&i.RetentionAuditsDays,
+		&i.RetentionBillingDays,
 	)
 	return i, err
 }
@@ -39,7 +44,7 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 const createOrganizationWithID = `-- name: CreateOrganizationWithID :one
 INSERT INTO organizations (id, name, slug)
 VALUES ($1, $2, $3)
-RETURNING id, name, slug, status, created_at, updated_at
+RETURNING id, name, slug, status, created_at, updated_at, privacy_default, retention_conversations_days, retention_usage_days, retention_audits_days, retention_billing_days
 `
 
 type CreateOrganizationWithIDParams struct {
@@ -58,12 +63,17 @@ func (q *Queries) CreateOrganizationWithID(ctx context.Context, arg CreateOrgani
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PrivacyDefault,
+		&i.RetentionConversationsDays,
+		&i.RetentionUsageDays,
+		&i.RetentionAuditsDays,
+		&i.RetentionBillingDays,
 	)
 	return i, err
 }
 
 const getOrganizationByID = `-- name: GetOrganizationByID :one
-SELECT id, name, slug, status, created_at, updated_at FROM organizations
+SELECT id, name, slug, status, created_at, updated_at, privacy_default, retention_conversations_days, retention_usage_days, retention_audits_days, retention_billing_days FROM organizations
 WHERE id = $1
 `
 
@@ -77,12 +87,17 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id uuid.UUID) (Organi
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PrivacyDefault,
+		&i.RetentionConversationsDays,
+		&i.RetentionUsageDays,
+		&i.RetentionAuditsDays,
+		&i.RetentionBillingDays,
 	)
 	return i, err
 }
 
 const getOrganizationBySlug = `-- name: GetOrganizationBySlug :one
-SELECT id, name, slug, status, created_at, updated_at FROM organizations
+SELECT id, name, slug, status, created_at, updated_at, privacy_default, retention_conversations_days, retention_usage_days, retention_audits_days, retention_billing_days FROM organizations
 WHERE slug = $1
 `
 
@@ -96,6 +111,11 @@ func (q *Queries) GetOrganizationBySlug(ctx context.Context, slug string) (Organ
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PrivacyDefault,
+		&i.RetentionConversationsDays,
+		&i.RetentionUsageDays,
+		&i.RetentionAuditsDays,
+		&i.RetentionBillingDays,
 	)
 	return i, err
 }
@@ -130,19 +150,38 @@ UPDATE organizations
 SET
   name = COALESCE($2::text, name),
   slug = COALESCE($3::text, slug),
+  privacy_default = COALESCE($4::text, privacy_default),
+  retention_conversations_days = COALESCE($5::int, retention_conversations_days),
+  retention_usage_days = COALESCE($6::int, retention_usage_days),
+  retention_audits_days = COALESCE($7::int, retention_audits_days),
+  retention_billing_days = COALESCE($8::int, retention_billing_days),
   updated_at = now()
 WHERE id = $1
-RETURNING id, name, slug, status, created_at, updated_at
+RETURNING id, name, slug, status, created_at, updated_at, privacy_default, retention_conversations_days, retention_usage_days, retention_audits_days, retention_billing_days
 `
 
 type UpdateOrganizationParams struct {
-	ID   uuid.UUID `json:"id"`
-	Name *string   `json:"name"`
-	Slug *string   `json:"slug"`
+	ID                         uuid.UUID `json:"id"`
+	Name                       *string   `json:"name"`
+	Slug                       *string   `json:"slug"`
+	PrivacyDefault             *string   `json:"privacy_default"`
+	RetentionConversationsDays *int32    `json:"retention_conversations_days"`
+	RetentionUsageDays         *int32    `json:"retention_usage_days"`
+	RetentionAuditsDays        *int32    `json:"retention_audits_days"`
+	RetentionBillingDays       *int32    `json:"retention_billing_days"`
 }
 
 func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error) {
-	row := q.db.QueryRow(ctx, updateOrganization, arg.ID, arg.Name, arg.Slug)
+	row := q.db.QueryRow(ctx, updateOrganization,
+		arg.ID,
+		arg.Name,
+		arg.Slug,
+		arg.PrivacyDefault,
+		arg.RetentionConversationsDays,
+		arg.RetentionUsageDays,
+		arg.RetentionAuditsDays,
+		arg.RetentionBillingDays,
+	)
 	var i Organization
 	err := row.Scan(
 		&i.ID,
@@ -151,6 +190,11 @@ func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganization
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PrivacyDefault,
+		&i.RetentionConversationsDays,
+		&i.RetentionUsageDays,
+		&i.RetentionAuditsDays,
+		&i.RetentionBillingDays,
 	)
 	return i, err
 }

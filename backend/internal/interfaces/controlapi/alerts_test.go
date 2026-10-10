@@ -68,7 +68,7 @@ func newAlertServer(t *testing.T, st *controlStubs, repo *fakeAlertRepo) *httpte
 	t.Helper()
 	return buildServer(t, Deps{
 		Identity:        identity.NewService(st.deps()),
-		Alerts:          alert.NewService(alert.ServiceDeps{Alerts: repo}),
+		Alerts:          alert.NewService(alert.ServiceDeps{Alerts: repo, Audits: st.audits}),
 		DevLoginEnabled: true,
 	})
 }

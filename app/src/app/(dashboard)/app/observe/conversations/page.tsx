@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import {
   DataTable,
+  ObserveFilters,
   PageShell,
   StatCard,
   type Column,
@@ -34,6 +35,7 @@ interface ConversationRow {
   lastActivity: string;
   privacy: string;
   privacyTone: StatusTone;
+  detailUrl: string;
 }
 
 /**
@@ -59,6 +61,7 @@ const conversationColumns: readonly Column<ConversationRow>[] = [
     primary: "title",
     secondary: "routing",
     sort: "title",
+    href: "detailUrl",
   },
   { key: "user", header: "User", primary: "user", sort: "user" },
   {
@@ -99,9 +102,24 @@ const conversationColumns: readonly Column<ConversationRow>[] = [
   },
 ];
 
-export default async function ConversationsPage() {
+export default async function ConversationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const filters = {
+    project_id: typeof params.project_id === "string" ? params.project_id : undefined,
+    user_id: typeof params.user_id === "string" ? params.user_id : undefined,
+    team_id: typeof params.team_id === "string" ? params.team_id : undefined,
+    provider: typeof params.provider === "string" ? params.provider : undefined,
+    model: typeof params.model === "string" ? params.model : undefined,
+    limit: typeof params.limit === "string" ? parseInt(params.limit, 10) : 50,
+    offset: typeof params.offset === "string" ? parseInt(params.offset, 10) : 0,
+  };
+
   const { conversations } = await getApiClient();
-  const { items } = await conversations.list();
+  const { items, has_more } = await conversations.list(filters);
 
   const totalMessages = items.reduce((sum, c) => sum + c.message_count, 0);
   const totalRequests = items.reduce((sum, c) => sum + c.request_count, 0);
@@ -116,8 +134,28 @@ export default async function ConversationsPage() {
     requests: c.request_count,
     tokens: c.total_tokens,
     lastActivity: formatRelative(c.last_activity_at ?? c.started_at),
+    detailUrl: `/app/observe/conversations/${c.id}`,
     ...privacyBadge(c.privacy_state),
   }));
+
+  const limit = filters.limit ?? 50;
+  const offset = filters.offset ?? 0;
+  const currentPage = Math.floor(offset / limit);
+
+  const buildPageUrl = (newOffset: number) => {
+    const p = new URLSearchParams();
+    if (filters.project_id) p.set("project_id", filters.project_id);
+    if (filters.user_id) p.set("user_id", filters.user_id);
+    if (filters.team_id) p.set("team_id", filters.team_id);
+    if (filters.provider) p.set("provider", filters.provider);
+    if (filters.model) p.set("model", filters.model);
+    p.set("limit", limit.toString());
+    p.set("offset", newOffset.toString());
+    return `/app/observe/conversations?${p.toString()}`;
+  };
+
+  const nextHref = buildPageUrl(offset + limit);
+  const prevHref = buildPageUrl(Math.max(0, offset - limit));
 
   return (
     <div className="p-4 sm:p-6">
@@ -125,6 +163,7 @@ export default async function ConversationsPage() {
         title="Conversations"
         description="The sessions behind the token spend — how many turns each one holds, and how much of its content the privacy mode lets you read."
       >
+        <ObserveFilters />
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Conversations"
@@ -163,8 +202,13 @@ export default async function ConversationsPage() {
               columns={conversationColumns}
               rows={rows}
               rowKey="id"
-              pageSize={10}
+              pageSize={limit}
               emptyMessage="No conversations recorded."
+              serverPaginated
+              hasMore={has_more}
+              currentPage={currentPage}
+              nextHref={nextHref}
+              prevHref={prevHref}
             />
           </CardContent>
         </Card>

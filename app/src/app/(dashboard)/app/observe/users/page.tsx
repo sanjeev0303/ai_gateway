@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { BarChart, DonutChart } from "@/components/charts";
 import {
   DataTable,
+  ObserveFilters,
   PageShell,
   StatCard,
   type Column,
@@ -35,10 +36,11 @@ interface UserRow {
   requests: number;
   tokens: number;
   spend: number;
+  detailUrl: string;
 }
 
 const userColumns: readonly Column<UserRow>[] = [
-  { key: "name", header: "User", primary: "name", secondary: "email", sort: "name" },
+  { key: "name", header: "User", primary: "name", secondary: "email", href: "detailUrl", sort: "name" },
   { key: "role", header: "Role", primary: "role", tone: "roleTone", sort: "role" },
   { key: "status", header: "Status", primary: "status", tone: "statusTone", sort: "status" },
   { key: "requests", header: "Requests 30d", primary: "requests", format: "number", align: "right", sort: "requests" },
@@ -46,9 +48,23 @@ const userColumns: readonly Column<UserRow>[] = [
   { key: "spend", header: "Spend 30d", primary: "spend", format: "usd", align: "right", sort: "spend" },
 ];
 
-export default async function UsersPage() {
+export default async function UsersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const filters = {
+    project_id: typeof params.project_id === "string" ? params.project_id : undefined,
+    user_id: typeof params.user_id === "string" ? params.user_id : undefined,
+    team_id: typeof params.team_id === "string" ? params.team_id : undefined,
+    provider: typeof params.provider === "string" ? params.provider : undefined,
+    model: typeof params.model === "string" ? params.model : undefined,
+    status: typeof params.status === "string" ? params.status : undefined,
+  };
+
   const { members, usage } = await getApiClient();
-  const [memberList, spendByUser] = await Promise.all([members.list(), usage.byUser()]);
+  const [memberList, spendByUser] = await Promise.all([members.list(), usage.byUser(filters)]);
 
   const totals = new Map(
     spendByUser.items.map((row) => [row.UserID, { requests: row.Requests, tokens: row.TotalTokens, spend: microsToUsd(row.CostMicros) }]),
@@ -60,6 +76,7 @@ export default async function UsersPage() {
     const status = member.user.status;
     return {
       id: member.user.id,
+      detailUrl: `/app/observe/users/${member.user.id}`,
       name: member.user.display_name || member.user.email,
       email: member.user.email,
       role,
@@ -92,6 +109,7 @@ export default async function UsersPage() {
         title="Users"
         description="Everyone with access to the gateway, and what they are spending."
       >
+        <ObserveFilters />
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Active users"
