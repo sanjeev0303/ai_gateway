@@ -3,6 +3,7 @@
 import * as React from "react";
 import { MoreHorizontal, Plus, Settings, RotateCcw, Trash2, RefreshCw, ExternalLink } from "lucide-react";
 import { DataTable, type Column } from "@/components/dashboard";
+import { ProviderCredentialActionsCell } from "./provider-credential-actions-cell";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -34,7 +35,7 @@ import { formatDate, formatNumber, formatUsd, microsToUsd } from "@/lib/format";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Separator } from "@/components/ui/separator";
 
-interface CredentialRow {
+export interface CredentialRow {
   id: string;
   name: string;
   kind: string;
@@ -303,6 +304,10 @@ export function ProviderDetailClient({
       statusTone: HEALTH_TONE[h.status] || "neutral",
     }));
 
+  function ProviderCredentialActionsCellWrapper({ row }: { row: CredentialRow }) {
+    return <ProviderCredentialActionsCell row={row} isUpdating={isUpdating} onRotate={setRotateCredId} onRevoke={setRevokeCredId} />;
+  }
+
   return (
     <div className="space-y-4">
       {/* Header Actions */}
@@ -346,28 +351,7 @@ export function ProviderDetailClient({
                   rowKey="id"
                   pageSize={10}
                   emptyMessage="No credentials."
-                  actions={(row) => (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="size-8 p-0" disabled={isUpdating}>
-                          <MoreHorizontal className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => { setRotateCredId(row.id); setRotateCredSecret(""); }}>
-                          <RotateCcw className="mr-2 size-4" /> Rotate
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive focus:bg-destructive/10 focus:text-destructive"
-                          onClick={() => setRevokeCredId(row.id)}
-                        >
-                          <Trash2 className="mr-2 size-4" /> Revoke
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
+                  ActionsComponent={ProviderCredentialActionsCellWrapper}
                 />
               )}
             </CardContent>

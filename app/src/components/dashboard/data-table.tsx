@@ -110,8 +110,8 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   /** Slot above the table for filters or a result count. */
   toolbar?: React.ReactNode;
-  /** Optional render function for a trailing actions cell. */
-  actions?: (row: T) => React.ReactNode;
+  /** Optional client component for rendering actions cell. Receives row as prop. */
+  ActionsComponent?: React.ComponentType<{ row: T } & Record<string, unknown>>;
   loading?: boolean;
   /** If true, pagination is managed by the caller. */
   serverPaginated?: boolean;
@@ -138,7 +138,7 @@ export function DataTable<T>({
   pageSize = 10,
   emptyMessage = "No records found.",
   toolbar,
-  actions,
+  ActionsComponent,
   serverPaginated = false,
   hasMore = false,
   currentPage: serverPage = 0,
@@ -234,7 +234,7 @@ export function DataTable<T>({
                   </TableHead>
                 );
               })}
-              {actions && (
+              {ActionsComponent && (
                 <TableHead className="w-12 text-right">
                   <span className="sr-only">Actions</span>
                 </TableHead>
@@ -331,9 +331,9 @@ export function DataTable<T>({
                       </TableCell>
                     );
                   })}
-                  {actions && (
+                  {ActionsComponent && (
                     <TableCell className="text-right">
-                      {actions(row)}
+                      <ActionsComponent row={row} />
                     </TableCell>
                   )}
                 </TableRow>

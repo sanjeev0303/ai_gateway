@@ -536,7 +536,7 @@ export default function ModelAccessPage() {
               rowKey="id"
               loading={loading}
               emptyMessage="No model access rules configured."
-              actions={(row) => (
+              ActionsComponent={(row) => (
                 <Button variant="outline" size="sm" onClick={() => handleRowAction(entries.find(e => e.provider === row.provider && e.model === row.model)!)}>
                   {row.allowed ? "Block" : "Allow"}
                 </Button>

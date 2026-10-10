@@ -16,6 +16,7 @@ func registerUsageRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("GET /v1/usage/timeseries", a.requireAuth(a.getUsageTimeSeries))
 	mux.Handle("GET /v1/usage/by-project", a.requireAuth(a.getUsageByProject))
 	mux.Handle("GET /v1/usage/by-model", a.requireAuth(a.getUsageByModel))
+	mux.Handle("GET /v1/usage/by-provider", a.requireAuth(a.getUsageByProvider))
 	mux.Handle("GET /v1/usage/by-user", a.requireAuth(a.getUsageByUser))
 	mux.Handle("GET /v1/usage/by-service-account", a.requireAuth(a.getUsageByServiceAccount))
 	mux.Handle("GET /v1/usage/by-team", a.requireAuth(a.getUsageByTeam))

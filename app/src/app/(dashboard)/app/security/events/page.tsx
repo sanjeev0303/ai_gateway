@@ -21,13 +21,14 @@ import {
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
 import { SecurityEventActions } from "./client";
+import { EventActionsCell } from "./actions-cell";
 
 export const metadata: Metadata = {
   title: "Events · Sentinel",
   description: "Platform-originated events: provider health transitions and failed usage rollups.",
 };
 
-interface EventRow {
+export interface EventRow {
   id: string;
   title: string;
   category: string;
@@ -164,13 +165,13 @@ export default async function EventsPage({
                 description="Nothing has failed since events began being captured, so there is nothing to list. Provider incidents appear here when a provider's reachability changes, and pipeline failures appear when a usage rollup cannot be completed. Gateway request activity is a different thing and is live under Observe → Live activity; current provider reachability is under Govern → Provider health."
               />
             ) : (
-              <DataTable
+<DataTable
                 columns={columns}
                 rows={rows}
                 rowKey="id"
                 pageSize={limit}
-                emptyMessage="No incidents recorded"
-                actions={(row) => <SecurityEventActions event={(row as any).rawEvent} />}
+                emptyMessage="No security events yet"
+                ActionsComponent={EventActionsCell}
                 serverPaginated
                 hasMore={has_more}
                 currentPage={currentPage}

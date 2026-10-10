@@ -3,6 +3,7 @@
 import * as React from "react";
 import { MoreHorizontal, Plus, Settings } from "lucide-react";
 import { DataTable, type Column } from "@/components/dashboard";
+import { TeamMemberActionsCell } from "./team-member-actions-cell";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -30,7 +31,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { formatDate } from "@/lib/format";
 
-interface MemberRow {
+export interface MemberRow {
   id: string;
   name: string;
   email: string;
@@ -134,6 +135,10 @@ export function TeamDetailClient({
     }
   };
 
+  function TeamMemberActionsCellWrapper({ row }: { row: MemberRow }) {
+    return <TeamMemberActionsCell row={row} isUpdating={isUpdating} onRemove={setRemoveId} />;
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end gap-2">
@@ -155,24 +160,7 @@ export function TeamDetailClient({
             rows={rows}
             rowKey="id"
             emptyMessage="No members in this team."
-            actions={(row) => (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="size-8 p-0" disabled={isUpdating}>
-                    <MoreHorizontal className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                  <DropdownMenuItem
-                    className="text-destructive focus:bg-destructive/10 focus:text-destructive"
-                    onClick={() => setRemoveId(row.id)}
-                  >
-                    Remove from team
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            ActionsComponent={TeamMemberActionsCellWrapper}
           />
         </CardContent>
       </Card>

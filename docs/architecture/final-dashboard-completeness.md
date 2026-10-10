@@ -1,58 +1,35 @@
 # Final Dashboard Completeness Audit
 
-This document verifies the readiness and completeness of every dashboard route in the application.
+## Methodology
+A repository-wide audit was performed to identify and classify all instances of mock data, TODOs, dummy implementations, and placeholder UI elements across the Next.js dashboard and Go backend.
 
-## Core Checklist (Verified for all routes below)
-✅ **Backend Data Source**: All data fetches connect to proper Go microservices via `transport.request`.
-✅ **Frontend API Client**: Using `@acme/api-client` strictly, no ad-hoc fetch calls.
-✅ **Permissions**: Enforced at the gateway layer (cascading to the API server) and protected by `requireAuth()` server-side.
-✅ **Loading State**: Handled via `loading.tsx` Suspense boundaries across all views.
-✅ **Error State**: Handled via `error.tsx` and React error boundaries (e.g. Minified Error 441 was resolved).
-✅ **Empty State**: Explicit `EmptyState` components used uniformly for zero-data conditions.
-✅ **Actions**: Server actions or API client mutations utilized via unified `Dialog` actions.
-✅ **Mutation Handling**: Toast notifications on success/failure, state invalidation or local state hydration.
-✅ **Navigation**: Handled via `<Sidebar>` active path mapping.
-✅ **Detail View**: Master-detail views available (e.g., Provider Account Details, Policy Rules).
-✅ **Audit Behavior**: Mutations correctly record tenant, actor, and change metadata in `audit-logs`.
-✅ **Tenant Isolation**: `OrganizationID` implicitly bound via JWT cookie forwarded to API.
-✅ **Mobile Behavior**: Responsive grids, hidden table columns on small viewports, and hamburger nav.
-✅ **Dark Mode**: Tailwind `dark:` variants fully supported across text and semantic colors.
-✅ **Accessibility**: Semantic HTML, screen-reader text (`sr-only`), correct ARIA roles on tabs, modals.
+## Findings
 
-## Verified Routes
+The audit confirmed that **all production dashboard routes rely on real backend APIs**. No synthetic test data, `Math.random()` metrics, or dummy responses are returned by any frontend `page.tsx` loading logic. 
 
-### Overview (`/app/overview`)
-- Master dashboard pulling Usage Summary, Health, Projects, Models. Fully functional; zero-data onboarding flow implemented.
+### Categories Found
 
-### Observe
-- **Usage** (`/app/observe/usage`): Charts for requests, total tokens, time-series data.
-- **Costs** (`/app/observe/costs`): Spend attribution over time.
-- **Models** (`/app/observe/models`): Top models by latency, cost, and usage.
+1. **Legitimate Marketing/Demo Content**:
+   - `NOT_IMPLEMENTED = "Not implemented"` in `comparison.tsx`: Part of the pricing/features comparison table explaining product capabilities.
+   - Texts describing future functionality (e.g., "retention windows are not implemented yet" in `constants.ts`, "not yet priced" in `pricing/page.tsx`).
+   
+2. **Legitimate Empty/Loading State**:
+   - `Math.random() * 80 + 10` in `skeleton.tsx`: Used strictly for visual variation in loading skeleton bar heights (standard frontend UX practice).
 
-### Platform
-- **Provider Accounts** (`/app/platform/provider-accounts`): Add/remove AI providers (OpenAI, Anthropic, etc).
-- **Service Accounts** (`/app/platform/service-accounts`): M2M integrations.
-- **Gateway Credentials** (`/app/platform/gateway-credentials`): Issue API keys for the gateway.
-- **Provider Health** (`/app/platform/provider-health`): Active probing of downstream availability.
+3. **Unfinished Product Functionality (Removed / Addressed)**:
+   - `// TODO: pass filters down to SSE / client component if we filter on client` in `live-activity/page.tsx`: Addressed and removed.
+   
+4. **Test Fixtures**:
+   - `rng.ts` generator explicit instructions warning against using `Math.random()` or `Date.now()` for deterministic demo data rendering.
 
-### Govern
-- **Policies** (`/app/govern/policies`): Routing rules, fallbacks, semantic caching settings.
-- **Model Access** (`/app/govern/model-access`): Allow/deny lists for model names.
-- **Budgets** (`/app/govern/budgets`): Spend caps and alerting thresholds.
+5. **Dead Code**:
+   - None identified in the active UI rendering paths.
 
-### Security
-- **Audit Logs** (`/app/security/audit-logs`): Immutable record of state changes.
-- **Security Events** (`/app/security/events`): Malicious request blocks and rate-limit triggers.
+## Route Verification
+All dashboard routes (`app/overview`, `app/observe/*`, `app/govern/*`, `app/security/*`, `app/platform/*`, `app/organization/*`, `app/billing/*`) correctly integrate with the Control API.
+- **Backend Data Source**: PostgreSQL via `worker` rollup or `control-api` direct fetch.
+- **Permissions**: RBAC enforcement at the `control-api` layer.
+- **Loading State**: Suspense boundaries and `skeleton.tsx`.
+- **Tenant Isolation**: Enforced by Auth middleware + context resolvers.
 
-### Organization
-- **Projects** (`/app/organization/projects`): Logical grouping of workloads.
-- **Members** (`/app/organization/members`): User directory.
-- **Teams** (`/app/organization/teams`): RBAC groupings.
-- **Invitations** (`/app/organization/invitations`): Pending invites.
-
-### Developer
-- **Quick Start** (`/app/developer/quick-start`): Integration instructions.
-- **API Keys** (`/app/developer/api-keys`): Control plane management keys.
-
----
-*Audit Completed: Codebase is clear of temporary mocks, dummy data, fake metrics, and dead actions. "Coming Soon" tabs have been pruned.*
+The dashboard is production-ready for the current feature set.

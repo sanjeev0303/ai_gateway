@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { MoreHorizontal, Plus, RotateCcw, Trash2, Copy, Check } from "lucide-react";
+import { CredentialActionsCell } from "./actions-cell";
 import { DataTable, type Column } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
 import {
@@ -171,6 +172,10 @@ export function ProviderCredentialsClient({ initialRows }: { initialRows: Creden
     }
   };
 
+  function ProviderCredentialActionsCell({ row }: { row: CredentialRow }) {
+    return <CredentialActionsCell row={row} onRotate={setRotateId} onRevoke={setRevokeId} isUpdating={isUpdating} />;
+  }
+
   return (
     <>
       <DataTable
@@ -186,33 +191,7 @@ export function ProviderCredentialsClient({ initialRows }: { initialRows: Creden
             </Button>
           </div>
         }
-        actions={(row) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="size-8 p-0" disabled={isUpdating}>
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              {row.status === "active" && (
-                <>
-                  <DropdownMenuItem onClick={() => { setRotateId(row.id); setRotateSecret(""); }}>
-                    <RotateCcw className="mr-2 size-4" /> Rotate
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                </>
-              )}
-              <DropdownMenuItem
-                className="text-destructive focus:bg-destructive/10 focus:text-destructive"
-                onClick={() => setRevokeId(row.id)}
-              >
-                <Trash2 className="mr-2 size-4" /> Revoke
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        ActionsComponent={ProviderCredentialActionsCell}
       />
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>

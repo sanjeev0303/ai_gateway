@@ -66,23 +66,36 @@ export async function requireSession(): Promise<Session> {
 
 /**
  * The caller's organization, resolved from their session. Callers are already
- * authenticated, so a failure here is a real error and is allowed to propagate
- * rather than degrading to null the way the session probe does.
- *
- * The API is snake_case; `SessionOrganization` is camelCase, so the mapping is
- * explicit here rather than an unchecked cast at each call site.
+ * authenticated, so a failure here is a real error. We catch and log it with
+ * context so the actual error appears in server logs (not masked by React's
+ * production error digest), then re-throw to let the error boundary handle it.
  */
 export async function getCurrentOrganization(): Promise<SessionOrganization> {
-  const { organization } = await getApiClient();
-  const org = await organization.get();
-  return {
-    id: org.id,
-    name: org.name,
-    slug: org.slug,
-    status: org.status,
-    createdAt: org.created_at,
-    updatedAt: org.updated_at,
-  };
+  try {
+    const { organization } = await getApiClient();
+    const org = await organization.get();
+    return {
+      id: org.id,
+      name: org.name,
+      slug: org.slug,
+      status: org.status,
+      createdAt: org.created_at,
+      updatedAt: org.updated_at,
+    };
+  } catch (error) {
+    // Ignore Next.js internal redirect errors - they're not real failures.
+    if (error instanceof Error && error.message === "NEXT_REDIRECT") {
+      throw error;
+    }
+    // Log the actual error with context for server-side debugging.
+    // In production, React masks the error message with a digest (#441).
+    console.error("[getCurrentOrganization] Failed to fetch organization:", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString(),
+    });
+    throw error;
+  }
 }
 
 /**

@@ -16,13 +16,14 @@ import {
 import { getApiClient } from "@/lib/session";
 import { AuditLogActions } from "./client";
 import { AuditFilters } from "./filters";
+import { AuditActionsCell } from "./actions-cell";
 
 export const metadata: Metadata = {
   title: "Audit logs · Sentinel",
   description: "Append-only record of every actor, action, and resource touched in the console.",
 };
 
-interface AuditRow {
+export interface AuditRow {
   id: string;
   action: string;
   actor: string;
@@ -155,7 +156,7 @@ export default async function AuditLogsPage({
               rowKey="id"
               pageSize={limit}
               emptyMessage="No audit records yet"
-              actions={(row) => <AuditLogActions record={(row as any).rawAlert} />}
+              ActionsComponent={AuditActionsCell}
               serverPaginated
               hasMore={has_more}
               currentPage={currentPage}

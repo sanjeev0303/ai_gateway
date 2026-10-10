@@ -113,7 +113,9 @@ function resolveAttempts(method: HttpMethod, options: RequestOptions, defaults: 
 function defaultRequestId(): string {
   const cryptoRef: Crypto | undefined = globalThis.crypto;
   if (cryptoRef && typeof cryptoRef.randomUUID === "function") return cryptoRef.randomUUID();
-  return Math.random().toString(36).slice(2);
+  const array = new Uint8Array(16);
+  cryptoRef?.getRandomValues?.(array);
+  return Array.from(array, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 function defaultSleep(ms: number): Promise<void> {

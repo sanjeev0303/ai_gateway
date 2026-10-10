@@ -35,7 +35,7 @@ COPY --from=deps /app/app/node_modules ./app/node_modules
 ARG CONTROL_API_URL
 ENV CONTROL_API_URL=${CONTROL_API_URL}
 
-RUN npm run build -w app
+RUN --mount=type=cache,target=/app/app/.next/cache npm run build -w app
 
 # ── runner ────────────────────────────────────────────────────────────────────
 FROM node:22-alpine AS runner

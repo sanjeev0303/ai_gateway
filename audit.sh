@@ -1,0 +1,1 @@
+grep -rE -n "(TODO|FIXME|mock|dummy|fake|sample operational data|demo traffic|Math\.random|hardcoded metrics|Coming soon|Needs API|No API available|not implemented|not yet|dead buttons|dead links|disabled actions|placeholder actions)" app/ backend/ || true

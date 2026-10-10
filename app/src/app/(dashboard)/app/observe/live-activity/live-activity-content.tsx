@@ -17,6 +17,8 @@ import {
 import { formatNumber, formatRelative } from "@/lib/format";
 import { toneFor } from "@/lib/org-tones";
 import { useLiveActivity, type LiveActivityEvent } from "@/hooks/use-live-activity";
+import { LiveActivityDrawer, type LiveRow } from "./live-activity-drawer";
+import { LiveActivityActionsCell } from "./live-activity-actions-cell";
 import type { StatusTone } from "@/types";
 
 /** Mirrors domain.ActivityState: active, idle, completed, failed. */
@@ -32,8 +34,6 @@ const STATUS_TONE: Record<string, StatusTone> = {
   error: "danger",
   failed: "danger",
 };
-
-import { LiveActivityDrawer, type LiveRow } from "./live-activity-drawer";
 
 const liveColumns: readonly Column<LiveRow>[] = [
   { key: "when", header: "When", primary: "when", sort: "whenTs" },
@@ -169,7 +169,7 @@ export function LiveActivityContent({
             rowKey="id"
             pageSize={12}
             emptyMessage="No requests recorded yet."
-            actions={(row) => <LiveActivityDrawer row={row} />}
+            ActionsComponent={LiveActivityActionsCell}
           />
         </CardContent>
       </Card>

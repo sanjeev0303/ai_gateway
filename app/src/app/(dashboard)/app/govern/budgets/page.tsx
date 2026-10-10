@@ -35,9 +35,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { fetchBudgetsAction, createBudgetAction, updateBudgetAction, deleteBudgetAction } from "./actions";
+import { BudgetActionsCell } from "./actions-cell";
 import type { Budget, CreateBudgetRequest, UpdateBudgetRequest, BudgetList } from "@ai-governance/api-client";
 
-interface BudgetRow {
+export interface BudgetRow {
   id: string;
   name: string;
   scope: string;
@@ -334,6 +335,10 @@ export default function BudgetsPage() {
     createdAt: budget.created_at ?? "",
   }));
 
+  function BudgetActionsCellWrapper({ row }: { row: BudgetRow }) {
+    return <BudgetActionsCell row={row} budgets={budgets} onEdit={handleEdit} onDelete={handleDelete} />;
+  }
+
   return (
     <div className="p-4 sm:p-6">
       <PageShell
@@ -568,12 +573,7 @@ export default function BudgetsPage() {
               rowKey="id"
               loading={loading}
               emptyMessage="No budgets configured. Create one to get started."
-              actions={(row) => (
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleEdit(budgets.find(b => b.id === row.id)!)}>Edit</Button>
-                  <Button variant="destructive" size="sm" onClick={() => handleDelete(budgets.find(b => b.id === row.id)!)}>Delete</Button>
-                </div>
-              )}
+              ActionsComponent={BudgetActionsCellWrapper}
             />
 
             {filteredBudgets.length === 0 && budgets.length > 0 && (

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { MoreHorizontal, Plus, Settings, Archive, RotateCcw } from "lucide-react";
 import { DataTable, type Column } from "@/components/dashboard";
+import { ProjectMemberActionsCell } from "./project-member-actions-cell";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -31,7 +32,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { formatDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 
-interface MemberRow {
+export interface MemberRow {
   id: string;
   name: string;
   email: string;
@@ -149,6 +150,10 @@ export function ProjectDetailClient({
     }
   };
 
+  function ProjectMemberActionsCellWrapper({ row }: { row: MemberRow }) {
+    return <ProjectMemberActionsCell row={row} isUpdating={isUpdating} onRemove={setRemoveId} />;
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap justify-between gap-2 items-center">
@@ -186,24 +191,7 @@ export function ProjectDetailClient({
             rows={rows}
             rowKey="id"
             emptyMessage="No members in this project."
-            actions={(row) => (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="size-8 p-0" disabled={isUpdating}>
-                    <MoreHorizontal className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                  <DropdownMenuItem
-                    className="text-destructive focus:bg-destructive/10 focus:text-destructive"
-                    onClick={() => setRemoveId(row.id)}
-                  >
-                    Remove from project
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            ActionsComponent={ProjectMemberActionsCellWrapper}
           />
         </CardContent>
       </Card>

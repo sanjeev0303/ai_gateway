@@ -3,6 +3,7 @@
 import * as React from "react";
 import { MoreHorizontal } from "lucide-react";
 import { DataTable, type Column } from "@/components/dashboard";
+import { MemberActionsCell } from "./member-actions-cell";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -84,6 +85,10 @@ export function MembersClient({ initialRows }: { initialRows: MemberRow[] }) {
     }
   };
 
+  function MemberActionsCellWrapper({ row }: { row: MemberRow }) {
+    return <MemberActionsCell row={row} isAdmin={isAdmin} currentUserEmail={currentUserEmail} onRoleChange={handleRoleChange} onRemove={handleRemove} isUpdating={isUpdating} />;
+  }
+
   return (
     <>
       <DataTable
@@ -91,33 +96,7 @@ export function MembersClient({ initialRows }: { initialRows: MemberRow[] }) {
         rows={rows}
         rowKey="id"
         emptyMessage="No members in this organization."
-        actions={isAdmin ? (row) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="size-8 p-0" disabled={isUpdating}>
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              {row.email !== currentUserEmail && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => handleRoleChange(row.id, row.role === "admin" ? "member" : "admin")}>
-                    Make {row.role === "admin" ? "Member" : "Admin"}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive focus:bg-destructive/10 focus:text-destructive"
-                    onClick={() => setRemoveId(row.id)}
-                  >
-                    Remove member
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : undefined}
+        ActionsComponent={MemberActionsCellWrapper}
       />
 
       <Dialog open={!!removeId} onOpenChange={(open) => !open && setRemoveId(null)}>

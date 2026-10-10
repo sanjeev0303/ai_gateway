@@ -36,7 +36,21 @@ func (b *recordingBus) Publish(_ context.Context, msg ports.UsageEventMessage) e
 	return nil
 }
 
+func (b *recordingBus) PublishSecurityEvent(_ context.Context, msg ports.SecurityEventMessage) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.err != nil {
+		return b.err
+	}
+	// We can ignore recording it for these tests, or record it in a new field if needed.
+	return nil
+}
+
 func (b *recordingBus) Run(context.Context, func(context.Context, ports.UsageEventMessage) error) error {
+	return nil
+}
+
+func (b *recordingBus) RunSecurity(context.Context, func(context.Context, ports.SecurityEventMessage) error) error {
 	return nil
 }
 

@@ -17,13 +17,14 @@ import {
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
 import { AlertActionsMenu, CreateAlertDialog } from "./client";
+import { AlertActionsCell } from "./actions-cell";
 
 export const metadata: Metadata = {
   title: "Alerts · Sentinel",
   description: "Alert rules configured for your organization.",
 };
 
-interface AlertRow {
+export interface AlertRow {
   id: string;
   name: string;
   alertType: string;
@@ -134,7 +135,7 @@ export default async function AlertsPage() {
                 rowKey="id"
                 pageSize={25}
                 emptyMessage="No alert rules configured"
-                actions={(row) => <AlertActionsMenu alert={(row as any).rawAlert} />}
+                ActionsComponent={AlertActionsCell}
                 toolbar={
                   <div className="flex w-full items-center justify-between gap-4">
                     <p className="text-muted-foreground text-sm">

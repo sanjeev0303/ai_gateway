@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useTheme } from "@/hooks/use-theme";
+import { useTheme } from "next-themes";
 import { DATE_RANGES } from "@/lib/constants";
 import { initials } from "@/lib/format";
 import { useSession } from "@/lib/session-context";
@@ -30,7 +30,6 @@ import { ORG_STATUS_LABELS, ORG_STATUS_TONE } from "@/types";
 import { CommandPaletteTrigger } from "./command-palette";
 import { useDateRange } from "@/hooks/use-date-range";
 
-/** Sun/moon/system switch. `useTheme` only mutates the DOM after mount. */
 function ThemeToggle() {
   const { theme, resolvedTheme, setTheme } = useTheme();
 

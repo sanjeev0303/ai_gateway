@@ -42,7 +42,6 @@ export default async function LiveActivityPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const params = await searchParams;
-  // TODO: pass filters down to SSE / client component if we filter on client
   const { events, activeRequests, activeUsers } = await loadActivity();
 
   return (

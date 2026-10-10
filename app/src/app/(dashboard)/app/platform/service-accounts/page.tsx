@@ -13,6 +13,7 @@ import { toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
 import { CreateServiceAccountButton, ServiceAccountActions } from "./client";
+import { ServiceAccountActionsCell } from "./actions-cell";
 
 export const metadata: Metadata = {
   title: "Service accounts · Sentinel",
@@ -24,7 +25,7 @@ const SERVICE_ACCOUNT_TONE: Record<string, StatusTone> = {
   revoked: "neutral",
 };
 
-interface ServiceAccountRow {
+export interface ServiceAccountRow {
   id: string;
   name: string;
   description: string;
@@ -126,7 +127,7 @@ export default async function ServiceAccountsPage() {
                   <CreateServiceAccountButton />
                 </div>
               }
-              actions={(row) => <ServiceAccountActions account={row} />}
+              ActionsComponent={ServiceAccountActionsCell}
             />
           </CardContent>
         </Card>

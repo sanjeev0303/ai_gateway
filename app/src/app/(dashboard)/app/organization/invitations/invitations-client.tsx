@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Copy, MoreHorizontal, MailPlus, Check } from "lucide-react";
 import { DataTable, type Column } from "@/components/dashboard";
+import { InviteActionsCell } from "./invite-actions-cell";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -214,6 +215,10 @@ export function InvitationsClient({ initialRows, oldestStr }: { initialRows: Inv
     }
   };
 
+  function InviteActionsCellWrapper({ row }: { row: InviteRow }) {
+    return <InviteActionsCell row={row} isAdmin={isAdmin} onReissue={handleReissue} onRevoke={handleRevoke} isUpdating={isUpdating} />;
+  }
+
   return (
     <>
       <DataTable
@@ -228,36 +233,7 @@ export function InvitationsClient({ initialRows, oldestStr }: { initialRows: Inv
           )
         }
         emptyMessage="No open invitations."
-        actions={isAdmin ? (row) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="size-8 p-0" disabled={isUpdating}>
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              {row.state === "expired" && (
-                <DropdownMenuItem onClick={() => handleReissue(row.email, row.role, row.id)}>
-                  Reissue invitation
-                </DropdownMenuItem>
-              )}
-              {row.state === "pending" && (
-                <DropdownMenuItem onClick={() => handleReissue(row.email, row.role, row.id)}>
-                  Resend / Reissue
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:bg-destructive/10 focus:text-destructive"
-                onClick={() => setRevokeId(row.id)}
-              >
-                Revoke
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : undefined}
+        ActionsComponent={InviteActionsCellWrapper}
       />
 
       <Dialog open={!!revokeId} onOpenChange={(open) => !open && setRevokeId(null)}>

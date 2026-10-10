@@ -19,6 +19,7 @@ import { toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
 import { GatewayCredentialActions, CreateCredentialButton } from "./client";
+import { CredentialActionsCell } from "./actions-cell";
 
 export const metadata: Metadata = {
   title: "Gateway credentials · Sentinel",
@@ -35,7 +36,7 @@ const EXPIRY_WINDOW_DAYS = 30;
 
 const short = (id?: string) => (id ? `${id.slice(0, 8)}…` : "—");
 
-interface CredentialRow {
+export interface CredentialRow {
   id: string;
   name: string;
   prefix: string;
@@ -200,7 +201,7 @@ export default async function GatewayCredentialsPage() {
                   <CreateCredentialButton />
                 </div>
               }
-              actions={(row) => <GatewayCredentialActions credential={row} />}
+              ActionsComponent={CredentialActionsCell}
             />
           </CardContent>
         </Card>

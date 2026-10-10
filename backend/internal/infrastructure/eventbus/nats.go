@@ -59,7 +59,7 @@ func NewNATS(ctx context.Context, url string, log *slog.Logger) (*NATS, error) {
 	}
 	stream, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:     natsStreamName,
-		Subjects: []string{natsSubject},
+		Subjects: []string{natsSubject, "aigw.security.events"},
 		Storage:  jetstream.FileStorage,
 	})
 	if err != nil {
@@ -174,4 +174,76 @@ func retryBackoff() []time.Duration {
 		}
 	}
 	return delays
+}
+
+// PublishSecurityEvent sends a security event to NATS.
+func (b *NATS) PublishSecurityEvent(ctx context.Context, msg ports.SecurityEventMessage) error {
+	// For simplicity, we just reuse the same error/backpressure handling logic
+	// but this could be on a separate stream if necessary.
+	if pending := b.js.PublishAsyncPending(); pending >= natsMaxPending {
+		b.log.Error("eventbus publish backlog full, dropped security event", "pending", pending)
+		return ErrQueueFull
+	}
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("eventbus: encode security event: %w", err)
+	}
+	ack, err := b.js.PublishAsync("aigw.security.events", data)
+	if err != nil {
+		return fmt.Errorf("eventbus: publish security event: %w", err)
+	}
+
+	timer := time.NewTimer(natsPublishWait)
+	defer timer.Stop()
+	select {
+	case <-ack.Ok():
+		return nil
+	case err := <-ack.Err():
+		return fmt.Errorf("eventbus: publish security event: %w", err)
+	case <-timer.C:
+		return fmt.Errorf("eventbus: publish security event: %w", ErrQueueFull)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// RunSecurity consumes security events from NATS.
+func (b *NATS) RunSecurity(ctx context.Context, handle func(context.Context, ports.SecurityEventMessage) error) error {
+	consumer, err := b.stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+		Durable:       "aigw-security-worker",
+		AckPolicy:     jetstream.AckExplicitPolicy,
+		AckWait:       natsAckWait,
+		MaxDeliver:    natsMaxDeliver,
+		BackOff:       retryBackoff(),
+		FilterSubject: "aigw.security.events",
+	})
+	if err != nil {
+		return fmt.Errorf("eventbus: create security consumer: %w", err)
+	}
+
+	cc, err := consumer.Consume(func(m jetstream.Msg) {
+		var msg ports.SecurityEventMessage
+		if err := json.Unmarshal(m.Data(), &msg); err != nil {
+			b.log.Error("eventbus: undecodable security event", "err", err)
+			m.Term()
+			return
+		}
+		if err := handle(ctx, msg); err != nil {
+			m.NakWithDelay(natsRetryBase)
+			return
+		}
+		m.Ack()
+	})
+	if err != nil {
+		return fmt.Errorf("eventbus: consume security: %w", err)
+	}
+	defer cc.Stop()
+
+	select {
+	case <-ctx.Done():
+		cc.Drain()
+		return ctx.Err()
+	case <-cc.Closed():
+		return nil
+	}
 }

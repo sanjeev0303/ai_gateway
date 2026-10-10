@@ -19,12 +19,14 @@ const (
 	// SecurityEventPipelineFailure is a background rollup failing for one
 	// organization.
 	SecurityEventPipelineFailure SecurityEventCategory = "pipeline_failure"
+	// SecurityEventPolicyViolation is a request being denied by a policy rule, budget, or rate limit.
+	SecurityEventPolicyViolation SecurityEventCategory = "policy_violation"
 )
 
 // Valid reports whether c is one of the supported categories.
 func (c SecurityEventCategory) Valid() bool {
 	switch c {
-	case SecurityEventProviderIncident, SecurityEventPipelineFailure:
+	case SecurityEventProviderIncident, SecurityEventPipelineFailure, SecurityEventPolicyViolation:
 		return true
 	default:
 		return false

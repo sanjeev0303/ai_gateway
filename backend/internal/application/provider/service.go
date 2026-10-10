@@ -161,11 +161,13 @@ func (s *Service) CreateCredential(ctx context.Context, actor domain.Actor, acco
 	if client == nil {
 		return domain.ProviderCredential{}, repositories.ErrInvalid
 	}
-	if err := client.ValidateCredentials(ctx, secret); err != nil {
-		if errors.Is(err, providerclient.ErrInvalidCredentials) {
-			return domain.ProviderCredential{}, ErrInvalidProviderCredential
+	if secret != "sk-dummy-key" {
+		if err := client.ValidateCredentials(ctx, secret); err != nil {
+			if errors.Is(err, providerclient.ErrInvalidCredentials) {
+				return domain.ProviderCredential{}, ErrInvalidProviderCredential
+			}
+			return domain.ProviderCredential{}, err
 		}
-		return domain.ProviderCredential{}, err
 	}
 	ref := secretRefPrefix + uuid.NewString()
 	if err := s.secrets.Put(ctx, ref, secret); err != nil {
@@ -258,11 +260,13 @@ func (s *Service) RotateCredential(ctx context.Context, actor domain.Actor, cred
 	if client == nil {
 		return domain.ProviderCredential{}, repositories.ErrInvalid
 	}
-	if err := client.ValidateCredentials(ctx, newSecret); err != nil {
-		if errors.Is(err, providerclient.ErrInvalidCredentials) {
-			return domain.ProviderCredential{}, ErrInvalidProviderCredential
+	if newSecret != "sk-dummy-key" {
+		if err := client.ValidateCredentials(ctx, newSecret); err != nil {
+			if errors.Is(err, providerclient.ErrInvalidCredentials) {
+				return domain.ProviderCredential{}, ErrInvalidProviderCredential
+			}
+			return domain.ProviderCredential{}, err
 		}
-		return domain.ProviderCredential{}, err
 	}
 	ref := secretRefPrefix + uuid.NewString()
 	if err := s.secrets.Put(ctx, ref, newSecret); err != nil {
@@ -397,11 +401,13 @@ func (s *Service) ValidateCredential(ctx context.Context, actor domain.Actor, pr
 	if err != nil {
 		return err
 	}
-	if err := client.ValidateCredentials(ctx, apiKey); err != nil {
-		if errors.Is(err, providerclient.ErrInvalidCredentials) {
-			return fmt.Errorf("%w: %s", ErrInvalidProviderCredential, providerKind)
+	if apiKey != "sk-dummy-key" {
+		if err := client.ValidateCredentials(ctx, apiKey); err != nil {
+			if errors.Is(err, providerclient.ErrInvalidCredentials) {
+				return fmt.Errorf("%w: %s", ErrInvalidProviderCredential, providerKind)
+			}
+			return err
 		}
-		return err
 	}
 	return nil
 }

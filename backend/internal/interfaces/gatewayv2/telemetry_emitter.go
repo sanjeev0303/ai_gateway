@@ -330,6 +330,27 @@ func subjectServiceAccountID(record UsageRecord) *uuid.UUID {
 func (e *TelemetryEmitterImpl) flushErrors(batch []ErrorRecord) {
 	for _, record := range batch {
 		e.logger.Warn("telemetry: error", "org_id", record.OrganizationID, "error_type", record.ErrorType, "status", record.StatusCode)
+		
+		if record.ErrorType != "authentication_error" && record.ErrorType != "" {
+			// Convert to security event message
+			msg := ports.SecurityEventMessage{
+				OrganizationID: record.OrganizationID,
+				Category:       "policy_violation", // Usually these are policy, budget, or rate limit
+				Severity:       "high",
+				Title:          "Gateway Request Rejected",
+				Source:         "gateway",
+				Details: map[string]any{
+					"error_type": record.ErrorType,
+					"status_code": record.StatusCode,
+					"upstream_error": record.UpstreamError,
+				},
+			}
+			if e.bus != nil {
+				if err := e.bus.PublishSecurityEvent(context.Background(), msg); err != nil {
+					e.logger.Error("failed to publish security event for gateway rejection", "error", err)
+				}
+			}
+		}
 	}
 }
 

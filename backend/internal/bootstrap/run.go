@@ -189,10 +189,16 @@ func RunGatewayV2(ctx context.Context) error {
 				UsageEvents: repositories.NewUsageEventRepository(store),
 				Log:         log,
 			})
+			secSvc := securityevent.NewService(securityevent.ServiceDeps{Events: repositories.NewSecurityEventRepository(store)})
 			jobs.Add(1)
 			go func() {
 				defer jobs.Done()
 				worker.RunUsageConsumer(ctx, bus.EventBus, usageSvc, log)
+			}()
+			jobs.Add(1)
+			go func() {
+				defer jobs.Done()
+				worker.RunSecurityConsumer(ctx, bus.EventBus, secSvc, log)
 			}()
 		}
 
@@ -501,10 +507,16 @@ func RunWorker(ctx context.Context) error {
 			}
 			defer bus.Close()
 			if !bus.inProcess {
+				secSvc := securityevent.NewService(securityevent.ServiceDeps{Events: repositories.NewSecurityEventRepository(store)})
 				jobs.Add(1)
 				go func() {
 					defer jobs.Done()
 					worker.RunUsageConsumer(ctx, bus.EventBus, rollups, log)
+				}()
+				jobs.Add(1)
+				go func() {
+					defer jobs.Done()
+					worker.RunSecurityConsumer(ctx, bus.EventBus, secSvc, log)
 				}()
 			}
 		}
