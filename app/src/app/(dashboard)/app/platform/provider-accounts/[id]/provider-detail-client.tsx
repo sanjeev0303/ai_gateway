@@ -90,24 +90,26 @@ function CredentialActionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>{description}</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">{children}</div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-              Cancel
-            </Button>
-            <Button type="submit" variant={submitVariant} disabled={isPending}>
-              {isPending && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
-              {submitLabel}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
+      {open ? (
+        <DialogContent>
+          <form onSubmit={handleSubmit}>
+            <DialogHeader>
+              <DialogTitle>{title}</DialogTitle>
+              <DialogDescription>{description}</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">{children}</div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+                Cancel
+              </Button>
+              <Button type="submit" variant={submitVariant} disabled={isPending}>
+                {isPending && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
+                {submitLabel}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      ) : null}
     </Dialog>
   );
 }
@@ -150,8 +152,8 @@ export function ProviderDetailClient({
   const router = useRouter();
   const api = React.useMemo(() => createApiClient({ baseUrl: CONTROL_API_BASE }), []);
 
-  const [creds, setCreds] = React.useState(credentials);
-  const [healthData, setHealthData] = React.useState(health);
+  const [creds, setCreds] = React.useState(credentials || []);
+  const [healthData, setHealthData] = React.useState(health || []);
 
   // Credential dialogs
   const [addCredOpen, setAddCredOpen] = React.useState(false);

@@ -2,7 +2,14 @@
 
 Updated after each completed prompt.
 
-## COMPLETED TASK: Fix React Error #418 Hydration Mismatch on /app/platform/provider-accounts
+## PREVIOUS TASK: Fix 500 Error & React Error #441 on /app/platform/provider-accounts/[id]
+- [x] Inspect server logs and route implementation of `/app/platform/provider-accounts/[id]`
+- [x] Identify root cause: asynchronous route params in Next.js 16 (`params: Promise<{ id: string }>`) passed unawaited `undefined` to `api.providers.getAccount`
+- [x] Fix unawaited `params` across all dynamic `[id]` pages, guard `credentials`/`health` state arrays, conditionally mount `CredentialActionDialog`
+- [x] Rebuild container image `ai-gateway-web:dev` with Docker buildx, recreate `ai-gateway-app-1`, and verify HTTP 200 clean rendering
+- [x] Update `task.md` on completion
+
+## PREVIOUS TASK: Fix React Error #418 Hydration Mismatch on /app/platform/provider-accounts
 - [x] Inspect `/app/platform/provider-accounts` and Dialog / Add Account form components
 - [x] Identify source of SSR vs client HTML hydration mismatch (Radix Select form control injection, DialogContent mounted during SSR, and unawaited `params` Promise in `[id]` pages)
 - [x] Fix hydration mismatch, make `provider_kind` controlled with native hidden input, update `[id]` route params, and verify Next.js build
