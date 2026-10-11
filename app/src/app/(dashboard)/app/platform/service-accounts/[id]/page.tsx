@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 interface ServiceAccountPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 const CREDENTIAL_COLUMNS: readonly Column<any>[] = [
@@ -22,11 +22,12 @@ const CREDENTIAL_COLUMNS: readonly Column<any>[] = [
 ];
 
 export default async function ServiceAccountDetailPage({ params }: ServiceAccountPageProps) {
+  const { id } = await params;
   const { serviceAccounts, credentials, usage } = await getApiClient();
 
   // Load account
   const list = await serviceAccounts.list();
-  const account = list.items.find((a) => a.id === params.id);
+  const account = list.items.find((a) => a.id === id);
   if (!account) notFound();
 
   // Load credentials associated with this account

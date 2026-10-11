@@ -8,11 +8,16 @@ export const metadata: Metadata = {
   title: "Provider Account Detail · Sentinel",
 };
 
-export default async function ProviderAccountDetailPage({ params }: { params: { id: string } }) {
+export default async function ProviderAccountDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
   const api = await getApiClient();
 
   try {
-    const account = await api.providers.getAccount(params.id);
+    const account = await api.providers.getAccount(id);
     const credentials = await api.providers.listCredentials();
     const health = await api.providers.health();
 

@@ -49,7 +49,11 @@ export function formatMs(value: number): string {
 }
 
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
+  if (!iso) return "—";
+  const normalized = typeof iso === "string" && iso.includes(" ") && !iso.includes("T") ? iso.replace(" ", "T") : iso;
+  const d = new Date(normalized);
+  if (isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -58,7 +62,11 @@ export function formatDate(iso: string): string {
 }
 
 export function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("en-US", {
+  if (!iso) return "—";
+  const normalized = typeof iso === "string" && iso.includes(" ") && !iso.includes("T") ? iso.replace(" ", "T") : iso;
+  const d = new Date(normalized);
+  if (isNaN(d.getTime())) return String(iso);
+  return d.toLocaleString("en-US", {
     month: "short",
     day: "numeric",
     hour: "numeric",

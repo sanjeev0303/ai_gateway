@@ -4,6 +4,8 @@ import * as React from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
+import { useRouter } from "next/navigation";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +20,9 @@ import { FormDialog } from "@/components/dashboard/dialogs";
 import { createProviderAccount } from "./actions";
 
 export function CreateProviderAccountButton() {
+  const router = useRouter();
   const [open, setOpen] = React.useState(false);
+  const [providerKind, setProviderKind] = React.useState("openai");
 
   return (
     <>
@@ -34,13 +38,17 @@ export function CreateProviderAccountButton() {
         description="Register a new provider endpoint."
         action={createProviderAccount}
         submitLabel="Add Account"
-        onSuccess={() => toast.success("Provider account added")}
+        onSuccess={() => {
+          toast.success("Provider account added");
+          router.refresh();
+        }}
       >
         <div className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="provider_kind">Provider</Label>
-            <Select name="provider_kind" required>
-              <SelectTrigger>
+            <input type="hidden" name="provider_kind" value={providerKind} />
+            <Select value={providerKind} onValueChange={setProviderKind}>
+              <SelectTrigger id="provider_kind">
                 <SelectValue placeholder="Select provider" />
               </SelectTrigger>
               <SelectContent>

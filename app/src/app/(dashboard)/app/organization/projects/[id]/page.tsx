@@ -8,12 +8,17 @@ export const metadata: Metadata = {
   title: "Project Detail · Sentinel",
 };
 
-export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
+export default async function ProjectDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
   const api = await getApiClient();
   
   try {
-    const project = await api.projects.get(params.id);
-    const members = await api.projects.listMembers(params.id);
+    const project = await api.projects.get(id);
+    const members = await api.projects.listMembers(id);
     const orgMembers = await api.members.list();
 
     return (

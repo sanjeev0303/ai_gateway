@@ -2,7 +2,13 @@
 
 Updated after each completed prompt.
 
-## COMPLETED TASK: Resolve IDE Diagnostics & Lint Problems
+## COMPLETED TASK: Fix React Error #418 Hydration Mismatch on /app/platform/provider-accounts
+- [x] Inspect `/app/platform/provider-accounts` and Dialog / Add Account form components
+- [x] Identify source of SSR vs client HTML hydration mismatch (Radix Select form control injection, DialogContent mounted during SSR, and unawaited `params` Promise in `[id]` pages)
+- [x] Fix hydration mismatch, make `provider_kind` controlled with native hidden input, update `[id]` route params, and verify Next.js build
+- [x] Update `task.md` on completion
+
+## PREVIOUS TASK: Resolve IDE Diagnostics & Lint Problems
 - [x] Remove obsolete root scratch files (`patch_run.go`, `recovered_main.go`) causing Go symbol collision
 - [x] Update Tailwind CSS v4 class notations in `overview/page.tsx` and `textarea.tsx`
 - [x] Run type check and verify diagnostics clear

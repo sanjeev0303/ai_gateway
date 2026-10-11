@@ -54,39 +54,41 @@ export function ActionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        <form action={formAction}>
-          <DialogFooter className="gap-2 sm:justify-between items-center w-full">
-            <div className="flex-1">
-              {state.error && <StatusBadge tone="danger">{state.error}</StatusBadge>}
-            </div>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onOpenChange(false)}
-                disabled={pending}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant={submitVariant}
-                size="sm"
-                disabled={pending}
-              >
-                {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {submitLabel}
-              </Button>
-            </div>
-          </DialogFooter>
-        </form>
-      </DialogContent>
+      {open ? (
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{description}</DialogDescription>
+          </DialogHeader>
+          <form action={formAction}>
+            <DialogFooter className="gap-2 sm:justify-between items-center w-full">
+              <div className="flex-1">
+                {state.error && <StatusBadge tone="danger">{state.error}</StatusBadge>}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onOpenChange(false)}
+                  disabled={pending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant={submitVariant}
+                  size="sm"
+                  disabled={pending}
+                >
+                  {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {submitLabel}
+                </Button>
+              </div>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      ) : null}
     </Dialog>
   );
 }
@@ -120,40 +122,42 @@ export function FormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          {description && <DialogDescription>{description}</DialogDescription>}
-        </DialogHeader>
-        <form action={formAction} className="space-y-4">
-          <div className="space-y-4 py-4">{children}</div>
-          <DialogFooter className="gap-2 sm:justify-between items-center w-full">
-            <div className="flex-1">
-              {state?.error && <StatusBadge tone="danger">{state.error}</StatusBadge>}
-            </div>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onOpenChange(false)}
-                disabled={pending}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant={submitVariant}
-                size="sm"
-                disabled={pending}
-              >
-                {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {submitLabel}
-              </Button>
-            </div>
-          </DialogFooter>
-        </form>
-      </DialogContent>
+      {open ? (
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            {description && <DialogDescription>{description}</DialogDescription>}
+          </DialogHeader>
+          <form action={formAction} className="space-y-4">
+            <div className="space-y-4 py-4">{children}</div>
+            <DialogFooter className="gap-2 sm:justify-between items-center w-full">
+              <div className="flex-1">
+                {state?.error && <StatusBadge tone="danger">{state.error}</StatusBadge>}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onOpenChange(false)}
+                  disabled={pending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant={submitVariant}
+                  size="sm"
+                  disabled={pending}
+                >
+                  {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {submitLabel}
+                </Button>
+              </div>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      ) : null}
     </Dialog>
   );
 }

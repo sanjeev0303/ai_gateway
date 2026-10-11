@@ -8,12 +8,17 @@ export const metadata: Metadata = {
   title: "Team Detail · Sentinel",
 };
 
-export default async function TeamDetailPage({ params }: { params: { id: string } }) {
+export default async function TeamDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
   const api = await getApiClient();
   
   try {
-    const team = await api.teams.get(params.id);
-    const members = await api.teams.listMembers(params.id);
+    const team = await api.teams.get(id);
+    const members = await api.teams.listMembers(id);
     const orgMembers = await api.members.list();
 
     return (

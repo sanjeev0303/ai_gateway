@@ -253,7 +253,7 @@ export function DataTable<T>({
 
                     if (column.tone) {
                       return (
-                        <TableCell key={column.key}>
+                        <TableCell key={column.key} suppressHydrationWarning>
                           <StatusBadge tone={record[column.tone] as StatusTone}>
                             {cellText(record, column.primary, format)}
                           </StatusBadge>
@@ -263,7 +263,7 @@ export function DataTable<T>({
 
                     if (column.render) {
                       return (
-                        <TableCell key={column.key} className={cn(alignRight && "text-right")}>
+                        <TableCell key={column.key} suppressHydrationWarning className={cn(alignRight && "text-right")}>
                           {column.render(row)}
                         </TableCell>
                       );
@@ -281,6 +281,7 @@ export function DataTable<T>({
                     return (
                       <TableCell
                         key={column.key}
+                        suppressHydrationWarning
                         className={cn(alignRight && "text-right")}
                       >
                         <div
