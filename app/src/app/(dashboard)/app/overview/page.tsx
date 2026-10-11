@@ -127,7 +127,7 @@ function EmptyVisualCard({
   iconAccent,
 }: EmptyVisualCardProps) {
   return (
-    <div className="relative flex flex-col items-center justify-center p-8 sm:p-12 text-center rounded-xl bg-muted/15 border border-dashed border-border/60 overflow-hidden min-h-[220px]">
+    <div className="relative flex flex-col items-center justify-center p-8 sm:p-12 text-center rounded-xl bg-muted/15 border border-dashed border-border/60 overflow-hidden min-h-55">
       {/* Ghost Visual Background */}
       <div className="absolute inset-0 pointer-events-none opacity-20 flex items-center justify-center overflow-hidden">
         {ghostType === "chart" && (
@@ -152,7 +152,7 @@ function EmptyVisualCard({
         {ghostType === "heatmap" && (
           <div className="grid grid-cols-12 gap-1 w-3/4">
             {Array.from({ length: 36 }).map((_, i) => (
-              <div key={i} className="h-2.5 rounded-[2px] bg-border/30" />
+              <div key={i} className="h-2.5 rounded-xs bg-border/30" />
             ))}
           </div>
         )}
@@ -324,7 +324,7 @@ async function OnboardingWidget({ timeParams }: { timeParams: TimeRangeQuery }) 
 
   if (isOperational) {
     return (
-      <section aria-labelledby="operational-heading" className="p-4 sm:p-5 rounded-2xl border border-border/80 bg-gradient-to-r from-card/90 via-card/60 to-card/40 backdrop-blur-xs shadow-xs">
+      <section aria-labelledby="operational-heading" className="p-4 sm:p-5 rounded-2xl border border-border/80 bg-linear-to-r from-card/90 via-card/60 to-card/40 backdrop-blur-xs shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="size-9 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 flex items-center justify-center shrink-0">
@@ -370,7 +370,7 @@ async function OnboardingWidget({ timeParams }: { timeParams: TimeRangeQuery }) 
   return (
     <section
       aria-labelledby="onboarding-heading"
-      className="p-5 sm:p-6 rounded-2xl border border-border/80 bg-gradient-to-b from-card/90 via-card/60 to-card/40 backdrop-blur-xs shadow-xs"
+      className="p-5 sm:p-6 rounded-2xl border border-border/80 bg-linear-to-b from-card/90 via-card/60 to-card/40 backdrop-blur-xs shadow-xs"
     >
       <div className="space-y-6">
         <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-border/40">
@@ -391,7 +391,7 @@ async function OnboardingWidget({ timeParams }: { timeParams: TimeRangeQuery }) 
           <div className="flex items-center gap-3 shrink-0">
             <div className="h-2 w-36 sm:w-48 bg-muted/60 rounded-full overflow-hidden p-0.5 border border-border/40">
               <div
-                className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500"
+                className="h-full bg-linear-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500"
                 style={{ width: `${(completedSteps / totalSetupSteps) * 100}%` }}
                 role="progressbar"
                 aria-valuenow={completedSteps}
@@ -1088,7 +1088,7 @@ function SectionHeader({
 
 function WidgetSkeleton() {
   return (
-    <div className="animate-pulse bg-card/60 border border-border/40 rounded-xl h-[220px] w-full flex items-center justify-center">
+    <div className="animate-pulse bg-card/60 border border-border/40 rounded-xl h-55 w-full flex items-center justify-center">
       <div className="size-6 rounded-full border-2 border-border border-t-primary animate-spin" />
     </div>
   );
