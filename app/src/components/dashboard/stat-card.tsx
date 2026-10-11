@@ -79,12 +79,12 @@ export function StatCard({
           {Icon && <Icon className="size-4" aria-hidden />}
           <span className="truncate">{label}</span>
         </div>
-        <p className={cn("text-2xl font-semibold tabular-nums", TONE_TEXT[tone])}>
+        <p suppressHydrationWarning className={cn("text-2xl font-semibold tabular-nums", TONE_TEXT[tone])}>
           {value}
         </p>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           {delta && <DeltaBadge delta={delta} />}
-          {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
+          {hint && <span suppressHydrationWarning className="text-xs text-muted-foreground">{hint}</span>}
         </div>
       </div>
       {sparkline && sparkline.length > 1 && (

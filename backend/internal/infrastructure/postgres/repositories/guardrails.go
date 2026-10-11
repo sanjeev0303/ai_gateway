@@ -21,6 +21,49 @@ func NewGuardrailsRepository(store *postgres.Store) *GuardrailsRepository {
 }
 
 func (r *GuardrailsRepository) Create(ctx context.Context, g domain.Guardrail) error {
+	id := g.ID
+	if id == "" {
+		id = uuid.New().String()
+	}
+	parsedID, err := uuid.Parse(id)
+	if err != nil {
+		parsedID = uuid.New()
+	}
+
+	orgID, err := uuid.Parse(g.OrganizationID)
+	if err != nil {
+		return err
+	}
+
+	createdAt := g.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+	updatedAt := g.UpdatedAt
+	if updatedAt.IsZero() {
+		updatedAt = createdAt
+	}
+
+	targetType := string(g.TargetType)
+	if targetType == "" {
+		targetType = string(domain.GuardrailTargetGlobal)
+	}
+
+	detector := string(g.Detector)
+	if detector == "" {
+		detector = string(domain.GuardrailDetectorPII)
+	}
+
+	action := string(g.Action)
+	if action == "" {
+		action = string(domain.GuardrailActionBlock)
+	}
+
+	config := g.Configuration
+	if len(config) == 0 {
+		config = []byte("{}")
+	}
+
 	query := `
 		INSERT INTO guardrails (id, organization_id, name, description, target_type, target_id, detector, action, configuration, enabled, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -33,19 +76,19 @@ func (r *GuardrailsRepository) Create(ctx context.Context, g domain.Guardrail) e
 		}
 	}
 
-	_, err := r.store.Pool().Exec(ctx, query,
-		g.ID,
-		g.OrganizationID,
+	_, err = r.store.Pool().Exec(ctx, query,
+		parsedID,
+		orgID,
 		g.Name,
 		g.Description,
-		g.TargetType,
+		targetType,
 		targetID,
-		g.Detector,
-		g.Action,
-		g.Configuration,
+		detector,
+		action,
+		config,
 		g.Enabled,
-		g.CreatedAt,
-		g.UpdatedAt,
+		createdAt,
+		updatedAt,
 	)
 	return err
 }

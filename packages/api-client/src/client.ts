@@ -77,7 +77,14 @@ function isArrayValue(value: QueryValue): value is ReadonlyArray<string | number
 function buildUrl(baseUrl: string, path: string, query?: Query | undefined): string {
   const base = baseUrl.replace(/\/+$/, "");
   const suffix = path.startsWith("/") ? path : `/${path}`;
-  const url = new URL(`${base}${suffix}`);
+  const full = `${base}${suffix}`;
+  const url =
+    full.startsWith("http://") || full.startsWith("https://")
+      ? new URL(full)
+      : new URL(
+          full,
+          typeof window !== "undefined" ? window.location.origin : "http://localhost:8081"
+        );
   if (query) {
     for (const [key, value] of Object.entries(query)) {
       if (value === undefined || value === null) continue;

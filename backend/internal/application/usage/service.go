@@ -17,6 +17,7 @@ import (
 
 	"ai-governance-saas/backend/internal/application/securityevent"
 	"ai-governance-saas/backend/internal/domain"
+	"ai-governance-saas/backend/internal/ports"
 	"ai-governance-saas/backend/internal/ports/repositories"
 )
 
@@ -60,6 +61,9 @@ func NewService(deps ServiceDeps) *Service {
 // (organization_id, request_id, event_type), so a redelivered message is
 // treated as success rather than an error.
 func (s *Service) RecordRequest(ctx context.Context, orgID uuid.UUID, req domain.NewLlmRequest, ev domain.NewUsageEvent) error {
+	if orgID == uuid.Nil || req.RequestID == "" {
+		return fmt.Errorf("%w: record request missing org_id or request_id", ports.ErrNonRetryable)
+	}
 	if _, err := s.llmRequests.Record(ctx, orgID, req); err != nil && !errors.Is(err, repositories.ErrConflict) {
 		return fmt.Errorf("record llm request %s: %w", req.RequestID, err)
 	}

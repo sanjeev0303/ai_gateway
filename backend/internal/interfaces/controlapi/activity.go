@@ -28,6 +28,31 @@ func (a *api) handleActivity(w http.ResponseWriter, r *http.Request) {
 		events = []domain.ActivityEvent{}
 	}
 
+	// If no in-flight streaming requests in Redis, include recent completed requests
+	// so the activity feed displays recent gateway requests seamlessly.
+	if len(events) == 0 && a.usage != nil {
+		if recents, err := a.usage.GetRecent(r.Context(), actor); err == nil {
+			for _, req := range recents {
+				state := domain.ActivityStateCompleted
+				if req.Status == "failed" {
+					state = domain.ActivityStateFailed
+				}
+				events = append(events, domain.ActivityEvent{
+					RequestID:      req.RequestID,
+					OrganizationID: req.OrganizationID,
+					UserID:         req.UserID,
+					TeamID:         req.TeamID,
+					ProjectID:      req.ProjectID,
+					Provider:       req.ProviderKind,
+					Model:          req.Model,
+					Status:         req.Status,
+					StartedAt:      req.CreatedAt,
+					CurrentState:   state,
+				})
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"data": events})
 }

@@ -18,7 +18,7 @@ export function useDateRange(): UseDateRangeReturn {
   const router = useRouter();
   const pathname = usePathname();
 
-  const initialRange = React.useMemo(() => {
+  const range = React.useMemo(() => {
     const param = searchParams.get(DATE_RANGE_PARAM);
     if (param && DATE_RANGES.includes(param as DateRange)) {
       return param as DateRange;
@@ -26,21 +26,8 @@ export function useDateRange(): UseDateRangeReturn {
     return DEFAULT_RANGE;
   }, [searchParams]);
 
-  const [range, setRangeState] = React.useState<DateRange>(initialRange);
-
-  React.useEffect(() => {
-    const param = searchParams.get(DATE_RANGE_PARAM);
-    if (param && DATE_RANGES.includes(param as DateRange)) {
-      setRangeState(param as DateRange);
-    } else {
-      setRangeState(DEFAULT_RANGE);
-    }
-  }, [searchParams]);
-
   const setRange = React.useCallback(
     (newRange: DateRange) => {
-      setRangeState(newRange);
-
       const params = new URLSearchParams(searchParams.toString());
       if (newRange === DEFAULT_RANGE) {
         params.delete(DATE_RANGE_PARAM);

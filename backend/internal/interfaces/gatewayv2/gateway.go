@@ -142,7 +142,7 @@ func NewGateway(deps GatewayDeps) (*Gateway, error) {
 	// Telemetry
 	telemetry := deps.Telemetry
 	if telemetry == nil {
-		telemetry = NewTelemetryEmitter(10000, 5*time.Second, deps.EventBus, deps.Logger)
+		telemetry = NewTelemetryEmitter(10000, 500*time.Millisecond, deps.EventBus, deps.Logger)
 	}
 
 	// Build components
@@ -217,6 +217,11 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		observed, err := g.streamProxy.Forward(r.Context(), w, r, result.Context.UpstreamURL, result.Context.UpstreamHeaders)
 		if err != nil {
 			g.logger.Error("stream proxy forward failed", "error", err)
+			if errors.Is(err, ErrUpstreamTimeout) {
+				g.writeError(w, http.StatusGatewayTimeout, "upstream_timeout", "upstream provider timed out")
+			} else if errors.Is(err, ErrUpstreamError) {
+				g.writeError(w, http.StatusBadGateway, "upstream_error", "failed to connect to upstream provider")
+			}
 		}
 		g.emitTelemetry(r.Context(), reqID, result, start, observed)
 		return
@@ -514,7 +519,7 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 
 		if g.activity != nil {
 			state := domain.ActivityStateCompleted
-			if result.StatusCode >= 400 {
+			if (observed != nil && observed.StatusCode >= 400) || result.StatusCode >= 400 {
 				state = domain.ActivityStateFailed
 			}
 			g.activity.Emit(domain.ActivityEvent{
@@ -537,6 +542,11 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 	}
 
 	if result.Allowed && result.Context != nil {
+		actualStatusCode := result.StatusCode
+		if observed != nil && observed.StatusCode != 0 {
+			actualStatusCode = observed.StatusCode
+		}
+
 		usage := UsageRecord{
 			RequestID:        reqID,
 			OrganizationID:   result.Context.Credential.OrganizationID,
@@ -546,10 +556,8 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 			ProjectID:        result.Context.Credential.ProjectID,
 			TeamID:           result.Context.Credential.TeamID,
 			Model:            result.Context.InspectorHints.Model,
-			InputTokens:      result.Context.InspectorHints.EstimatedInputTokens,
-			OutputTokens:     result.Context.InspectorHints.EstimatedOutputTokens,
 			LatencyMs:        latencyMs,
-			StatusCode:       result.StatusCode,
+			StatusCode:       actualStatusCode,
 			Timestamp:        completedAt,
 			RequestStartedAt: startUTC,
 			CompletedAt:      completedAt,
@@ -558,14 +566,25 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 		totalLatencyMs := int32(latencyMs)
 		usage.TotalLatencyMs = &totalLatencyMs
 
-		// Provider-reported counts are authoritative; the inspector only
-		// estimates, so it is the fallback for responses carrying no usage.
-		if observed != nil {
+		upstreamProvider := result.Context.Upstream.ProviderAccount.ProviderKind
+		if upstreamProvider == "" && observed != nil {
+			upstreamProvider = observed.Provider
+		}
+		if upstreamProvider == "" {
+			upstreamProvider = "unknown"
+		}
+
+		// Provider-reported counts are authoritative; fallback to estimates when provider does not supply counts.
+		if observed != nil && (observed.InputTokens > 0 || observed.OutputTokens > 0) {
 			usage.InputTokens = observed.InputTokens
 			usage.OutputTokens = observed.OutputTokens
 			usage.CacheReadTokens = observed.CacheReadTokens
 			usage.CacheWriteTokens = observed.CacheWriteTokens
-			usage.ProviderMeta = map[string]any{"provider": observed.Provider}
+			meta := map[string]any{"provider": upstreamProvider, "tokens_reported": true, "estimated": false}
+			if observed.ReasoningTokens > 0 {
+				meta["reasoning_tokens"] = observed.ReasoningTokens
+			}
+			usage.ProviderMeta = meta
 
 			if !observed.FirstTokenAt.IsZero() {
 				firstToken := observed.FirstTokenAt.UTC()
@@ -573,8 +592,21 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 				ttft := int32(firstToken.Sub(startUTC).Milliseconds())
 				usage.TimeToFirstTokenMs = &ttft
 			}
+		} else {
+			// Fallback to estimates, explicitly flagged as estimated
+			usage.InputTokens = result.Context.InspectorHints.EstimatedInputTokens
+			usage.OutputTokens = result.Context.InspectorHints.EstimatedOutputTokens
+			usage.ProviderMeta = map[string]any{"provider": upstreamProvider, "tokens_reported": false, "estimated": true}
 		}
 		
+		// Estimate initial cost in micros (e.g. 10 micros per 1k input tokens, 30 micros per 1k output tokens).
+		// Exact cost is backfilled during rollup using the organization's versioned price sheet.
+		costMicros := int64((float64(usage.InputTokens)*10.0 + float64(usage.OutputTokens)*30.0) / 1000.0 * 1000000.0)
+		if costMicros <= 0 && (usage.InputTokens > 0 || usage.OutputTokens > 0) {
+			costMicros = int64(usage.InputTokens*2 + usage.OutputTokens*10)
+		}
+		usage.CostMicros = costMicros
+
 		// Record usage against local budget tracker
 		cost := (float64(usage.InputTokens)/1000*0.01) + (float64(usage.OutputTokens)/1000*0.03)
 		budgetKey := g.buildBudgetKey(result.Context.Credential, result.Context.Upstream)
@@ -585,9 +617,23 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 		g.telemetry.EmitUsage(ctx, usage)
 	} else {
 		// Error telemetry
+		orgID := uuid.Nil
+		credID := uuid.Nil
+		var projID, teamID *uuid.UUID
+		var subType string
+		var subID uuid.UUID
+		if result.Context != nil {
+			orgID = result.Context.Credential.OrganizationID
+			credID = result.Context.Credential.ID
+			projID = result.Context.Credential.ProjectID
+			teamID = result.Context.Credential.TeamID
+			subType = result.Context.Credential.SubjectType
+			subID = result.Context.Credential.SubjectID
+		}
+
 		errRecord := ErrorRecord{
-			OrganizationID: uuid.Nil, // Would be set from context
-			CredentialID:   uuid.Nil,
+			OrganizationID: orgID,
+			CredentialID:   credID,
 			ErrorType:      result.ErrorType,
 			ErrorCode:      result.ErrorType,
 			StatusCode:     result.StatusCode,
@@ -596,6 +642,30 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 			UpstreamError:  result.ErrorMessage,
 		}
 		g.telemetry.EmitError(ctx, errRecord)
+
+		if orgID != uuid.Nil {
+			provKind := providerKind
+			if provKind == "" {
+				provKind = "unknown"
+			}
+			failedUsage := UsageRecord{
+				RequestID:        reqID,
+				OrganizationID:   orgID,
+				CredentialID:     credID,
+				SubjectType:      subType,
+				SubjectID:        subID,
+				ProjectID:        projID,
+				TeamID:           teamID,
+				Model:            model,
+				LatencyMs:        latencyMs,
+				StatusCode:       result.StatusCode,
+				Timestamp:        completedAt,
+				RequestStartedAt: startUTC,
+				CompletedAt:      completedAt,
+				ProviderMeta:     map[string]any{"provider": provKind},
+			}
+			g.telemetry.EmitUsage(ctx, failedUsage)
+		}
 	}
 }
 
@@ -676,3 +746,18 @@ func (g *Gateway) Start() error {
 	g.logger.Info("gateway started", "config", g.config)
 	return nil
 }
+
+// InvalidatePolicy immediately evicts the cached policy snapshot for an organization.
+func (g *Gateway) InvalidatePolicy(orgID uuid.UUID) {
+	if g.policyResolver != nil {
+		g.policyResolver.Invalidate(orgID)
+	}
+}
+
+// InvalidateCredentialByID immediately evicts a cached credential by ID.
+func (g *Gateway) InvalidateCredentialByID(ctx context.Context, id string) {
+	if authImpl, ok := g.authenticator.(*AuthenticatorImpl); ok {
+		authImpl.InvalidateByID(ctx, id)
+	}
+}
+

@@ -50,6 +50,17 @@ func discardLogger() *slog.Logger {
 	return slog.New(slog.DiscardHandler)
 }
 
+// requireEqual fails the test when got != want.
+func requireEqual[T comparable](t *testing.T, got, want T, msg ...string) {
+	t.Helper()
+	if got != want {
+		if len(msg) > 0 {
+			t.Fatalf("%s: got %v, want %v", msg[0], got, want)
+		}
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
 // strPtr returns a pointer to s for building pointer-typed test fixtures.
 func strPtr(s string) *string {
 	return &s

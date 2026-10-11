@@ -72,7 +72,9 @@ WHERE organization_id = sqlc.arg(organization_id) AND bucket_start >= sqlc.arg(f
 
 -- name: RecomputeUsageHourly :exec
 INSERT INTO usage_hourly (organization_id, project_id, model, bucket_start, requests, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, cost_micros, updated_at)
-SELECT r.organization_id, r.project_id, r.model,
+SELECT r.organization_id,
+       r.project_id,
+       r.model,
        date_trunc('hour', r.created_at, 'UTC') AS bucket_start,
        count(*)::int,
        sum(r.prompt_tokens)::bigint,
@@ -82,7 +84,8 @@ SELECT r.organization_id, r.project_id, r.model,
        sum(r.cost_micros)::bigint,
        now()
 FROM llm_requests r
-WHERE r.organization_id = sqlc.arg(organization_id) AND r.project_id IS NOT NULL
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND r.project_id IS NOT NULL
   AND r.created_at >= sqlc.arg(from_ts) AND r.created_at < sqlc.arg(to_ts)
 GROUP BY r.organization_id, r.project_id, r.model, date_trunc('hour', r.created_at, 'UTC')
 ON CONFLICT (organization_id, project_id, model, bucket_start) DO UPDATE SET
@@ -96,7 +99,9 @@ WHERE organization_id = sqlc.arg(organization_id) AND bucket_start >= sqlc.arg(f
 
 -- name: RecomputeUsageDaily :exec
 INSERT INTO usage_daily (organization_id, project_id, model, bucket_start, requests, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, cost_micros, updated_at)
-SELECT r.organization_id, r.project_id, r.model,
+SELECT r.organization_id,
+       r.project_id,
+       r.model,
        date_trunc('day', r.created_at, 'UTC') AS bucket_start,
        count(*)::int,
        sum(r.prompt_tokens)::bigint,
@@ -106,7 +111,8 @@ SELECT r.organization_id, r.project_id, r.model,
        sum(r.cost_micros)::bigint,
        now()
 FROM llm_requests r
-WHERE r.organization_id = sqlc.arg(organization_id) AND r.project_id IS NOT NULL
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND r.project_id IS NOT NULL
   AND r.created_at >= sqlc.arg(from_ts) AND r.created_at < sqlc.arg(to_ts)
 GROUP BY r.organization_id, r.project_id, r.model, date_trunc('day', r.created_at, 'UTC')
 ON CONFLICT (organization_id, project_id, model, bucket_start) DO UPDATE SET
@@ -120,7 +126,9 @@ WHERE organization_id = sqlc.arg(organization_id) AND bucket_start >= sqlc.arg(f
 
 -- name: RecomputeUsageMonthly :exec
 INSERT INTO usage_monthly (organization_id, project_id, model, bucket_start, requests, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, cost_micros, updated_at)
-SELECT r.organization_id, r.project_id, r.model,
+SELECT r.organization_id,
+       r.project_id,
+       r.model,
        date_trunc('month', r.created_at, 'UTC') AS bucket_start,
        count(*)::int,
        sum(r.prompt_tokens)::bigint,
@@ -130,7 +138,8 @@ SELECT r.organization_id, r.project_id, r.model,
        sum(r.cost_micros)::bigint,
        now()
 FROM llm_requests r
-WHERE r.organization_id = sqlc.arg(organization_id) AND r.project_id IS NOT NULL
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND r.project_id IS NOT NULL
   AND r.created_at >= sqlc.arg(from_ts) AND r.created_at < sqlc.arg(to_ts)
 GROUP BY r.organization_id, r.project_id, r.model, date_trunc('month', r.created_at, 'UTC')
 ON CONFLICT (organization_id, project_id, model, bucket_start) DO UPDATE SET
@@ -207,13 +216,13 @@ ORDER BY total_tokens DESC;
 
 -- name: GetUsageByModel :many
 SELECT model,
-       COALESCE(sum(requests), 0)::bigint as requests,
-       COALESCE(sum(total_tokens), 0)::bigint as total_tokens,
-       COALESCE(sum(cost_micros), 0)::bigint as cost_micros
-FROM usage_daily
+       COUNT(*)::bigint as requests,
+       COALESCE(SUM(total_tokens), 0)::bigint as total_tokens,
+       COALESCE(SUM(cost_micros), 0)::bigint as cost_micros
+FROM llm_requests
 WHERE organization_id = sqlc.arg(organization_id)
-  AND bucket_start >= sqlc.arg(from_ts)
-  AND bucket_start < sqlc.arg(to_ts)
+  AND created_at >= sqlc.arg(from_ts)
+  AND created_at < sqlc.arg(to_ts)
   AND model != ''
 GROUP BY model
 ORDER BY total_tokens DESC;
@@ -393,3 +402,8 @@ WHERE r.organization_id = sqlc.arg(organization_id)
   AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status))
 GROUP BY r.provider_kind, r.model
 ORDER BY total_samples DESC;
+
+-- name: PurgeExpiredUsageEvents :execrows
+DELETE FROM usage_events
+WHERE organization_id = sqlc.arg(organization_id)
+  AND timestamp < sqlc.arg(older_than)::timestamptz;

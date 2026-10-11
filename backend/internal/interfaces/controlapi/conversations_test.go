@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -47,6 +48,10 @@ func (f *fakeConversationRepo) Detail(context.Context, uuid.UUID, uuid.UUID) (do
 func (f *fakeConversationRepo) List(_ context.Context, _ uuid.UUID, filter domain.ConversationFilter, limit, offset int32) ([]domain.ConversationSummary, error) {
 	f.gotFilter, f.gotLimit, f.gotOffset = filter, limit, offset
 	return f.summaries, nil
+}
+
+func (f *fakeConversationRepo) PurgeExpired(_ context.Context, _ uuid.UUID, _ time.Time) (int64, error) {
+	return 0, nil
 }
 
 type fakeMessageRepo struct{ messages []domain.ConversationMessage }

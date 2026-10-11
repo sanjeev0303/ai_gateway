@@ -154,6 +154,20 @@ type Alert struct {
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
+type AlertEvent struct {
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	AlertID        uuid.UUID  `json:"alert_id"`
+	AlertType      string     `json:"alert_type"`
+	Severity       string     `json:"severity"`
+	Status         string     `json:"status"`
+	Message        string     `json:"message"`
+	Context        []byte     `json:"context"`
+	TriggeredAt    time.Time  `json:"triggered_at"`
+	ResolvedAt     *time.Time `json:"resolved_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
 type ApiCredential struct {
 	ID               uuid.UUID  `json:"id"`
 	OrganizationID   uuid.UUID  `json:"organization_id"`

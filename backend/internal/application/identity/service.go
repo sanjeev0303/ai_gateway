@@ -64,10 +64,16 @@ type ServiceDeps struct {
 	Hasher                 ports.TokenHasher
 	Passwords              ports.PasswordHasher
 	GatewayCredentialCache *credentialcache.CredentialCache
+	CredentialInvalidator  CredentialInvalidator
 	Log                    *slog.Logger
 	Now                    func() time.Time
 	InviteTTL              time.Duration
 	RefreshTokenTTL        time.Duration
+}
+
+// CredentialInvalidator broadcasts real-time credential revocation across processes.
+type CredentialInvalidator interface {
+	InvalidateCredential(orgID, credID uuid.UUID)
 }
 
 // Service is the identity application service.
@@ -88,6 +94,7 @@ type Service struct {
 	refreshTokens          repositories.RefreshTokenRepository
 	subs                   repositories.SubscriptionRepository
 	gatewayCredentialCache *credentialcache.CredentialCache
+	credentialInvalidator  CredentialInvalidator
 
 	issuer     ports.TokenIssuer
 	verifier   ports.TokenVerifier
@@ -135,6 +142,7 @@ func NewService(deps ServiceDeps) *Service {
 		refreshTokens:          deps.RefreshTokens,
 		subs:                   deps.Subs,
 		gatewayCredentialCache: deps.GatewayCredentialCache,
+		credentialInvalidator:  deps.CredentialInvalidator,
 		issuer:                 deps.Issuer,
 		verifier:               deps.Verifier,
 		hasher:                 deps.Hasher,
@@ -982,6 +990,9 @@ func (s *Service) RevokeGatewayCredential(ctx context.Context, actor domain.Acto
 	if s.gatewayCredentialCache != nil {
 		s.gatewayCredentialCache.Invalidate(ctx, s.toCachedCredential(&credential))
 	}
+	if s.credentialInvalidator != nil {
+		s.credentialInvalidator.InvalidateCredential(actor.OrganizationID, credentialID)
+	}
 	s.audit(ctx, actor, "gateway_credential.revoke", "gateway_credential", &credentialID, nil, nil)
 	return nil
 }
@@ -992,7 +1003,21 @@ func (s *Service) RotateGatewayCredential(ctx context.Context, actor domain.Acto
 	if err := s.RequirePermission(actor, domain.PermissionCredentialsManage); err != nil {
 		return domain.GatewayCredential{}, "", err
 	}
-	if strings.TrimSpace(input.Name) == "" {
+
+	// Get existing credential to verify it exists and is active
+	existing, err := s.gatewayCredentials.Get(ctx, actor.OrganizationID, credentialID)
+	if err != nil {
+		return domain.GatewayCredential{}, "", err
+	}
+	if existing.Status != domain.GatewayCredentialStatusActive {
+		return domain.GatewayCredential{}, "", repositories.ErrInvalid
+	}
+
+	name := input.Name
+	if strings.TrimSpace(name) == "" {
+		name = existing.Name
+	}
+	if strings.TrimSpace(name) == "" {
 		return domain.GatewayCredential{}, "", repositories.ErrInvalid
 	}
 	for _, scope := range input.Scopes {
@@ -1001,15 +1026,6 @@ func (s *Service) RotateGatewayCredential(ctx context.Context, actor domain.Acto
 		}
 	}
 	if input.ExpiresAt != nil && !input.ExpiresAt.After(s.now()) {
-		return domain.GatewayCredential{}, "", repositories.ErrInvalid
-	}
-
-	// Get existing credential to verify it exists and is active
-	existing, err := s.gatewayCredentials.Get(ctx, actor.OrganizationID, credentialID)
-	if err != nil {
-		return domain.GatewayCredential{}, "", err
-	}
-	if existing.Status != domain.GatewayCredentialStatusActive {
 		return domain.GatewayCredential{}, "", repositories.ErrInvalid
 	}
 
@@ -1026,7 +1042,7 @@ func (s *Service) RotateGatewayCredential(ctx context.Context, actor domain.Acto
 
 	// Create new credential with rotation input (preserves subject/team/project if not overridden)
 	newInput := domain.NewGatewayCredential{
-		Name:        input.Name,
+		Name:        name,
 		KeyPrefix:   rawKey[:len(apiKeyPrefix)+7],
 		KeyHash:     hash,
 		SubjectType: existing.SubjectType,
@@ -1060,6 +1076,9 @@ func (s *Service) RotateGatewayCredential(ctx context.Context, actor domain.Acto
 		s.gatewayCredentialCache.Invalidate(ctx, s.toCachedCredential(&existing))
 		s.gatewayCredentialCache.Set(ctx, s.toCachedCredential(&newCred))
 	}
+	if s.credentialInvalidator != nil {
+		s.credentialInvalidator.InvalidateCredential(actor.OrganizationID, credentialID)
+	}
 	s.audit(ctx, actor, "gateway_credential.rotate", "gateway_credential", &newCred.ID, nil, nil)
 	return newCred, rawKey, nil
 }
@@ -1075,6 +1094,9 @@ func (s *Service) ExpireGatewayCredential(ctx context.Context, actor domain.Acto
 	}
 	if s.gatewayCredentialCache != nil {
 		s.gatewayCredentialCache.Invalidate(ctx, s.toCachedCredential(&credential))
+	}
+	if s.credentialInvalidator != nil {
+		s.credentialInvalidator.InvalidateCredential(actor.OrganizationID, credentialID)
 	}
 	s.audit(ctx, actor, "gateway_credential.expire", "gateway_credential", &credentialID, nil, nil)
 	return nil

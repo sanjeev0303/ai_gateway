@@ -73,12 +73,13 @@ func (r *ProviderRouterImpl) routeAnthropic(baseURL string, headers http.Header,
 
 // routeOpenAI handles OpenAI-compatible routing.
 func (r *ProviderRouterImpl) routeOpenAI(baseURL string, headers http.Header, upstream ResolvedUpstream, hints InspectorHints) (string, http.Header, error) {
-	// OpenAI-compatible providers may need different header format
-	// Convert x-api-key to Authorization: Bearer
+	// OpenAI-compatible providers use Authorization: Bearer
 	if key := headers.Get("x-api-key"); key != "" {
 		headers.Set("Authorization", "Bearer "+key)
 		headers.Del("x-api-key")
 	}
+	headers.Del("anthropic-version")
+	headers.Del("anthropic-beta")
 	return baseURL, headers, nil
 }
 

@@ -214,7 +214,11 @@ func (c *stubCredentialCache) Set(_ context.Context, entry *CredentialCacheEntry
 	if c.entries == nil {
 		c.entries = make(map[string]*CredentialCacheEntry)
 	}
-	c.entries[entry.ID] = entry
+	key := entry.KeyHash
+	if key == "" {
+		key = entry.ID
+	}
+	c.entries[key] = entry
 }
 func (c *stubCredentialCache) Invalidate(_ context.Context, keyHash string) {
 	if c.entries == nil {

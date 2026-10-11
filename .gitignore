@@ -34,3 +34,4 @@ deploy/terraform/aws/.terraform/
 .opencode
 .playwright-mcp
 .kilo
+scratch/

@@ -215,13 +215,13 @@ func (q *Queries) GetRecentUsage(ctx context.Context, organizationID uuid.UUID) 
 
 const getUsageByModel = `-- name: GetUsageByModel :many
 SELECT model,
-       COALESCE(sum(requests), 0)::bigint as requests,
-       COALESCE(sum(total_tokens), 0)::bigint as total_tokens,
-       COALESCE(sum(cost_micros), 0)::bigint as cost_micros
-FROM usage_daily
+       COUNT(*)::bigint as requests,
+       COALESCE(SUM(total_tokens), 0)::bigint as total_tokens,
+       COALESCE(SUM(cost_micros), 0)::bigint as cost_micros
+FROM llm_requests
 WHERE organization_id = $1
-  AND bucket_start >= $2
-  AND bucket_start < $3
+  AND created_at >= $2
+  AND created_at < $3
   AND model != ''
 GROUP BY model
 ORDER BY total_tokens DESC
@@ -1261,9 +1261,30 @@ func (q *Queries) ListUsageEventsByRequest(ctx context.Context, arg ListUsageEve
 	return items, nil
 }
 
+const purgeExpiredUsageEvents = `-- name: PurgeExpiredUsageEvents :execrows
+DELETE FROM usage_events
+WHERE organization_id = $1
+  AND timestamp < $2::timestamptz
+`
+
+type PurgeExpiredUsageEventsParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	OlderThan      time.Time `json:"older_than"`
+}
+
+func (q *Queries) PurgeExpiredUsageEvents(ctx context.Context, arg PurgeExpiredUsageEventsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeExpiredUsageEvents, arg.OrganizationID, arg.OlderThan)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const recomputeUsageDaily = `-- name: RecomputeUsageDaily :exec
 INSERT INTO usage_daily (organization_id, project_id, model, bucket_start, requests, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, cost_micros, updated_at)
-SELECT r.organization_id, r.project_id, r.model,
+SELECT r.organization_id,
+       r.project_id,
+       r.model,
        date_trunc('day', r.created_at, 'UTC') AS bucket_start,
        count(*)::int,
        sum(r.prompt_tokens)::bigint,
@@ -1273,7 +1294,8 @@ SELECT r.organization_id, r.project_id, r.model,
        sum(r.cost_micros)::bigint,
        now()
 FROM llm_requests r
-WHERE r.organization_id = $1 AND r.project_id IS NOT NULL
+WHERE r.organization_id = $1
+  AND r.project_id IS NOT NULL
   AND r.created_at >= $2 AND r.created_at < $3
 GROUP BY r.organization_id, r.project_id, r.model, date_trunc('day', r.created_at, 'UTC')
 ON CONFLICT (organization_id, project_id, model, bucket_start) DO UPDATE SET
@@ -1295,7 +1317,9 @@ func (q *Queries) RecomputeUsageDaily(ctx context.Context, arg RecomputeUsageDai
 
 const recomputeUsageHourly = `-- name: RecomputeUsageHourly :exec
 INSERT INTO usage_hourly (organization_id, project_id, model, bucket_start, requests, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, cost_micros, updated_at)
-SELECT r.organization_id, r.project_id, r.model,
+SELECT r.organization_id,
+       r.project_id,
+       r.model,
        date_trunc('hour', r.created_at, 'UTC') AS bucket_start,
        count(*)::int,
        sum(r.prompt_tokens)::bigint,
@@ -1305,7 +1329,8 @@ SELECT r.organization_id, r.project_id, r.model,
        sum(r.cost_micros)::bigint,
        now()
 FROM llm_requests r
-WHERE r.organization_id = $1 AND r.project_id IS NOT NULL
+WHERE r.organization_id = $1
+  AND r.project_id IS NOT NULL
   AND r.created_at >= $2 AND r.created_at < $3
 GROUP BY r.organization_id, r.project_id, r.model, date_trunc('hour', r.created_at, 'UTC')
 ON CONFLICT (organization_id, project_id, model, bucket_start) DO UPDATE SET
@@ -1327,7 +1352,9 @@ func (q *Queries) RecomputeUsageHourly(ctx context.Context, arg RecomputeUsageHo
 
 const recomputeUsageMonthly = `-- name: RecomputeUsageMonthly :exec
 INSERT INTO usage_monthly (organization_id, project_id, model, bucket_start, requests, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, cost_micros, updated_at)
-SELECT r.organization_id, r.project_id, r.model,
+SELECT r.organization_id,
+       r.project_id,
+       r.model,
        date_trunc('month', r.created_at, 'UTC') AS bucket_start,
        count(*)::int,
        sum(r.prompt_tokens)::bigint,
@@ -1337,7 +1364,8 @@ SELECT r.organization_id, r.project_id, r.model,
        sum(r.cost_micros)::bigint,
        now()
 FROM llm_requests r
-WHERE r.organization_id = $1 AND r.project_id IS NOT NULL
+WHERE r.organization_id = $1
+  AND r.project_id IS NOT NULL
   AND r.created_at >= $2 AND r.created_at < $3
 GROUP BY r.organization_id, r.project_id, r.model, date_trunc('month', r.created_at, 'UTC')
 ON CONFLICT (organization_id, project_id, model, bucket_start) DO UPDATE SET

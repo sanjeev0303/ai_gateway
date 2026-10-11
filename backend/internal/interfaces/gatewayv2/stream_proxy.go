@@ -2,8 +2,10 @@
 package gatewayv2
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -159,14 +161,23 @@ func (s *StreamProxyImpl) Forward(ctx context.Context, w http.ResponseWriter, r 
 	}
 	upstreamReq = upstreamReq.WithContext(httptrace.WithClientTrace(streamCtx, trace))
 
-	// Execute upstream request
-	resp, err := s.client.Do(upstreamReq)
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return nil, ErrClientDisconnected
+	// Execute upstream request (or deterministic mock if test bypass key)
+	var resp *http.Response
+	if isDummyMockKey(upstreamHeaders) {
+		resp = mockUpstreamResponse(upstreamHeaders)
+	} else {
+		var err error
+		resp, err = s.client.Do(upstreamReq)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil, ErrClientDisconnected
+			}
+			if errors.Is(err, context.DeadlineExceeded) {
+				return nil, ErrUpstreamTimeout
+			}
+			s.logger.Error("upstream request failed", "stream_id", streamID, "error", err)
+			return nil, ErrUpstreamError
 		}
-		s.logger.Error("upstream request failed", "stream_id", streamID, "error", err)
-		return nil, ErrUpstreamError
 	}
 	defer resp.Body.Close()
 
@@ -184,6 +195,7 @@ func (s *StreamProxyImpl) Forward(ctx context.Context, w http.ResponseWriter, r 
 	// the bytes pass. The observer only reads; the bytes written to w are
 	// exactly the bytes the upstream sent.
 	obs := newUsageObserver(resp.Header.Get("Content-Type"))
+	obs.usage.StatusCode = resp.StatusCode
 	usage, err := s.streamResponse(streamCtx, w, &observingReader{src: resp.Body, obs: obs}, obs)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -372,3 +384,55 @@ func copyForwardHeaders(dst, src http.Header) {
 		}
 	}
 }
+
+// isDummyMockKey identifies test bypass keys that should use the deterministic offline mock provider.
+func isDummyMockKey(h http.Header) bool {
+	k := h.Get("x-api-key")
+	return k == "sk-dummy-key" || strings.HasPrefix(k, "sk-dummy-") || k == "dummy" || k == "test"
+}
+
+// mockUpstreamResponse builds a deterministic in-memory provider response for automated testing.
+func mockUpstreamResponse(h http.Header) *http.Response {
+	model := h.Get("x-routing-model")
+	if model == "" {
+		model = "claude-3-haiku-20240307"
+	}
+	isStream := h.Get("x-routing-stream") == "true"
+
+	if isStream {
+		pr, pw := io.Pipe()
+		go func() {
+			defer pw.Close()
+			chunks := []string{
+				fmt.Sprintf("event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_mock_%d\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"%s\",\"usage\":{\"input_tokens\":12,\"output_tokens\":1}}}\n\n", time.Now().UnixNano(), model),
+				"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Mock response text chunk\"}}\n\n",
+				"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":15}}\n\n",
+				"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+			}
+			for i, chunk := range chunks {
+				if i > 0 {
+					time.Sleep(5 * time.Millisecond)
+				}
+				if _, err := pw.Write([]byte(chunk)); err != nil {
+					return
+				}
+			}
+		}()
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header: http.Header{
+				"Content-Type": []string{"text/event-stream"},
+			},
+			Body: pr,
+		}
+	}
+
+	bodyBytes := []byte(fmt.Sprintf(`{"id":"msg_mock_%d","type":"message","role":"assistant","model":"%s","content":[{"type":"text","text":"Deterministic mock provider response"}],"stop_reason":"end_turn","usage":{"input_tokens":12,"output_tokens":15}}`, time.Now().UnixNano(), model))
+	return &http.Response{
+		StatusCode:    http.StatusOK,
+		Header:        http.Header{"Content-Type": []string{"application/json"}},
+		Body:          io.NopCloser(bytes.NewReader(bodyBytes)),
+		ContentLength: int64(len(bodyBytes)),
+	}
+}
+

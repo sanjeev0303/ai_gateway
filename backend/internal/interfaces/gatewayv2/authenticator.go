@@ -60,7 +60,8 @@ func (a *AuthenticatorImpl) Authenticate(ctx context.Context, rawKey string) (Ga
 			if a.validateCached(cached) {
 				return a.fromCached(cached), nil
 			}
-			// Cache entry invalid, fall through to DB
+			// Cache entry invalid, evict it and fall through to DB
+			a.cache.Invalidate(ctx, hash)
 		}
 	}
 
@@ -83,7 +84,9 @@ func (a *AuthenticatorImpl) Authenticate(ctx context.Context, rawKey string) (Ga
 
 	// Update cache
 	if a.cache != nil {
-		a.cache.Set(ctx, a.toCacheEntry(gwCred))
+		entry := a.toCacheEntry(gwCred)
+		entry.KeyHash = hash
+		a.cache.Set(ctx, entry)
 	}
 
 	return gwCred, nil
@@ -183,6 +186,15 @@ func (a *AuthenticatorImpl) fromCached(cached *CredentialCacheEntry) GatewayCred
 		Scopes:         scopes,
 		Status:         cached.Status,
 		ExpiresAt:      cached.ExpiresAt,
+	}
+}
+
+// InvalidateByID evicts a credential from the cache by credential ID.
+func (a *AuthenticatorImpl) InvalidateByID(ctx context.Context, id string) {
+	if a.cache != nil {
+		if inMem, ok := a.cache.(*InMemoryCredentialCache); ok {
+			inMem.InvalidateByID(ctx, id)
+		}
 	}
 }
 

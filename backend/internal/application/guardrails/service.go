@@ -3,6 +3,8 @@ package guardrails
 import (
 	"context"
 
+	"github.com/google/uuid"
+
 	"ai-governance-saas/backend/internal/domain"
 	"ai-governance-saas/backend/internal/ports/repositories"
 )
@@ -16,8 +18,10 @@ func NewService(repo repositories.GuardrailsRepository) *Service {
 }
 
 func (s *Service) Create(ctx context.Context, actor domain.Actor, g domain.Guardrail) (domain.Guardrail, error) {
-	// Usually authorization happens in HTTP handlers or middleware in this repo
 	g.OrganizationID = actor.OrganizationID.String()
+	if g.ID == "" {
+		g.ID = uuid.New().String()
+	}
 	
 	if err := s.repo.Create(ctx, g); err != nil {
 		return domain.Guardrail{}, err

@@ -5,6 +5,7 @@ package bootstrap
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -29,6 +30,7 @@ import (
 	"ai-governance-saas/backend/internal/application/usage"
 	"ai-governance-saas/backend/internal/domain"
 	"ai-governance-saas/backend/internal/infrastructure/auth"
+	"ai-governance-saas/backend/internal/infrastructure/invalidation"
 	"ai-governance-saas/backend/internal/infrastructure/postgres"
 	"ai-governance-saas/backend/internal/infrastructure/postgres/repositories"
 	"ai-governance-saas/backend/internal/infrastructure/provider/anthropic"
@@ -40,6 +42,7 @@ import (
 	"ai-governance-saas/backend/internal/interfaces/gatewayv2"
 	"ai-governance-saas/backend/internal/interfaces/worker"
 	"ai-governance-saas/backend/internal/platform/config"
+	"ai-governance-saas/backend/internal/platform/credentialcache"
 	"ai-governance-saas/backend/internal/platform/health"
 	"ai-governance-saas/backend/internal/platform/httpx"
 	"ai-governance-saas/backend/internal/platform/logging"
@@ -161,6 +164,11 @@ func RunGatewayV2(ctx context.Context) error {
 			})
 		}
 
+		var rateLimiter gatewayv2.RateLimiter
+		if redisClient != nil {
+			rateLimiter = gatewayv2.NewRedisRateLimiter(redisClient, log)
+		}
+
 		activityTracker := gatewayv2.NewActivityTracker(redisClient, log)
 
 		// Build gateway v2 with all components
@@ -178,9 +186,44 @@ func RunGatewayV2(ctx context.Context) error {
 			Guardrails:          repositories.NewGuardrailsRepository(store),
 			EventBus:            bus.EventBus,
 			Activity:            activityTracker,
+			RateLimiter:         rateLimiter,
 		})
 		if err != nil {
 			return fmt.Errorf("gateway-v2: create gateway: %w", err)
+		}
+
+		if redisClient != nil {
+			jobs.Add(1)
+			go func() {
+				defer jobs.Done()
+				pubsub := redisClient.Subscribe(ctx, invalidation.PolicyInvalidationChannel, invalidation.CredentialInvalidationChannel)
+				defer pubsub.Close()
+				ch := pubsub.Channel()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case msg, ok := <-ch:
+						if !ok {
+							return
+						}
+						switch msg.Channel {
+						case invalidation.PolicyInvalidationChannel:
+							var payload invalidation.PolicyInvalidationPayload
+							if err := json.Unmarshal([]byte(msg.Payload), &payload); err == nil {
+								if orgID, err := uuid.Parse(payload.OrganizationID); err == nil {
+									gatewayV2.InvalidatePolicy(orgID)
+								}
+							}
+						case invalidation.CredentialInvalidationChannel:
+							var payload invalidation.CredentialInvalidationPayload
+							if err := json.Unmarshal([]byte(msg.Payload), &payload); err == nil {
+								gatewayV2.InvalidateCredentialByID(ctx, payload.CredentialID)
+							}
+						}
+					}
+				}
+			}()
 		}
 
 		if bus.inProcess {
@@ -263,7 +306,19 @@ func RunControlAPI(ctx context.Context) error {
 			defer bus.Close()
 		}
 
+		var redisClient *redis.Client
+		if cfg.Redis.Enabled {
+			redisClient = redis.NewClient(&redis.Options{
+				Addr:     cfg.Redis.Addr,
+				Password: cfg.Redis.Password,
+				DB:       cfg.Redis.DB,
+			})
+			reg.Register("redis", func(ctx context.Context) error {
+				return redisClient.Ping(ctx).Err()
+			})
+		}
 
+		redisInvalidator := invalidation.NewRedisInvalidator(redisClient, log)
 
 		svc := identity.NewService(identity.ServiceDeps{
 			Orgs:        repositories.NewOrganizationRepository(store),
@@ -278,7 +333,9 @@ func RunControlAPI(ctx context.Context) error {
 			Credentials: repositories.NewAPICredentialRepository(store),
 			Audits:      repositories.NewAuditLogRepository(store),
 
-			GatewayCredentials: repositories.NewGatewayCredentialRepository(store),
+			GatewayCredentials:     repositories.NewGatewayCredentialRepository(store),
+			GatewayCredentialCache: credentialcache.NewCredentialCache(redisClient, 5*time.Minute),
+			CredentialInvalidator:  redisInvalidator,
 
 			Auth:            repositories.NewAuthRepository(store),
 			RefreshTokens:   repositories.NewRefreshTokenRepository(store),
@@ -321,18 +378,6 @@ func RunControlAPI(ctx context.Context) error {
 			Log:            log,
 		})
 
-		var redisClient *redis.Client
-		if cfg.Redis.Enabled {
-			redisClient = redis.NewClient(&redis.Options{
-				Addr:     cfg.Redis.Addr,
-				Password: cfg.Redis.Password,
-				DB:       cfg.Redis.DB,
-			})
-			reg.Register("redis", func(ctx context.Context) error {
-				return redisClient.Ping(ctx).Err()
-			})
-		}
-
 		activitySvc := activity.NewService(redisClient, log)
 
 		usageSvc := usage.NewService(usage.ServiceDeps{
@@ -341,7 +386,6 @@ func RunControlAPI(ctx context.Context) error {
 			UsageEvents: repositories.NewUsageEventRepository(store),
 			Log:         log,
 		})
-
 
 		conversationSvc := conversation.NewService(conversation.ServiceDeps{
 			Organizations:  repositories.NewOrganizationRepository(store),
@@ -355,11 +399,23 @@ func RunControlAPI(ctx context.Context) error {
 			Log:    log,
 		})
 
-		alertSvc := alert.NewService(alert.ServiceDeps{
-			Log:    log,
-			Alerts: repositories.NewAlertRepository(store),
-			Audits: repositories.NewAuditLogRepository(store),
+		alertEval := alert.NewEvaluator(alert.EvaluatorDeps{
+			Log:            log,
+			Alerts:         repositories.NewAlertRepository(store),
+			Notifier:       alert.NewInAppNotifier(log),
+			UsageRollups:   repositories.NewUsageRollupRepository(store),
+			ProviderHealth: repositories.NewProviderHealthRepository(store),
+			SecurityEvents: repositories.NewSecurityEventRepository(store),
+			LlmRequests:    repositories.NewLlmRequestRepository(store),
 		})
+
+		alertSvc := alert.NewService(alert.ServiceDeps{
+			Log:       log,
+			Alerts:    repositories.NewAlertRepository(store),
+			Audits:    repositories.NewAuditLogRepository(store),
+			Evaluator: alertEval,
+		})
+
 
 		billingSvc := billing.NewService(billing.ServiceDeps{
 			Plans:         repositories.NewPlanRepository(store),
@@ -375,7 +431,7 @@ func RunControlAPI(ctx context.Context) error {
 			repositories.NewPolicyRepository(store),
 			repositories.NewPolicyRuleRepository(store),
 			repositories.NewAuditLogRepository(store),
-			dummyInvalidator{},
+			redisInvalidator,
 			log,
 		)
 
@@ -384,7 +440,7 @@ func RunControlAPI(ctx context.Context) error {
 			Policies:    repositories.NewPolicyRepository(store),
 			Rules:       repositories.NewPolicyRuleRepository(store),
 			Audits:      repositories.NewAuditLogRepository(store),
-			Invalidator: dummyInvalidator{},
+			Invalidator: redisInvalidator,
 		})
 
 		deps = controlapi.Deps{
@@ -467,6 +523,18 @@ func RunWorker(ctx context.Context) error {
 			worker.RunRollup(ctx, rollups, log)
 		}()
 
+		retentionJob := worker.NewRetentionJob(worker.RetentionDeps{
+			Orgs:          repositories.NewOrganizationRepository(store),
+			Conversations: repositories.NewConversationRepository(store),
+			UsageEvents:   repositories.NewUsageEventRepository(store),
+			Log:           log,
+		})
+		jobs.Add(1)
+		go func() {
+			defer jobs.Done()
+			worker.RunRetention(ctx, retentionJob, 1*time.Hour)
+		}()
+
 		_ = alert.NewService(alert.ServiceDeps{
 			Log:    log,
 			Alerts: repositories.NewAlertRepository(store),
@@ -474,11 +542,15 @@ func RunWorker(ctx context.Context) error {
 		})
 		notifier := alert.NewInAppNotifier(log)
 		evaluator := alert.NewEvaluator(alert.EvaluatorDeps{
-			Log:          log,
-			Alerts:       repositories.NewAlertRepository(store),
-			Notifier:     notifier,
-			UsageRollups: repositories.NewUsageRollupRepository(store),
+			Log:            log,
+			Alerts:         repositories.NewAlertRepository(store),
+			Notifier:       notifier,
+			UsageRollups:   repositories.NewUsageRollupRepository(store),
+			ProviderHealth: repositories.NewProviderHealthRepository(store),
+			SecurityEvents: repositories.NewSecurityEventRepository(store),
+			LlmRequests:    repositories.NewLlmRequestRepository(store),
 		})
+
 		jobs.Add(1)
 		go func() {
 			defer jobs.Done()
@@ -580,5 +652,3 @@ func serveHTTP(ctx context.Context, cfg *config.Config, h http.Handler, name str
 		return nil
 	}
 }
-type dummyInvalidator struct{}
-func (dummyInvalidator) Invalidate(orgID uuid.UUID) {}

@@ -228,6 +228,7 @@ type UsageRecord struct {
 	CompletedAt        time.Time
 	TimeToFirstTokenMs *int32
 	TotalLatencyMs     *int32
+	CostMicros         int64
 	ProviderMeta       map[string]any
 }
 

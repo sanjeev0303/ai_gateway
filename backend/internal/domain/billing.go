@@ -56,8 +56,9 @@ const (
 )
 
 const (
-	AlertStatusActive = "active"
-	AlertStatusMuted  = "muted"
+	AlertStatusActive   = "active"
+	AlertStatusMuted    = "muted"
+	AlertStatusResolved = "resolved"
 )
 
 // Plan is a sellable subscription tier.
@@ -249,5 +250,32 @@ func ValidAlertSeverity(sev string) bool {
 }
 
 func ValidAlertStatus(st string) bool {
-	return st == AlertStatusActive || st == AlertStatusMuted
+	return st == AlertStatusActive || st == AlertStatusMuted || st == AlertStatusResolved
+}
+
+// AlertEvent records an occurrence when an alert rule condition was triggered or resolved.
+type AlertEvent struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	AlertID        uuid.UUID
+	AlertType      string
+	Severity       string
+	Status         string // triggered, resolved, acknowledged
+	Message        string
+	Context        []byte
+	TriggeredAt    time.Time
+	ResolvedAt     *time.Time
+	CreatedAt      time.Time
+}
+
+// NewAlertEvent carries input data for recording an alert occurrence.
+type NewAlertEvent struct {
+	AlertID     uuid.UUID
+	AlertType   string
+	Severity    string
+	Status      string
+	Message     string
+	Context     []byte
+	TriggeredAt time.Time
+	ResolvedAt  *time.Time
 }

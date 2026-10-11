@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	uuid "github.com/google/uuid"
 )
@@ -47,6 +48,53 @@ func (q *Queries) CreateAlert(ctx context.Context, arg CreateAlertParams) (Alert
 		&i.LastTriggeredAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createAlertEvent = `-- name: CreateAlertEvent :one
+INSERT INTO alert_events (organization_id, alert_id, alert_type, severity, status, message, context, triggered_at, resolved_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
+RETURNING id, organization_id, alert_id, alert_type, severity, status, message, context, triggered_at, resolved_at, created_at
+`
+
+type CreateAlertEventParams struct {
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	AlertID        uuid.UUID  `json:"alert_id"`
+	AlertType      string     `json:"alert_type"`
+	Severity       string     `json:"severity"`
+	Status         string     `json:"status"`
+	Message        string     `json:"message"`
+	Column7        []byte     `json:"column_7"`
+	TriggeredAt    time.Time  `json:"triggered_at"`
+	ResolvedAt     *time.Time `json:"resolved_at"`
+}
+
+func (q *Queries) CreateAlertEvent(ctx context.Context, arg CreateAlertEventParams) (AlertEvent, error) {
+	row := q.db.QueryRow(ctx, createAlertEvent,
+		arg.OrganizationID,
+		arg.AlertID,
+		arg.AlertType,
+		arg.Severity,
+		arg.Status,
+		arg.Message,
+		arg.Column7,
+		arg.TriggeredAt,
+		arg.ResolvedAt,
+	)
+	var i AlertEvent
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.AlertID,
+		&i.AlertType,
+		&i.Severity,
+		&i.Status,
+		&i.Message,
+		&i.Context,
+		&i.TriggeredAt,
+		&i.ResolvedAt,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -95,6 +143,89 @@ func (q *Queries) GetAlert(ctx context.Context, arg GetAlertParams) (Alert, erro
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getLatestAlertEvent = `-- name: GetLatestAlertEvent :one
+SELECT id, organization_id, alert_id, alert_type, severity, status, message, context, triggered_at, resolved_at, created_at FROM alert_events
+WHERE organization_id = $1 AND alert_id = $2
+ORDER BY triggered_at DESC
+LIMIT 1
+`
+
+type GetLatestAlertEventParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	AlertID        uuid.UUID `json:"alert_id"`
+}
+
+func (q *Queries) GetLatestAlertEvent(ctx context.Context, arg GetLatestAlertEventParams) (AlertEvent, error) {
+	row := q.db.QueryRow(ctx, getLatestAlertEvent, arg.OrganizationID, arg.AlertID)
+	var i AlertEvent
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.AlertID,
+		&i.AlertType,
+		&i.Severity,
+		&i.Status,
+		&i.Message,
+		&i.Context,
+		&i.TriggeredAt,
+		&i.ResolvedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const listAlertEvents = `-- name: ListAlertEvents :many
+SELECT id, organization_id, alert_id, alert_type, severity, status, message, context, triggered_at, resolved_at, created_at FROM alert_events
+WHERE organization_id = $1
+  AND ($4::uuid IS NULL OR alert_id = $4)
+ORDER BY triggered_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListAlertEventsParams struct {
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	Limit          int32      `json:"limit"`
+	Offset         int32      `json:"offset"`
+	AlertID        *uuid.UUID `json:"alert_id"`
+}
+
+func (q *Queries) ListAlertEvents(ctx context.Context, arg ListAlertEventsParams) ([]AlertEvent, error) {
+	rows, err := q.db.Query(ctx, listAlertEvents,
+		arg.OrganizationID,
+		arg.Limit,
+		arg.Offset,
+		arg.AlertID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AlertEvent{}
+	for rows.Next() {
+		var i AlertEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.AlertID,
+			&i.AlertType,
+			&i.Severity,
+			&i.Status,
+			&i.Message,
+			&i.Context,
+			&i.TriggeredAt,
+			&i.ResolvedAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listAlerts = `-- name: ListAlerts :many
@@ -163,6 +294,39 @@ func (q *Queries) UpdateAlert(ctx context.Context, arg UpdateAlertParams) (Alert
 		arg.Column5,
 		arg.Status,
 	)
+	var i Alert
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.AlertType,
+		&i.Name,
+		&i.Severity,
+		&i.Configuration,
+		&i.Status,
+		&i.LastTriggeredAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateAlertTriggered = `-- name: UpdateAlertTriggered :one
+UPDATE alerts
+SET last_triggered_at = now(),
+    status = $3,
+    updated_at = now()
+WHERE organization_id = $1 AND id = $2
+RETURNING id, organization_id, alert_type, name, severity, configuration, status, last_triggered_at, created_at, updated_at
+`
+
+type UpdateAlertTriggeredParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ID             uuid.UUID `json:"id"`
+	Status         string    `json:"status"`
+}
+
+func (q *Queries) UpdateAlertTriggered(ctx context.Context, arg UpdateAlertTriggeredParams) (Alert, error) {
+	row := q.db.QueryRow(ctx, updateAlertTriggered, arg.OrganizationID, arg.ID, arg.Status)
 	var i Alert
 	err := row.Scan(
 		&i.ID,

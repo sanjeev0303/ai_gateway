@@ -292,12 +292,14 @@ export function DataTable<T>({
                           {href ? (
                             <a
                               href={String(href)}
+                              suppressHydrationWarning
                               className="font-medium underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
                               {primaryText}
                             </a>
                           ) : (
                             <span
+                              suppressHydrationWarning
                               className={cn(
                                 "block",
                                 TABULAR.has(format) && "tabular-nums",

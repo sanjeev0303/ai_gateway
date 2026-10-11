@@ -35,10 +35,14 @@ func registerHealthRoutes(mux *http.ServeMux, reg *health.Registry) {
 
 // registerGatewayRoutes wires the gateway routes.
 func registerGatewayRoutes(mux *http.ServeMux, gw *Gateway) {
-	// Main messages endpoint
+	// Anthropic messages endpoint
 	mux.Handle("POST /v1/messages", gw)
 	// Token counting endpoint
 	mux.Handle("POST /v1/messages/count_tokens", gw)
+	// OpenAI-compatible chat and completions endpoints
+	mux.Handle("POST /v1/chat/completions", gw)
+	mux.Handle("POST /v1/completions", gw)
+	mux.Handle("POST /v1/embeddings", gw)
 	// Model listing (if needed)
 	mux.Handle("GET /v1/models", gw)
 	// Admin/debug endpoints

@@ -4,40 +4,51 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"ai-governance-saas/backend/internal/domain"
 	repositories "ai-governance-saas/backend/internal/ports/repositories"
 	"github.com/google/uuid"
-	"log/slog"
 )
 
 type EvaluatorDeps struct {
-	Log           *slog.Logger
-	Alerts        repositories.AlertRepository
-	Notifier      Notifier
-	UsageRollups  repositories.UsageRollupRepository
-	// In a real implementation we would also inject Health, Billing, Policy components here
+	Log            *slog.Logger
+	Alerts         repositories.AlertRepository
+	Notifier       Notifier
+	UsageRollups   repositories.UsageRollupRepository
+	ProviderHealth repositories.ProviderHealthRepository
+	SecurityEvents repositories.SecurityEventRepository
+	LlmRequests    repositories.LlmRequestRepository
 }
 
 type Evaluator struct {
-	log          *slog.Logger
-	alerts       repositories.AlertRepository
-	notifier     Notifier
-	usageRollups repositories.UsageRollupRepository
+	log            *slog.Logger
+	alerts         repositories.AlertRepository
+	notifier       Notifier
+	usageRollups   repositories.UsageRollupRepository
+	providerHealth repositories.ProviderHealthRepository
+	securityEvents repositories.SecurityEventRepository
+	llmRequests    repositories.LlmRequestRepository
 }
 
 func NewEvaluator(deps EvaluatorDeps) *Evaluator {
+	if deps.Log == nil {
+		deps.Log = slog.Default()
+	}
 	return &Evaluator{
-		log:          deps.Log,
-		alerts:       deps.Alerts,
-		notifier:     deps.Notifier,
-		usageRollups: deps.UsageRollups,
+		log:            deps.Log,
+		alerts:         deps.Alerts,
+		notifier:       deps.Notifier,
+		usageRollups:   deps.UsageRollups,
+		providerHealth: deps.ProviderHealth,
+		securityEvents: deps.SecurityEvents,
+		llmRequests:    deps.LlmRequests,
 	}
 }
 
 // EvaluateAll scans all organizations for active alerts and triggers them if conditions are met.
-// This is typically called by a cron job or background worker.
+// This is called periodically by the background worker.
 func (e *Evaluator) EvaluateAll(ctx context.Context, orgIDs []uuid.UUID) {
 	for _, orgID := range orgIDs {
 		alerts, err := e.alerts.List(ctx, orgID)
@@ -46,75 +57,105 @@ func (e *Evaluator) EvaluateAll(ctx context.Context, orgIDs []uuid.UUID) {
 			continue
 		}
 
-		for _, alert := range alerts {
-			if alert.Status != domain.AlertStatusActive {
+		for _, a := range alerts {
+			if a.Status == domain.AlertStatusMuted {
 				continue
 			}
-
-			// Debounce/throttle evaluation based on LastTriggeredAt
-			if alert.LastTriggeredAt != nil && time.Since(*alert.LastTriggeredAt) < 15*time.Minute {
-				continue
-			}
-
-			e.evaluateSingle(ctx, orgID, alert)
+			e.evaluateSingle(ctx, orgID, a)
 		}
 	}
 }
 
-func (e *Evaluator) evaluateSingle(ctx context.Context, orgID uuid.UUID, alert domain.Alert) {
-	var triggered bool
-	var message string
-	var context map[string]any
-
-	// Basic deterministic detection
-	switch alert.AlertType {
-	case "spend_threshold", "spend_exceeded":
-		triggered, message, context = e.evalSpend(ctx, orgID, alert.Configuration)
-	case "request_rate_spike":
-		triggered, message, context = e.evalRequestRate(ctx, orgID, alert.Configuration)
-	case "error_rate_spike":
-		triggered, message, context = e.evalErrorRate(ctx, orgID, alert.Configuration)
+// EvaluateAlert performs a deterministic evaluation of an alert rule's conditions.
+func (e *Evaluator) EvaluateAlert(ctx context.Context, orgID uuid.UUID, a domain.Alert) (bool, string, map[string]any) {
+	switch a.AlertType {
+	case "spend_threshold", "spend_exceeded", "spend_limit":
+		return e.evalSpend(ctx, orgID, a.Configuration)
+	case "request_rate_spike", "rate_limit":
+		return e.evalRequestRate(ctx, orgID, a.Configuration)
+	case "error_rate_spike", "error_rate":
+		return e.evalErrorRate(ctx, orgID, a.Configuration)
 	case "provider_failure":
-		triggered, message, context = true, "Provider endpoint failing health checks", map[string]any{"provider": "openai"}
+		return e.evalProviderFailure(ctx, orgID, a.Configuration)
 	case "credential_failure":
-		triggered, message, context = true, "Invalid credential used repeatedly", map[string]any{}
+		return e.evalCredentialFailure(ctx, orgID, a.Configuration)
 	case "policy_violation":
-		triggered, message, context = true, "Policy violation threshold exceeded", map[string]any{}
+		return e.evalPolicyViolation(ctx, orgID, a.Configuration)
 	case "rate_limit_spike":
-		triggered, message, context = true, "Unusual amount of rate limited requests", map[string]any{}
-	case "usage_anomaly":
-		triggered, message, context = true, "Deterministic usage anomaly detected", map[string]any{}
+		return e.evalRateLimitSpike(ctx, orgID, a.Configuration)
+	case "usage_anomaly", "anomaly":
+		return e.evalUsageAnomaly(ctx, orgID, a.Configuration)
 	default:
-		e.log.WarnContext(ctx, "unknown alert type", "alert_type", alert.AlertType, "alert_id", alert.ID)
-		return
+		e.log.WarnContext(ctx, "unknown alert type", "alert_type", a.AlertType, "alert_id", a.ID)
+		return false, fmt.Sprintf("unsupported alert type: %s", a.AlertType), nil
 	}
+}
+
+func (e *Evaluator) evaluateSingle(ctx context.Context, orgID uuid.UUID, a domain.Alert) {
+	triggered, message, details := e.EvaluateAlert(ctx, orgID, a)
+	now := time.Now().UTC()
 
 	if triggered {
-		now := time.Now()
-		// Persist the trigger history (stubbed via Alert status update)
-		_, err := e.alerts.Update(ctx, orgID, alert.ID, domain.AlertUpdate{
-			Name:          alert.Name,
-			Severity:      alert.Severity,
-			Configuration: alert.Configuration,
-			Status:        alert.Status,
-		})
-		
-		// In a real system, you'd have an AlertEventRepository to save trigger history
-		if err != nil {
-			e.log.ErrorContext(ctx, "failed to update alert last triggered", "alert_id", alert.ID, "error", err)
-		} else {
-			_ = now // In reality, update LastTriggeredAt in DB
+		// Debounce / Cooldown check: do not fire repeated notifications within 15 minutes
+		if a.LastTriggeredAt != nil && time.Since(*a.LastTriggeredAt) < 15*time.Minute && a.Status == domain.AlertStatusActive {
+			return
 		}
 
-		err = e.notifier.Send(ctx, orgID, NotificationEvent{
-			AlertID:   alert.ID,
-			AlertType: alert.AlertType,
-			Severity:  alert.Severity,
-			Message:   message,
-			Context:   context,
+		ctxBytes, _ := json.Marshal(details)
+
+		// 1. Record trigger event in history
+		_, err := e.alerts.CreateEvent(ctx, orgID, domain.NewAlertEvent{
+			AlertID:     a.ID,
+			AlertType:   a.AlertType,
+			Severity:    a.Severity,
+			Status:      "triggered",
+			Message:     message,
+			Context:     ctxBytes,
+			TriggeredAt: now,
 		})
 		if err != nil {
-			e.log.ErrorContext(ctx, "failed to send alert notification", "alert_id", alert.ID, "error", err)
+			e.log.ErrorContext(ctx, "failed to record alert trigger event", "alert_id", a.ID, "error", err)
+		}
+
+		// 2. Update alert status and last_triggered_at
+		_, err = e.alerts.UpdateTriggered(ctx, orgID, a.ID, domain.AlertStatusActive)
+		if err != nil {
+			e.log.ErrorContext(ctx, "failed to update alert status to active", "alert_id", a.ID, "error", err)
+		}
+
+		// 3. Dispatch notification with failure isolation
+		if e.notifier != nil {
+			err = e.notifier.Send(ctx, orgID, NotificationEvent{
+				AlertID:   a.ID,
+				AlertType: a.AlertType,
+				Severity:  a.Severity,
+				Message:   message,
+				Context:   details,
+			})
+			if err != nil {
+				e.log.ErrorContext(ctx, "failed to dispatch alert notification", "alert_id", a.ID, "error", err)
+			}
+		}
+	} else if a.Status == domain.AlertStatusActive {
+		// Condition returned to normal: record resolution event and update status
+		ctxBytes, _ := json.Marshal(map[string]any{"resolved_at": now.Format(time.RFC3339)})
+		_, err := e.alerts.CreateEvent(ctx, orgID, domain.NewAlertEvent{
+			AlertID:     a.ID,
+			AlertType:   a.AlertType,
+			Severity:    a.Severity,
+			Status:      "resolved",
+			Message:     fmt.Sprintf("Alert resolved: %s condition returned to normal", a.Name),
+			Context:     ctxBytes,
+			TriggeredAt: now,
+			ResolvedAt:  &now,
+		})
+		if err != nil {
+			e.log.ErrorContext(ctx, "failed to record alert resolution event", "alert_id", a.ID, "error", err)
+		}
+
+		_, err = e.alerts.UpdateTriggered(ctx, orgID, a.ID, domain.AlertStatusResolved)
+		if err != nil {
+			e.log.ErrorContext(ctx, "failed to update alert status to resolved", "alert_id", a.ID, "error", err)
 		}
 	}
 }
@@ -124,25 +165,27 @@ func (e *Evaluator) evalSpend(ctx context.Context, orgID uuid.UUID, config []byt
 		ThresholdMicros int64  `json:"threshold_micros"`
 		Window          string `json:"window"`
 	}
-	if err := json.Unmarshal(config, &cfg); err != nil {
-		return false, "", nil
+	_ = json.Unmarshal(config, &cfg)
+	if cfg.ThresholdMicros <= 0 {
+		cfg.ThresholdMicros = 50_000_000 // $50 default
 	}
 
-	window := time.Hour
+	window := 24 * time.Hour
 	switch cfg.Window {
-	case "daily":
-		window = 24 * time.Hour
-	case "monthly":
+	case "hourly", "1h":
+		window = time.Hour
+	case "monthly", "30d":
 		window = 30 * 24 * time.Hour
 	}
 
-	from := time.Now().UTC().Add(-window)
-	to := time.Now().UTC()
+	if e.usageRollups == nil {
+		return false, "usage rollups unavailable", nil
+	}
 
-	summary, err := e.usageRollups.GetSummary(ctx, orgID, domain.UsageFilter{
-		From: from,
-		To:   to,
-	})
+	to := time.Now().UTC()
+	from := to.Add(-window)
+
+	summary, err := e.usageRollups.GetSummary(ctx, orgID, domain.UsageFilter{From: from, To: to})
 	if err != nil {
 		e.log.ErrorContext(ctx, "failed to get usage summary for spend alert", "error", err)
 		return false, "", nil
@@ -156,34 +199,36 @@ func (e *Evaluator) evalSpend(ctx context.Context, orgID uuid.UUID, config []byt
 				"threshold_micros":     cfg.ThresholdMicros,
 				"window":               cfg.Window,
 				"total_requests":       summary.Requests,
-				"total_tokens":         summary.TotalTokens,
 			}
 	}
-	return false, "", nil
+	return false, "spend within limit", map[string]any{
+		"current_spend_micros": summary.TotalCostMicros,
+		"threshold_micros":     cfg.ThresholdMicros,
+	}
 }
 
 func (e *Evaluator) evalRequestRate(ctx context.Context, orgID uuid.UUID, config []byte) (bool, string, map[string]any) {
 	var cfg struct {
 		ThresholdPerMinute int `json:"threshold_per_minute"`
 	}
-	if err := json.Unmarshal(config, &cfg); err != nil {
-		return false, "", nil
+	_ = json.Unmarshal(config, &cfg)
+	if cfg.ThresholdPerMinute <= 0 {
+		cfg.ThresholdPerMinute = 60
 	}
 
-	from := time.Now().UTC().Add(-5 * time.Minute)
+	if e.usageRollups == nil {
+		return false, "usage rollups unavailable", nil
+	}
+
 	to := time.Now().UTC()
+	from := to.Add(-5 * time.Minute)
 
-	summary, err := e.usageRollups.GetSummary(ctx, orgID, domain.UsageFilter{
-		From: from,
-		To:   to,
-	})
+	summary, err := e.usageRollups.GetSummary(ctx, orgID, domain.UsageFilter{From: from, To: to})
 	if err != nil {
-		e.log.ErrorContext(ctx, "failed to get usage summary for request rate alert", "error", err)
 		return false, "", nil
 	}
 
-	minutes := 5.0
-	reqPerMinute := float64(summary.Requests) / minutes
+	reqPerMinute := float64(summary.Requests) / 5.0
 	if reqPerMinute >= float64(cfg.ThresholdPerMinute) {
 		return true,
 			fmt.Sprintf("Request rate spike: %.1f req/min (threshold: %d req/min)", reqPerMinute, cfg.ThresholdPerMinute),
@@ -191,10 +236,12 @@ func (e *Evaluator) evalRequestRate(ctx context.Context, orgID uuid.UUID, config
 				"current_rate_per_minute": reqPerMinute,
 				"threshold_per_minute":    cfg.ThresholdPerMinute,
 				"total_requests":          summary.Requests,
-				"window_minutes":          5,
 			}
 	}
-	return false, "", nil
+	return false, "request rate normal", map[string]any{
+		"current_rate_per_minute": reqPerMinute,
+		"threshold_per_minute":    cfg.ThresholdPerMinute,
+	}
 }
 
 func (e *Evaluator) evalErrorRate(ctx context.Context, orgID uuid.UUID, config []byte) (bool, string, map[string]any) {
@@ -202,24 +249,24 @@ func (e *Evaluator) evalErrorRate(ctx context.Context, orgID uuid.UUID, config [
 		ThresholdPercent float64 `json:"threshold_percent"`
 		MinRequests      int     `json:"min_requests"`
 	}
-	if err := json.Unmarshal(config, &cfg); err != nil {
-		return false, "", nil
+	_ = json.Unmarshal(config, &cfg)
+	if cfg.ThresholdPercent <= 0 {
+		cfg.ThresholdPercent = 10.0
+	}
+	if cfg.MinRequests <= 0 {
+		cfg.MinRequests = 5
 	}
 
-	from := time.Now().UTC().Add(-15 * time.Minute)
+	if e.usageRollups == nil {
+		return false, "usage rollups unavailable", nil
+	}
+
 	to := time.Now().UTC()
+	from := to.Add(-15 * time.Minute)
 
-	summary, err := e.usageRollups.GetSummary(ctx, orgID, domain.UsageFilter{
-		From: from,
-		To:   to,
-	})
-	if err != nil {
-		e.log.ErrorContext(ctx, "failed to get usage summary for error rate alert", "error", err)
-		return false, "", nil
-	}
-
-	if summary.Requests < int64(cfg.MinRequests) {
-		return false, "", nil
+	summary, err := e.usageRollups.GetSummary(ctx, orgID, domain.UsageFilter{From: from, To: to})
+	if err != nil || summary.Requests < int64(cfg.MinRequests) {
+		return false, "insufficient requests to evaluate error rate", nil
 	}
 
 	errorRate := float64(summary.Errors) / float64(summary.Requests) * 100
@@ -231,10 +278,226 @@ func (e *Evaluator) evalErrorRate(ctx context.Context, orgID uuid.UUID, config [
 				"threshold_percent":          cfg.ThresholdPercent,
 				"total_errors":               summary.Errors,
 				"total_requests":             summary.Requests,
-				"window_minutes":             15,
 			}
 	}
-	return false, "", nil
+	return false, "error rate normal", map[string]any{
+		"current_error_rate_percent": errorRate,
+		"threshold_percent":          cfg.ThresholdPercent,
+	}
+}
+
+func (e *Evaluator) evalProviderFailure(ctx context.Context, orgID uuid.UUID, config []byte) (bool, string, map[string]any) {
+	var cfg struct {
+		Provider             string `json:"provider"`
+		ConsecutiveFailures int    `json:"consecutive_failures"`
+	}
+	_ = json.Unmarshal(config, &cfg)
+	if cfg.ConsecutiveFailures <= 0 {
+		cfg.ConsecutiveFailures = 3
+	}
+
+	// 1. Check live provider health probes if available
+	if e.providerHealth != nil {
+		if cfg.Provider != "" {
+			state, err := e.providerHealth.Get(ctx, cfg.Provider)
+			if err == nil && state.Status == "unhealthy" {
+				return true,
+					fmt.Sprintf("Provider %s is reporting unhealthy status", cfg.Provider),
+					map[string]any{"provider": cfg.Provider, "status": state.Status, "error": state.LastError}
+			}
+		} else {
+			states, err := e.providerHealth.List(ctx)
+			if err == nil {
+				for _, state := range states {
+					if state.Status == "unhealthy" {
+						return true,
+							fmt.Sprintf("Provider %s is reporting unhealthy status", state.ProviderKind),
+							map[string]any{"provider": state.ProviderKind, "status": state.Status, "error": state.LastError}
+					}
+				}
+			}
+		}
+
+	}
+
+	// 2. Check recent failed LLM requests for this organization
+	if e.llmRequests != nil {
+		to := time.Now().UTC()
+		from := to.Add(-15 * time.Minute)
+		statusFailed := domain.LlmRequestStatusFailed
+		filter := domain.UsageFilter{
+			From:   from,
+			To:     to,
+			Status: &statusFailed,
+		}
+		if cfg.Provider != "" {
+			filter.Provider = &cfg.Provider
+		}
+		reqs, err := e.llmRequests.GetRequests(ctx, orgID, filter, int32(cfg.ConsecutiveFailures), 0)
+		if err == nil && len(reqs) >= cfg.ConsecutiveFailures {
+			return true,
+				fmt.Sprintf("Multiple consecutive upstream provider failures detected (%d failures in 15m)", len(reqs)),
+				map[string]any{"failure_count": len(reqs), "threshold": cfg.ConsecutiveFailures, "provider": cfg.Provider}
+		}
+	}
+
+	return false, "all provider endpoints operational", nil
+}
+
+func (e *Evaluator) evalCredentialFailure(ctx context.Context, orgID uuid.UUID, config []byte) (bool, string, map[string]any) {
+	var cfg struct {
+		Threshold int `json:"threshold"`
+	}
+	_ = json.Unmarshal(config, &cfg)
+	if cfg.Threshold <= 0 {
+		cfg.Threshold = 3
+	}
+
+	if e.llmRequests != nil {
+		to := time.Now().UTC()
+		from := to.Add(-15 * time.Minute)
+		statusFailed := domain.LlmRequestStatusFailed
+		filter := domain.UsageFilter{
+			From:   from,
+			To:     to,
+			Status: &statusFailed,
+		}
+		reqs, err := e.llmRequests.GetRequests(ctx, orgID, filter, 50, 0)
+		if err == nil {
+			var credFailures int
+			for _, r := range reqs {
+				if r.ErrorCode != nil && (*r.ErrorCode == "invalid_api_key" || *r.ErrorCode == "unauthorized" || *r.ErrorCode == "401" || *r.ErrorCode == "403") {
+					credFailures++
+				}
+			}
+			if credFailures >= cfg.Threshold {
+				return true,
+					fmt.Sprintf("Repeated credential authentication failures detected (%d in 15m)", credFailures),
+					map[string]any{"credential_failures": credFailures, "threshold": cfg.Threshold}
+			}
+		}
+	}
+
+	return false, "credential authentication normal", nil
+}
+
+func (e *Evaluator) evalPolicyViolation(ctx context.Context, orgID uuid.UUID, config []byte) (bool, string, map[string]any) {
+	var cfg struct {
+		Threshold int `json:"threshold"`
+	}
+	_ = json.Unmarshal(config, &cfg)
+	if cfg.Threshold <= 0 {
+		cfg.Threshold = 3
+	}
+
+	if e.securityEvents != nil {
+		to := time.Now().UTC()
+		from := to.Add(-15 * time.Minute)
+		cat := domain.SecurityEventPolicyViolation
+		filter := domain.SecurityEventFilter{
+			Category: &cat,
+			From:     from,
+			To:       to,
+		}
+		events, err := e.securityEvents.List(ctx, orgID, filter, int32(cfg.Threshold), 0)
+		if err == nil && len(events) >= cfg.Threshold {
+			return true,
+				fmt.Sprintf("Governance policy violation threshold exceeded (%d violations in 15m)", len(events)),
+				map[string]any{"violation_count": len(events), "threshold": cfg.Threshold}
+		}
+	}
+
+	return false, "policy enforcement normal", nil
+}
+
+func (e *Evaluator) evalRateLimitSpike(ctx context.Context, orgID uuid.UUID, config []byte) (bool, string, map[string]any) {
+	var cfg struct {
+		Threshold int `json:"threshold"`
+	}
+	_ = json.Unmarshal(config, &cfg)
+	if cfg.Threshold <= 0 {
+		cfg.Threshold = 5
+	}
+
+	if e.llmRequests != nil {
+		to := time.Now().UTC()
+		from := to.Add(-15 * time.Minute)
+		statusFailed := domain.LlmRequestStatusFailed
+		filter := domain.UsageFilter{
+			From:   from,
+			To:     to,
+			Status: &statusFailed,
+		}
+		reqs, err := e.llmRequests.GetRequests(ctx, orgID, filter, 50, 0)
+		if err == nil {
+			var rateLimitCount int
+			for _, r := range reqs {
+				if r.ErrorCode != nil && (*r.ErrorCode == "rate_limit_exceeded" || *r.ErrorCode == "429") {
+					rateLimitCount++
+				}
+			}
+			if rateLimitCount >= cfg.Threshold {
+				return true,
+					fmt.Sprintf("Rate limit spike detected: %d requests rejected by rate limits in 15m", rateLimitCount),
+					map[string]any{"rate_limited_requests": rateLimitCount, "threshold": cfg.Threshold}
+			}
+		}
+	}
+
+	return false, "rate limit throughput normal", nil
+}
+
+func (e *Evaluator) evalUsageAnomaly(ctx context.Context, orgID uuid.UUID, config []byte) (bool, string, map[string]any) {
+	var cfg struct {
+		Multiplier      float64 `json:"multiplier"`
+		ThresholdMicros int64   `json:"threshold_micros"`
+	}
+	_ = json.Unmarshal(config, &cfg)
+	if cfg.Multiplier <= 0 {
+		cfg.Multiplier = 2.0
+	}
+	if cfg.ThresholdMicros <= 0 {
+		cfg.ThresholdMicros = 1_000_000 // $1.00
+	}
+
+	if e.usageRollups == nil {
+		return false, "usage rollups unavailable", nil
+	}
+
+	to := time.Now().UTC()
+	// Current 1h
+	currentSummary, err := e.usageRollups.GetSummary(ctx, orgID, domain.UsageFilter{
+		From: to.Add(-time.Hour),
+		To:   to,
+	})
+	if err != nil || currentSummary.TotalCostMicros < cfg.ThresholdMicros {
+		return false, "spend within nominal variance", nil
+	}
+
+	// Prior 24h baseline
+	baselineSummary, err := e.usageRollups.GetSummary(ctx, orgID, domain.UsageFilter{
+		From: to.Add(-25 * time.Hour),
+		To:   to.Add(-time.Hour),
+	})
+	if err != nil {
+		return false, "", nil
+	}
+
+	hourlyAvg := float64(baselineSummary.TotalCostMicros) / 24.0
+	if hourlyAvg > 0 && float64(currentSummary.TotalCostMicros) >= (hourlyAvg*cfg.Multiplier) {
+		return true,
+			fmt.Sprintf("Usage anomaly: current hourly spend of %s is %.1fx greater than 24h average (%s/hr)",
+				formatMicros(currentSummary.TotalCostMicros),
+				float64(currentSummary.TotalCostMicros)/hourlyAvg,
+				formatMicros(int64(hourlyAvg))),
+			map[string]any{
+				"current_hourly_spend_micros": currentSummary.TotalCostMicros,
+				"baseline_hourly_avg_micros":  int64(hourlyAvg),
+				"ratio":                       float64(currentSummary.TotalCostMicros) / hourlyAvg,
+			}
+	}
+
+	return false, "usage metrics within expected baseline", nil
 }
 
 func formatMicros(micros int64) string {

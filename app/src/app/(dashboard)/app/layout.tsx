@@ -40,7 +40,7 @@ export default async function DashboardLayout({
 
           <div className="flex min-w-0 flex-1 flex-col">
             <Topbar />
-            <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+            <main className="min-h-0 flex-1 overflow-y-auto page-scrollbar">{children}</main>
           </div>
         </div>
       </SessionProvider>

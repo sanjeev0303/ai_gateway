@@ -280,3 +280,22 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 	}
 	return items, nil
 }
+
+const purgeExpiredConversations = `-- name: PurgeExpiredConversations :execrows
+DELETE FROM conversations
+WHERE organization_id = $1
+  AND created_at < $2::timestamptz
+`
+
+type PurgeExpiredConversationsParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	OlderThan      time.Time `json:"older_than"`
+}
+
+func (q *Queries) PurgeExpiredConversations(ctx context.Context, arg PurgeExpiredConversationsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeExpiredConversations, arg.OrganizationID, arg.OlderThan)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}

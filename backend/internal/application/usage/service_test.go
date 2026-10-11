@@ -192,6 +192,10 @@ func (f *fakeUsageEvents) ListByRequest(context.Context, uuid.UUID, string) ([]d
 	return nil, nil
 }
 
+func (f *fakeUsageEvents) PurgeExpired(context.Context, uuid.UUID, time.Time) (int64, error) {
+	return 0, nil
+}
+
 func TestRecordRequest(t *testing.T) {
 	orgID := uuid.New()
 	req := domain.NewLlmRequest{RequestID: "req-1"}

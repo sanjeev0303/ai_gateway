@@ -15,25 +15,29 @@ import (
 )
 
 type ServiceDeps struct {
-	Log    *slog.Logger
-	Alerts repositories.AlertRepository
-	Audits repositories.AuditLogRepository
+	Log       *slog.Logger
+	Alerts    repositories.AlertRepository
+	Audits    repositories.AuditLogRepository
+	Evaluator *Evaluator
 }
 
 // Service manages an organization's configured alert rules.
 type Service struct {
-	log    *slog.Logger
-	alerts repositories.AlertRepository
-	audits repositories.AuditLogRepository
+	log       *slog.Logger
+	alerts    repositories.AlertRepository
+	audits    repositories.AuditLogRepository
+	evaluator *Evaluator
 }
 
 func NewService(deps ServiceDeps) *Service {
 	return &Service{
-		log:    deps.Log,
-		alerts: deps.Alerts,
-		audits: deps.Audits,
+		log:       deps.Log,
+		alerts:    deps.Alerts,
+		audits:    deps.Audits,
+		evaluator: deps.Evaluator,
 	}
 }
+
 
 func (s *Service) List(ctx context.Context, actor domain.Actor) ([]domain.Alert, error) {
 	if !actor.Can(domain.PermissionAlertsRead) {
@@ -125,6 +129,14 @@ func (s *Service) Test(ctx context.Context, actor domain.Actor, id uuid.UUID) (T
 		return TestResult{}, err
 	}
 	muted := existing.Status == domain.AlertStatusMuted
+	var triggered bool
+	var msg string
+	if s.evaluator != nil {
+		triggered, msg, _ = s.evaluator.EvaluateAlert(ctx, actor.OrganizationID, existing)
+	} else {
+		msg = testMessage(muted)
+	}
+
 	return TestResult{
 		AlertID:          existing.ID,
 		AlertType:        existing.AlertType,
@@ -132,9 +144,16 @@ func (s *Service) Test(ctx context.Context, actor domain.Actor, id uuid.UUID) (T
 		Status:           existing.Status,
 		Configuration:    existing.Configuration,
 		StatusIsMuted:    muted,
-		NotificationSent: false,
-		Message:          testMessage(muted),
+		NotificationSent: triggered && !muted,
+		Message:          msg,
 	}, nil
+}
+
+func (s *Service) ListEvents(ctx context.Context, actor domain.Actor, alertID *uuid.UUID, limit, offset int32) ([]domain.AlertEvent, error) {
+	if !actor.Can(domain.PermissionAlertsRead) {
+		return nil, repositories.ErrForbidden
+	}
+	return s.alerts.ListEvents(ctx, actor.OrganizationID, alertID, limit, offset)
 }
 
 func testMessage(muted bool) string {
@@ -143,6 +162,7 @@ func testMessage(muted bool) string {
 	}
 	return "Rule is active, but no evaluator is wired to this rule type, so nothing was evaluated and no notification was sent."
 }
+
 
 // TestResult is the outcome of evaluating an alert rule's configuration. It
 // deliberately carries NotificationSent and StatusIsMuted rather than a

@@ -17,6 +17,7 @@ type ConversationRepository interface {
 	// from its messages; Get returns the bare row.
 	Detail(ctx context.Context, orgID, id uuid.UUID) (domain.ConversationSummary, error)
 	List(ctx context.Context, orgID uuid.UUID, filter domain.ConversationFilter, limit, offset int32) ([]domain.ConversationSummary, error)
+	PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error)
 }
 
 // ConversationMessageRepository manages the turns of a conversation.
@@ -44,6 +45,7 @@ type UsageEventRepository interface {
 	Record(ctx context.Context, orgID uuid.UUID, input domain.NewUsageEvent) (domain.UsageEvent, error)
 	Get(ctx context.Context, orgID uuid.UUID, requestID, eventType string) (domain.UsageEvent, error)
 	ListByRequest(ctx context.Context, orgID uuid.UUID, requestID string) ([]domain.UsageEvent, error)
+	PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error)
 }
 
 // UsageRollupRepository rebuilds the hourly/daily/monthly bucket tables for one
@@ -123,6 +125,10 @@ type AlertRepository interface {
 	Get(ctx context.Context, orgID, id uuid.UUID) (domain.Alert, error)
 	Update(ctx context.Context, orgID, id uuid.UUID, input domain.AlertUpdate) (domain.Alert, error)
 	Delete(ctx context.Context, orgID, id uuid.UUID) error
+	UpdateTriggered(ctx context.Context, orgID, id uuid.UUID, status string) (domain.Alert, error)
+	CreateEvent(ctx context.Context, orgID uuid.UUID, input domain.NewAlertEvent) (domain.AlertEvent, error)
+	ListEvents(ctx context.Context, orgID uuid.UUID, alertID *uuid.UUID, limit, offset int32) ([]domain.AlertEvent, error)
+	GetLatestEvent(ctx context.Context, orgID, alertID uuid.UUID) (*domain.AlertEvent, error)
 }
 
 // AuditLogRepository appends immutable audit records and reads them back.

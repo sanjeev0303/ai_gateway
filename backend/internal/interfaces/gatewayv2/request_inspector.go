@@ -60,12 +60,16 @@ func (i *RequestInspectorImpl) Inspect(ctx context.Context, body io.Reader) (Ins
 		hints.RoutingTags["stream"] = boolToString(stream)
 	}
 
-	// Extract tools
+	// Extract tools (supporting both Anthropic name and OpenAI function.name)
 	if tools, ok := req["tools"].([]any); ok {
 		for _, t := range tools {
 			if toolMap, ok := t.(map[string]any); ok {
 				if name, ok := toolMap["name"].(string); ok {
 					hints.Tools = append(hints.Tools, name)
+				} else if fn, ok := toolMap["function"].(map[string]any); ok {
+					if name, ok := fn["name"].(string); ok {
+						hints.Tools = append(hints.Tools, name)
+					}
 				}
 			}
 		}

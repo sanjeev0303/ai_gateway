@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"ai-governance-saas/backend/internal/domain"
 	"ai-governance-saas/backend/internal/platform/health"
@@ -531,6 +532,7 @@ func TestProxyStreamingFlushesChunks(t *testing.T) {
 				return
 			}
 			fl.Flush()
+			time.Sleep(10 * time.Millisecond)
 		}
 	}))
 	defer upstream.Close()

@@ -2,6 +2,81 @@
 
 Updated after each completed prompt.
 
+## ACTIVE TASK: Push All Changes to GitHub
+- [ ] Stage all modified and untracked repository files
+- [ ] Commit with descriptive message
+- [ ] Push to remote `origin/main`
+- [ ] Verify remote synchronization
+
+## PREVIOUS TASK: Final Acceptance Criteria & Required Documentation Deliverables
+- [x] Verify Final Acceptance Criteria across the 22 required evaluation areas
+- [x] Produce and update authoritative documentation in `docs/local-readiness/`:
+  - [x] `docs/local-readiness/current-state.md` (runtime architecture, service topology, pipelines, schemas)
+  - [x] `docs/local-readiness/feature-matrix.md` (exhaustive feature matrix across all 48 capabilities)
+  - [x] `docs/local-readiness/risk-register.md` (residual risks, security boundaries, mitigation controls)
+  - [x] `docs/local-readiness/test-results.md` (complete test results log: unit, integration, race, E2E, perf)
+  - [x] `docs/local-readiness/local-setup.md` (deterministic local setup, env vars, commands, troubleshooting)
+  - [x] `docs/local-readiness/local-production-readiness.md` (authoritative readiness audit report)
+- [x] Update `task.md` on completion
+
+## PREVIOUS TASK: Phases 16 and 17 — Local Performance & Resilience Validation and Release-Readiness Commands
+- [x] Phase 16: Local Performance & Resilience Validation
+- [x] Phase 17: Local Release-Readiness Commands
+- [x] Record all test & journey outputs and update `task.md`
+
+## PREVIOUS TASK: Phases 14 and 15 — Automated Test Suite & Required End-to-End User Journeys
+- [x] Create comprehensive implementation plan artifact (`phase_14_15_implementation_plan.md`)
+- [x] Phase 14: Comprehensive Automated Test Suite
+- [x] Phase 15: Required End-to-End User Journeys
+- [x] Record all test & journey outputs and update `task.md`
+
+## PREVIOUS TASK: Phases 8, 9, 10, and 11 — Dashboard Features, Conversations/Privacy, Alerts/Audits, & Organization/Credential Workflows
+- [x] Create comprehensive implementation plan artifact (`phase_8_9_10_11_implementation_plan.md`)
+- [x] Phase 9: Complete Conversations, Privacy, and Retention
+- [x] Phase 10: Repair Alerts, Audit Logs, and Security Events
+- [x] Phase 11: Complete Organization and Credential Workflows
+- [x] Phase 8: Finish Every Existing Dashboard Feature
+- [x] Validation & Local Production-Readiness (`cmd/e2e/main.go` and full build suites)
+
+## PREVIOUS TASK: Phases 6, 7, and 8 — Event Processing Reliability, Analytics Reconciliation & Control Plane Completion
+- [x] Create comprehensive implementation plan artifact (`phase_6_7_8_implementation_plan.md`)
+- [x] Phase 6: Make Event Processing & Background Jobs Reliable
+- [x] Phase 7: Correct Usage, Cost, and Analytics Reconciliation
+- [x] Phase 8: Finish Control Plane Completion & Verification
+
+## PREVIOUS TASK: Deep Hardening — Phases 3, 4, and 5 Implementation
+- [x] Create comprehensive implementation plan artifact (`phase_3_4_5_implementation_plan.md`)
+- [x] Phase 3: Authentication, Authorization & Multi-Tenancy Hardening
+  - [x] Strict tenant derivation from actor context (no client-supplied org ID trusted)
+  - [x] Secret safety audit (verify no raw API keys or password hashes exposed in responses)
+  - [x] Immediate credential revocation & cache invalidation
+  - [x] Automated security isolation test suite (`multi_tenancy_security_test.go`)
+- [x] Phase 4: Gateway Request Lifecycle & Streaming Hardening
+  - [x] SSE streaming flush verification & client cancellation handling (`ctx.Done()`)
+  - [x] Token attribution (input, output, cached, thinking tokens, tool calls)
+  - [x] Provider error mapping (HTTP 429, 504, 403, 402)
+  - [x] Automated gateway lifecycle test suite (`gateway_lifecycle_test.go`)
+- [x] Phase 5: Real-Time Governance & Distributed Enforcement
+  - [x] Replace `dummyInvalidator{}` with real Redis Pub/Sub invalidator
+  - [x] Instantaneous gateway policy snapshot invalidation (<1ms)
+  - [x] Distributed / atomic Redis rate limiter implementation
+  - [x] Automated policy invalidation & concurrent budget test suite (`policy_invalidation_test.go`)
+
+## PREVIOUS TASK: Sentinel Overview — Fix Source Mismatch, Render Paths, and UI Responsiveness
+- [x] Step 1 — Prove the source being served
+- [x] Step 2 — Fix font configuration
+- [x] Step 3 — Unify Overview render paths
+- [x] Step 4 — Correct functional and data issues
+- [x] Step 5 — Prove changes are visible (type check, build, screenshots)
+- [x] Resolve docker compose build DNS metadata failure for backend base images
+- [x] Overview Page Pixel-Level Redesign (Impeccable & Modern Design System)
+- [x] Refine scrollbar design and decrease width (sidebar & main page)
+- [x] Fix Actionable Alerts card overflow and visual design in Overview page
+- [x] Unify layout gaps across all pages (sidebar and right edge consistent margin/padding)
+- [x] Fix React error #418 hydration mismatch across client date formatting in HeaderActions
+- [x] Eliminate React error #418 hydration mismatch across dashboard (enforce UTC in formatDate/formatDateTime, add suppressHydrationWarning to StatCard & DataTable, and resolve relative URL handling in api-client)
+
+
 ## STATUS
 
 | Phase | Title | Status |
@@ -175,4 +250,3 @@ Updated after each completed prompt.
 
 1. **P27** — Wire server-side pagination for audit logs and activity
 2. **P43** — Extend seed.sql with realistic dev records
-

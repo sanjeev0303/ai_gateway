@@ -18,14 +18,24 @@ import (
 
 // usageFlushTimeout bounds one batch of ledger writes so a stuck database
 // cannot pin the worker goroutine indefinitely.
-const usageFlushTimeout = 5 * time.Second
+const (
+	usageFlushTimeout  = 5 * time.Second
+	maxRetrySpoolSize  = 5000
+	maxSpoolAttempts   = 5
+)
 
 var errMissingRequestID = errors.New("gateway: usage record has no request id")
+
+type spooledRecord struct {
+	record   UsageRecord
+	attempts int
+}
 
 // TelemetryEmitterImpl emits usage and error events asynchronously.
 type TelemetryEmitterImpl struct {
 	usageQueue  chan UsageRecord
 	errorQueue  chan ErrorRecord
+	retrySpool  []spooledRecord
 	logger      *slog.Logger
 	wg          sync.WaitGroup
 	stopCh      chan struct{}
@@ -116,6 +126,9 @@ func (e *TelemetryEmitterImpl) usageWorker() {
 	defer ticker.Stop()
 
 	flush := func() {
+		if len(e.retrySpool) > 0 {
+			e.flushSpooled()
+		}
 		if len(batch) == 0 {
 			return
 		}
@@ -151,10 +164,16 @@ func (e *TelemetryEmitterImpl) usageWorker() {
 		case done := <-e.flushReq:
 			drain()
 			flush()
+			if len(e.retrySpool) > 0 {
+				e.flushSpooled()
+			}
 			close(done)
 		case <-e.stopCh:
 			drain()
 			flush()
+			if len(e.retrySpool) > 0 {
+				e.flushSpooled()
+			}
 			return
 		}
 	}
@@ -199,9 +218,8 @@ func (e *TelemetryEmitterImpl) errorWorker() {
 	}
 }
 
-// flushUsage publishes a batch of usage records. The worker owns the ledger
-// write, and its idempotency absorbs a redelivered message rather than
-// double-counting it.
+// flushUsage publishes a batch of usage records. When a transient publish failure occurs,
+// the record is spooled into retrySpool to ensure it is not permanently lost.
 func (e *TelemetryEmitterImpl) flushUsage(batch []UsageRecord) {
 	if e.bus == nil {
 		atomic.AddInt64(&e.stats.UsageWriteFailed, int64(len(batch)))
@@ -215,13 +233,41 @@ func (e *TelemetryEmitterImpl) flushUsage(batch []UsageRecord) {
 	for _, record := range batch {
 		if err := e.writeUsage(ctx, record); err != nil {
 			atomic.AddInt64(&e.stats.UsageWriteFailed, 1)
-			e.logger.Error("telemetry: usage write failed",
+			e.logger.Warn("telemetry: usage publish failed, spooling for retry",
 				"request_id", record.RequestID,
 				"org_id", record.OrganizationID,
 				"error", err,
 			)
+			if len(e.retrySpool) < maxRetrySpoolSize {
+				e.retrySpool = append(e.retrySpool, spooledRecord{record: record, attempts: 1})
+			} else {
+				e.logger.Error("telemetry: retry spool full, discarding record", "request_id", record.RequestID)
+			}
 		}
 	}
+}
+
+// flushSpooled attempts to redeliver spooled usage records.
+func (e *TelemetryEmitterImpl) flushSpooled() {
+	if len(e.retrySpool) == 0 || e.bus == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), usageFlushTimeout)
+	defer cancel()
+
+	remaining := make([]spooledRecord, 0, len(e.retrySpool))
+	for _, item := range e.retrySpool {
+		if err := e.writeUsage(ctx, item.record); err != nil {
+			item.attempts++
+			if item.attempts < maxSpoolAttempts {
+				remaining = append(remaining, item)
+			} else {
+				e.logger.Error("telemetry: max retry attempts exceeded for spooled record, discarding",
+					"request_id", item.record.RequestID, "attempts", item.attempts)
+			}
+		}
+	}
+	e.retrySpool = remaining
 }
 
 // usageEventMetadata is the ledger detail carried alongside the token total.
@@ -303,6 +349,7 @@ func newLlmRequestFrom(record UsageRecord, providerKind, status string) domain.N
 		CachedInputTokens:  int32(record.CacheReadTokens),
 		TotalTokens:        int32(record.InputTokens + record.OutputTokens),
 		LatencyMs:          int32(record.LatencyMs),
+		CostMicros:         record.CostMicros,
 		CreatedAt:          record.Timestamp.UTC(),
 		RequestStartedAt:   &record.RequestStartedAt,
 		FirstTokenAt:       record.FirstTokenAt,

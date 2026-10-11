@@ -54,21 +54,23 @@ export default async function MembersPage() {
   const active = rows.filter((row) => row.status === "active");
 
   return (
-    <PageShell title="Members" description="Everyone in the organization, with their role and status">
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Active members" value={String(active.length)} tone="success" hint="Enabled and signing in" />
-      </section>
+    <div className="p-4 sm:p-6">
+      <PageShell title="Members" description="Everyone in the organization, with their role and status">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Active members" value={String(active.length)} tone="success" hint="Enabled and signing in" />
+        </section>
 
-      <div className="grid gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>All members</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <MembersClient initialRows={rows} />
-          </CardContent>
-        </Card>
-      </div>
-    </PageShell>
+        <div className="grid gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>All members</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <MembersClient initialRows={rows} />
+            </CardContent>
+          </Card>
+        </div>
+      </PageShell>
+    </div>
   );
 }

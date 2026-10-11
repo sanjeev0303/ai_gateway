@@ -44,7 +44,7 @@ x-backend-env: &backend-env
   AIGW_REDIS_DB: "0"
 
   AIGW_EVENTBUS_ENABLED: "true"
-  AIGW_EVENTBUS_KIND: inmemory # inmemory runs in-process; nats is reserved and not yet built
+  AIGW_EVENTBUS_KIND: nats # distributed persistent event transport via NATS JetStream
   AIGW_EVENTBUS_URL: nats://nats:4222
 
   AIGW_PROVIDER_REQUEST_TIMEOUT: 2m
@@ -109,10 +109,12 @@ services:
 
   nats:
     image: nats:2-alpine
-    command: ["-m", "8222"] # enable monitoring (host 8222)
+    command: ["-m", "8222", "-js", "-sd", "/data"] # enable monitoring (host 8222) and JetStream file persistence in /data
     ports:
       - "4222:4222" # client
       - "8222:8222" # monitoring /healthz
+    volumes:
+      - natsdata:/data
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8222/healthz"]
       interval: 5s
@@ -259,4 +261,5 @@ services:
 volumes:
   pgdata:
   redisdata:
+  natsdata:
   secrets: # AIGW_SECRETS_FILE=./data/secrets.json (+ sibling .key) live here

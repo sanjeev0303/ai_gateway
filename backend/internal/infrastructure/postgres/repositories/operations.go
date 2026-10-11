@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -102,6 +103,22 @@ func (r *conversationRepo) List(ctx context.Context, orgID uuid.UUID, filter dom
 	return summaries, err
 }
 
+func (r *conversationRepo) PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error) {
+	var count int64
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		n, err := q.PurgeExpiredConversations(ctx, db.PurgeExpiredConversationsParams{
+			OrganizationID: orgID,
+			OlderThan:      olderThan,
+		})
+		if err != nil {
+			return err
+		}
+		count = n
+		return nil
+	})
+	return count, err
+}
+
 type conversationMessageRepo struct {
 	store *postgres.Store
 }
@@ -169,6 +186,17 @@ func (r *llmRequestRepo) Record(ctx context.Context, orgID uuid.UUID, input doma
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
 	}
+	status := input.Status
+	switch status {
+	case "success", "succeeded":
+		status = "succeeded"
+	case "error", "failed":
+		status = "failed"
+	case "cancelled", "canceled":
+		status = "cancelled"
+	default:
+		status = "succeeded"
+	}
 	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
 		row, err := q.RecordLLMRequest(ctx, db.RecordLLMRequestParams{
 			OrganizationID:     orgID,
@@ -180,7 +208,7 @@ func (r *llmRequestRepo) Record(ctx context.Context, orgID uuid.UUID, input doma
 			ProviderRequestID:   input.ProviderRequestID,
 			ProviderKind:        input.ProviderKind,
 			Model:              input.Model,
-			Status:             input.Status,
+			Status:             status,
 			ErrorCode:          input.ErrorCode,
 			PromptTokens:       input.PromptTokens,
 			CompletionTokens:   input.CompletionTokens,
@@ -389,6 +417,22 @@ func (r *usageEventRepo) ListByRequest(ctx context.Context, orgID uuid.UUID, req
 		return nil
 	})
 	return usageEvents, err
+}
+
+func (r *usageEventRepo) PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error) {
+	var count int64
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		n, err := q.PurgeExpiredUsageEvents(ctx, db.PurgeExpiredUsageEventsParams{
+			OrganizationID: orgID,
+			OlderThan:      olderThan,
+		})
+		if err != nil {
+			return err
+		}
+		count = n
+		return nil
+	})
+	return count, err
 }
 
 type usageRollupRepo struct {
@@ -1267,9 +1311,91 @@ func (r *alertRepo) Delete(ctx context.Context, orgID, id uuid.UUID) error {
 	})
 }
 
+func (r *alertRepo) UpdateTriggered(ctx context.Context, orgID, id uuid.UUID, status string) (domain.Alert, error) {
+	var alert domain.Alert
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.UpdateAlertTriggered(ctx, db.UpdateAlertTriggeredParams{
+			OrganizationID: orgID,
+			ID:             id,
+			Status:         status,
+		})
+		if err != nil {
+			return err
+		}
+		alert = toAlert(row)
+		return nil
+	})
+	return alert, mapNotFound(err)
+}
+
+func (r *alertRepo) CreateEvent(ctx context.Context, orgID uuid.UUID, input domain.NewAlertEvent) (domain.AlertEvent, error) {
+	var event domain.AlertEvent
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.CreateAlertEvent(ctx, db.CreateAlertEventParams{
+			OrganizationID: orgID,
+			AlertID:        input.AlertID,
+			AlertType:      input.AlertType,
+			Severity:       input.Severity,
+			Status:         input.Status,
+			Message:        input.Message,
+			Column7:        jsonObject(input.Context),
+			TriggeredAt:    input.TriggeredAt,
+			ResolvedAt:     input.ResolvedAt,
+		})
+		if err != nil {
+			return err
+		}
+		event = toAlertEvent(row)
+		return nil
+	})
+	return event, err
+}
+
+func (r *alertRepo) ListEvents(ctx context.Context, orgID uuid.UUID, alertID *uuid.UUID, limit, offset int32) ([]domain.AlertEvent, error) {
+	var events []domain.AlertEvent
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		rows, err := q.ListAlertEvents(ctx, db.ListAlertEventsParams{
+			OrganizationID: orgID,
+			AlertID:        alertID,
+			Limit:          limit,
+			Offset:         offset,
+		})
+		if err != nil {
+			return err
+		}
+		events = make([]domain.AlertEvent, 0, len(rows))
+		for _, row := range rows {
+			events = append(events, toAlertEvent(row))
+		}
+		return nil
+	})
+	return events, err
+}
+
+func (r *alertRepo) GetLatestEvent(ctx context.Context, orgID, alertID uuid.UUID) (*domain.AlertEvent, error) {
+	var event *domain.AlertEvent
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.GetLatestAlertEvent(ctx, db.GetLatestAlertEventParams{
+			OrganizationID: orgID,
+			AlertID:        alertID,
+		})
+		if err != nil {
+			return err
+		}
+		e := toAlertEvent(row)
+		event = &e
+		return nil
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return event, err
+}
+
 type auditLogRepo struct {
 	store *postgres.Store
 }
+
 
 // NewAuditLogRepository returns an AuditLogRepository backed by the store. All
 // operations are tenant-scoped via the orgID context.
@@ -1572,6 +1698,23 @@ func toAlert(row db.Alert) domain.Alert {
 		UpdatedAt:       row.UpdatedAt,
 	}
 }
+
+func toAlertEvent(row db.AlertEvent) domain.AlertEvent {
+	return domain.AlertEvent{
+		ID:             row.ID,
+		OrganizationID: row.OrganizationID,
+		AlertID:        row.AlertID,
+		AlertType:      row.AlertType,
+		Severity:       row.Severity,
+		Status:         row.Status,
+		Message:        row.Message,
+		Context:        row.Context,
+		TriggeredAt:    row.TriggeredAt,
+		ResolvedAt:     row.ResolvedAt,
+		CreatedAt:      row.CreatedAt,
+	}
+}
+
 
 func toAuditLog(row db.AuditLog) domain.AuditLog {
 	return domain.AuditLog{

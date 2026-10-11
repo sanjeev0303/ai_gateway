@@ -366,6 +366,58 @@ func (s *stubCredentials) Revoke(ctx context.Context, orgID, id uuid.UUID) (doma
 	return s.revoke(ctx, orgID, id)
 }
 
+type stubGatewayCredentials struct {
+	repositories.GatewayCredentialRepository
+	create       func(context.Context, uuid.UUID, domain.NewGatewayCredential) (domain.GatewayCredential, error)
+	get          func(context.Context, uuid.UUID, uuid.UUID) (domain.GatewayCredential, error)
+	list         func(context.Context, uuid.UUID) ([]domain.GatewayCredential, error)
+	revoke       func(context.Context, uuid.UUID, uuid.UUID) (domain.GatewayCredential, error)
+	updateStatus func(context.Context, uuid.UUID, uuid.UUID, domain.GatewayCredentialStatus) (domain.GatewayCredential, error)
+	rotate       func(context.Context, uuid.UUID, uuid.UUID, domain.NewGatewayCredential) (domain.GatewayCredential, string, error)
+}
+
+func (s *stubGatewayCredentials) Create(ctx context.Context, orgID uuid.UUID, in domain.NewGatewayCredential) (domain.GatewayCredential, error) {
+	if s.create == nil {
+		notConfigured("stubGatewayCredentials.Create")
+	}
+	return s.create(ctx, orgID, in)
+}
+
+func (s *stubGatewayCredentials) Get(ctx context.Context, orgID, id uuid.UUID) (domain.GatewayCredential, error) {
+	if s.get == nil {
+		notConfigured("stubGatewayCredentials.Get")
+	}
+	return s.get(ctx, orgID, id)
+}
+
+func (s *stubGatewayCredentials) List(ctx context.Context, orgID uuid.UUID) ([]domain.GatewayCredential, error) {
+	if s.list == nil {
+		notConfigured("stubGatewayCredentials.List")
+	}
+	return s.list(ctx, orgID)
+}
+
+func (s *stubGatewayCredentials) Revoke(ctx context.Context, orgID, id uuid.UUID) (domain.GatewayCredential, error) {
+	if s.revoke == nil {
+		notConfigured("stubGatewayCredentials.Revoke")
+	}
+	return s.revoke(ctx, orgID, id)
+}
+
+func (s *stubGatewayCredentials) UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status domain.GatewayCredentialStatus) (domain.GatewayCredential, error) {
+	if s.updateStatus == nil {
+		notConfigured("stubGatewayCredentials.UpdateStatus")
+	}
+	return s.updateStatus(ctx, orgID, id, status)
+}
+
+func (s *stubGatewayCredentials) Rotate(ctx context.Context, orgID, id uuid.UUID, in domain.NewGatewayCredential) (domain.GatewayCredential, string, error) {
+	if s.rotate == nil {
+		notConfigured("stubGatewayCredentials.Rotate")
+	}
+	return s.rotate(ctx, orgID, id, in)
+}
+
 // stubAudits records every append and defaults to success, mirroring the
 // identity package's recording stub.
 type stubAudits struct {

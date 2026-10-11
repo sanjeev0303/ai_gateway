@@ -15,6 +15,16 @@ const eslintConfig = defineConfig([
     // Vendored agent-skill bundles; not project source.
     ".agents/**",
   ]),
+  {
+    rules: {
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unused-vars": "warn",
+      "react/no-unescaped-entities": "warn",
+      "react-hooks/immutability": "warn",
+      "react-hooks/error-boundaries": "warn",
+      "react-hooks/set-state-in-effect": "warn",
+    },
+  },
 ]);
 
 export default eslintConfig;

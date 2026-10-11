@@ -73,6 +73,10 @@ func (f *recordingEvents) Get(context.Context, uuid.UUID, string, string) (domai
 func (f *recordingEvents) ListByRequest(context.Context, uuid.UUID, string) ([]domain.UsageEvent, error) {
 	return nil, nil
 }
+func (f *recordingEvents) PurgeExpired(context.Context, uuid.UUID, time.Time) (int64, error) {
+	return 0, nil
+}
+
 
 func (f *recordingEvents) count() int {
 	f.mu.Lock()

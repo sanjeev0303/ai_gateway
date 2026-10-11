@@ -12,9 +12,11 @@ import (
 // response body. Reported is true only when the upstream actually sent usage;
 // otherwise the gateway falls back to pre-flight estimates.
 type StreamUsage struct {
+	StatusCode       int
 	Provider         string
 	InputTokens      int
 	OutputTokens     int
+	ReasoningTokens  int
 	CacheReadTokens  int
 	CacheWriteTokens int
 	Reported         bool
@@ -149,6 +151,9 @@ type wireUsage struct {
 	PromptTokensDetails *struct {
 		CachedTokens *int64 `json:"cached_tokens"`
 	} `json:"prompt_tokens_details"`
+	CompletionTokensDetails *struct {
+		ReasoningTokens *int64 `json:"reasoning_tokens"`
+	} `json:"completion_tokens_details"`
 	// Gemini.
 	PromptTokenCount     *int64 `json:"promptTokenCount"`
 	CandidatesTokenCount *int64 `json:"candidatesTokenCount"`
@@ -198,6 +203,10 @@ func (o *usageObserver) merge(u *wireUsage, provider string) {
 	if v := firstInt64(u.OutputTokens, u.CompletionTokens, u.CandidatesTokenCount); v != nil {
 		o.usage.OutputTokens = int(*v)
 		o.setProvider(firstNonEmpty(provider, providerForOutput(u)))
+		seen = true
+	}
+	if u.CompletionTokensDetails != nil && u.CompletionTokensDetails.ReasoningTokens != nil {
+		o.usage.ReasoningTokens = int(*u.CompletionTokensDetails.ReasoningTokens)
 		seen = true
 	}
 	var openAICached *int64

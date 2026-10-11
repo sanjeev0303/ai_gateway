@@ -1,4 +1,10 @@
-.PHONY: build test vet lint tidy format generate db-migrate db-seed dev-up dev-down dev-seed dev-logs dev-gateway dev-gateway-v1 dev-control-api dev-worker check-boundaries
+.PHONY: build test vet lint tidy format generate db-migrate db-seed dev-up dev-down dev-seed dev-logs dev-gateway dev-gateway-v1 dev-control-api dev-worker check-boundaries verify check
+
+# --- Local Release-Readiness Verification Entry Point ---
+verify:
+	bash scripts/verify-local.sh
+
+check: verify
 
 # --- Go backend ---
 build:

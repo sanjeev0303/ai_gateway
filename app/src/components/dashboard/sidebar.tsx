@@ -51,7 +51,7 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
         </p>
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+      <nav className="min-h-0 flex-1 overflow-y-auto sidebar-scrollbar px-3 py-4">
         <ul className="space-y-5">
           {DASHBOARD_NAV.map((section) => {
             const Icon = section.icon;

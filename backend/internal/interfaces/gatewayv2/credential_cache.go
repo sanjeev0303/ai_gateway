@@ -10,6 +10,7 @@ import (
 // CredentialCacheEntry represents a cached credential for fast lookup.
 type CredentialCacheEntry struct {
 	ID             string
+	KeyHash        string
 	OrganizationID string
 	SubjectType    string
 	SubjectID      string
@@ -98,7 +99,10 @@ func (c *InMemoryCredentialCache) Set(ctx context.Context, entry *CredentialCach
 		return
 	}
 
-	keyHash := entry.ID // Using ID as key for simplicity, in practice use key hash
+	keyHash := entry.KeyHash
+	if keyHash == "" {
+		keyHash = entry.ID
+	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -113,13 +117,26 @@ func (c *InMemoryCredentialCache) Set(ctx context.Context, entry *CredentialCach
 	c.lru.addToFront(keyHash)
 }
 
-// Invalidate removes a credential from the cache.
+// Invalidate removes a credential from the cache by its key hash.
 func (c *InMemoryCredentialCache) Invalidate(ctx context.Context, keyHash string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	delete(c.entries, keyHash)
 	c.lru.remove(keyHash)
+}
+
+// InvalidateByID removes a credential from the cache by its credential ID.
+func (c *InMemoryCredentialCache) InvalidateByID(ctx context.Context, id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for key, entry := range c.entries {
+		if entry.ID == id {
+			delete(c.entries, key)
+			c.lru.remove(key)
+		}
+	}
 }
 
 // InvalidateByOrg clears all credentials for an organization.

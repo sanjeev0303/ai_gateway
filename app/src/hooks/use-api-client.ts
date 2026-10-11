@@ -10,19 +10,10 @@ export function useApiClient(): ApiClient {
   const session = useSession();
 
   return React.useMemo(() => {
-    if (session.status !== "authenticated") {
-      return createApiClient({
-        baseUrl: process.env.NEXT_PUBLIC_CONTROL_API_URL || "http://localhost:8081",
-      });
-    }
-
-    if (!apiClientInstance) {
-      apiClientInstance = createApiClient({
-        baseUrl: process.env.NEXT_PUBLIC_CONTROL_API_URL || "http://localhost:8081",
-        credentials: "include",
-      });
-    }
-    return apiClientInstance;
+    return createApiClient({
+      baseUrl: process.env.NEXT_PUBLIC_CONTROL_API_URL || "http://localhost:8081",
+      credentials: session.status === "authenticated" ? "include" : undefined,
+    });
   }, [session.status]);
 }
 

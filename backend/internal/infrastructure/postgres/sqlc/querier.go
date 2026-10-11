@@ -20,6 +20,7 @@ type Querier interface {
 	CountOrgMembersByRole(ctx context.Context, arg CountOrgMembersByRoleParams) (int64, error)
 	CreateAPICredential(ctx context.Context, arg CreateAPICredentialParams) (ApiCredential, error)
 	CreateAlert(ctx context.Context, arg CreateAlertParams) (Alert, error)
+	CreateAlertEvent(ctx context.Context, arg CreateAlertEventParams) (AlertEvent, error)
 	CreateBudget(ctx context.Context, arg CreateBudgetParams) (Budget, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
 	CreateConversationMessage(ctx context.Context, arg CreateConversationMessageParams) (ConversationMessage, error)
@@ -64,6 +65,7 @@ type Querier interface {
 	GetInvitation(ctx context.Context, arg GetInvitationParams) (Invitation, error)
 	GetInvoice(ctx context.Context, arg GetInvoiceParams) (Invoice, error)
 	GetLLMRequestByRequestID(ctx context.Context, arg GetLLMRequestByRequestIDParams) (LlmRequest, error)
+	GetLatestAlertEvent(ctx context.Context, arg GetLatestAlertEventParams) (AlertEvent, error)
 	GetOrgMember(ctx context.Context, arg GetOrgMemberParams) (GetOrgMemberRow, error)
 	GetOrganizationByID(ctx context.Context, id uuid.UUID) (Organization, error)
 	GetOrganizationBySlug(ctx context.Context, slug string) (Organization, error)
@@ -98,6 +100,7 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, lower string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	ListAPICredentials(ctx context.Context, organizationID uuid.UUID) ([]ApiCredential, error)
+	ListAlertEvents(ctx context.Context, arg ListAlertEventsParams) ([]AlertEvent, error)
 	ListAlerts(ctx context.Context, organizationID uuid.UUID) ([]Alert, error)
 	ListAllOrganizationIDs(ctx context.Context) ([]uuid.UUID, error)
 	// Read-only projection of the append-only ledger. Append-only is preserved
@@ -147,6 +150,8 @@ type Querier interface {
 	ListTeams(ctx context.Context, organizationID uuid.UUID) ([]Team, error)
 	ListUsageEventsByRequest(ctx context.Context, arg ListUsageEventsByRequestParams) ([]UsageEvent, error)
 	MarkInvitationAccepted(ctx context.Context, arg MarkInvitationAcceptedParams) (Invitation, error)
+	PurgeExpiredConversations(ctx context.Context, arg PurgeExpiredConversationsParams) (int64, error)
+	PurgeExpiredUsageEvents(ctx context.Context, arg PurgeExpiredUsageEventsParams) (int64, error)
 	RecomputeUsageDaily(ctx context.Context, arg RecomputeUsageDailyParams) error
 	RecomputeUsageHourly(ctx context.Context, arg RecomputeUsageHourlyParams) error
 	RecomputeUsageMonthly(ctx context.Context, arg RecomputeUsageMonthlyParams) error
@@ -176,6 +181,7 @@ type Querier interface {
 	SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) error
 	TouchUserLastLogin(ctx context.Context, id uuid.UUID) error
 	UpdateAlert(ctx context.Context, arg UpdateAlertParams) (Alert, error)
+	UpdateAlertTriggered(ctx context.Context, arg UpdateAlertTriggeredParams) (Alert, error)
 	UpdateBudget(ctx context.Context, arg UpdateBudgetParams) (Budget, error)
 	UpdateGatewayCredentialStatus(ctx context.Context, arg UpdateGatewayCredentialStatusParams) (GatewayCredential, error)
 	UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error)

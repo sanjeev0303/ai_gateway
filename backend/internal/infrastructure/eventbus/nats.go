@@ -3,6 +3,7 @@ package eventbus
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -14,15 +15,16 @@ import (
 )
 
 const (
-	natsStreamName    = "AIGW_USAGE"
-	natsSubject       = "aigw.usage.events"
-	natsDurable       = "aigw-usage-worker"
-	natsAckWait       = 30 * time.Second
-	natsMaxDeliver    = 10
-	natsPublishWait   = 5 * time.Second
-	natsMaxPending    = 10000
-	natsRetryBase     = time.Second
-	natsMaxRetryDelay = 30 * time.Second
+	natsStreamName         = "AIGW_USAGE"
+	natsSubject            = "aigw.usage.events"
+	natsDeadLetterSubject  = "aigw.usage.deadletter"
+	natsDurable            = "aigw-usage-worker"
+	natsAckWait            = 30 * time.Second
+	natsMaxDeliver         = 10
+	natsPublishWait        = 5 * time.Second
+	natsMaxPending         = 10000
+	natsRetryBase          = time.Second
+	natsMaxRetryDelay      = 30 * time.Second
 )
 
 // NATS is a distributed EventBus backed by a JetStream stream. Unlike InMemory
@@ -59,7 +61,7 @@ func NewNATS(ctx context.Context, url string, log *slog.Logger) (*NATS, error) {
 	}
 	stream, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:     natsStreamName,
-		Subjects: []string{natsSubject, "aigw.security.events"},
+		Subjects: []string{natsSubject, natsDeadLetterSubject, "aigw.security.events"},
 		Storage:  jetstream.FileStorage,
 	})
 	if err != nil {
@@ -102,8 +104,8 @@ func (b *NATS) Publish(ctx context.Context, msg ports.UsageEventMessage) error {
 }
 
 // Run consumes from a durable consumer until ctx is cancelled. A handler
-// failure is negatively acknowledged so JetStream redelivers it with backoff
-// rather than dropping usage; a message that cannot be decoded is terminal.
+// failure is negatively acknowledged with backoff or routed to dead-letter if
+// terminal or delivery limits are reached.
 func (b *NATS) Run(ctx context.Context, handle func(context.Context, ports.UsageEventMessage) error) error {
 	consumer, err := b.stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
 		Durable:       natsDurable,
@@ -126,8 +128,24 @@ func (b *NATS) Run(ctx context.Context, handle func(context.Context, ports.Usage
 			return
 		}
 		if err := handle(ctx, msg); err != nil {
-			b.log.Error("eventbus: usage handler failed, redelivering",
-				"err", err, "request_id", msg.Usage.RequestID, "delivery", deliveredCount(m))
+			delCount := deliveredCount(m)
+			if errors.Is(err, ports.ErrNonRetryable) || delCount >= natsMaxDeliver {
+				b.log.Error("eventbus: usage event dead-lettered",
+					"err", err, "request_id", msg.Usage.RequestID, "deliveries", delCount)
+				dlMsg := ports.DeadLetterUsageMessage{
+					OriginalMessage: msg,
+					Error:           err.Error(),
+					Deliveries:      delCount,
+					FailedAt:        time.Now().UTC(),
+				}
+				if dlData, mErr := json.Marshal(dlMsg); mErr == nil {
+					_, _ = b.js.PublishAsync(natsDeadLetterSubject, dlData)
+				}
+				m.Term()
+				return
+			}
+			b.log.Warn("eventbus: usage handler failed, redelivering with backoff",
+				"err", err, "request_id", msg.Usage.RequestID, "delivery", delCount)
 			m.NakWithDelay(natsRetryBase)
 			return
 		}

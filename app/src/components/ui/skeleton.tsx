@@ -85,13 +85,15 @@ function SkeletonKPI({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+const CHART_BAR_HEIGHTS = [40, 65, 30, 85, 55, 70, 45, 90, 60, 75, 35, 80];
+
 function SkeletonChart({ className, height = 200, ...props }: React.ComponentProps<"div"> & { height?: number }) {
   return (
     <div className={cn("rounded-lg border bg-card p-4", className)} style={{ height }} {...props}>
       <Skeleton className="h-4 w-1/4 mb-4" />
       <div className="h-full flex items-end justify-between gap-1" aria-hidden>
         {Array.from({ length: 12 }).map((_, i) => (
-          <Skeleton key={i} className="flex-1 rounded-t" style={{ height: `${Math.random() * 80 + 10}%` }} />
+          <Skeleton key={i} className="flex-1 rounded-t" style={{ height: `${CHART_BAR_HEIGHTS[i % CHART_BAR_HEIGHTS.length]}%` }} />
         ))}
       </div>
     </div>

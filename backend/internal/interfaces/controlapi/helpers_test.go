@@ -148,15 +148,16 @@ type controlStubs struct {
 	teamMembers *stubTeamMembers
 	projMembers *stubProjMembers
 	accounts    *stubAccounts
-	credentials *stubCredentials
-	audits      *stubAudits
-	issuer      *stubIssuer
-	verifier    *stubVerifier
-	hasher      *stubHasher
-	auth        *stubAuth
-	refresh     *stubRefreshTokens
-	passwords   *stubPasswords
-	subs        *stubSubscriptions
+	credentials        *stubCredentials
+	gatewayCredentials *stubGatewayCredentials
+	audits             *stubAudits
+	issuer             *stubIssuer
+	verifier           *stubVerifier
+	hasher             *stubHasher
+	auth               *stubAuth
+	refresh            *stubRefreshTokens
+	passwords          *stubPasswords
+	subs               *stubSubscriptions
 
 	budgets  *stubBudgets
 	policy   *stubPolicy
@@ -174,19 +175,20 @@ type controlStubs struct {
 
 func newControlStubs() *controlStubs {
 	return &controlStubs{
-		orgs:        &stubOrgs{},
-		users:       &stubUsers{},
-		members:     &stubMembers{},
-		invitations: &stubInvitations{},
-		projects:    &stubProjects{},
-		teams:       &stubTeams{},
-		teamMembers: &stubTeamMembers{},
-		projMembers: &stubProjMembers{},
-		accounts:    &stubAccounts{},
-		credentials: &stubCredentials{},
-		audits:      &stubAudits{},
-		issuer:      &stubIssuer{},
-		verifier:    &stubVerifier{},
+		orgs:               &stubOrgs{},
+		users:              &stubUsers{},
+		members:            &stubMembers{},
+		invitations:        &stubInvitations{},
+		projects:           &stubProjects{},
+		teams:              &stubTeams{},
+		teamMembers:        &stubTeamMembers{},
+		projMembers:        &stubProjMembers{},
+		accounts:           &stubAccounts{},
+		credentials:        &stubCredentials{},
+		gatewayCredentials: &stubGatewayCredentials{},
+		audits:             &stubAudits{},
+		issuer:             &stubIssuer{},
+		verifier:           &stubVerifier{},
 		// hasher.hash stays nil so tests can assert a code path never reached
 		// TokenHasher.Hash; the auth helper below installs one on demand.
 		hasher:    &stubHasher{},
@@ -211,27 +213,28 @@ func newControlStubs() *controlStubs {
 // deps wires the stub bundle into the identity service with a fixed clock.
 func (st *controlStubs) deps() identity.ServiceDeps {
 	return identity.ServiceDeps{
-		Orgs:            st.orgs,
-		Users:           st.users,
-		Members:         st.members,
-		Invitations:     st.invitations,
-		Projects:        st.projects,
-		Teams:           st.teams,
-		TeamMembers:     st.teamMembers,
-		ProjMembers:     st.projMembers,
-		Accounts:        st.accounts,
-		Credentials:     st.credentials,
-		Audits:          st.audits,
-		Auth:            st.auth,
-		RefreshTokens:   st.refresh,
-		Subs:            st.subs,
-		Issuer:          st.issuer,
-		Verifier:        st.verifier,
-		Hasher:          st.hasher,
-		Passwords:       st.passwords,
-		RefreshTokenTTL: testRefreshTTL,
-		Now:             func() time.Time { return testNow },
-		InviteTTL:       testInviteTTL,
+		Orgs:               st.orgs,
+		Users:              st.users,
+		Members:            st.members,
+		Invitations:        st.invitations,
+		Projects:           st.projects,
+		Teams:              st.teams,
+		TeamMembers:        st.teamMembers,
+		ProjMembers:        st.projMembers,
+		Accounts:           st.accounts,
+		Credentials:        st.credentials,
+		GatewayCredentials: st.gatewayCredentials,
+		Audits:             st.audits,
+		Auth:               st.auth,
+		RefreshTokens:      st.refresh,
+		Subs:               st.subs,
+		Issuer:             st.issuer,
+		Verifier:           st.verifier,
+		Hasher:             st.hasher,
+		Passwords:          st.passwords,
+		RefreshTokenTTL:    testRefreshTTL,
+		Now:                func() time.Time { return testNow },
+		InviteTTL:          testInviteTTL,
 	}
 }
 

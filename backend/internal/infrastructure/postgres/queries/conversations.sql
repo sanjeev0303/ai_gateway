@@ -59,3 +59,8 @@ RETURNING *;
 SELECT * FROM conversation_messages
 WHERE organization_id = sqlc.arg(organization_id) AND conversation_id = sqlc.arg(conversation_id)
 ORDER BY created_at, id;
+
+-- name: PurgeExpiredConversations :execrows
+DELETE FROM conversations
+WHERE organization_id = sqlc.arg(organization_id)
+  AND created_at < sqlc.arg(older_than)::timestamptz;

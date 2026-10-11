@@ -53,6 +53,7 @@ export function formatDate(iso: string): string {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "UTC",
   });
 }
 
@@ -62,6 +63,7 @@ export function formatDateTime(iso: string): string {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: "UTC",
   });
 }
 

@@ -64,6 +64,22 @@ func (f *fakeAlertRepo) Delete(_ context.Context, orgID, id uuid.UUID) error {
 	return f.err
 }
 
+func (f *fakeAlertRepo) UpdateTriggered(_ context.Context, _, _ uuid.UUID, status string) (domain.Alert, error) {
+	return f.alert, nil
+}
+
+func (f *fakeAlertRepo) CreateEvent(_ context.Context, _ uuid.UUID, input domain.NewAlertEvent) (domain.AlertEvent, error) {
+	return domain.AlertEvent{ID: uuid.New(), Message: input.Message}, nil
+}
+
+func (f *fakeAlertRepo) ListEvents(_ context.Context, _ uuid.UUID, _ *uuid.UUID, _, _ int32) ([]domain.AlertEvent, error) {
+	return nil, nil
+}
+
+func (f *fakeAlertRepo) GetLatestEvent(_ context.Context, _, _ uuid.UUID) (*domain.AlertEvent, error) {
+	return nil, nil
+}
+
 func newAlertServer(t *testing.T, st *controlStubs, repo *fakeAlertRepo) *httptest.Server {
 	t.Helper()
 	return buildServer(t, Deps{
