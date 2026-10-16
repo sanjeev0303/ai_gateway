@@ -19,6 +19,11 @@ import {
 import { formatDate } from "@/lib/format";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
+import {
+  ChangePlanDialog,
+  CancelSubscriptionButton,
+  PlanActionsCellWrapper,
+} from "./client";
 
 export const metadata: Metadata = {
   title: "Subscription · Sentinel",
@@ -37,9 +42,10 @@ interface PlanRow {
   status: Plan["status"];
   tone: StatusTone;
   description: string;
+  currentPlanCode?: string;
 }
 
-const planColumns: readonly Column<PlanRow>[] = [
+const createPlanColumns = (currentCode?: string): readonly Column<PlanRow>[] => [
   { key: "name", header: "Plan", primary: "name", sort: "name" },
   { key: "code", header: "Code", primary: "code", sort: "code" },
   { key: "status", header: "Status", primary: "status", tone: "tone", sort: "status" },
@@ -80,6 +86,7 @@ export default async function SubscriptionPage() {
       status: plan.status,
       tone: PLAN_TONE[plan.status],
       description: plan.description,
+      currentPlanCode: subscription?.plan_code,
     }));
 
   return (
@@ -87,20 +94,35 @@ export default async function SubscriptionPage() {
       <PageShell
         title="Subscription"
         description="The plan recorded for this organization and the billing cycle it runs on."
+        actions={
+          <ChangePlanDialog
+            currentPlanCode={subscription?.plan_code}
+            plans={plans}
+          />
+        }
       >
         {subscription ? (
           <>
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <StatCard label="Plan" value={subscription.plan_name} hint={subscription.plan_code} />
-              <StatCard
-                label="Status"
-                value={subscription.status}
-                hint={
-                  subscription.cancel_at_period_end
-                    ? "Cancels at period end"
-                    : "No cancellation recorded"
-                }
-              />
+              <div className="flex flex-col justify-between rounded-lg border bg-card p-4 shadow-sm">
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground">Status</div>
+                  <div className="text-2xl font-bold tracking-tight capitalize mt-1">
+                    {subscription.status}
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">
+                    {subscription.cancel_at_period_end
+                      ? "Cancels at period end"
+                      : "Auto-renewing cycle"}
+                  </span>
+                  <CancelSubscriptionButton
+                    isCancelled={subscription.cancel_at_period_end}
+                  />
+                </div>
+              </div>
               <StatCard
                 label="Period start"
                 value={
@@ -121,16 +143,14 @@ export default async function SubscriptionPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>What this is</CardTitle>
+                <CardTitle>Organization Entitlements</CardTitle>
                 <CardDescription>
-                  Local billing state, not a payment arrangement.
+                  Local billing state and governance capabilities granted by {subscription.plan_name}.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2 text-sm text-muted-foreground">
                 <p>
-                  This plan and cycle are rows in the control plane&apos;s own tables. No
-                  payment processor is integrated, so there is no card on file, no charge,
-                  and no receipt — and nothing here means money has moved.
+                  This plan and cycle govern policy enforcement limits, guardrail rules, and retention thresholds across all gateway routes.
                 </p>
                 <p>
                   Recorded consumption for the current cycle is priced by the worker and
@@ -150,7 +170,7 @@ export default async function SubscriptionPage() {
             <CardContent>
               <EmptyState
                 title="There is no plan to show"
-                description="A subscription is only recorded once one is created for this organization, so there is no plan, cycle, or cancellation state to render. What is already real is recorded consumption: per-request cost and volume are rolled up by the worker and available under Billing → Usage."
+                description="Click 'Change Plan' above to initialize a subscription tier for this organization."
               />
             </CardContent>
           </Card>
@@ -160,16 +180,17 @@ export default async function SubscriptionPage() {
           <CardHeader>
             <CardTitle>Plan catalog</CardTitle>
             <CardDescription>
-              The same catalog for every organization. No prices are stored.
+              Compare available tiers and switch plans instantly with one click.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <DataTable
-              columns={planColumns}
+              columns={createPlanColumns(subscription?.plan_code)}
               rows={activePlans}
               rowKey="id"
               pageSize={10}
               emptyMessage="No plans are marked active."
+              ActionsComponent={PlanActionsCellWrapper}
             />
           </CardContent>
         </Card>

@@ -80,6 +80,32 @@ func (f *fakeAlertRepo) GetLatestEvent(_ context.Context, _, _ uuid.UUID) (*doma
 	return nil, nil
 }
 
+func (f *fakeAlertRepo) UpdateEventStatus(_ context.Context, _ uuid.UUID, id uuid.UUID, status string) (domain.AlertEvent, error) {
+	return domain.AlertEvent{ID: id, Status: status}, nil
+}
+
+func (f *fakeAlertRepo) CreateNotification(_ context.Context, orgID uuid.UUID, input domain.NewInAppNotification) (domain.InAppNotification, error) {
+	return domain.InAppNotification{
+		ID:             uuid.New(),
+		OrganizationID: orgID,
+		Title:          input.Title,
+		Message:        input.Message,
+		Severity:       input.Severity,
+	}, nil
+}
+
+func (f *fakeAlertRepo) ListNotifications(_ context.Context, _ uuid.UUID, _ bool, _, _ int32) ([]domain.InAppNotification, error) {
+	return nil, nil
+}
+
+func (f *fakeAlertRepo) MarkNotificationRead(_ context.Context, _, _ uuid.UUID) error {
+	return nil
+}
+
+func (f *fakeAlertRepo) MarkAllNotificationsRead(_ context.Context, _ uuid.UUID) error {
+	return nil
+}
+
 func newAlertServer(t *testing.T, st *controlStubs, repo *fakeAlertRepo) *httptest.Server {
 	t.Helper()
 	return buildServer(t, Deps{

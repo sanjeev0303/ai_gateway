@@ -60,6 +60,19 @@ func (b *BudgetGuardImpl) Check(ctx context.Context, key string, limit float64, 
 	return tracker.check(estimatedCost)
 }
 
+// Reserve atomically reserves estimated cost/tokens against the budget if within limit,
+// returning a release callback to apply actual cost when the request finishes.
+func (b *BudgetGuardImpl) Reserve(ctx context.Context, key string, limit float64, window time.Duration, estimatedCost float64) (BudgetResult, func(actualCost float64)) {
+	if b.policyResolver != nil && limit == 0 && window == 0 {
+		if budgetConfig, ok := b.getBudgetConfigFromSnapshot(ctx, key); ok {
+			limit = budgetConfig.Limit
+			window = budgetConfig.Window
+		}
+	}
+	tracker := b.getOrCreateTracker(key, limit, window, 0.8*limit)
+	return tracker.reserve(estimatedCost)
+}
+
 // getBudgetConfigFromSnapshot retrieves budget config from the already-synced
 // snapshot by matching the budget key directly.
 func (b *BudgetGuardImpl) getBudgetConfigFromSnapshot(ctx context.Context, key string) (BudgetConfig, bool) {
@@ -155,6 +168,58 @@ func (t *budgetTracker) check(estimatedCost float64) BudgetResult {
 		Scope:     t.scope,
 		Key:       t.key,
 	}
+}
+
+// reserve atomically checks and reserves estimated cost/tokens under mutex.
+func (t *budgetTracker) reserve(estimatedCost float64) (BudgetResult, func(actualCost float64)) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	now := time.Now()
+	// Reset window if expired
+	if now.Sub(t.windowStart) > t.window {
+		t.spent = 0
+		t.windowStart = now
+	}
+
+	projected := t.spent + estimatedCost
+	allowed := projected <= t.limit
+
+	res := BudgetResult{
+		Allowed:   allowed,
+		Current:   t.spent,
+		Limit:     t.limit,
+		Projected: projected,
+		AlertAt:   t.alertAt,
+		Scope:     t.scope,
+		Key:       t.key,
+	}
+
+	if !allowed {
+		return res, func(_ float64) {}
+	}
+
+	// Atomically reserve
+	t.spent = projected
+
+	committed := false
+	release := func(actualCost float64) {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		if committed {
+			return
+		}
+		committed = true
+		if actualCost < 0 {
+			actualCost = 0
+		}
+		t.spent = t.spent - estimatedCost + actualCost
+		if t.spent < 0 {
+			t.spent = 0
+		}
+	}
+
+	return res, release
 }
 
 // RecordUsage records actual usage against the budget.

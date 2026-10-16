@@ -23,11 +23,21 @@ export interface Organization {
   updated_at: string;
   plan: OrganizationPlan | null;
   billing: OrganizationBilling | null;
+  privacy_default?: string;
+  retention_conversations_days?: number;
+  retention_usage_days?: number;
+  retention_audits_days?: number;
+  retention_billing_days?: number;
 }
 
 export interface OrganizationUpdateInput {
   name?: string;
   slug?: string;
+  privacy_default?: string;
+  retention_conversations_days?: number;
+  retention_usage_days?: number;
+  retention_audits_days?: number;
+  retention_billing_days?: number;
 }
 
 export interface OrganizationModule {

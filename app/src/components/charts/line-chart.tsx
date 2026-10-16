@@ -93,6 +93,18 @@ export function LineChart({
         strokeLinejoin="round"
       />
 
+      {points.map((point, index) => (
+        <circle
+          key={index}
+          cx={point.x}
+          cy={point.y}
+          r={points.length === 1 ? 5 : 3.5}
+          fill={color}
+          stroke="var(--background)"
+          strokeWidth={1.5}
+        />
+      ))}
+
       {points.map((point, index) =>
         index % stride === 0 ? (
           <text

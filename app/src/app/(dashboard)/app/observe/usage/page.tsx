@@ -26,6 +26,7 @@ import {
 } from "@/lib/format";
 import { getApiClient } from "@/lib/session";
 import type { TrendDirection } from "@/types";
+import { ExportUsageButton } from "./export-button";
 
 export const metadata: Metadata = {
   title: "Usage · Sentinel",
@@ -124,7 +125,7 @@ async function loadUsage(
     status?: string;
   },
 ) {
-  const { usage, projects, teams } = await getApiClient();
+  const { usage, projects, teams, members } = await getApiClient();
   const to = new Date();
   const query = { from: new Date(to.getTime() - RANGE_MS[range]), to, ...filters };
 
@@ -138,6 +139,7 @@ async function loadUsage(
     byTeam,
     projectList,
     teamList,
+    membersList,
   ] = await Promise.all([
     usage.summary(query),
     usage.timeseries(query),
@@ -148,6 +150,7 @@ async function loadUsage(
     usage.byTeam(query),
     projects.list(),
     teams.list(),
+    members.list().catch(() => ({ items: [] })),
   ]);
 
   return {
@@ -160,6 +163,7 @@ async function loadUsage(
     byTeam,
     projectNames: new Map(projectList.items.map((project) => [project.id, project.name])),
     teamNames: new Map(teamList.items.map((team) => [team.id, team.name])),
+    userNames: new Map(membersList.items.map((m) => [m.user.id, m.user.display_name || m.user.email])),
   };
 }
 
@@ -191,6 +195,7 @@ export default async function UsagePage({
     byTeam,
     projectNames,
     teamNames,
+    userNames,
   } = await loadUsage(range, filters);
 
   const totalSpend = microsToUsd(summary.TotalCostMicros);
@@ -272,7 +277,7 @@ export default async function UsagePage({
     const shareFraction = totalByUser > 0 ? cost / totalByUser : 0;
     return {
       id: row.UserID,
-      name: row.UserID,
+      name: userNames.get(row.UserID) ?? row.UserID,
       href: `/app/observe/users/${encodeURIComponent(row.UserID)}`,
       calls: row.Requests,
       tokens: row.TotalTokens,
@@ -286,7 +291,12 @@ export default async function UsagePage({
       <PageShell
         title="Usage"
         description="Request and token volume across every route, with spend attribution."
-        actions={<RangeTabs />}
+        actions={
+          <div className="flex items-center gap-2">
+            <RangeTabs />
+            <ExportUsageButton summary={summary} />
+          </div>
+        }
       >
         <ObserveFilters />
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

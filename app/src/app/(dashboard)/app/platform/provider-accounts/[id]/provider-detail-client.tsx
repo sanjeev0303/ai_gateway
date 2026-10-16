@@ -158,7 +158,7 @@ export function ProviderDetailClient({
   // Credential dialogs
   const [addCredOpen, setAddCredOpen] = React.useState(false);
   const [addCredName, setAddCredName] = React.useState("");
-  const [addCredKind, setAddCredKind] = React.useState("openai");
+  const [addCredKind, setAddCredKind] = React.useState("api_key");
   const [addCredSecret, setAddCredSecret] = React.useState("");
 
   const [rotateCredId, setRotateCredId] = React.useState<string | null>(null);
@@ -181,17 +181,17 @@ export function ProviderDetailClient({
     try {
       setIsUpdating(true);
       const cred = await api.providers.createCredential(account.id, {
-        name: addCredName,
-        kind: addCredKind,
-        secret: addCredSecret,
+        name: addCredName.trim(),
+        kind: "api_key",
+        secret: addCredSecret.trim(),
       });
       setCreds((prev) => [cred, ...prev]);
       toast.success("Credential added");
       setAddCredOpen(false);
       setAddCredName("");
       setAddCredSecret("");
-    } catch (error) {
-      toast.error("Failed to add credential");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to add credential");
     } finally {
       setIsUpdating(false);
     }
@@ -233,8 +233,8 @@ export function ProviderDetailClient({
 
   // Check Health
   const handleCheckHealth = async () => {
-    // Find active credential for this account's provider kind
-    const activeCred = creds.find((c) => c.status === "active" && c.kind === account.provider_kind);
+    // Find active credential for this account
+    const activeCred = creds.find((c) => c.status === "active");
     if (!activeCred) {
       toast.error("No active credential found for health check");
       return;
@@ -434,15 +434,11 @@ export function ProviderDetailClient({
           <div className="grid gap-2">
             <Label htmlFor="addCredKind">Kind</Label>
             <Select value={addCredKind} onValueChange={setAddCredKind}>
-              <SelectTrigger>
-                <SelectValue />
+              <SelectTrigger id="addCredKind">
+                <SelectValue placeholder="Select kind" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="openai">OpenAI</SelectItem>
-                <SelectItem value="anthropic">Anthropic</SelectItem>
-                <SelectItem value="google">Google</SelectItem>
-                <SelectItem value="cohere">Cohere</SelectItem>
-                <SelectItem value="mistral">Mistral</SelectItem>
+                <SelectItem value="api_key">API Key</SelectItem>
               </SelectContent>
             </Select>
           </div>

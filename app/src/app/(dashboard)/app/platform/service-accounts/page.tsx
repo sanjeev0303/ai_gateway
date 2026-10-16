@@ -87,6 +87,7 @@ export default async function ServiceAccountsPage() {
       <PageShell
         title="Service accounts"
         description="Non-human identities that call the gateway on behalf of workloads and pipelines."
+        actions={<CreateServiceAccountButton />}
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard

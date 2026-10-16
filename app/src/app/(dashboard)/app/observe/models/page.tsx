@@ -181,7 +181,7 @@ export default async function ModelsPage({
       share: formatPercent(shareFraction),
       shareFraction,
       spend,
-      detailUrl: `/app/observe/usage?model=${encodeURIComponent(row.Model)}`,
+      detailUrl: `/app/observe/models/${encodeURIComponent(row.Model)}`,
     };
   });
 
@@ -194,7 +194,7 @@ export default async function ModelsPage({
       provider: model.provider_kind,
       active,
       activeTone,
-      detailUrl: `/app/observe/usage?model=${encodeURIComponent(model.model_slug)}`,
+      detailUrl: `/app/observe/models/${encodeURIComponent(model.model_slug)}`,
     };
   });
 

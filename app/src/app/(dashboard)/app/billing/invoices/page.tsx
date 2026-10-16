@@ -21,6 +21,7 @@ import {
 import { formatDate, formatNumber, formatUsd, microsToUsd } from "@/lib/format";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
+import { ExportAllInvoicesButton, InvoiceActions } from "./client";
 
 export const metadata: Metadata = {
   title: "Invoices · Sentinel",
@@ -59,23 +60,23 @@ function InvoiceLines({ invoice }: { invoice: Invoice }) {
       <TableBody>
         {invoice.lines.map((line) => (
           <TableRow key={line.id}>
-            <TableCell>{line.description}</TableCell>
+            <TableCell className="font-medium">{line.description}</TableCell>
             <TableCell className="text-right tabular-nums">
               {formatNumber(line.quantity)}
             </TableCell>
             <TableCell className="text-right tabular-nums">
               {formatUsd(microsToUsd(line.unit_micros))}
             </TableCell>
-            <TableCell className="text-right tabular-nums">
+            <TableCell className="text-right tabular-nums font-semibold">
               {formatUsd(microsToUsd(line.amount_micros))}
             </TableCell>
           </TableRow>
         ))}
-        <TableRow>
-          <TableCell colSpan={3} className="text-right font-medium">
-            Total ({invoice.currency})
+        <TableRow className="border-t-2">
+          <TableCell colSpan={3} className="text-right font-semibold">
+            Total ({invoice.currency.toUpperCase()})
           </TableCell>
-          <TableCell className="text-right font-medium tabular-nums">
+          <TableCell className="text-right font-bold text-base tabular-nums text-primary">
             {formatUsd(microsToUsd(invoice.total_micros))}
           </TableCell>
         </TableRow>
@@ -91,26 +92,20 @@ export default async function InvoicesPage() {
     <div className="p-4 sm:p-6">
       <PageShell
         title="Invoices"
-        description="Invoices recorded for this organization, with their itemised lines."
+        description="Invoices and billing statements recorded for this organization, with their itemised lines."
+        actions={<ExportAllInvoicesButton invoices={invoices} />}
       >
         <Card>
           <CardHeader>
             <CardTitle>What an invoice here is</CardTitle>
             <CardDescription>
-              A record of priced usage, not a request for payment.
+              A deterministic statement of recorded token usage and base tier fees.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p>
-              Each invoice is a row in this control plane holding a billing period and
-              its itemised lines. No payment processor is integrated, so an invoice is
-              only ever <span className="font-medium">open</span> or{" "}
-              <span className="font-medium">void</span> — there is no paid state,
-              no card, no charge, and no downloadable document.
-            </p>
-            <p>
-              Figures are derived from recorded requests priced by the worker. See
-              Billing → Usage for the underlying consumption.
+              Each invoice is recorded per billing cycle with itemised line rows.
+              Consumption figures are priced by the async worker from the active price sheet at inference time.
             </p>
           </CardContent>
         </Card>
@@ -120,24 +115,27 @@ export default async function InvoicesPage() {
             <CardContent className="pt-6">
               <EmptyState
                 title="No invoices yet"
-                description="An invoice is only recorded once a billing period has been closed for this organization, so there is nothing to itemise. Recorded consumption is still available under Billing → Usage."
+                description="An invoice is only recorded once a billing period has been closed for this organization. Recorded consumption is still available under Billing → Usage."
               />
             </CardContent>
           </Card>
         ) : (
           invoices.map((invoice) => (
-            <Card key={invoice.id}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  {invoice.number}
-                  <StatusBadge tone={INVOICE_TONE[invoice.status]}>
-                    {invoice.status}
-                  </StatusBadge>
-                </CardTitle>
-                <CardDescription>
-                  {formatDate(invoice.period_start)} – {formatDate(invoice.period_end)} ·{" "}
-                  issued {formatDate(invoice.issued_at)}
-                </CardDescription>
+            <Card key={invoice.id} className="shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between pb-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <span>{invoice.number}</span>
+                    <StatusBadge tone={INVOICE_TONE[invoice.status]}>
+                      {invoice.status}
+                    </StatusBadge>
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    {formatDate(invoice.period_start)} – {formatDate(invoice.period_end)} ·{" "}
+                    issued {formatDate(invoice.issued_at)}
+                  </CardDescription>
+                </div>
+                <InvoiceActions invoice={invoice} />
               </CardHeader>
               <CardContent>
                 <InvoiceLines invoice={invoice} />

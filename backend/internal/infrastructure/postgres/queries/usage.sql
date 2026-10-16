@@ -5,9 +5,10 @@ INSERT INTO llm_requests (
     prompt_tokens, completion_tokens, cached_input_tokens, total_tokens,
     latency_ms, cost_micros, created_at,
     request_started_at, first_token_at, completed_at,
-    time_to_first_token_ms, total_latency_ms, service_account_id, team_id
+    time_to_first_token_ms, total_latency_ms, service_account_id, team_id,
+    reasoning_tokens, tool_tokens, pricing_version, cost_status, policy_decision, denial_reason
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
 ON CONFLICT (organization_id, request_id) DO NOTHING
 RETURNING *;
 
@@ -153,10 +154,13 @@ SELECT COUNT(*)::bigint as total_requests,
        COALESCE(SUM(r.prompt_tokens), 0)::bigint as input_tokens,
        COALESCE(SUM(r.completion_tokens), 0)::bigint as output_tokens,
        COALESCE(SUM(r.cached_input_tokens), 0)::bigint as cached_tokens,
+       COALESCE(SUM(r.reasoning_tokens), 0)::bigint as reasoning_tokens,
+       COALESCE(SUM(r.tool_tokens), 0)::bigint as tool_tokens,
        COALESCE(SUM(r.total_tokens), 0)::bigint as total_tokens,
        COALESCE(SUM(r.cost_micros), 0)::bigint as total_cost_micros,
        COUNT(*) FILTER (WHERE r.status = 'failed')::bigint as errors,
        COALESCE(AVG(r.latency_ms), 0)::float8 as avg_latency_ms,
+       COUNT(DISTINCT r.user_id) FILTER (WHERE r.user_id IS NOT NULL)::bigint as active_users,
        -- An ungrouped aggregate always returns one row, so an empty window makes
        -- MAX() NULL. Coalesce to Go's zero time so the scan cannot fail; the
        -- repository detects "no requests" from TotalRequests.
@@ -175,16 +179,16 @@ WHERE r.organization_id = sqlc.arg(organization_id)
   AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status));
 
 -- name: GetUsageTimeSeries :many
-SELECT bucket_start,
-       COALESCE(sum(requests), 0)::bigint as requests,
-       COALESCE(sum(total_tokens), 0)::bigint as total_tokens,
-       COALESCE(sum(cost_micros), 0)::bigint as cost_micros
-FROM usage_daily
-WHERE organization_id = sqlc.arg(organization_id)
-  AND bucket_start >= sqlc.arg(from_ts)
-  AND bucket_start < sqlc.arg(to_ts)
-  AND (sqlc.narg(project_id)::uuid IS NULL OR project_id = sqlc.narg(project_id))
-GROUP BY bucket_start
+SELECT date_trunc('day', r.created_at, 'UTC')::timestamptz as bucket_start,
+       COUNT(*)::bigint as requests,
+       COALESCE(sum(r.total_tokens), 0)::bigint as total_tokens,
+       COALESCE(sum(r.cost_micros), 0)::bigint as cost_micros
+FROM llm_requests r
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND r.created_at >= sqlc.arg(from_ts)
+  AND r.created_at < sqlc.arg(to_ts)
+  AND (sqlc.narg(project_id)::uuid IS NULL OR r.project_id = sqlc.narg(project_id))
+GROUP BY date_trunc('day', r.created_at, 'UTC')
 ORDER BY bucket_start ASC;
 
 -- name: GetUsageByProject :many
@@ -319,14 +323,22 @@ GROUP BY r.team_id, t.name
 ORDER BY total_tokens DESC;
 
 -- name: GetRecentUsage :many
-SELECT id, request_id, project_id, user_id, provider_kind, model, status, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms, service_account_id, team_id, gateway_credential_id
+SELECT id, request_id, project_id, user_id, provider_kind, model, status,
+       prompt_tokens, completion_tokens, cached_input_tokens, reasoning_tokens, tool_tokens,
+       total_tokens, latency_ms, cost_micros, pricing_version, cost_status, policy_decision, denial_reason, error_code,
+       created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms,
+       service_account_id, team_id, gateway_credential_id
 FROM llm_requests
 WHERE organization_id = sqlc.arg(organization_id)
 ORDER BY created_at DESC
 LIMIT 50;
 
 -- name: GetUsageRequests :many
-SELECT id, request_id, project_id, user_id, provider_kind, model, status, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms, service_account_id, team_id, gateway_credential_id
+SELECT id, request_id, project_id, user_id, provider_kind, model, status,
+       prompt_tokens, completion_tokens, cached_input_tokens, reasoning_tokens, tool_tokens,
+       total_tokens, latency_ms, cost_micros, pricing_version, cost_status, policy_decision, denial_reason, error_code,
+       created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms,
+       service_account_id, team_id, gateway_credential_id
 FROM llm_requests r
 WHERE r.organization_id = sqlc.arg(organization_id)
   AND r.created_at >= sqlc.arg(from_ts)
@@ -407,3 +419,9 @@ ORDER BY total_samples DESC;
 DELETE FROM usage_events
 WHERE organization_id = sqlc.arg(organization_id)
   AND timestamp < sqlc.arg(older_than)::timestamptz;
+
+-- name: PurgeExpiredLlmRequests :execrows
+DELETE FROM llm_requests
+WHERE organization_id = sqlc.arg(organization_id)
+  AND created_at < sqlc.arg(older_than)::timestamptz;
+

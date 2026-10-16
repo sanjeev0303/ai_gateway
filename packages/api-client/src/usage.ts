@@ -28,10 +28,13 @@ export interface UsageSummary {
   InputTokens: number;
   OutputTokens: number;
   CachedTokens: number;
+  ReasoningTokens?: number;
+  ToolTokens?: number;
   TotalTokens: number;
   TotalCostMicros: number;
   Errors: number;
   AvgLatencyMs?: number;
+  ActiveUsers?: number;
   /** RFC3339. */
   LastActivityAt: string;
 }

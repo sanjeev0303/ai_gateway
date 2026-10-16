@@ -17,7 +17,7 @@ import { formatNumber, formatRelative } from "@/lib/format";
 import { toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
-import { ProviderHealthClient } from "./client";
+import { ProviderHealthClient, ProbeProviderDialog } from "./client";
 
 export const metadata: Metadata = {
   title: "Provider health · Sentinel",
@@ -77,6 +77,7 @@ export default async function ProviderHealthPage() {
       <PageShell
         title="Provider health"
         description="Outcome of the most recent probe of each upstream provider, run by the background worker."
+        actions={<ProbeProviderDialog />}
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard

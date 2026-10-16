@@ -81,6 +81,11 @@ export async function getCurrentOrganization(): Promise<SessionOrganization> {
       status: org.status,
       createdAt: org.created_at,
       updatedAt: org.updated_at,
+      privacyDefault: org.privacy_default ?? "allow_all",
+      retentionConversationsDays: org.retention_conversations_days ?? 30,
+      retentionUsageDays: org.retention_usage_days ?? 90,
+      retentionAuditsDays: org.retention_audits_days ?? 365,
+      retentionBillingDays: org.retention_billing_days ?? 365,
     };
   } catch (error) {
     // Ignore Next.js internal redirect errors - they're not real failures.

@@ -27,6 +27,11 @@ export interface SessionOrganization {
   status: SessionOrganizationStatus;
   createdAt: ISODateString;
   updatedAt: ISODateString;
+  privacyDefault?: string;
+  retentionConversationsDays?: number;
+  retentionUsageDays?: number;
+  retentionAuditsDays?: number;
+  retentionBillingDays?: number;
 }
 
 export interface DashboardSession {

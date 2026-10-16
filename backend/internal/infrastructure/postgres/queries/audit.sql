@@ -58,3 +58,8 @@ SELECT a.id,
 FROM audit_logs a
 WHERE a.organization_id = sqlc.arg(organization_id)
   AND a.id = sqlc.arg(id);
+
+-- name: PurgeExpiredAuditLogs :execrows
+DELETE FROM audit_logs
+WHERE organization_id = sqlc.arg(organization_id)
+  AND created_at < sqlc.arg(older_than)::timestamptz;

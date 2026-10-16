@@ -69,8 +69,16 @@ func (e *Evaluator) EvaluateAll(ctx context.Context, orgIDs []uuid.UUID) {
 // EvaluateAlert performs a deterministic evaluation of an alert rule's conditions.
 func (e *Evaluator) EvaluateAlert(ctx context.Context, orgID uuid.UUID, a domain.Alert) (bool, string, map[string]any) {
 	switch a.AlertType {
+	case "budget_warning":
+		return e.evalBudgetWarning(ctx, orgID, a.Configuration)
+	case "budget_exhaustion":
+		return e.evalBudgetExhaustion(ctx, orgID, a.Configuration)
 	case "spend_threshold", "spend_exceeded", "spend_limit":
 		return e.evalSpend(ctx, orgID, a.Configuration)
+	case "spend_spike":
+		return e.evalSpendSpike(ctx, orgID, a.Configuration)
+	case "usage_spike":
+		return e.evalUsageSpike(ctx, orgID, a.Configuration)
 	case "request_rate_spike", "rate_limit":
 		return e.evalRequestRate(ctx, orgID, a.Configuration)
 	case "error_rate_spike", "error_rate":
@@ -79,7 +87,7 @@ func (e *Evaluator) EvaluateAlert(ctx context.Context, orgID uuid.UUID, a domain
 		return e.evalProviderFailure(ctx, orgID, a.Configuration)
 	case "credential_failure":
 		return e.evalCredentialFailure(ctx, orgID, a.Configuration)
-	case "policy_violation":
+	case "policy_violation", "policy_denial_spike":
 		return e.evalPolicyViolation(ctx, orgID, a.Configuration)
 	case "rate_limit_spike":
 		return e.evalRateLimitSpike(ctx, orgID, a.Configuration)
@@ -96,15 +104,20 @@ func (e *Evaluator) evaluateSingle(ctx context.Context, orgID uuid.UUID, a domai
 	now := time.Now().UTC()
 
 	if triggered {
-		// Debounce / Cooldown check: do not fire repeated notifications within 15 minutes
-		if a.LastTriggeredAt != nil && time.Since(*a.LastTriggeredAt) < 15*time.Minute && a.Status == domain.AlertStatusActive {
-			return
+		// Deduplication check:
+		latestEvent, err := e.alerts.GetLatestEvent(ctx, orgID, a.ID)
+		if err == nil && latestEvent != nil {
+			if latestEvent.Status == "triggered" && a.Status == domain.AlertStatusActive {
+				if time.Since(latestEvent.TriggeredAt) < 15*time.Minute {
+					return
+				}
+			}
 		}
 
 		ctxBytes, _ := json.Marshal(details)
 
 		// 1. Record trigger event in history
-		_, err := e.alerts.CreateEvent(ctx, orgID, domain.NewAlertEvent{
+		_, err = e.alerts.CreateEvent(ctx, orgID, domain.NewAlertEvent{
 			AlertID:     a.ID,
 			AlertType:   a.AlertType,
 			Severity:    a.Severity,
@@ -156,6 +169,16 @@ func (e *Evaluator) evaluateSingle(ctx context.Context, orgID uuid.UUID, a domai
 		_, err = e.alerts.UpdateTriggered(ctx, orgID, a.ID, domain.AlertStatusResolved)
 		if err != nil {
 			e.log.ErrorContext(ctx, "failed to update alert status to resolved", "alert_id", a.ID, "error", err)
+		}
+
+		if e.notifier != nil {
+			_ = e.notifier.Send(ctx, orgID, NotificationEvent{
+				AlertID:   a.ID,
+				AlertType: a.AlertType,
+				Severity:  "info",
+				Message:   fmt.Sprintf("Resolved: %s condition returned to normal", a.Name),
+				Context:   map[string]any{"resolved_at": now.Format(time.RFC3339)},
+			})
 		}
 	}
 }
@@ -503,4 +526,189 @@ func (e *Evaluator) evalUsageAnomaly(ctx context.Context, orgID uuid.UUID, confi
 func formatMicros(micros int64) string {
 	dollars := float64(micros) / 1_000_000
 	return fmt.Sprintf("$%.2f", dollars)
+}
+
+func (e *Evaluator) evalBudgetWarning(ctx context.Context, orgID uuid.UUID, config []byte) (bool, string, map[string]any) {
+	var cfg struct {
+		BudgetMicros            int64   `json:"budget_micros"`
+		ThresholdMicros         int64   `json:"threshold_micros"`
+		WarningThresholdPercent float64 `json:"warning_threshold_percent"`
+		Window                  string  `json:"window"`
+	}
+	_ = json.Unmarshal(config, &cfg)
+	if cfg.ThresholdMicros <= 0 && cfg.BudgetMicros > 0 {
+		pct := cfg.WarningThresholdPercent
+		if pct <= 0 {
+			pct = 80.0
+		}
+		cfg.ThresholdMicros = int64(float64(cfg.BudgetMicros) * (pct / 100.0))
+	}
+	if cfg.ThresholdMicros <= 0 {
+		cfg.ThresholdMicros = 40_000_000 // $40 default
+	}
+
+	window := 30 * 24 * time.Hour
+	switch cfg.Window {
+	case "daily", "24h":
+		window = 24 * time.Hour
+	case "weekly", "7d":
+		window = 7 * 24 * time.Hour
+	case "hourly", "1h":
+		window = time.Hour
+	}
+
+	if e.usageRollups == nil {
+		return false, "usage rollups unavailable", nil
+	}
+
+	to := time.Now().UTC()
+	from := to.Add(-window)
+
+	summary, err := e.usageRollups.GetSummary(ctx, orgID, domain.UsageFilter{From: from, To: to})
+	if err != nil {
+		return false, "", nil
+	}
+
+	if summary.TotalCostMicros >= cfg.ThresholdMicros {
+		return true,
+			fmt.Sprintf("Budget warning: spend of %s has reached or exceeded warning threshold %s",
+				formatMicros(summary.TotalCostMicros), formatMicros(cfg.ThresholdMicros)),
+			map[string]any{
+				"current_spend_micros": summary.TotalCostMicros,
+				"threshold_micros":     cfg.ThresholdMicros,
+				"budget_micros":        cfg.BudgetMicros,
+				"window":               cfg.Window,
+			}
+	}
+
+	return false, "spend within warning threshold", map[string]any{
+		"current_spend_micros": summary.TotalCostMicros,
+		"threshold_micros":     cfg.ThresholdMicros,
+	}
+}
+
+func (e *Evaluator) evalBudgetExhaustion(ctx context.Context, orgID uuid.UUID, config []byte) (bool, string, map[string]any) {
+	var cfg struct {
+		BudgetMicros    int64  `json:"budget_micros"`
+		ThresholdMicros int64  `json:"threshold_micros"`
+		Window          string `json:"window"`
+	}
+	_ = json.Unmarshal(config, &cfg)
+	limit := cfg.BudgetMicros
+	if limit <= 0 {
+		limit = cfg.ThresholdMicros
+	}
+	if limit <= 0 {
+		limit = 50_000_000 // $50 default
+	}
+
+	window := 30 * 24 * time.Hour
+	switch cfg.Window {
+	case "daily", "24h":
+		window = 24 * time.Hour
+	case "hourly", "1h":
+		window = time.Hour
+	}
+
+	if e.usageRollups == nil {
+		return false, "usage rollups unavailable", nil
+	}
+
+	to := time.Now().UTC()
+	from := to.Add(-window)
+
+	summary, err := e.usageRollups.GetSummary(ctx, orgID, domain.UsageFilter{From: from, To: to})
+	if err != nil {
+		return false, "", nil
+	}
+
+	if summary.TotalCostMicros >= limit {
+		return true,
+			fmt.Sprintf("Budget exhausted: total spend of %s reached or exceeded budget ceiling %s",
+				formatMicros(summary.TotalCostMicros), formatMicros(limit)),
+			map[string]any{
+				"current_spend_micros": summary.TotalCostMicros,
+				"budget_ceiling_micros": limit,
+				"window":               cfg.Window,
+			}
+	}
+
+	return false, "budget not exhausted", map[string]any{
+		"current_spend_micros": summary.TotalCostMicros,
+		"budget_ceiling_micros": limit,
+	}
+}
+
+func (e *Evaluator) evalSpendSpike(ctx context.Context, orgID uuid.UUID, config []byte) (bool, string, map[string]any) {
+	var cfg struct {
+		Multiplier      float64 `json:"multiplier"`
+		ThresholdMicros int64   `json:"threshold_micros"`
+	}
+	_ = json.Unmarshal(config, &cfg)
+	if cfg.Multiplier <= 0 {
+		cfg.Multiplier = 2.0
+	}
+	if cfg.ThresholdMicros <= 0 {
+		cfg.ThresholdMicros = 10_000_000 // $10.00
+	}
+
+	if e.usageRollups == nil {
+		return false, "usage rollups unavailable", nil
+	}
+
+	to := time.Now().UTC()
+	currentSummary, err := e.usageRollups.GetSummary(ctx, orgID, domain.UsageFilter{
+		From: to.Add(-time.Hour),
+		To:   to,
+	})
+	if err != nil {
+		return false, "", nil
+	}
+
+	if currentSummary.TotalCostMicros >= cfg.ThresholdMicros {
+		return true,
+			fmt.Sprintf("Spend spike detected: hourly spend of %s exceeded threshold of %s",
+				formatMicros(currentSummary.TotalCostMicros), formatMicros(cfg.ThresholdMicros)),
+			map[string]any{
+				"hourly_spend_micros": currentSummary.TotalCostMicros,
+				"threshold_micros":    cfg.ThresholdMicros,
+			}
+	}
+
+	return false, "spend velocity normal", nil
+}
+
+func (e *Evaluator) evalUsageSpike(ctx context.Context, orgID uuid.UUID, config []byte) (bool, string, map[string]any) {
+	var cfg struct {
+		ThresholdRequests int `json:"threshold_requests"`
+	}
+	_ = json.Unmarshal(config, &cfg)
+	if cfg.ThresholdRequests <= 0 {
+		cfg.ThresholdRequests = 50
+	}
+
+	if e.usageRollups == nil {
+		return false, "usage rollups unavailable", nil
+	}
+
+	to := time.Now().UTC()
+	summary, err := e.usageRollups.GetSummary(ctx, orgID, domain.UsageFilter{
+		From: to.Add(-15 * time.Minute),
+		To:   to,
+	})
+	if err != nil {
+		return false, "", nil
+	}
+
+	if int(summary.Requests) >= cfg.ThresholdRequests {
+		return true,
+			fmt.Sprintf("Unexpected usage spike detected: %d requests in the last 15 minutes (threshold: %d)",
+				summary.Requests, cfg.ThresholdRequests),
+			map[string]any{
+				"requests_in_window": summary.Requests,
+				"threshold_requests": cfg.ThresholdRequests,
+			}
+	}
+
+	return false, "usage rate normal", nil
 }

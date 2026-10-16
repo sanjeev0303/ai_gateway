@@ -66,7 +66,13 @@ type modelAccessPreviewResponse struct {
 func toBudgetDTO(b domain.Budget) budgetDTO {
 	pct := 0.0
 	if b.LimitAmount > 0 {
-		pct = (b.CurrentSpend / b.LimitAmount) * 100
+		if b.LimitType == domain.BudgetLimitTypeTokens {
+			pct = (float64(b.CurrentTokens) / b.LimitAmount) * 100
+		} else if b.LimitType == domain.BudgetLimitTypeRequests {
+			pct = (float64(b.CurrentRequests) / b.LimitAmount) * 100
+		} else {
+			pct = (b.CurrentSpend / b.LimitAmount) * 100
+		}
 	}
 	return budgetDTO{
 		ID:              b.ID.String(),
@@ -366,8 +372,44 @@ func (a *api) listBudgets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	now := time.Now().UTC()
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	endOfMonth := startOfMonth.AddDate(0, 1, 0)
+
 	out := make([]budgetDTO, 0, len(budgets))
 	for _, b := range budgets {
+		windowStart := startOfMonth
+		windowEnd := endOfMonth
+		if b.Window == domain.BudgetWindowDaily {
+			windowStart = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+			windowEnd = windowStart.AddDate(0, 0, 1)
+		} else if b.Window == domain.BudgetWindowWeekly {
+			windowStart = now.AddDate(0, 0, -7)
+			windowEnd = now
+		}
+
+		if a.usage != nil {
+			usageFilter := domain.UsageFilter{
+				From: windowStart,
+				To:   windowEnd,
+			}
+			if b.Scope == domain.BudgetScopeProject && b.ScopeID != uuid.Nil {
+				usageFilter.ProjectID = &b.ScopeID
+			}
+
+			if summary, err := a.usage.GetSummary(r.Context(), actor, usageFilter); err == nil && summary.Requests > 0 {
+				b.CurrentSpend = float64(summary.TotalCostMicros) / 1000000.0
+				b.CurrentTokens = summary.TotalTokens
+				b.CurrentRequests = summary.Requests
+			}
+		}
+		if b.WindowStart.IsZero() {
+			b.WindowStart = windowStart
+		}
+		if b.WindowEnd.IsZero() {
+			b.WindowEnd = windowEnd
+		}
+
 		out = append(out, toBudgetDTO(b))
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": out})

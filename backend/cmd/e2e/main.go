@@ -26,9 +26,17 @@ func main() {
 	runJourneyE()
 	runJourneyF()
 	runJourneyG()
+	runOrganizationLifecycle()
+	runGovernanceLifecycle()
+	runProviderGatewayLifecycle()
+	runUsageAttributionLifecycle()
+	runAlertingPrivacyRetentionLifecycle()
+	runCompleteAcceptanceJourney()
+	runGeminiMasterExecution()
 
 	fmt.Println("\n=================================================================")
-	fmt.Println("    ALL JOURNEYS (A through G) SUCCESSFULLY VERIFIED & PASSED    ")
+	fmt.Println("    ALL JOURNEYS, GOVERNANCE, GATEWAY, ATTRIBUTION, ALERTING,    ")
+	fmt.Println("    PRIVACY, RETENTION, GEMINI MASTER E2E & ACCEPTANCE PASSED    ")
 	fmt.Println("=================================================================")
 }
 
@@ -481,9 +489,9 @@ func runJourneyF() {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			req, _ := http.NewRequest("POST", "http://localhost:8084/v1/messages", bytes.NewBuffer([]byte(fmt.Sprintf(`{
+			req, _ := http.NewRequest("POST", "http://localhost:8084/v1/messages", bytes.NewBuffer(fmt.Appendf(nil, `{
 				"model": "claude-3-haiku-20240307", "max_tokens": 5, "messages": [{"role": "user", "content": "Concurrent %d"}]
-			}`, idx))))
+			}`, idx)))
 			req.Header.Set("Authorization", "Bearer "+gwToken)
 			req.Header.Set("Content-Type", "application/json")
 			res, doErr := client.Do(req)
@@ -617,6 +625,11 @@ func signup(email, password, orgName string) (string, string, string) {
 	if userID == "" {
 		if u, ok := out["user"].(map[string]interface{}); ok {
 			userID, _ = u["id"].(string)
+		}
+	}
+	if userID == "" {
+		if claims, ok := out["claims"].(map[string]interface{}); ok {
+			userID, _ = claims["subject"].(string)
 		}
 	}
 

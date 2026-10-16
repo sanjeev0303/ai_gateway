@@ -43,10 +43,23 @@ const (
 
 // Alert types, severities and statuses, mirroring the CHECKs in alerts.
 const (
-	AlertTypeSpendLimit = "spend_limit"
-	AlertTypeRateLimit  = "rate_limit"
-	AlertTypeErrorRate  = "error_rate"
-	AlertTypeAnomaly    = "anomaly"
+	AlertTypeSpendLimit        = "spend_limit"
+	AlertTypeSpendThreshold    = "spend_threshold"
+	AlertTypeSpendExceeded     = "spend_exceeded"
+	AlertTypeBudgetWarning     = "budget_warning"
+	AlertTypeBudgetExhaustion  = "budget_exhaustion"
+	AlertTypeRateLimit         = "rate_limit"
+	AlertTypeRateLimitSpike    = "rate_limit_spike"
+	AlertTypeErrorRate         = "error_rate"
+	AlertTypeErrorRateSpike    = "error_rate_spike"
+	AlertTypeAnomaly           = "anomaly"
+	AlertTypeUsageAnomaly      = "usage_anomaly"
+	AlertTypeUsageSpike        = "usage_spike"
+	AlertTypeSpendSpike        = "spend_spike"
+	AlertTypeProviderFailure   = "provider_failure"
+	AlertTypeCredentialFailure = "credential_failure"
+	AlertTypePolicyViolation   = "policy_violation"
+	AlertTypePolicyDenialSpike = "policy_denial_spike"
 )
 
 const (
@@ -279,3 +292,26 @@ type NewAlertEvent struct {
 	TriggeredAt time.Time
 	ResolvedAt  *time.Time
 }
+
+// InAppNotification represents an in-app alert or notification for an organization.
+type InAppNotification struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	AlertID        *uuid.UUID
+	AlertEventID   *uuid.UUID
+	Title          string
+	Message        string
+	Severity       string
+	Read           bool
+	CreatedAt      time.Time
+}
+
+// NewInAppNotification carries fields to create a notification.
+type NewInAppNotification struct {
+	AlertID      *uuid.UUID
+	AlertEventID *uuid.UUID
+	Title        string
+	Message      string
+	Severity     string
+}
+

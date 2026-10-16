@@ -55,7 +55,17 @@ export default async function MembersPage() {
 
   return (
     <div className="p-4 sm:p-6">
-      <PageShell title="Members" description="Everyone in the organization, with their role and status">
+      <PageShell
+        title="Members"
+        description="Everyone in the organization, with their role, status, and attributed spend."
+        actions={
+          <Button asChild size="sm">
+            <a href="/app/organization/invitations">
+              <UserPlus className="mr-2 h-4 w-4" /> Invite Member
+            </a>
+          </Button>
+        }
+      >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Active members" value={String(active.length)} tone="success" hint="Enabled and signing in" />
         </section>

@@ -101,7 +101,7 @@ func (q *Queries) DeleteUsageMonthlyInWindow(ctx context.Context, arg DeleteUsag
 }
 
 const getLLMRequestByRequestID = `-- name: GetLLMRequestByRequestID :one
-SELECT id, organization_id, project_id, user_id, gateway_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms, service_account_id, team_id FROM llm_requests
+SELECT id, organization_id, project_id, user_id, gateway_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms, service_account_id, team_id, reasoning_tokens, tool_tokens, pricing_version, cost_status, policy_decision, denial_reason FROM llm_requests
 WHERE organization_id = $1 AND request_id = $2
 `
 
@@ -139,12 +139,22 @@ func (q *Queries) GetLLMRequestByRequestID(ctx context.Context, arg GetLLMReques
 		&i.TotalLatencyMs,
 		&i.ServiceAccountID,
 		&i.TeamID,
+		&i.ReasoningTokens,
+		&i.ToolTokens,
+		&i.PricingVersion,
+		&i.CostStatus,
+		&i.PolicyDecision,
+		&i.DenialReason,
 	)
 	return i, err
 }
 
 const getRecentUsage = `-- name: GetRecentUsage :many
-SELECT id, request_id, project_id, user_id, provider_kind, model, status, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms, service_account_id, team_id, gateway_credential_id
+SELECT id, request_id, project_id, user_id, provider_kind, model, status,
+       prompt_tokens, completion_tokens, cached_input_tokens, reasoning_tokens, tool_tokens,
+       total_tokens, latency_ms, cost_micros, pricing_version, cost_status, policy_decision, denial_reason, error_code,
+       created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms,
+       service_account_id, team_id, gateway_credential_id
 FROM llm_requests
 WHERE organization_id = $1
 ORDER BY created_at DESC
@@ -159,9 +169,19 @@ type GetRecentUsageRow struct {
 	ProviderKind        string     `json:"provider_kind"`
 	Model               string     `json:"model"`
 	Status              string     `json:"status"`
+	PromptTokens        int32      `json:"prompt_tokens"`
+	CompletionTokens    int32      `json:"completion_tokens"`
+	CachedInputTokens   int32      `json:"cached_input_tokens"`
+	ReasoningTokens     int32      `json:"reasoning_tokens"`
+	ToolTokens          int32      `json:"tool_tokens"`
 	TotalTokens         int32      `json:"total_tokens"`
 	LatencyMs           int32      `json:"latency_ms"`
 	CostMicros          int64      `json:"cost_micros"`
+	PricingVersion      *int32     `json:"pricing_version"`
+	CostStatus          string     `json:"cost_status"`
+	PolicyDecision      *string    `json:"policy_decision"`
+	DenialReason        *string    `json:"denial_reason"`
+	ErrorCode           *string    `json:"error_code"`
 	CreatedAt           time.Time  `json:"created_at"`
 	RequestStartedAt    *time.Time `json:"request_started_at"`
 	FirstTokenAt        *time.Time `json:"first_token_at"`
@@ -190,9 +210,19 @@ func (q *Queries) GetRecentUsage(ctx context.Context, organizationID uuid.UUID) 
 			&i.ProviderKind,
 			&i.Model,
 			&i.Status,
+			&i.PromptTokens,
+			&i.CompletionTokens,
+			&i.CachedInputTokens,
+			&i.ReasoningTokens,
+			&i.ToolTokens,
 			&i.TotalTokens,
 			&i.LatencyMs,
 			&i.CostMicros,
+			&i.PricingVersion,
+			&i.CostStatus,
+			&i.PolicyDecision,
+			&i.DenialReason,
+			&i.ErrorCode,
 			&i.CreatedAt,
 			&i.RequestStartedAt,
 			&i.FirstTokenAt,
@@ -910,7 +940,11 @@ func (q *Queries) GetUsageLatencyOverall(ctx context.Context, arg GetUsageLatenc
 }
 
 const getUsageRequests = `-- name: GetUsageRequests :many
-SELECT id, request_id, project_id, user_id, provider_kind, model, status, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms, service_account_id, team_id, gateway_credential_id
+SELECT id, request_id, project_id, user_id, provider_kind, model, status,
+       prompt_tokens, completion_tokens, cached_input_tokens, reasoning_tokens, tool_tokens,
+       total_tokens, latency_ms, cost_micros, pricing_version, cost_status, policy_decision, denial_reason, error_code,
+       created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms,
+       service_account_id, team_id, gateway_credential_id
 FROM llm_requests r
 WHERE r.organization_id = $1
   AND r.created_at >= $2
@@ -952,9 +986,19 @@ type GetUsageRequestsRow struct {
 	ProviderKind        string     `json:"provider_kind"`
 	Model               string     `json:"model"`
 	Status              string     `json:"status"`
+	PromptTokens        int32      `json:"prompt_tokens"`
+	CompletionTokens    int32      `json:"completion_tokens"`
+	CachedInputTokens   int32      `json:"cached_input_tokens"`
+	ReasoningTokens     int32      `json:"reasoning_tokens"`
+	ToolTokens          int32      `json:"tool_tokens"`
 	TotalTokens         int32      `json:"total_tokens"`
 	LatencyMs           int32      `json:"latency_ms"`
 	CostMicros          int64      `json:"cost_micros"`
+	PricingVersion      *int32     `json:"pricing_version"`
+	CostStatus          string     `json:"cost_status"`
+	PolicyDecision      *string    `json:"policy_decision"`
+	DenialReason        *string    `json:"denial_reason"`
+	ErrorCode           *string    `json:"error_code"`
 	CreatedAt           time.Time  `json:"created_at"`
 	RequestStartedAt    *time.Time `json:"request_started_at"`
 	FirstTokenAt        *time.Time `json:"first_token_at"`
@@ -995,9 +1039,19 @@ func (q *Queries) GetUsageRequests(ctx context.Context, arg GetUsageRequestsPara
 			&i.ProviderKind,
 			&i.Model,
 			&i.Status,
+			&i.PromptTokens,
+			&i.CompletionTokens,
+			&i.CachedInputTokens,
+			&i.ReasoningTokens,
+			&i.ToolTokens,
 			&i.TotalTokens,
 			&i.LatencyMs,
 			&i.CostMicros,
+			&i.PricingVersion,
+			&i.CostStatus,
+			&i.PolicyDecision,
+			&i.DenialReason,
+			&i.ErrorCode,
 			&i.CreatedAt,
 			&i.RequestStartedAt,
 			&i.FirstTokenAt,
@@ -1023,10 +1077,13 @@ SELECT COUNT(*)::bigint as total_requests,
        COALESCE(SUM(r.prompt_tokens), 0)::bigint as input_tokens,
        COALESCE(SUM(r.completion_tokens), 0)::bigint as output_tokens,
        COALESCE(SUM(r.cached_input_tokens), 0)::bigint as cached_tokens,
+       COALESCE(SUM(r.reasoning_tokens), 0)::bigint as reasoning_tokens,
+       COALESCE(SUM(r.tool_tokens), 0)::bigint as tool_tokens,
        COALESCE(SUM(r.total_tokens), 0)::bigint as total_tokens,
        COALESCE(SUM(r.cost_micros), 0)::bigint as total_cost_micros,
        COUNT(*) FILTER (WHERE r.status = 'failed')::bigint as errors,
        COALESCE(AVG(r.latency_ms), 0)::float8 as avg_latency_ms,
+       COUNT(DISTINCT r.user_id) FILTER (WHERE r.user_id IS NOT NULL)::bigint as active_users,
        -- An ungrouped aggregate always returns one row, so an empty window makes
        -- MAX() NULL. Coalesce to Go's zero time so the scan cannot fail; the
        -- repository detects "no requests" from TotalRequests.
@@ -1064,10 +1121,13 @@ type GetUsageSummaryRow struct {
 	InputTokens     int64     `json:"input_tokens"`
 	OutputTokens    int64     `json:"output_tokens"`
 	CachedTokens    int64     `json:"cached_tokens"`
+	ReasoningTokens int64     `json:"reasoning_tokens"`
+	ToolTokens      int64     `json:"tool_tokens"`
 	TotalTokens     int64     `json:"total_tokens"`
 	TotalCostMicros int64     `json:"total_cost_micros"`
 	Errors          int64     `json:"errors"`
 	AvgLatencyMs    float64   `json:"avg_latency_ms"`
+	ActiveUsers     int64     `json:"active_users"`
 	LastActivityAt  time.Time `json:"last_activity_at"`
 }
 
@@ -1091,26 +1151,29 @@ func (q *Queries) GetUsageSummary(ctx context.Context, arg GetUsageSummaryParams
 		&i.InputTokens,
 		&i.OutputTokens,
 		&i.CachedTokens,
+		&i.ReasoningTokens,
+		&i.ToolTokens,
 		&i.TotalTokens,
 		&i.TotalCostMicros,
 		&i.Errors,
 		&i.AvgLatencyMs,
+		&i.ActiveUsers,
 		&i.LastActivityAt,
 	)
 	return i, err
 }
 
 const getUsageTimeSeries = `-- name: GetUsageTimeSeries :many
-SELECT bucket_start,
-       COALESCE(sum(requests), 0)::bigint as requests,
-       COALESCE(sum(total_tokens), 0)::bigint as total_tokens,
-       COALESCE(sum(cost_micros), 0)::bigint as cost_micros
-FROM usage_daily
-WHERE organization_id = $1
-  AND bucket_start >= $2
-  AND bucket_start < $3
-  AND ($4::uuid IS NULL OR project_id = $4)
-GROUP BY bucket_start
+SELECT date_trunc('day', r.created_at, 'UTC')::timestamptz as bucket_start,
+       COUNT(*)::bigint as requests,
+       COALESCE(sum(r.total_tokens), 0)::bigint as total_tokens,
+       COALESCE(sum(r.cost_micros), 0)::bigint as cost_micros
+FROM llm_requests r
+WHERE r.organization_id = $1
+  AND r.created_at >= $2
+  AND r.created_at < $3
+  AND ($4::uuid IS NULL OR r.project_id = $4)
+GROUP BY date_trunc('day', r.created_at, 'UTC')
 ORDER BY bucket_start ASC
 `
 
@@ -1159,7 +1222,7 @@ func (q *Queries) GetUsageTimeSeries(ctx context.Context, arg GetUsageTimeSeries
 }
 
 const listLLMRequests = `-- name: ListLLMRequests :many
-SELECT id, organization_id, project_id, user_id, gateway_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms, service_account_id, team_id FROM llm_requests
+SELECT id, organization_id, project_id, user_id, gateway_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms, service_account_id, team_id, reasoning_tokens, tool_tokens, pricing_version, cost_status, policy_decision, denial_reason FROM llm_requests
 WHERE organization_id = $1 AND created_at >= $2 AND created_at < $3
 ORDER BY created_at DESC
 `
@@ -1205,6 +1268,12 @@ func (q *Queries) ListLLMRequests(ctx context.Context, arg ListLLMRequestsParams
 			&i.TotalLatencyMs,
 			&i.ServiceAccountID,
 			&i.TeamID,
+			&i.ReasoningTokens,
+			&i.ToolTokens,
+			&i.PricingVersion,
+			&i.CostStatus,
+			&i.PolicyDecision,
+			&i.DenialReason,
 		); err != nil {
 			return nil, err
 		}
@@ -1259,6 +1328,25 @@ func (q *Queries) ListUsageEventsByRequest(ctx context.Context, arg ListUsageEve
 		return nil, err
 	}
 	return items, nil
+}
+
+const purgeExpiredLlmRequests = `-- name: PurgeExpiredLlmRequests :execrows
+DELETE FROM llm_requests
+WHERE organization_id = $1
+  AND created_at < $2::timestamptz
+`
+
+type PurgeExpiredLlmRequestsParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	OlderThan      time.Time `json:"older_than"`
+}
+
+func (q *Queries) PurgeExpiredLlmRequests(ctx context.Context, arg PurgeExpiredLlmRequestsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeExpiredLlmRequests, arg.OrganizationID, arg.OlderThan)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const purgeExpiredUsageEvents = `-- name: PurgeExpiredUsageEvents :execrows
@@ -1392,11 +1480,12 @@ INSERT INTO llm_requests (
     prompt_tokens, completion_tokens, cached_input_tokens, total_tokens,
     latency_ms, cost_micros, created_at,
     request_started_at, first_token_at, completed_at,
-    time_to_first_token_ms, total_latency_ms, service_account_id, team_id
+    time_to_first_token_ms, total_latency_ms, service_account_id, team_id,
+    reasoning_tokens, tool_tokens, pricing_version, cost_status, policy_decision, denial_reason
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
 ON CONFLICT (organization_id, request_id) DO NOTHING
-RETURNING id, organization_id, project_id, user_id, gateway_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms, service_account_id, team_id
+RETURNING id, organization_id, project_id, user_id, gateway_credential_id, request_id, provider_request_id, provider_kind, model, status, error_code, prompt_tokens, completion_tokens, cached_input_tokens, total_tokens, latency_ms, cost_micros, created_at, request_started_at, first_token_at, completed_at, time_to_first_token_ms, total_latency_ms, service_account_id, team_id, reasoning_tokens, tool_tokens, pricing_version, cost_status, policy_decision, denial_reason
 `
 
 type RecordLLMRequestParams struct {
@@ -1424,6 +1513,12 @@ type RecordLLMRequestParams struct {
 	TotalLatencyMs      *int32     `json:"total_latency_ms"`
 	ServiceAccountID    *uuid.UUID `json:"service_account_id"`
 	TeamID              *uuid.UUID `json:"team_id"`
+	ReasoningTokens     int32      `json:"reasoning_tokens"`
+	ToolTokens          int32      `json:"tool_tokens"`
+	PricingVersion      *int32     `json:"pricing_version"`
+	CostStatus          string     `json:"cost_status"`
+	PolicyDecision      *string    `json:"policy_decision"`
+	DenialReason        *string    `json:"denial_reason"`
 }
 
 func (q *Queries) RecordLLMRequest(ctx context.Context, arg RecordLLMRequestParams) (LlmRequest, error) {
@@ -1452,6 +1547,12 @@ func (q *Queries) RecordLLMRequest(ctx context.Context, arg RecordLLMRequestPara
 		arg.TotalLatencyMs,
 		arg.ServiceAccountID,
 		arg.TeamID,
+		arg.ReasoningTokens,
+		arg.ToolTokens,
+		arg.PricingVersion,
+		arg.CostStatus,
+		arg.PolicyDecision,
+		arg.DenialReason,
 	)
 	var i LlmRequest
 	err := row.Scan(
@@ -1480,6 +1581,12 @@ func (q *Queries) RecordLLMRequest(ctx context.Context, arg RecordLLMRequestPara
 		&i.TotalLatencyMs,
 		&i.ServiceAccountID,
 		&i.TeamID,
+		&i.ReasoningTokens,
+		&i.ToolTokens,
+		&i.PricingVersion,
+		&i.CostStatus,
+		&i.PolicyDecision,
+		&i.DenialReason,
 	)
 	return i, err
 }

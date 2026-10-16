@@ -49,6 +49,14 @@ func (f *fakeBillingSubs) ActiveWithPlan(context.Context, uuid.UUID) (domain.Org
 	return f.plan, f.err
 }
 
+func (f *fakeBillingSubs) SetPlan(context.Context, uuid.UUID, uuid.UUID) error {
+	return f.err
+}
+
+func (f *fakeBillingSubs) Cancel(context.Context, uuid.UUID) error {
+	return f.err
+}
+
 type fakeBillingInvoices struct{ invoices []domain.Invoice }
 
 func (f *fakeBillingInvoices) List(context.Context, uuid.UUID) ([]domain.Invoice, error) {

@@ -99,6 +99,47 @@ func (q *Queries) CreateAlertEvent(ctx context.Context, arg CreateAlertEventPara
 	return i, err
 }
 
+const createInAppNotification = `-- name: CreateInAppNotification :one
+INSERT INTO in_app_notifications (organization_id, alert_id, alert_event_id, title, message, severity, read)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, organization_id, alert_id, alert_event_id, title, message, severity, read, created_at
+`
+
+type CreateInAppNotificationParams struct {
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	AlertID        *uuid.UUID `json:"alert_id"`
+	AlertEventID   *uuid.UUID `json:"alert_event_id"`
+	Title          string     `json:"title"`
+	Message        string     `json:"message"`
+	Severity       string     `json:"severity"`
+	Read           bool       `json:"read"`
+}
+
+func (q *Queries) CreateInAppNotification(ctx context.Context, arg CreateInAppNotificationParams) (InAppNotification, error) {
+	row := q.db.QueryRow(ctx, createInAppNotification,
+		arg.OrganizationID,
+		arg.AlertID,
+		arg.AlertEventID,
+		arg.Title,
+		arg.Message,
+		arg.Severity,
+		arg.Read,
+	)
+	var i InAppNotification
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.AlertID,
+		&i.AlertEventID,
+		&i.Title,
+		&i.Message,
+		&i.Severity,
+		&i.Read,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const deleteAlert = `-- name: DeleteAlert :execrows
 DELETE FROM alerts
 WHERE organization_id = $1 AND id = $2
@@ -265,6 +306,99 @@ func (q *Queries) ListAlerts(ctx context.Context, organizationID uuid.UUID) ([]A
 	return items, nil
 }
 
+const listInAppNotifications = `-- name: ListInAppNotifications :many
+SELECT id, organization_id, alert_id, alert_event_id, title, message, severity, read, created_at FROM in_app_notifications
+WHERE organization_id = $1
+  AND ($4::boolean IS NULL OR ($4::boolean = true AND read = false))
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListInAppNotificationsParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	Limit          int32     `json:"limit"`
+	Offset         int32     `json:"offset"`
+	UnreadOnly     *bool     `json:"unread_only"`
+}
+
+func (q *Queries) ListInAppNotifications(ctx context.Context, arg ListInAppNotificationsParams) ([]InAppNotification, error) {
+	rows, err := q.db.Query(ctx, listInAppNotifications,
+		arg.OrganizationID,
+		arg.Limit,
+		arg.Offset,
+		arg.UnreadOnly,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InAppNotification{}
+	for rows.Next() {
+		var i InAppNotification
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.AlertID,
+			&i.AlertEventID,
+			&i.Title,
+			&i.Message,
+			&i.Severity,
+			&i.Read,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markAllNotificationsRead = `-- name: MarkAllNotificationsRead :execrows
+UPDATE in_app_notifications
+SET read = true
+WHERE organization_id = $1 AND read = false
+`
+
+func (q *Queries) MarkAllNotificationsRead(ctx context.Context, organizationID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, markAllNotificationsRead, organizationID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const markNotificationRead = `-- name: MarkNotificationRead :one
+UPDATE in_app_notifications
+SET read = true
+WHERE organization_id = $1 AND id = $2
+RETURNING id, organization_id, alert_id, alert_event_id, title, message, severity, read, created_at
+`
+
+type MarkNotificationReadParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ID             uuid.UUID `json:"id"`
+}
+
+func (q *Queries) MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) (InAppNotification, error) {
+	row := q.db.QueryRow(ctx, markNotificationRead, arg.OrganizationID, arg.ID)
+	var i InAppNotification
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.AlertID,
+		&i.AlertEventID,
+		&i.Title,
+		&i.Message,
+		&i.Severity,
+		&i.Read,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const updateAlert = `-- name: UpdateAlert :one
 UPDATE alerts
 SET name          = $3,
@@ -306,6 +440,39 @@ func (q *Queries) UpdateAlert(ctx context.Context, arg UpdateAlertParams) (Alert
 		&i.LastTriggeredAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateAlertEventStatus = `-- name: UpdateAlertEventStatus :one
+UPDATE alert_events
+SET status = $3,
+    resolved_at = CASE WHEN $3 = 'resolved' THEN now() ELSE resolved_at END
+WHERE organization_id = $1 AND id = $2
+RETURNING id, organization_id, alert_id, alert_type, severity, status, message, context, triggered_at, resolved_at, created_at
+`
+
+type UpdateAlertEventStatusParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ID             uuid.UUID `json:"id"`
+	Status         string    `json:"status"`
+}
+
+func (q *Queries) UpdateAlertEventStatus(ctx context.Context, arg UpdateAlertEventStatusParams) (AlertEvent, error) {
+	row := q.db.QueryRow(ctx, updateAlertEventStatus, arg.OrganizationID, arg.ID, arg.Status)
+	var i AlertEvent
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.AlertID,
+		&i.AlertType,
+		&i.Severity,
+		&i.Status,
+		&i.Message,
+		&i.Context,
+		&i.TriggeredAt,
+		&i.ResolvedAt,
+		&i.CreatedAt,
 	)
 	return i, err
 }

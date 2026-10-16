@@ -662,7 +662,9 @@ async function KpiRowWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
       <ModernKpiCard
         label="Active users"
         value={
-          activeUsersResp === null
+          summary?.ActiveUsers != null && summary.ActiveUsers > 0
+            ? formatCompact(summary.ActiveUsers)
+            : activeUsersResp === null
             ? "—"
             : activeUsersResp?.count != null
             ? formatCompact(activeUsersResp.count)
@@ -773,30 +775,39 @@ async function HeatmapWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
     );
   }
 
-  const maxReq = Math.max(...series.items.map((s) => s.Requests));
+  const items = [...series.items];
+  const maxReq = Math.max(...items.map((s) => s.Requests));
 
   return (
     <>
-      <div className="flex flex-wrap gap-1 mt-2" role="img" aria-label="Activity heatmap">
-        {series.items.map((s, i) => {
+      <div className="flex flex-wrap gap-1.5 mt-2 max-w-full" role="img" aria-label="Activity heatmap">
+        {items.map((s, i) => {
           const intensity = maxReq > 0 ? s.Requests / maxReq : 0;
-          let bg = "bg-muted";
-          if (intensity > 0) bg = "bg-blue-500/20";
-          if (intensity > 0.3) bg = "bg-blue-500/40";
-          if (intensity > 0.6) bg = "bg-blue-500/70";
-          if (intensity > 0.8) bg = "bg-blue-500";
+          let bg = "bg-muted/50 border border-border/20";
+          if (intensity > 0) bg = "bg-blue-500/25 border border-blue-500/30";
+          if (intensity > 0.3) bg = "bg-blue-500/45 border border-blue-500/50";
+          if (intensity > 0.6) bg = "bg-blue-500/75 border border-blue-500/80 shadow-xs shadow-blue-500/20";
+          if (intensity > 0.8) bg = "bg-blue-500 border border-blue-400 shadow-sm shadow-blue-500/40";
           return (
             <div
               key={i}
-              title={`${new Date(s.BucketStart).toLocaleString()}: ${s.Requests} requests`}
-              className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-[3px] ${bg} hover:ring-1 hover:ring-foreground/50 transition-all`}
+              title={`${new Date(s.BucketStart).toLocaleDateString()}: ${s.Requests} requests (${s.TotalTokens.toLocaleString()} tokens)`}
+              className={`w-4 h-4 sm:w-5 sm:h-5 rounded-lg ${bg} hover:ring-2 hover:ring-primary/80 hover:scale-110 transition-all cursor-pointer`}
             />
           );
         })}
       </div>
-      <p className="text-xs text-muted-foreground mt-4">
-        Each cell represents a time bucket. Darker cells indicate higher request concentration.
-      </p>
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-4 pt-2 border-t border-border/40">
+        <span>Activity timeline ({items.length} buckets)</span>
+        <div className="flex items-center gap-1.5">
+          <span>Less</span>
+          <span className="w-2.5 h-2.5 rounded-xs bg-muted/60" />
+          <span className="w-2.5 h-2.5 rounded-xs bg-blue-500/30" />
+          <span className="w-2.5 h-2.5 rounded-xs bg-blue-500/60" />
+          <span className="w-2.5 h-2.5 rounded-xs bg-blue-500" />
+          <span>More</span>
+        </div>
+      </div>
     </>
   );
 }

@@ -181,6 +181,8 @@ func RunGatewayV2(ctx context.Context) error {
 			ProviderAccounts:    repositories.NewProviderAccountRepository(store),
 			ProviderCredentials: repositories.NewProviderCredentialRepository(store),
 			Secrets:             secretStore,
+			ModelRepo:           repositories.NewModelRepository(store),
+			ProjectRepo:         repositories.NewProjectRepository(store),
 			PolicyRepo:          repositories.NewPolicyRepository(store),
 			RuleRepo:            repositories.NewPolicyRuleRepository(store),
 			Guardrails:          repositories.NewGuardrailsRepository(store),
@@ -241,7 +243,7 @@ func RunGatewayV2(ctx context.Context) error {
 			jobs.Add(1)
 			go func() {
 				defer jobs.Done()
-				worker.RunSecurityConsumer(ctx, bus.EventBus, secSvc, log)
+				worker.RunSecurityConsumer(ctx, bus.EventBus, secSvc, repositories.NewAuditLogRepository(store), log)
 			}()
 		}
 
@@ -399,10 +401,11 @@ func RunControlAPI(ctx context.Context) error {
 			Log:    log,
 		})
 
+		alertRepo := repositories.NewAlertRepository(store)
 		alertEval := alert.NewEvaluator(alert.EvaluatorDeps{
 			Log:            log,
-			Alerts:         repositories.NewAlertRepository(store),
-			Notifier:       alert.NewInAppNotifier(log),
+			Alerts:         alertRepo,
+			Notifier:       alert.NewInAppNotifier(log, alertRepo),
 			UsageRollups:   repositories.NewUsageRollupRepository(store),
 			ProviderHealth: repositories.NewProviderHealthRepository(store),
 			SecurityEvents: repositories.NewSecurityEventRepository(store),
@@ -411,7 +414,7 @@ func RunControlAPI(ctx context.Context) error {
 
 		alertSvc := alert.NewService(alert.ServiceDeps{
 			Log:       log,
-			Alerts:    repositories.NewAlertRepository(store),
+			Alerts:    alertRepo,
 			Audits:    repositories.NewAuditLogRepository(store),
 			Evaluator: alertEval,
 		})
@@ -527,23 +530,27 @@ func RunWorker(ctx context.Context) error {
 			Orgs:          repositories.NewOrganizationRepository(store),
 			Conversations: repositories.NewConversationRepository(store),
 			UsageEvents:   repositories.NewUsageEventRepository(store),
+			LlmRequests:   repositories.NewLlmRequestRepository(store),
+			AuditLogs:     repositories.NewAuditLogRepository(store),
+			BillingEvents: repositories.NewBillingEventRepository(store),
 			Log:           log,
 		})
 		jobs.Add(1)
 		go func() {
 			defer jobs.Done()
-			worker.RunRetention(ctx, retentionJob, 1*time.Hour)
+			worker.RunRetention(ctx, retentionJob, 10*time.Second)
 		}()
 
+		workerAlertRepo := repositories.NewAlertRepository(store)
 		_ = alert.NewService(alert.ServiceDeps{
 			Log:    log,
-			Alerts: repositories.NewAlertRepository(store),
+			Alerts: workerAlertRepo,
 			Audits: repositories.NewAuditLogRepository(store),
 		})
-		notifier := alert.NewInAppNotifier(log)
+		notifier := alert.NewInAppNotifier(log, workerAlertRepo)
 		evaluator := alert.NewEvaluator(alert.EvaluatorDeps{
 			Log:            log,
-			Alerts:         repositories.NewAlertRepository(store),
+			Alerts:         workerAlertRepo,
 			Notifier:       notifier,
 			UsageRollups:   repositories.NewUsageRollupRepository(store),
 			ProviderHealth: repositories.NewProviderHealthRepository(store),
@@ -554,7 +561,11 @@ func RunWorker(ctx context.Context) error {
 		jobs.Add(1)
 		go func() {
 			defer jobs.Done()
-			ticker := time.NewTicker(1 * time.Minute)
+			// Initial pass on start
+			if orgIDs, err := repositories.NewOrganizationRepository(store).ListAllIDs(ctx); err == nil {
+				evaluator.EvaluateAll(ctx, orgIDs)
+			}
+			ticker := time.NewTicker(5 * time.Second)
 			defer ticker.Stop()
 			for {
 				select {
@@ -588,7 +599,7 @@ func RunWorker(ctx context.Context) error {
 				jobs.Add(1)
 				go func() {
 					defer jobs.Done()
-					worker.RunSecurityConsumer(ctx, bus.EventBus, secSvc, log)
+					worker.RunSecurityConsumer(ctx, bus.EventBus, secSvc, repositories.NewAuditLogRepository(store), log)
 				}()
 			}
 		}

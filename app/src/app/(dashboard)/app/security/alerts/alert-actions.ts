@@ -26,3 +26,30 @@ export async function testAlert(id: string) {
   const { alerts } = await getApiClient();
   return await alerts.test(id);
 }
+
+export async function acknowledgeAlertEventAction(id: string) {
+  const { alerts } = await getApiClient();
+  const res = await alerts.acknowledgeEvent(id);
+  revalidatePath("/app/security/alerts");
+  return res;
+}
+
+export async function resolveAlertEventAction(id: string) {
+  const { alerts } = await getApiClient();
+  const res = await alerts.resolveEvent(id);
+  revalidatePath("/app/security/alerts");
+  return res;
+}
+
+export async function markNotificationReadAction(id: string) {
+  const { alerts } = await getApiClient();
+  await alerts.markNotificationRead(id);
+  revalidatePath("/app/security/alerts");
+}
+
+export async function markAllNotificationsReadAction() {
+  const { alerts } = await getApiClient();
+  await alerts.markAllNotificationsRead();
+  revalidatePath("/app/security/alerts");
+}
+

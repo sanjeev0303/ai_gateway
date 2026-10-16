@@ -118,8 +118,16 @@ export default async function ConversationsPage({
     offset: typeof params.offset === "string" ? parseInt(params.offset, 10) : 0,
   };
 
-  const { conversations } = await getApiClient();
-  const { items, has_more } = await conversations.list(filters);
+  const { conversations, members } = await getApiClient();
+  const [{ items, has_more }, membersList] = await Promise.all([
+    conversations.list(filters),
+    members.list().catch(() => ({ items: [] })),
+  ]);
+
+  const userMap = new Map<string, string>();
+  for (const m of membersList.items) {
+    userMap.set(m.user.id, m.user.display_name || m.user.email);
+  }
 
   const totalMessages = items.reduce((sum, c) => sum + c.message_count, 0);
   const totalRequests = items.reduce((sum, c) => sum + c.request_count, 0);
@@ -128,7 +136,7 @@ export default async function ConversationsPage({
   const rows: ConversationRow[] = items.map((c) => ({
     id: c.id,
     title: c.title || "Untitled",
-    user: c.user_id,
+    user: userMap.get(c.user_id) ?? c.user_id,
     routing: [c.provider, c.model].filter(Boolean).join(" · ") || "Provider not recorded",
     messages: c.message_count,
     requests: c.request_count,

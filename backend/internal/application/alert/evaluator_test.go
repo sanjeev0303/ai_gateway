@@ -72,6 +72,15 @@ func (m *mockAlertRepo) CreateEvent(ctx context.Context, orgID uuid.UUID, input 
 	return event, nil
 }
 
+func (m *mockAlertRepo) GetLatestEvent(ctx context.Context, orgID, alertID uuid.UUID) (*domain.AlertEvent, error) {
+	for i := len(m.events) - 1; i >= 0; i-- {
+		if m.events[i].AlertID == alertID && m.events[i].OrganizationID == orgID {
+			return &m.events[i], nil
+		}
+	}
+	return nil, nil
+}
+
 type mockNotifier struct {
 	sent []alert.NotificationEvent
 }

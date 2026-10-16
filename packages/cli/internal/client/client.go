@@ -1,0 +1,407 @@
+package client
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+)
+
+// GatewayClient interacts with the Sentinel Gateway data plane.
+type GatewayClient struct {
+	GatewayURL string
+	APIKey     string
+	ProjectID  string
+	HTTPClient *http.Client
+}
+
+// Model represents a permitted model returned by the gateway.
+type Model struct {
+	ID          string `json:"id"`
+	Object      string `json:"object"`
+	Provider    string `json:"provider"`
+	DisplayName string `json:"display_name,omitempty"`
+}
+
+// RequestMetadata contains execution statistics for a gateway call.
+type RequestMetadata struct {
+	RequestID    string
+	StatusCode   int
+	Duration     time.Duration
+	InputTokens  int
+	OutputTokens int
+	TotalTokens  int
+	Model        string
+}
+
+// RequestPayload specifies the parameters for an LLM prompt.
+type RequestPayload struct {
+	Model     string
+	Prompt    string
+	Stream    bool
+	MaxTokens int
+	ProjectID string
+}
+
+// New creates a new GatewayClient.
+func New(gatewayURL, apiKey, projectID string) *GatewayClient {
+	gatewayURL = strings.TrimRight(gatewayURL, "/")
+	return &GatewayClient{
+		GatewayURL: gatewayURL,
+		APIKey:     apiKey,
+		ProjectID:  projectID,
+		HTTPClient: &http.Client{Timeout: 0}, // streaming requests need no overall timeout
+	}
+}
+
+// ListModels fetches the permitted models from the gateway.
+func (c *GatewayClient) ListModels(ctx context.Context) ([]Model, error) {
+	url := c.GatewayURL + "/v1/models"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, parseHTTPError(resp)
+	}
+
+	var data struct {
+		Data  []Model `json:"data"`
+		Items []Model `json:"items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if len(data.Data) > 0 {
+		return data.Data, nil
+	}
+	return data.Items, nil
+}
+
+// StreamRequest sends a streaming prompt to the gateway and invokes onChunk for each text delta.
+func (c *GatewayClient) StreamRequest(ctx context.Context, payload RequestPayload, onChunk func(string)) (*RequestMetadata, error) {
+	start := time.Now()
+	isOpenAI := strings.HasPrefix(payload.Model, "gpt-") || strings.HasPrefix(payload.Model, "o1") || strings.HasPrefix(payload.Model, "o3") || strings.HasPrefix(payload.Model, "gemini-")
+
+	endpoint := c.GatewayURL + "/v1/messages"
+	if isOpenAI {
+		endpoint = c.GatewayURL + "/v1/chat/completions"
+	}
+
+	bodyMap := c.buildRequestBody(payload, true, isOpenAI)
+	bodyBytes, err := json.Marshal(bodyMap)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	c.setHeaders(req)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return nil, parseHTTPError(resp)
+	}
+
+	meta := &RequestMetadata{
+		RequestID:  resp.Header.Get("x-request-id"),
+		StatusCode: resp.StatusCode,
+		Model:      payload.Model,
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "" || data == "[DONE]" {
+			continue
+		}
+
+		// Gemini SSE format
+		var geminiEvt struct {
+			Candidates []struct {
+				Content struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				} `json:"content"`
+			} `json:"candidates"`
+			UsageMetadata struct {
+				PromptTokenCount     int `json:"promptTokenCount"`
+				CandidatesTokenCount int `json:"candidatesTokenCount"`
+				TotalTokenCount      int `json:"totalTokenCount"`
+			} `json:"usageMetadata"`
+		}
+		if err := json.Unmarshal([]byte(data), &geminiEvt); err == nil && len(geminiEvt.Candidates) > 0 {
+			for _, part := range geminiEvt.Candidates[0].Content.Parts {
+				if part.Text != "" {
+					onChunk(part.Text)
+				}
+			}
+			if geminiEvt.UsageMetadata.PromptTokenCount > 0 {
+				meta.InputTokens = geminiEvt.UsageMetadata.PromptTokenCount
+			}
+			if geminiEvt.UsageMetadata.CandidatesTokenCount > 0 {
+				meta.OutputTokens = geminiEvt.UsageMetadata.CandidatesTokenCount
+			}
+			if geminiEvt.UsageMetadata.TotalTokenCount > 0 {
+				meta.TotalTokens = geminiEvt.UsageMetadata.TotalTokenCount
+			}
+			continue
+		}
+
+		if isOpenAI {
+			var chunk struct {
+				Choices []struct {
+					Delta struct {
+						Content string `json:"content"`
+					} `json:"delta"`
+				} `json:"choices"`
+				Usage *struct {
+					PromptTokens     int `json:"prompt_tokens"`
+					CompletionTokens int `json:"completion_tokens"`
+					TotalTokens      int `json:"total_tokens"`
+				} `json:"usage"`
+			}
+			if err := json.Unmarshal([]byte(data), &chunk); err == nil {
+				if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
+					onChunk(chunk.Choices[0].Delta.Content)
+				}
+				if chunk.Usage != nil {
+					meta.InputTokens = chunk.Usage.PromptTokens
+					meta.OutputTokens = chunk.Usage.CompletionTokens
+					meta.TotalTokens = chunk.Usage.TotalTokens
+				}
+			}
+		} else {
+			// Anthropic SSE format
+			var evt struct {
+				Type  string `json:"type"`
+				Delta struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"delta"`
+				Message struct {
+					Usage struct {
+						InputTokens int `json:"input_tokens"`
+					} `json:"usage"`
+				} `json:"message"`
+				Usage struct {
+					OutputTokens int `json:"output_tokens"`
+				} `json:"usage"`
+			}
+			if err := json.Unmarshal([]byte(data), &evt); err == nil {
+				if evt.Type == "content_block_delta" && evt.Delta.Text != "" {
+					onChunk(evt.Delta.Text)
+				}
+				if evt.Type == "message_start" && evt.Message.Usage.InputTokens > 0 {
+					meta.InputTokens = evt.Message.Usage.InputTokens
+				}
+				if evt.Type == "message_delta" && evt.Usage.OutputTokens > 0 {
+					meta.OutputTokens = evt.Usage.OutputTokens
+				}
+			}
+		}
+	}
+
+	meta.Duration = time.Since(start)
+	if meta.TotalTokens == 0 {
+		meta.TotalTokens = meta.InputTokens + meta.OutputTokens
+	}
+	return meta, scanner.Err()
+}
+
+// SendRequest sends a non-streaming prompt to the gateway.
+func (c *GatewayClient) SendRequest(ctx context.Context, payload RequestPayload) (string, *RequestMetadata, error) {
+	start := time.Now()
+	isOpenAI := strings.HasPrefix(payload.Model, "gpt-") || strings.HasPrefix(payload.Model, "o1") || strings.HasPrefix(payload.Model, "o3") || strings.HasPrefix(payload.Model, "gemini-")
+
+	endpoint := c.GatewayURL + "/v1/messages"
+	if isOpenAI {
+		endpoint = c.GatewayURL + "/v1/chat/completions"
+	}
+
+	bodyMap := c.buildRequestBody(payload, false, isOpenAI)
+	bodyBytes, err := json.Marshal(bodyMap)
+	if err != nil {
+		return "", nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", nil, fmt.Errorf("create request: %w", err)
+	}
+	c.setHeaders(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return "", nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return "", nil, parseHTTPError(resp)
+	}
+
+	meta := &RequestMetadata{
+		RequestID:  resp.Header.Get("x-request-id"),
+		StatusCode: resp.StatusCode,
+		Duration:   time.Since(start),
+		Model:      payload.Model,
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", nil, fmt.Errorf("read response body: %w", err)
+	}
+
+	var outputText string
+	if isOpenAI {
+		var chatResp struct {
+			Choices []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			} `json:"choices"`
+			Usage struct {
+				PromptTokens     int `json:"prompt_tokens"`
+				CompletionTokens int `json:"completion_tokens"`
+				TotalTokens      int `json:"total_tokens"`
+			} `json:"usage"`
+		}
+		if err := json.Unmarshal(respBody, &chatResp); err == nil {
+			if len(chatResp.Choices) > 0 {
+				outputText = chatResp.Choices[0].Message.Content
+			}
+			meta.InputTokens = chatResp.Usage.PromptTokens
+			meta.OutputTokens = chatResp.Usage.CompletionTokens
+			meta.TotalTokens = chatResp.Usage.TotalTokens
+		}
+	} else {
+		var geminiResp struct {
+			Candidates []struct {
+				Content struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				} `json:"content"`
+			} `json:"candidates"`
+			UsageMetadata struct {
+				PromptTokenCount     int `json:"promptTokenCount"`
+				CandidatesTokenCount int `json:"candidatesTokenCount"`
+				TotalTokenCount      int `json:"totalTokenCount"`
+			} `json:"usageMetadata"`
+		}
+		if err := json.Unmarshal(respBody, &geminiResp); err == nil && len(geminiResp.Candidates) > 0 {
+			for _, part := range geminiResp.Candidates[0].Content.Parts {
+				outputText += part.Text
+			}
+			meta.InputTokens = geminiResp.UsageMetadata.PromptTokenCount
+			meta.OutputTokens = geminiResp.UsageMetadata.CandidatesTokenCount
+			meta.TotalTokens = geminiResp.UsageMetadata.TotalTokenCount
+			if meta.TotalTokens == 0 {
+				meta.TotalTokens = meta.InputTokens + meta.OutputTokens
+			}
+			return outputText, meta, nil
+		}
+
+		var anthropicResp struct {
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+			Usage struct {
+				InputTokens  int `json:"input_tokens"`
+				OutputTokens int `json:"output_tokens"`
+			} `json:"usage"`
+		}
+		if err := json.Unmarshal(respBody, &anthropicResp); err == nil {
+			for _, part := range anthropicResp.Content {
+				if part.Type == "text" {
+					outputText += part.Text
+				}
+			}
+			meta.InputTokens = anthropicResp.Usage.InputTokens
+			meta.OutputTokens = anthropicResp.Usage.OutputTokens
+			meta.TotalTokens = meta.InputTokens + meta.OutputTokens
+		}
+	}
+
+	return outputText, meta, nil
+}
+
+func (c *GatewayClient) setHeaders(req *http.Request) {
+	req.Header.Set("x-api-key", c.APIKey)
+	req.Header.Set("Authorization", "Bearer "+c.APIKey)
+	if c.ProjectID != "" {
+		req.Header.Set("x-project-id", c.ProjectID)
+	}
+}
+
+func (c *GatewayClient) buildRequestBody(payload RequestPayload, stream, isOpenAI bool) map[string]any {
+	maxTokens := payload.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = 1024
+	}
+
+	m := map[string]any{
+		"model":  payload.Model,
+		"stream": stream,
+		"messages": []map[string]string{
+			{"role": "user", "content": payload.Prompt},
+		},
+	}
+	if isOpenAI {
+		m["max_tokens"] = maxTokens
+	} else {
+		m["max_tokens"] = maxTokens
+	}
+	if payload.ProjectID != "" {
+		m["project_id"] = payload.ProjectID
+	}
+	return m
+}
+
+func parseHTTPError(resp *http.Response) error {
+	data, _ := io.ReadAll(resp.Body)
+	var errResp struct {
+		Type  string `json:"type"`
+		Error struct {
+			Type    string `json:"type"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(data, &errResp); err == nil && errResp.Error.Message != "" {
+		return fmt.Errorf("[HTTP %d %s] %s", resp.StatusCode, errResp.Error.Type, errResp.Error.Message)
+	}
+	return fmt.Errorf("[HTTP %d] %s", resp.StatusCode, string(data))
+}

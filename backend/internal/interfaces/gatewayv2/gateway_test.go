@@ -42,6 +42,10 @@ func (s *stubGatewayTenantResolver) ResolveUpstream(_ context.Context, _ uuid.UU
 	return s.upstream, s.err
 }
 
+func (s *stubGatewayTenantResolver) ResolveUpstreamForProvider(_ context.Context, _ uuid.UUID, _ string) (ResolvedUpstream, error) {
+	return s.upstream, s.err
+}
+
 type stubGatewayPolicyResolver struct {
 	snapshot         PolicySnapshot
 	err              error
@@ -686,12 +690,16 @@ func TestEmitTelemetry_ErrorOnDenied(t *testing.T) {
 	g.emitTelemetry(context.Background(), "req-1", res, start, nil)
 
 	requireTrue(t, len(stubs.telemetry.errs) == 1, "want one error record, got %d", len(stubs.telemetry.errs))
-	requireTrue(t, len(stubs.telemetry.usage) == 0, "no usage record expected")
+	requireTrue(t, len(stubs.telemetry.usage) == 1, "want one denied usage telemetry record, got %d", len(stubs.telemetry.usage))
 
 	e := stubs.telemetry.errs[0]
 	requireTrue(t, e.ErrorType == "rate_limit_exceeded", "error type mismatch")
 	requireTrue(t, e.StatusCode == 429, "error status mismatch")
 	requireTrue(t, e.UpstreamError == "rate limit exceeded", "error message mismatch")
+
+	u := stubs.telemetry.usage[0]
+	requireTrue(t, u.StatusCode == 429, "denied usage status mismatch")
+	requireTrue(t, u.PolicyDecision != nil && *u.PolicyDecision == domain.PolicyDecisionDenied, "denied policy decision mismatch")
 }
 
 // TestEmitTelemetry_NilEmitterNoPanic verifies telemetry is optional.
@@ -759,4 +767,65 @@ func TestGateway_Stats(t *testing.T) {
 func TestPipelineError_ErrorString(t *testing.T) {
 	err := &PipelineError{Stage: "authenticate", Err: errStub, StatusCode: 401, ErrorType: "authentication_error"}
 	requireTrue(t, err.Error() == "authenticate: "+errStub.Error(), "message format wrong")
+}
+
+func TestGateway_ListModels_FiltersByPolicy(t *testing.T) {
+	g, stubs := newGatewayForPipeline()
+	stubs.policy.snapshot.Rules = []PolicyRule{modelRule(domain.RuleTypeAllowlist, "claude-sonnet-4-5")}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	req.Header.Set("x-api-key", "aigw_valid_key")
+	rec := httptest.NewRecorder()
+
+	g.ServeHTTP(rec, req)
+	requireTrue(t, rec.Code == http.StatusOK, "want 200 OK, got %d", rec.Code)
+
+	var resp struct {
+		Object string `json:"object"`
+		Data   []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
+	requireNoErr(t, err, "unmarshal models response")
+	requireTrue(t, len(resp.Data) == 1, "expected exactly 1 permitted model, got %d", len(resp.Data))
+	requireTrue(t, resp.Data[0].ID == "claude-sonnet-4-5", "expected claude-sonnet-4-5, got %s", resp.Data[0].ID)
+}
+
+func TestGateway_TenantSpoofingRejected(t *testing.T) {
+	g, _ := newGatewayForPipeline()
+
+	req := pipelineRequest("key-1", `{"model":"claude-sonnet-4-5"}`)
+	req.Header.Set("X-Organization-ID", uuid.New().String()) // Spoofed other org
+
+	res := g.executePipeline(context.Background(), req, "req-spoof")
+	requireTrue(t, !res.Allowed, "spoofed org header must be rejected")
+	requireTrue(t, res.StatusCode == http.StatusForbidden, "want 403, got %d", res.StatusCode)
+	requireTrue(t, res.ErrorType == "tenant_isolation_violation", "want tenant_isolation_violation, got %s", res.ErrorType)
+}
+
+func TestGateway_ProjectMismatchRejected(t *testing.T) {
+	g, stubs := newGatewayForPipeline()
+	projID := uuid.New()
+	stubs.auth.cred.ProjectID = &projID
+
+	req := pipelineRequest("key-1", `{"model":"claude-sonnet-4-5"}`)
+	req.Header.Set("X-Project-ID", uuid.New().String()) // Mismatched project
+
+	res := g.executePipeline(context.Background(), req, "req-proj-spoof")
+	requireTrue(t, !res.Allowed, "mismatched project header must be rejected")
+	requireTrue(t, res.StatusCode == http.StatusForbidden, "want 403, got %d", res.StatusCode)
+	requireTrue(t, res.ErrorType == "permission_error", "want permission_error, got %s", res.ErrorType)
+}
+
+func TestGateway_UnsupportedModel(t *testing.T) {
+	g, stubs := newGatewayForPipeline()
+	stubs.inspect.hints.Model = "non-existent-fantasy-model"
+
+	req := pipelineRequest("key-1", `{"model":"non-existent-fantasy-model"}`)
+	res := g.executePipeline(context.Background(), req, "req-unsupported")
+
+	requireTrue(t, !res.Allowed, "unsupported model must be rejected")
+	requireTrue(t, res.StatusCode == http.StatusBadRequest, "want 400, got %d", res.StatusCode)
+	requireTrue(t, res.ErrorType == "unsupported_model", "want unsupported_model, got %s", res.ErrorType)
 }

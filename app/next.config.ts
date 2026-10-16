@@ -9,6 +9,7 @@ const appDir = path.dirname(fileURLToPath(import.meta.url));
 // browser. Local dev runs on the host (:8081); in compose the app container
 // reaches the service by name on its internal port (:8080).
 const controlApiUrl = process.env.CONTROL_API_URL ?? "http://localhost:8081";
+const gatewayUrl = process.env.GATEWAY_URL ?? "http://localhost:8084";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
@@ -23,6 +24,7 @@ const nextConfig: NextConfig = {
       // any CORS configuration.
       { source: "/api/v1/:path*", destination: `${controlApiUrl}/v1/:path*` },
       { source: "/api/control/v1/:path*", destination: `${controlApiUrl}/v1/:path*` },
+      { source: "/api/gateway/:path*", destination: `${gatewayUrl}/:path*` },
     ];
   },
 };

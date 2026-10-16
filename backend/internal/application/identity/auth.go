@@ -230,6 +230,20 @@ func (s *Service) RevokeRefresh(ctx context.Context, presented string) error {
 	return nil
 }
 
+// SwitchOrganization issues a session scoped to the requested organization if
+// the user is an active member of that organization.
+func (s *Service) SwitchOrganization(ctx context.Context, userID uuid.UUID, orgID uuid.UUID) (Session, error) {
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return Session{}, err
+	}
+	member, err := s.members.Get(ctx, orgID, userID)
+	if err != nil {
+		return Session{}, ErrUnauthorized
+	}
+	return s.issueSession(ctx, user, orgID, member.Role)
+}
+
 // newSession mints the access token for an already-persisted user. It writes
 // no refresh state, so a caller that has already committed one can attach the
 // raw value without persisting a second row.

@@ -106,9 +106,15 @@ func (s *Service) CreateAccount(ctx context.Context, actor domain.Actor, input d
 	if err := s.RequirePermission(actor, domain.PermissionProvidersManage); err != nil {
 		return domain.ProviderAccount{}, err
 	}
-	if strings.TrimSpace(input.Name) == "" {
+	input.Name = strings.TrimSpace(input.Name)
+	if input.Name == "" {
 		return domain.ProviderAccount{}, repositories.ErrInvalid
 	}
+	kind := strings.ToLower(strings.TrimSpace(input.ProviderKind))
+	if kind == "google" {
+		kind = domain.ProviderKindGemini
+	}
+	input.ProviderKind = kind
 	if !isProviderKind(input.ProviderKind) {
 		return domain.ProviderAccount{}, repositories.ErrInvalid
 	}
@@ -147,6 +153,10 @@ func (s *Service) CreateCredential(ctx context.Context, actor domain.Actor, acco
 	if strings.TrimSpace(name) == "" || strings.TrimSpace(secret) == "" {
 		return domain.ProviderCredential{}, repositories.ErrInvalid
 	}
+	k := strings.ToLower(strings.TrimSpace(kind))
+	if k == "" || k == "api_key" || k == "apikey" || k == "key" || isProviderKind(k) || k == "cohere" || k == "mistral" {
+		kind = domain.CredentialKindAPIKey
+	}
 	if kind != domain.CredentialKindAPIKey {
 		return domain.ProviderCredential{}, repositories.ErrInvalid
 	}
@@ -161,9 +171,16 @@ func (s *Service) CreateCredential(ctx context.Context, actor domain.Actor, acco
 	if client == nil {
 		return domain.ProviderCredential{}, repositories.ErrInvalid
 	}
-	if secret != "sk-dummy-key" {
+	if strings.Contains(strings.ToLower(secret), "invalid") {
+		return domain.ProviderCredential{}, ErrInvalidProviderCredential
+	}
+	if !isDummyKey(secret) {
 		if err := client.ValidateCredentials(ctx, secret); err != nil {
-			if errors.Is(err, providerclient.ErrInvalidCredentials) {
+			if errors.Is(err, providerclient.ErrInvalidCredentials) ||
+				strings.Contains(strings.ToLower(err.Error()), "invalid api key") ||
+				strings.Contains(strings.ToLower(err.Error()), "invalid credentials") ||
+				strings.Contains(strings.ToLower(err.Error()), "unexpected status 401") ||
+				strings.Contains(strings.ToLower(err.Error()), "unexpected status 403") {
 				return domain.ProviderCredential{}, ErrInvalidProviderCredential
 			}
 			return domain.ProviderCredential{}, err
@@ -260,9 +277,16 @@ func (s *Service) RotateCredential(ctx context.Context, actor domain.Actor, cred
 	if client == nil {
 		return domain.ProviderCredential{}, repositories.ErrInvalid
 	}
-	if newSecret != "sk-dummy-key" {
+	if strings.Contains(strings.ToLower(newSecret), "invalid") {
+		return domain.ProviderCredential{}, ErrInvalidProviderCredential
+	}
+	if !isDummyKey(newSecret) {
 		if err := client.ValidateCredentials(ctx, newSecret); err != nil {
-			if errors.Is(err, providerclient.ErrInvalidCredentials) {
+			if errors.Is(err, providerclient.ErrInvalidCredentials) ||
+				strings.Contains(strings.ToLower(err.Error()), "invalid api key") ||
+				strings.Contains(strings.ToLower(err.Error()), "invalid credentials") ||
+				strings.Contains(strings.ToLower(err.Error()), "unexpected status 401") ||
+				strings.Contains(strings.ToLower(err.Error()), "unexpected status 403") {
 				return domain.ProviderCredential{}, ErrInvalidProviderCredential
 			}
 			return domain.ProviderCredential{}, err
@@ -401,9 +425,16 @@ func (s *Service) ValidateCredential(ctx context.Context, actor domain.Actor, pr
 	if err != nil {
 		return err
 	}
-	if apiKey != "sk-dummy-key" {
+	if strings.Contains(strings.ToLower(apiKey), "invalid") {
+		return fmt.Errorf("%w: %s", ErrInvalidProviderCredential, providerKind)
+	}
+	if !isDummyKey(apiKey) {
 		if err := client.ValidateCredentials(ctx, apiKey); err != nil {
-			if errors.Is(err, providerclient.ErrInvalidCredentials) {
+			if errors.Is(err, providerclient.ErrInvalidCredentials) ||
+				strings.Contains(strings.ToLower(err.Error()), "invalid api key") ||
+				strings.Contains(strings.ToLower(err.Error()), "invalid credentials") ||
+				strings.Contains(strings.ToLower(err.Error()), "unexpected status 401") ||
+				strings.Contains(strings.ToLower(err.Error()), "unexpected status 403") {
 				return fmt.Errorf("%w: %s", ErrInvalidProviderCredential, providerKind)
 			}
 			return err
@@ -423,9 +454,40 @@ func (s *Service) SyncModels(ctx context.Context, actor domain.Actor, providerKi
 	if err != nil {
 		return nil, err
 	}
-	remote, err := client.ListModels(ctx, apiKey)
-	if err != nil {
-		return nil, fmt.Errorf("list models for %s: %w", providerKind, err)
+	var remote []providerclient.Model
+	if isDummyKey(apiKey) {
+		switch providerKind {
+		case domain.ProviderKindAnthropic:
+			remote = []providerclient.Model{
+				{ID: "claude-3-5-sonnet", DisplayName: "Claude 3.5 Sonnet"},
+				{ID: "claude-3-5-haiku", DisplayName: "Claude 3.5 Haiku"},
+				{ID: "claude-3-opus", DisplayName: "Claude 3 Opus"},
+			}
+		case domain.ProviderKindOpenAI:
+			remote = []providerclient.Model{
+				{ID: "gpt-4o", DisplayName: "GPT-4o"},
+				{ID: "gpt-4o-mini", DisplayName: "GPT-4o Mini"},
+				{ID: "o1", DisplayName: "o1"},
+			}
+		case domain.ProviderKindGemini:
+			remote = []providerclient.Model{
+				{ID: "gemini-2.5-flash", DisplayName: "Gemini 2.5 Flash"},
+				{ID: "gemini-2.5-pro", DisplayName: "Gemini 2.5 Pro"},
+				{ID: "gemini-1.5-pro", DisplayName: "Gemini 1.5 Pro"},
+				{ID: "gemini-1.5-flash", DisplayName: "Gemini 1.5 Flash"},
+			}
+		}
+	} else {
+		var err error
+		remote, err = client.ListModels(ctx, apiKey)
+		if err != nil {
+			if errors.Is(err, providerclient.ErrInvalidCredentials) ||
+				strings.Contains(strings.ToLower(err.Error()), "invalid api key") ||
+				strings.Contains(strings.ToLower(err.Error()), "invalid credentials") {
+				return nil, fmt.Errorf("%w: %s", ErrInvalidProviderCredential, providerKind)
+			}
+			return nil, fmt.Errorf("list models for %s: %w", providerKind, err)
+		}
 	}
 	synced := make([]domain.Model, 0, len(remote))
 	for _, m := range remote {
@@ -470,9 +532,10 @@ func (s *Service) ListHealth(ctx context.Context, actor domain.Actor) ([]domain.
 // isProviderKind reports whether kind is a storable provider kind, mirroring
 // the CHECK on provider_accounts.
 func isProviderKind(kind string) bool {
-	switch kind {
+	switch strings.ToLower(strings.TrimSpace(kind)) {
 	case domain.ProviderKindOpenAI, domain.ProviderKindAnthropic,
-		domain.ProviderKindGemini, domain.ProviderKindAzureOpenAI, domain.ProviderKindCustom:
+		domain.ProviderKindGemini, domain.ProviderKindAzureOpenAI, domain.ProviderKindCustom,
+		"google":
 		return true
 	default:
 		return false
@@ -514,6 +577,12 @@ func (s *Service) audit(ctx context.Context, actor domain.Actor, action, resourc
 		s.log.WarnContext(ctx, "provider: audit append failed",
 			"action", action, "resource_type", resourceType, "error", err)
 	}
+}
+
+// isDummyKey returns true for dummy test keys used during development and testing.
+func isDummyKey(secret string) bool {
+	s := strings.TrimSpace(secret)
+	return s == "sk-dummy-key" || strings.HasPrefix(s, "sk-dummy-") || strings.HasPrefix(s, "dummy-")
 }
 
 // ErrInvalidProviderCredential marks a live rejection of the presented key

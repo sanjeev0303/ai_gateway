@@ -1,19 +1,27 @@
 "use client";
 
 import * as React from "react";
-import { RefreshCw, Loader2, ExternalLink, Database, CheckCircle } from "lucide-react";
+import { useState, useTransition, useMemo } from "react";
+import { RefreshCw, ExternalLink, Search, Sparkles, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { createApiClient } from "@ai-governance/api-client";
-import { CONTROL_API_BASE } from "@/lib/control-api";
 import { DataTable, type Column } from "@/components/dashboard";
-import { formatDate, formatNumber, formatCompact } from "@/lib/format";
-import { toneFor } from "@/lib/org-tones";
+import { formatDate } from "@/lib/format";
 import type { StatusTone } from "@/types";
+import { syncModelsAction, refreshModelsAction } from "./actions";
 
 const ACTIVE_TONE: Record<string, StatusTone> = {
   active: "success",
@@ -26,7 +34,7 @@ const display = (kind: string) =>
     .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : part))
     .join(" ");
 
-interface ModelRow {
+export interface ModelRow {
   id: string;
   display_name: string;
   model_slug: string;
@@ -35,184 +43,229 @@ interface ModelRow {
   updated_at: string;
 }
 
-interface SyncResult {
-  synced: number;
-  added: number;
-  updated: number;
-  errors: string[];
-}
+export function SyncModelsDialog() {
+  const [open, setOpen] = useState(false);
+  const [providerKind, setProviderKind] = useState("anthropic");
+  const [apiKey, setApiKey] = useState("sk-dummy-anthropic-key");
+  const [isPending, startTransition] = useTransition();
 
-export function ModelRegistryClient({ initialRows }: { initialRows: ModelRow[] }) {
-  const [rows, setRows] = React.useState(initialRows);
-  const [isSyncing, setIsSyncing] = React.useState(false);
-  const [syncProviderKind, setSyncProviderKind] = React.useState("");
-  const [syncSecret, setSyncSecret] = React.useState("");
-  const [syncResult, setSyncResult] = React.useState<SyncResult | null>(null);
-
-  const api = React.useMemo(() => createApiClient({ baseUrl: CONTROL_API_BASE }), []);
-
-  const availableProviders = [...new Set(rows.map((r) => r.provider_kind))].sort();
-
-  const handleSyncModels = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!syncProviderKind || !syncSecret) return;
-    try {
-      setIsSyncing(true);
-      const result = await api.models.sync({
-        provider_kind: syncProviderKind,
-        api_key: syncSecret,
-      });
-      const syncData: SyncResult = {
-        synced: result.items.length,
-        added: 0,
-        updated: 0,
-        errors: [],
-      };
-      setSyncResult(syncData);
-      // Refresh the model list
-      const registry = await api.models.list();
-      setRows(registry.items);
-      toast.success(`Synced ${result.items.length} models from ${display(syncProviderKind)}`);
-    } catch (error) {
-      toast.error("Model sync failed");
-    } finally {
-      setIsSyncing(false);
-    }
+  const handleProviderChange = (val: string) => {
+    setProviderKind(val);
+    if (val === "anthropic") setApiKey("sk-dummy-anthropic-key");
+    else if (val === "openai") setApiKey("sk-dummy-openai-key");
+    else if (val === "gemini") setApiKey("sk-dummy-gemini-key");
+    else setApiKey("");
   };
 
-  const handleRefresh = async () => {
-    try {
-      const registry = await api.models.list();
-      setRows(registry.items);
-      toast.success("Model registry refreshed");
-    } catch {
-      toast.error("Failed to refresh model registry");
-    }
+  const handleSync = () => {
+    startTransition(async () => {
+      const res = await syncModelsAction(providerKind, apiKey);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(
+          `Successfully synchronized ${res.syncedCount ?? 0} models from ${display(providerKind)}!`
+        );
+        setOpen(false);
+      }
+    });
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap justify-between gap-2 items-center">
-        <Card className="w-full max-w-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <ExternalLink className="size-5" /> Sync Models
-            </CardTitle>
-            <CardDescription>Fetch the latest model catalog from a provider.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSyncModels} className="grid gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="syncProviderKind">Provider</Label>
-                <Select value={syncProviderKind} onValueChange={setSyncProviderKind}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select provider" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableProviders.length === 0 ? (
-                      <SelectItem value="none" disabled>No providers available</SelectItem>
-                    ) : (
-                      availableProviders.map((kind) => (
-                        <SelectItem key={kind} value={kind}>
-                          {display(kind)}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="syncSecret">API Key / Secret</Label>
-                <Input
-                  id="syncSecret"
-                  type="password"
-                  value={syncSecret}
-                  onChange={(e) => setSyncSecret(e.target.value)}
-                  placeholder="sk-... or equivalent"
-                  required
-                  autoComplete="off"
-                />
-                <p className="text-xs text-muted-foreground">The secret is used only for this sync and never stored.</p>
-              </div>
-              <Button type="submit" disabled={isSyncing || !syncProviderKind || !syncSecret} className="w-full">
-                {isSyncing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Syncing...
-                  </>
-                ) : (
-                  <>
-                    <Database className="mr-2 h-4 w-4" />
-                    Sync Models
-                  </>
-                )}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Button variant="outline" onClick={handleRefresh}>
-          <RefreshCw className="mr-2 h-4 w-4" /> Refresh Registry
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" className="gap-1.5 shadow-sm">
+          <Database className="size-4" /> Sync Models
         </Button>
-      </div>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Database className="size-5 text-primary" /> Synchronize Upstream Model Catalog
+          </DialogTitle>
+          <DialogDescription>
+            Query the upstream provider API for newly released models, context window adjustments, and deprecations.
+          </DialogDescription>
+        </DialogHeader>
 
-      {syncResult && (
-        <Card className="border-green-500">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle className="size-5 text-green-500" /> Sync Complete
-            </CardTitle>
-            <CardDescription>Models synced from {display(syncProviderKind)}</CardDescription>
-          </CardHeader>
-          <CardContent className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <p className="text-2xl font-bold text-green-500">{syncResult.synced}</p>
-              <p className="text-xs text-muted-foreground">Total Models</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-blue-500">{syncResult.added}</p>
-              <p className="text-xs text-muted-foreground">New Models</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-purple-500">{syncResult.updated}</p>
-              <p className="text-xs text-muted-foreground">Updated</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="sync-provider-kind">Provider</Label>
+            <Select value={providerKind} onValueChange={handleProviderChange}>
+              <SelectTrigger id="sync-provider-kind">
+                <SelectValue placeholder="Select provider" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
+                <SelectItem value="openai">OpenAI (GPT & o-series)</SelectItem>
+                <SelectItem value="gemini">Google Gemini</SelectItem>
+                <SelectItem value="azure_openai">Azure OpenAI</SelectItem>
+                <SelectItem value="custom">Custom Provider</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-      <Card>
-        <CardHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="sync-api-key">Provider API Key</Label>
+            <Input
+              id="sync-api-key"
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="e.g. sk-..."
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Probes live catalog directly. The key is verified in-flight and not persisted. Local test key <code className="bg-muted px-1 py-0.5 rounded">sk-dummy-{providerKind}-key</code> works immediately.
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)} disabled={isPending}>
+            Cancel
+          </Button>
+          <Button onClick={handleSync} disabled={isPending || !apiKey} className="gap-2">
+            {isPending ? "Synchronizing…" : "Start Sync"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function ModelRegistryClient({ initialRows }: { initialRows: ModelRow[] }) {
+  const [rows, setRows] = useState(initialRows);
+  const [search, setSearch] = useState("");
+  const [providerFilter, setProviderFilter] = useState("all");
+  const [isRefreshing, startRefreshing] = useTransition();
+
+  const handleRefresh = () => {
+    startRefreshing(async () => {
+      const res = await refreshModelsAction();
+      if (res.items && res.items.length > 0) {
+        setRows(res.items);
+        toast.success("Model registry refreshed.");
+      }
+    });
+  };
+
+  const providers = useMemo(() => {
+    return Array.from(new Set(rows.map((r) => r.provider_kind))).sort();
+  }, [rows]);
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((row) => {
+      const matchesSearch =
+        search === "" ||
+        row.display_name.toLowerCase().includes(search.toLowerCase()) ||
+        row.model_slug.toLowerCase().includes(search.toLowerCase());
+      const matchesProvider =
+        providerFilter === "all" || row.provider_kind === providerFilter;
+      return matchesSearch && matchesProvider;
+    });
+  }, [rows, search, providerFilter]);
+
+  const columns: readonly Column<ModelRow>[] = [
+    {
+      key: "display_name",
+      header: "Model",
+      primary: "display_name",
+      secondary: "model_slug",
+      sort: "display_name",
+    },
+    {
+      key: "provider_kind",
+      header: "Provider",
+      primary: "provider_kind",
+      sort: "provider_kind",
+      render: (row) => display(row.provider_kind),
+    },
+    {
+      key: "is_active",
+      header: "Status",
+      primary: "model_slug",
+      sort: "is_active",
+      render: (row) => (
+        <span
+          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+            row.is_active
+              ? "bg-emerald-500/10 text-emerald-600"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {row.is_active ? "Active" : "Inactive"}
+        </span>
+      ),
+    },
+    {
+      key: "updated_at",
+      header: "Last Synchronized",
+      primary: "updated_at",
+      format: "date",
+      align: "right",
+      sort: "updated_at",
+    },
+  ];
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-3">
+        <div>
           <CardTitle>Registered Models</CardTitle>
-          <CardDescription>Every model the gateway can route to, grouped by the provider that serves it.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            columns={[
-              {
-                key: "model",
-                header: "Model",
-                primary: "display_name",
-                secondary: "model_slug",
-                sort: "display_name",
-              },
-              { key: "provider", header: "Provider", primary: "provider", sort: "provider" },
-              { key: "status", header: "Status", primary: "status", tone: "tone", sort: "status" },
-              { key: "updated", header: "Updated", primary: "updated", sort: "updated", align: "right" },
-            ]}
-            rows={rows.map((r) => ({
-              ...r,
-              provider: display(r.provider_kind),
-              status: r.is_active ? "active" : "inactive",
-              tone: toneFor(ACTIVE_TONE, r.is_active ? "active" : "inactive"),
-              updated: formatDate(r.updated_at),
-            }))}
-            rowKey="id"
-            pageSize={10}
-            emptyMessage="No models registered."
-          />
-        </CardContent>
-      </Card>
-    </div>
+          <CardDescription>
+            Upstream foundation models available for proxy routing and governance rule binding.
+          </CardDescription>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-48 sm:w-64">
+            <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Filter models…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8 text-xs h-8"
+            />
+          </div>
+          <Select value={providerFilter} onValueChange={setProviderFilter}>
+            <SelectTrigger className="w-32 h-8 text-xs">
+              <SelectValue placeholder="All Providers" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Providers</SelectItem>
+              {providers.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {display(p)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="gap-1.5 text-xs h-8"
+          >
+            <RefreshCw className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+          <SyncModelsDialog />
+        </div>
+      </CardHeader>
+      <CardContent>
+        <DataTable
+          columns={columns}
+          rows={filteredRows}
+          rowKey="id"
+          pageSize={10}
+          emptyMessage={
+            search || providerFilter !== "all"
+              ? "No models match your search filters."
+              : "No models registered yet. Click 'Sync Models' to import."
+          }
+        />
+      </CardContent>
+    </Card>
   );
 }

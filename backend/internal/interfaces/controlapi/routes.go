@@ -23,6 +23,7 @@ func registerV1Routes(mux *http.ServeMux, deps Deps) {
 		// valid access cookie; a GET needs no CSRF token, which csrfAllowed
 		// exempts for safe methods.
 		mux.Handle("GET /v1/auth/session", a.requireAuth(a.session))
+		mux.Handle("POST /v1/auth/switch-org", a.requireAuth(a.switchOrg))
 	}
 	if deps.DevLoginEnabled {
 		mux.Handle("POST /v1/auth/dev-login", http.HandlerFunc(a.devLogin))

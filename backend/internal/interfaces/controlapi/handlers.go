@@ -716,6 +716,12 @@ func (a *api) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, r, err)
 		return
 	}
+	if a.sessionCookieName != "" && actor.Kind == domain.ActorKindUser {
+		if session, err := a.svc.SwitchOrganization(r.Context(), actor.UserID, member.OrganizationID); err == nil {
+			csrf := newCSRFToken()
+			a.setSessionCookies(w, session, csrf)
+		}
+	}
 	httpx.WriteJSON(w, http.StatusOK, toOrgMemberDTO(member))
 }
 

@@ -18,6 +18,7 @@ import { formatDate, formatNumber, formatRelative } from "@/lib/format";
 import { toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
+import { IssueCredentialDialog, CredentialRowActionsWrapper } from "./client";
 
 export const metadata: Metadata = {
   title: "Credentials · Sentinel",
@@ -99,6 +100,7 @@ export default async function CredentialsPage() {
       <PageShell
         title="Credentials"
         description="Control-plane API keys for this organization. Key hashes are never returned, so only the prefix shown here leaves the server."
+        actions={<IssueCredentialDialog />}
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
@@ -139,16 +141,18 @@ export default async function CredentialsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Expiry and blast radius</CardTitle>
-              <CardDescription>Not available for control-plane keys.</CardDescription>
+              <CardDescription>Control-plane administration keys</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-muted-foreground">
               <p>
-                These keys carry no expiry and no per-project usage, so there is
-                nothing to schedule rotation against or rank by blast radius.
+                Control-plane keys authenticate direct administrative automation and CI/CD operations.
+                Keys are issued with single-display secret generation and immediate revocation.
               </p>
               <p>
-                Gateway credentials do expose expiry, scopes, and an owning team
-                or project, and are listed under Platform.
+                For employee and application runtime routing, see{" "}
+                <a href="/app/platform/gateway-credentials" className="text-primary hover:underline font-medium">
+                  Gateway Credentials
+                </a>.
               </p>
             </CardContent>
           </Card>
@@ -169,6 +173,7 @@ export default async function CredentialsPage() {
               rowKey="id"
               pageSize={10}
               emptyMessage="No control-plane credentials."
+              ActionsComponent={CredentialRowActionsWrapper}
             />
           </CardContent>
         </Card>

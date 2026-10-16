@@ -12,7 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getApiClient } from "@/lib/session";
-import { CreateRuleDialog, DeletePolicyButton } from "./rules-client";
+import { CreateRuleDialog, DeletePolicyButton, RuleActionsCell, ValidatePolicyButton } from "./rules-client";
 
 export async function generateMetadata({
   params,
@@ -32,6 +32,7 @@ export async function generateMetadata({
 
 interface RuleRow {
   id: string;
+  policy_id: string;
   rule_type: string;
   description: string;
   enabled: boolean;
@@ -61,6 +62,7 @@ export default async function PolicyDetailPage({
 
   const rows: RuleRow[] = (ruleList.items || []).map((r) => ({
     id: r.id ?? "",
+    policy_id: id,
     rule_type: r.rule_type ?? "",
     description: r.description || "No description",
     enabled: r.enabled ?? false,
@@ -73,6 +75,7 @@ export default async function PolicyDetailPage({
         description={policy.description || "No description provided."}
         actions={
           <div className="flex gap-2">
+            <ValidatePolicyButton id={policy.id ?? ""} />
             <DeletePolicyButton id={policy.id ?? ""} />
           </div>
         }
@@ -96,6 +99,7 @@ export default async function PolicyDetailPage({
               columns={COLUMNS}
               rows={rows}
               rowKey="id"
+              ActionsComponent={RuleActionsCell}
               emptyMessage="No rules configured."
             />
           </CardContent>

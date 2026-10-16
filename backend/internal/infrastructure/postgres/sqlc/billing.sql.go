@@ -359,6 +359,25 @@ func (q *Queries) ListSubscriptions(ctx context.Context, organizationID uuid.UUI
 	return items, nil
 }
 
+const purgeExpiredBillingEvents = `-- name: PurgeExpiredBillingEvents :execrows
+DELETE FROM billing_events
+WHERE organization_id = $1
+  AND created_at < $2::timestamptz
+`
+
+type PurgeExpiredBillingEventsParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	OlderThan      time.Time `json:"older_than"`
+}
+
+func (q *Queries) PurgeExpiredBillingEvents(ctx context.Context, arg PurgeExpiredBillingEventsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeExpiredBillingEvents, arg.OrganizationID, arg.OlderThan)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const recordBillingEvent = `-- name: RecordBillingEvent :one
 INSERT INTO billing_events (organization_id, billing_event_id, event_type, amount_micros, currency, status, payload)
 VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)

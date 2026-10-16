@@ -1,11 +1,15 @@
 # ---- Go ----
 backend/bin/
+backend/control-api
+packages/cli/aigw
 *.test
 *.out
 coverage.*
 
 # ---- Node / Next.js ----
 node_modules/
+app/.next/
+app/out/
 apps/web/.next/
 apps/web/out/
 dist/

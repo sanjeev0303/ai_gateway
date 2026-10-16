@@ -132,12 +132,21 @@ func NewConversationMessageRepository(store *postgres.Store) ports.ConversationM
 func (r *conversationMessageRepo) Create(ctx context.Context, orgID uuid.UUID, input domain.NewConversationMessage) (domain.ConversationMessage, error) {
 	var message domain.ConversationMessage
 	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		contentToStore := input.Content
+		conv, err := q.GetConversation(ctx, db.GetConversationParams{OrganizationID: orgID, ID: input.ConversationID})
+		if err == nil && conv.PrivacyState != nil && *conv.PrivacyState != "" {
+			mode := domain.PrivacyMode(*conv.PrivacyState)
+			if !mode.ContentVisible(input.Role) {
+				contentToStore = ""
+			}
+		}
+
 		row, err := q.CreateConversationMessage(ctx, db.CreateConversationMessageParams{
 			ConversationID:    input.ConversationID,
 			OrganizationID:    orgID,
 			UserID:            input.UserID,
 			Role:              input.Role,
-			Content:           input.Content,
+			Content:           contentToStore,
 			Tokens:            input.Tokens,
 			ToolName:          input.ToolName,
 			ProviderMessageID: input.ProviderMessageID,
@@ -197,32 +206,50 @@ func (r *llmRequestRepo) Record(ctx context.Context, orgID uuid.UUID, input doma
 	default:
 		status = "succeeded"
 	}
+	costStatus := input.CostStatus
+	if costStatus == "" {
+		costStatus = domain.CostStatusCalculated
+	}
+	policyDecision := input.PolicyDecision
+	if policyDecision == nil {
+		d := domain.PolicyDecisionAllowed
+		if status == "failed" && input.DenialReason != nil && *input.DenialReason != "" {
+			d = domain.PolicyDecisionDenied
+		}
+		policyDecision = &d
+	}
 	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
 		row, err := q.RecordLLMRequest(ctx, db.RecordLLMRequestParams{
-			OrganizationID:     orgID,
-			ProjectID:          input.ProjectID,
+			OrganizationID:      orgID,
+			ProjectID:           input.ProjectID,
 			UserID:              input.UserID,
 			TeamID:              input.TeamID,
 			GatewayCredentialID: input.GatewayCredentialID,
 			RequestID:           input.RequestID,
 			ProviderRequestID:   input.ProviderRequestID,
 			ProviderKind:        input.ProviderKind,
-			Model:              input.Model,
-			Status:             status,
-			ErrorCode:          input.ErrorCode,
-			PromptTokens:       input.PromptTokens,
-			CompletionTokens:   input.CompletionTokens,
-			CachedInputTokens:  input.CachedInputTokens,
-			TotalTokens:        input.TotalTokens,
-			LatencyMs:          input.LatencyMs,
-			CostMicros:         input.CostMicros,
-			CreatedAt:          createdAt,
-			RequestStartedAt:   input.RequestStartedAt,
-			FirstTokenAt:       input.FirstTokenAt,
-			CompletedAt:        input.CompletedAt,
-			TimeToFirstTokenMs: input.TimeToFirstTokenMs,
-			TotalLatencyMs:     input.TotalLatencyMs,
-			ServiceAccountID:   input.ServiceAccountID,
+			Model:               input.Model,
+			Status:              status,
+			ErrorCode:           input.ErrorCode,
+			PromptTokens:        input.PromptTokens,
+			CompletionTokens:    input.CompletionTokens,
+			CachedInputTokens:   input.CachedInputTokens,
+			TotalTokens:         input.TotalTokens,
+			LatencyMs:           input.LatencyMs,
+			CostMicros:          input.CostMicros,
+			CreatedAt:           createdAt,
+			RequestStartedAt:    input.RequestStartedAt,
+			FirstTokenAt:        input.FirstTokenAt,
+			CompletedAt:         input.CompletedAt,
+			TimeToFirstTokenMs:  input.TimeToFirstTokenMs,
+			TotalLatencyMs:      input.TotalLatencyMs,
+			ServiceAccountID:    input.ServiceAccountID,
+			ReasoningTokens:     input.ReasoningTokens,
+			ToolTokens:          input.ToolTokens,
+			PricingVersion:      input.PricingVersion,
+			CostStatus:          costStatus,
+			PolicyDecision:      policyDecision,
+			DenialReason:        input.DenialReason,
 		})
 		if err != nil {
 			return err
@@ -279,24 +306,36 @@ func (r *llmRequestRepo) GetRecent(ctx context.Context, orgID uuid.UUID) ([]doma
 		llmRequests = make([]domain.LlmRequest, 0, len(rows))
 		for _, row := range rows {
 			llmRequests = append(llmRequests, domain.LlmRequest{
-				ID:                 row.ID,
-				OrganizationID:     orgID,
-				ProjectID:          row.ProjectID,
-				UserID:             row.UserID,
-				ServiceAccountID:   row.ServiceAccountID,
-				RequestID:          row.RequestID,
-				ProviderKind:       row.ProviderKind,
-				Model:              row.Model,
-				Status:             row.Status,
-				TotalTokens:        int32(row.TotalTokens),
-				LatencyMs:          int32(row.LatencyMs),
-				CostMicros:         row.CostMicros,
-				CreatedAt:          row.CreatedAt,
-				RequestStartedAt:   row.RequestStartedAt,
-				FirstTokenAt:       row.FirstTokenAt,
-				CompletedAt:        row.CompletedAt,
-				TimeToFirstTokenMs: row.TimeToFirstTokenMs,
-				TotalLatencyMs:     row.TotalLatencyMs,
+				ID:                  row.ID,
+				OrganizationID:      orgID,
+				ProjectID:           row.ProjectID,
+				UserID:              row.UserID,
+				ServiceAccountID:    row.ServiceAccountID,
+				TeamID:              row.TeamID,
+				GatewayCredentialID: row.GatewayCredentialID,
+				RequestID:           row.RequestID,
+				ProviderKind:        row.ProviderKind,
+				Model:               row.Model,
+				Status:              row.Status,
+				ErrorCode:           row.ErrorCode,
+				PromptTokens:        row.PromptTokens,
+				CompletionTokens:    row.CompletionTokens,
+				CachedInputTokens:   row.CachedInputTokens,
+				ReasoningTokens:     row.ReasoningTokens,
+				ToolTokens:          row.ToolTokens,
+				TotalTokens:         row.TotalTokens,
+				LatencyMs:           row.LatencyMs,
+				CostMicros:          row.CostMicros,
+				PricingVersion:      row.PricingVersion,
+				CostStatus:          row.CostStatus,
+				PolicyDecision:      row.PolicyDecision,
+				DenialReason:        row.DenialReason,
+				CreatedAt:           row.CreatedAt,
+				RequestStartedAt:    row.RequestStartedAt,
+				FirstTokenAt:        row.FirstTokenAt,
+				CompletedAt:         row.CompletedAt,
+				TimeToFirstTokenMs:  row.TimeToFirstTokenMs,
+				TotalLatencyMs:      row.TotalLatencyMs,
 			})
 		}
 		return nil
@@ -337,9 +376,19 @@ func (r *llmRequestRepo) GetRequests(ctx context.Context, orgID uuid.UUID, filte
 				ProviderKind:        row.ProviderKind,
 				Model:               row.Model,
 				Status:              row.Status,
-				TotalTokens:         int32(row.TotalTokens),
-				LatencyMs:           int32(row.LatencyMs),
+				ErrorCode:           row.ErrorCode,
+				PromptTokens:        row.PromptTokens,
+				CompletionTokens:    row.CompletionTokens,
+				CachedInputTokens:   row.CachedInputTokens,
+				ReasoningTokens:     row.ReasoningTokens,
+				ToolTokens:          row.ToolTokens,
+				TotalTokens:         row.TotalTokens,
+				LatencyMs:           row.LatencyMs,
 				CostMicros:          row.CostMicros,
+				PricingVersion:      row.PricingVersion,
+				CostStatus:          row.CostStatus,
+				PolicyDecision:      row.PolicyDecision,
+				DenialReason:        row.DenialReason,
 				CreatedAt:           row.CreatedAt,
 				RequestStartedAt:    row.RequestStartedAt,
 				FirstTokenAt:        row.FirstTokenAt,
@@ -351,6 +400,19 @@ func (r *llmRequestRepo) GetRequests(ctx context.Context, orgID uuid.UUID, filte
 		return nil
 	})
 	return llmRequests, err
+}
+
+func (r *llmRequestRepo) PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error) {
+	var count int64
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		n, err := q.PurgeExpiredLlmRequests(ctx, db.PurgeExpiredLlmRequestsParams{
+			OrganizationID: orgID,
+			OlderThan:      olderThan,
+		})
+		count = n
+		return err
+	})
+	return count, err
 }
 
 type usageEventRepo struct {
@@ -540,10 +602,13 @@ func (r *usageRollupRepo) GetSummary(ctx context.Context, orgID uuid.UUID, filte
 			InputTokens:     row.InputTokens,
 			OutputTokens:    row.OutputTokens,
 			CachedTokens:    row.CachedTokens,
+			ReasoningTokens: row.ReasoningTokens,
+			ToolTokens:      row.ToolTokens,
 			TotalTokens:     row.TotalTokens,
 			TotalCostMicros: row.TotalCostMicros,
 			Errors:          row.Errors,
 			AvgLatencyMs:    avgLatencyPtr(row.TotalRequests, row.AvgLatencyMs),
+			ActiveUsers:     row.ActiveUsers,
 			LastActivityAt:  row.LastActivityAt,
 		}
 		return nil
@@ -563,13 +628,38 @@ func (r *usageRollupRepo) GetTimeSeries(ctx context.Context, orgID uuid.UUID, fr
 		if err != nil {
 			return err
 		}
+		dataMap := make(map[string]domain.UsageTimeSeriesPoint, len(rows))
 		for _, row := range rows {
-			points = append(points, domain.UsageTimeSeriesPoint{
-				BucketStart: row.BucketStart,
+			dataMap[row.BucketStart.UTC().Format("2006-01-02")] = domain.UsageTimeSeriesPoint{
+				BucketStart: row.BucketStart.UTC(),
 				Requests:    row.Requests,
 				TotalTokens: row.TotalTokens,
 				CostMicros:  row.CostMicros,
-			})
+			}
+		}
+
+		// Zero-fill daily buckets from 'from' to 'to'
+		cur := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.UTC)
+		end := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, time.UTC)
+		if cur.After(end) {
+			cur = end
+		}
+		if end.Sub(cur) < 6*24*time.Hour {
+			cur = end.AddDate(0, 0, -6)
+		}
+		for !cur.After(end) {
+			key := cur.Format("2006-01-02")
+			if pt, ok := dataMap[key]; ok {
+				points = append(points, pt)
+			} else {
+				points = append(points, domain.UsageTimeSeriesPoint{
+					BucketStart: cur,
+					Requests:    0,
+					TotalTokens: 0,
+					CostMicros:  0,
+				})
+			}
+			cur = cur.AddDate(0, 0, 1)
 		}
 		return nil
 	})
@@ -1012,6 +1102,44 @@ func (r *subscriptionRepo) ActiveWithPlan(ctx context.Context, orgID uuid.UUID) 
 	return plan, mapNotFound(err)
 }
 
+func (r *subscriptionRepo) SetPlan(ctx context.Context, orgID, planID uuid.UUID) error {
+	return r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		tag, err := r.store.Pool().Exec(ctx, `
+			UPDATE subscriptions
+			SET plan_id = $1, status = 'active', cancel_at_period_end = false, updated_at = now()
+			WHERE organization_id = $2 AND status IN ('active', 'trialing')
+		`, planID, orgID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			now := time.Now().UTC()
+			end := now.AddDate(0, 1, 0)
+			_, err = q.CreateSubscription(ctx, db.CreateSubscriptionParams{
+				OrganizationID:     orgID,
+				PlanID:             planID,
+				Status:             "active",
+				CurrentPeriodStart: &now,
+				CurrentPeriodEnd:   &end,
+				CancelAtPeriodEnd:  false,
+			})
+			return err
+		}
+		return nil
+	})
+}
+
+func (r *subscriptionRepo) Cancel(ctx context.Context, orgID uuid.UUID) error {
+	return r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		_, err := r.store.Pool().Exec(ctx, `
+			UPDATE subscriptions
+			SET cancel_at_period_end = true, updated_at = now()
+			WHERE organization_id = $1 AND status IN ('active', 'trialing')
+		`, orgID)
+		return err
+	})
+}
+
 type billingEventRepo struct {
 	store *postgres.Store
 }
@@ -1057,6 +1185,19 @@ func (r *billingEventRepo) Get(ctx context.Context, orgID uuid.UUID, billingEven
 		return nil
 	})
 	return billingEvent, mapNotFound(err)
+}
+
+func (r *billingEventRepo) PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error) {
+	var count int64
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		n, err := q.PurgeExpiredBillingEvents(ctx, db.PurgeExpiredBillingEventsParams{
+			OrganizationID: orgID,
+			OlderThan:      olderThan,
+		})
+		count = n
+		return err
+	})
+	return count, err
 }
 
 type invoiceRepo struct {
@@ -1392,6 +1533,86 @@ func (r *alertRepo) GetLatestEvent(ctx context.Context, orgID, alertID uuid.UUID
 	return event, err
 }
 
+func (r *alertRepo) UpdateEventStatus(ctx context.Context, orgID, eventID uuid.UUID, status string) (domain.AlertEvent, error) {
+	var event domain.AlertEvent
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.UpdateAlertEventStatus(ctx, db.UpdateAlertEventStatusParams{
+			OrganizationID: orgID,
+			ID:             eventID,
+			Status:         status,
+		})
+		if err != nil {
+			return err
+		}
+		event = toAlertEvent(row)
+		return nil
+	})
+	return event, mapNotFound(err)
+}
+
+func (r *alertRepo) CreateNotification(ctx context.Context, orgID uuid.UUID, input domain.NewInAppNotification) (domain.InAppNotification, error) {
+	var notification domain.InAppNotification
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.CreateInAppNotification(ctx, db.CreateInAppNotificationParams{
+			OrganizationID: orgID,
+			AlertID:        input.AlertID,
+			AlertEventID:   input.AlertEventID,
+			Title:          input.Title,
+			Message:        input.Message,
+			Severity:       input.Severity,
+		})
+		if err != nil {
+			return err
+		}
+		notification = toInAppNotification(row)
+		return nil
+	})
+	return notification, err
+}
+
+func (r *alertRepo) ListNotifications(ctx context.Context, orgID uuid.UUID, unreadOnly bool, limit, offset int32) ([]domain.InAppNotification, error) {
+	var notifications []domain.InAppNotification
+	var unreadPtr *bool
+	if unreadOnly {
+		u := true
+		unreadPtr = &u
+	}
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		rows, err := q.ListInAppNotifications(ctx, db.ListInAppNotificationsParams{
+			OrganizationID: orgID,
+			Limit:          limit,
+			Offset:         offset,
+			UnreadOnly:     unreadPtr,
+		})
+		if err != nil {
+			return err
+		}
+		notifications = make([]domain.InAppNotification, 0, len(rows))
+		for _, row := range rows {
+			notifications = append(notifications, toInAppNotification(row))
+		}
+		return nil
+	})
+	return notifications, err
+}
+
+func (r *alertRepo) MarkNotificationRead(ctx context.Context, orgID, id uuid.UUID) error {
+	return r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		_, err := q.MarkNotificationRead(ctx, db.MarkNotificationReadParams{
+			OrganizationID: orgID,
+			ID:             id,
+		})
+		return err
+	})
+}
+
+func (r *alertRepo) MarkAllNotificationsRead(ctx context.Context, orgID uuid.UUID) error {
+	return r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		_, err := q.MarkAllNotificationsRead(ctx, orgID)
+		return err
+	})
+}
+
 type auditLogRepo struct {
 	store *postgres.Store
 }
@@ -1470,6 +1691,33 @@ func (r *auditLogRepo) Get(ctx context.Context, orgID, id uuid.UUID) (domain.Aud
 	return auditLog, mapNotFound(err)
 }
 
+func (r *auditLogRepo) PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error) {
+	var count int64
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		n, err := q.PurgeExpiredAuditLogs(ctx, db.PurgeExpiredAuditLogsParams{
+			OrganizationID: orgID,
+			OlderThan:      olderThan,
+		})
+		count = n
+		return err
+	})
+	return count, err
+}
+
+func toInAppNotification(row db.InAppNotification) domain.InAppNotification {
+	return domain.InAppNotification{
+		ID:             row.ID,
+		OrganizationID: row.OrganizationID,
+		AlertID:        row.AlertID,
+		AlertEventID:   row.AlertEventID,
+		Title:          row.Title,
+		Message:        row.Message,
+		Severity:       row.Severity,
+		Read:           row.Read,
+		CreatedAt:      row.CreatedAt,
+	}
+}
+
 // jsonObject returns the JSON bytes to store in a jsonb column declared NOT
 // NULL DEFAULT '{}'::jsonb. The domain "nil means default" contract is
 // preserved by substituting an empty JSON object.
@@ -1536,31 +1784,37 @@ func toConversationSummary(row db.ListConversationsRow) domain.ConversationSumma
 
 func toLlmRequest(row db.LlmRequest) domain.LlmRequest {
 	return domain.LlmRequest{
-		ID:                 row.ID,
-		OrganizationID:     row.OrganizationID,
-		ProjectID:          row.ProjectID,
-		UserID:             row.UserID,
+		ID:                  row.ID,
+		OrganizationID:      row.OrganizationID,
+		ProjectID:           row.ProjectID,
+		UserID:              row.UserID,
 		ServiceAccountID:    row.ServiceAccountID,
 		TeamID:              row.TeamID,
 		GatewayCredentialID: row.GatewayCredentialID,
-		RequestID:          row.RequestID,
-		ProviderRequestID:  row.ProviderRequestID,
-		ProviderKind:       row.ProviderKind,
-		Model:              row.Model,
-		Status:             row.Status,
-		ErrorCode:          row.ErrorCode,
-		PromptTokens:       row.PromptTokens,
-		CompletionTokens:   row.CompletionTokens,
-		CachedInputTokens:  row.CachedInputTokens,
-		TotalTokens:        row.TotalTokens,
-		LatencyMs:          row.LatencyMs,
-		CostMicros:         row.CostMicros,
-		CreatedAt:          row.CreatedAt,
-		RequestStartedAt:   row.RequestStartedAt,
-		FirstTokenAt:       row.FirstTokenAt,
-		CompletedAt:        row.CompletedAt,
-		TimeToFirstTokenMs: row.TimeToFirstTokenMs,
-		TotalLatencyMs:     row.TotalLatencyMs,
+		RequestID:           row.RequestID,
+		ProviderRequestID:   row.ProviderRequestID,
+		ProviderKind:        row.ProviderKind,
+		Model:               row.Model,
+		Status:              row.Status,
+		ErrorCode:           row.ErrorCode,
+		PromptTokens:        row.PromptTokens,
+		CompletionTokens:    row.CompletionTokens,
+		CachedInputTokens:   row.CachedInputTokens,
+		ReasoningTokens:     row.ReasoningTokens,
+		ToolTokens:          row.ToolTokens,
+		TotalTokens:         row.TotalTokens,
+		LatencyMs:           row.LatencyMs,
+		CostMicros:          row.CostMicros,
+		PricingVersion:      row.PricingVersion,
+		CostStatus:          row.CostStatus,
+		PolicyDecision:      row.PolicyDecision,
+		DenialReason:        row.DenialReason,
+		CreatedAt:           row.CreatedAt,
+		RequestStartedAt:    row.RequestStartedAt,
+		FirstTokenAt:        row.FirstTokenAt,
+		CompletedAt:         row.CompletedAt,
+		TimeToFirstTokenMs:  row.TimeToFirstTokenMs,
+		TotalLatencyMs:      row.TotalLatencyMs,
 	}
 }
 

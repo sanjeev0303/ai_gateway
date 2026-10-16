@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { Metadata } from "next";
 import { Plus, Search, Filter, Trash2, Edit, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 
@@ -123,7 +123,7 @@ const COLUMNS: readonly Column<BudgetRow>[] = [
     header: "Usage",
     primary: "percentageUsed",
     render: (row) => (
-      <div className="w-full max-w-[200px]">
+      <div className="w-full max-w-50">
         <div className="flex items-center justify-between text-xs mb-1">
           <span>{row.percentageUsed.toFixed(1)}%</span>
           <span className="text-muted-foreground">
@@ -224,7 +224,7 @@ export default function BudgetsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const fetchBudgets = async () => {
+  const fetchBudgets = useCallback(async () => {
     setLoading(true);
     try {
       const params: any = {};
@@ -238,7 +238,11 @@ export default function BudgetsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [scopeFilter, limitTypeFilter, enabledFilter]);
+
+  useEffect(() => {
+    fetchBudgets();
+  }, [fetchBudgets]);
 
   const handleCreate = async () => {
     setIsEditing(false);
@@ -351,7 +355,7 @@ export default function BudgetsPage() {
                 <Plus aria-hidden /> New budget
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-125">
               <DialogHeader>
                 <DialogTitle>{isEditing ? "Edit budget" : "Create budget"}</DialogTitle>
                 <DialogDescription>
@@ -530,7 +534,7 @@ export default function BudgetsPage() {
                 />
               </div>
               <Select value={scopeFilter} onValueChange={setScopeFilter}>
-                <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectTrigger className="w-full sm:w-45">
                   <SelectValue placeholder="All scopes" />
                 </SelectTrigger>
                 <SelectContent>
@@ -543,7 +547,7 @@ export default function BudgetsPage() {
                 </SelectContent>
               </Select>
               <Select value={limitTypeFilter} onValueChange={setLimitTypeFilter}>
-                <SelectTrigger className="w-full sm:w-[160px]">
+                <SelectTrigger className="w-full sm:w-40">
                   <SelectValue placeholder="All types" />
                 </SelectTrigger>
                 <SelectContent>
@@ -556,7 +560,7 @@ export default function BudgetsPage() {
                 </SelectContent>
               </Select>
               <Select value={enabledFilter} onValueChange={(v) => setEnabledFilter(v as any)}>
-                <SelectTrigger className="w-full sm:w-[140px]">
+                <SelectTrigger className="w-full sm:w-35">
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>

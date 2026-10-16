@@ -84,7 +84,11 @@ type PolicySnapshot struct {
 
 type PolicyRule struct {
 	ID         string
+	PolicyID   string
+	Priority   int32
 	Type       string // domain rule type: rate_limit | token_budget | blocklist | allowlist | content_filter | budget
+	Scope      string // "organization" | "team" | "project" | "user" | "service_account" | "credential"
+	ScopeID    string
 	Conditions map[string]any
 	Actions    map[string]any
 	Enabled    bool
@@ -94,16 +98,19 @@ type RateLimitConfig struct {
 	Key        string
 	Limit      int
 	Window     time.Duration
-	Scope      string // "organization" | "project" | "credential" | "user"
+	Scope      string // "organization" | "team" | "project" | "credential" | "user" | "service_account"
+	ScopeID    string
 	BurstAllow int
 }
 
 type BudgetConfig struct {
-	Key     string
-	Limit   float64
-	Window  time.Duration
-	Scope   string
-	AlertAt float64
+	Key       string
+	Limit     float64
+	Window    time.Duration
+	Scope     string
+	ScopeID   string
+	LimitType string // "spend" | "tokens" | "requests"
+	AlertAt   float64
 }
 
 // RateLimitResult captures rate limiting decision.
@@ -131,6 +138,7 @@ type BudgetResult struct {
 // InspectorHints carries request inspection results for routing.
 type InspectorHints struct {
 	Model                 string
+	Provider              string
 	EstimatedInputTokens  int
 	EstimatedOutputTokens int
 	Tools                 []string
@@ -159,6 +167,7 @@ type Authenticator interface {
 // TenantResolver resolves the upstream provider connection for an organization.
 type TenantResolver interface {
 	ResolveUpstream(ctx context.Context, orgID uuid.UUID) (ResolvedUpstream, error)
+	ResolveUpstreamForProvider(ctx context.Context, orgID uuid.UUID, providerKind string) (ResolvedUpstream, error)
 }
 
 // PolicyResolver provides immutable policy snapshots for evaluation.
@@ -219,6 +228,8 @@ type UsageRecord struct {
 	OutputTokens       int
 	CacheReadTokens    int
 	CacheWriteTokens   int
+	ReasoningTokens    int
+	ToolTokens         int
 	ToolCalls          int
 	LatencyMs          int64
 	StatusCode         int
@@ -229,6 +240,10 @@ type UsageRecord struct {
 	TimeToFirstTokenMs *int32
 	TotalLatencyMs     *int32
 	CostMicros         int64
+	PricingVersion     *int32
+	CostStatus         string
+	PolicyDecision     *string
+	DenialReason       *string
 	ProviderMeta       map[string]any
 }
 

@@ -40,6 +40,8 @@ import type { UsageModule } from "./usage";
 import { createUsageModule } from "./usage";
 import type { SearchModule } from "./search";
 import { createSearchModule } from "./search";
+import type { GuardrailsModule } from "./guardrails";
+import { createGuardrailsModule } from "./guardrails";
 
 export * from "./errors";
 export { createTransport, paginate } from "./client";
@@ -63,6 +65,7 @@ export * from "./audit-logs";
 export * from "./billing";
 export * from "./conversations";
 export * from "./credentials";
+export * from "./guardrails";
 export * from "./invitations";
 export * from "./members";
 export * from "./policies";
@@ -87,6 +90,7 @@ export interface ApiClient extends Transport {
   readonly policies: PoliciesModule;
   readonly modelAccess: ModelAccessModule;
   readonly budgets: BudgetsModule;
+  readonly guardrails: GuardrailsModule;
   readonly organization: OrganizationModule;
   readonly members: MembersModule;
   readonly invitations: InvitationsModule;
@@ -114,6 +118,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     policies: createPoliciesModule(transport),
     modelAccess: createModelAccessModule(transport),
     budgets: createBudgetsModule(transport),
+    guardrails: createGuardrailsModule(transport),
     organization: createOrganizationModule(transport),
     members: createMembersModule(transport),
     invitations: createInvitationsModule(transport),
@@ -133,3 +138,5 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     search: createSearchModule(transport),
   };
 }
+
+export * from "./gateway";

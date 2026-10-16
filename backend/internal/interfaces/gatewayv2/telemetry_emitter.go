@@ -334,28 +334,42 @@ func (e *TelemetryEmitterImpl) writeUsage(ctx context.Context, record UsageRecor
 }
 
 func newLlmRequestFrom(record UsageRecord, providerKind, status string) domain.NewLlmRequest {
+	costStatus := record.CostStatus
+	if costStatus == "" {
+		if record.CostMicros > 0 {
+			costStatus = domain.CostStatusCalculated
+		} else {
+			costStatus = domain.CostStatusUnavailable
+		}
+	}
 	return domain.NewLlmRequest{
-		ProjectID:          record.ProjectID,
-		UserID:             subjectUserID(record),
+		ProjectID:           record.ProjectID,
+		UserID:              subjectUserID(record),
 		ServiceAccountID:    subjectServiceAccountID(record),
 		TeamID:              record.TeamID,
 		GatewayCredentialID: &record.CredentialID,
-		RequestID:          record.RequestID,
-		ProviderKind:       providerKind,
-		Model:              record.Model,
-		Status:             status,
-		PromptTokens:       int32(record.InputTokens),
-		CompletionTokens:   int32(record.OutputTokens),
-		CachedInputTokens:  int32(record.CacheReadTokens),
-		TotalTokens:        int32(record.InputTokens + record.OutputTokens),
-		LatencyMs:          int32(record.LatencyMs),
-		CostMicros:         record.CostMicros,
-		CreatedAt:          record.Timestamp.UTC(),
-		RequestStartedAt:   &record.RequestStartedAt,
-		FirstTokenAt:       record.FirstTokenAt,
-		CompletedAt:        &record.CompletedAt,
-		TimeToFirstTokenMs: record.TimeToFirstTokenMs,
-		TotalLatencyMs:     record.TotalLatencyMs,
+		RequestID:           record.RequestID,
+		ProviderKind:        providerKind,
+		Model:               record.Model,
+		Status:              status,
+		PromptTokens:        int32(record.InputTokens),
+		CompletionTokens:    int32(record.OutputTokens),
+		CachedInputTokens:   int32(record.CacheReadTokens),
+		ReasoningTokens:     int32(record.ReasoningTokens),
+		ToolTokens:          int32(record.ToolTokens),
+		TotalTokens:         int32(record.InputTokens + record.OutputTokens),
+		LatencyMs:           int32(record.LatencyMs),
+		CostMicros:          record.CostMicros,
+		PricingVersion:      record.PricingVersion,
+		CostStatus:          costStatus,
+		PolicyDecision:      record.PolicyDecision,
+		DenialReason:        record.DenialReason,
+		CreatedAt:           record.Timestamp.UTC(),
+		RequestStartedAt:    &record.RequestStartedAt,
+		FirstTokenAt:        record.FirstTokenAt,
+		CompletedAt:         &record.CompletedAt,
+		TimeToFirstTokenMs:  record.TimeToFirstTokenMs,
+		TotalLatencyMs:      record.TotalLatencyMs,
 	}
 }
 
@@ -382,8 +396,8 @@ func (e *TelemetryEmitterImpl) flushErrors(batch []ErrorRecord) {
 			// Convert to security event message
 			msg := ports.SecurityEventMessage{
 				OrganizationID: record.OrganizationID,
-				Category:       "policy_violation", // Usually these are policy, budget, or rate limit
-				Severity:       "high",
+				Category:       string(domain.SecurityEventPolicyViolation), // Usually these are policy, budget, or rate limit
+				Severity:       string(domain.SecurityEventSeverityWarning),
 				Title:          "Gateway Request Rejected",
 				Source:         "gateway",
 				Details: map[string]any{

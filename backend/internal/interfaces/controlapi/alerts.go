@@ -19,6 +19,11 @@ func registerAlertRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("POST /v1/alerts/{id}/test", a.requireAuth(a.testAlert))
 	mux.Handle("GET /v1/alerts/{id}/events", a.requireAuth(a.listAlertEventsByAlert))
 	mux.Handle("GET /v1/alert-events", a.requireAuth(a.listAlertEvents))
+	mux.Handle("POST /v1/alert-events/{id}/acknowledge", a.requireAuth(a.acknowledgeAlertEvent))
+	mux.Handle("POST /v1/alert-events/{id}/resolve", a.requireAuth(a.resolveAlertEvent))
+	mux.Handle("GET /v1/notifications", a.requireAuth(a.listNotifications))
+	mux.Handle("PATCH /v1/notifications/{id}/read", a.requireAuth(a.markNotificationRead))
+	mux.Handle("POST /v1/notifications/read-all", a.requireAuth(a.markAllNotificationsRead))
 }
 
 
@@ -100,10 +105,11 @@ func (a *api) createAlert(w http.ResponseWriter, r *http.Request) {
 		alertType = "error_rate"
 	case "usage_anomaly":
 		alertType = "anomaly"
-	case "spend_limit", "rate_limit", "error_rate", "anomaly", "provider_failure", "credential_failure", "policy_violation", "rate_limit_spike":
-		// valid
+	case "spend_limit", "rate_limit", "error_rate", "anomaly", "provider_failure", "credential_failure", "policy_violation", "rate_limit_spike",
+		"budget_warning", "budget_exhaustion", "spend_spike", "usage_spike", "policy_denial_spike":
+		// canonical
 	default:
-		alertType = "spend_limit"
+		// preserve user specified alertType
 	}
 
 	severity := req.Severity
@@ -271,5 +277,106 @@ func (a *api) listAlertEventsByAlert(w http.ResponseWriter, r *http.Request) {
 		items = append(items, toAlertEventDTO(e))
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *api) acknowledgeAlertEvent(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	id, err := pathUUID(r, "id")
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	event, err := a.alerts.AcknowledgeEvent(r.Context(), actor, id)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toAlertEventDTO(event))
+}
+
+func (a *api) resolveAlertEvent(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	id, err := pathUUID(r, "id")
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	event, err := a.alerts.ResolveEvent(r.Context(), actor, id)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toAlertEventDTO(event))
+}
+
+type inAppNotificationDTO struct {
+	ID           string  `json:"id"`
+	AlertID      *string `json:"alert_id,omitempty"`
+	AlertEventID *string `json:"alert_event_id,omitempty"`
+	Title        string  `json:"title"`
+	Message      string  `json:"message"`
+	Severity     string  `json:"severity"`
+	Read         bool    `json:"read"`
+	CreatedAt    string  `json:"created_at"`
+}
+
+func toNotificationDTO(n domain.InAppNotification) inAppNotificationDTO {
+	dto := inAppNotificationDTO{
+		ID:        n.ID.String(),
+		Title:     n.Title,
+		Message:   n.Message,
+		Severity:  n.Severity,
+		Read:      n.Read,
+		CreatedAt: n.CreatedAt.UTC().Format(time.RFC3339),
+	}
+	if n.AlertID != nil {
+		aid := n.AlertID.String()
+		dto.AlertID = &aid
+	}
+	if n.AlertEventID != nil {
+		eid := n.AlertEventID.String()
+		dto.AlertEventID = &eid
+	}
+	return dto
+}
+
+func (a *api) listNotifications(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	unreadOnly := r.URL.Query().Get("unread_only") == "true"
+	limit := int32(50)
+	offset := int32(0)
+	notifications, err := a.alerts.ListNotifications(r.Context(), actor, unreadOnly, limit, offset)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	items := make([]inAppNotificationDTO, 0, len(notifications))
+	for _, n := range notifications {
+		items = append(items, toNotificationDTO(n))
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *api) markNotificationRead(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	id, err := pathUUID(r, "id")
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	if err := a.alerts.MarkNotificationRead(r.Context(), actor, id); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *api) markAllNotificationsRead(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	if err := a.alerts.MarkAllNotificationsRead(r.Context(), actor); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 

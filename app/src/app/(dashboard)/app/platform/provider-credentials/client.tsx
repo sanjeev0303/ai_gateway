@@ -92,7 +92,7 @@ export function ProviderCredentialsClient({ initialRows }: { initialRows: Creden
   const [addOpen, setAddOpen] = React.useState(false);
   const [addAccountId, setAddAccountId] = React.useState("");
   const [addName, setAddName] = React.useState("");
-  const [addKind, setAddKind] = React.useState("openai");
+  const [addKind, setAddKind] = React.useState("api_key");
   const [addSecret, setAddSecret] = React.useState("");
 
   // Rotate Credential
@@ -119,9 +119,9 @@ export function ProviderCredentialsClient({ initialRows }: { initialRows: Creden
     try {
       setIsUpdating(true);
       const cred = await api.providers.createCredential(addAccountId, {
-        name: addName,
-        kind: addKind,
-        secret: addSecret,
+        name: addName.trim(),
+        kind: "api_key",
+        secret: addSecret.trim(),
       });
       const account = accounts.find(a => a.id === addAccountId);
       const accountName = account ? account.name : addAccountId;
@@ -131,8 +131,8 @@ export function ProviderCredentialsClient({ initialRows }: { initialRows: Creden
       setAddAccountId("");
       setAddName("");
       setAddSecret("");
-    } catch (error) {
-      toast.error("Failed to add credential");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to add credential");
     } finally {
       setIsUpdating(false);
     }
@@ -195,11 +195,6 @@ export function ProviderCredentialsClient({ initialRows }: { initialRows: Creden
       />
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogTrigger asChild>
-          <Button variant="outline" size="sm">
-            <Plus className="mr-2 h-4 w-4" /> Add Credential
-          </Button>
-        </DialogTrigger>
         <DialogContent>
           <form onSubmit={handleAddCredential}>
             <DialogHeader>
@@ -235,15 +230,11 @@ export function ProviderCredentialsClient({ initialRows }: { initialRows: Creden
               <div className="grid gap-2">
                 <Label htmlFor="addKind">Kind</Label>
                 <Select value={addKind} onValueChange={setAddKind}>
-                  <SelectTrigger>
-                    <SelectValue />
+                  <SelectTrigger id="addKind">
+                    <SelectValue placeholder="Select kind" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="openai">OpenAI</SelectItem>
-                    <SelectItem value="anthropic">Anthropic</SelectItem>
-                    <SelectItem value="google">Google</SelectItem>
-                    <SelectItem value="cohere">Cohere</SelectItem>
-                    <SelectItem value="mistral">Mistral</SelectItem>
+                    <SelectItem value="api_key">API Key</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

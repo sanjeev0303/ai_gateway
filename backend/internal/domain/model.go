@@ -190,9 +190,10 @@ type TeamMember struct {
 
 // OrgMember is an organization member with the user's profile attached.
 type OrgMember struct {
-	User        User
-	Role        string
-	MemberSince time.Time
+	OrganizationID uuid.UUID
+	User           User
+	Role           string
+	MemberSince    time.Time
 }
 
 // TeamMemberView is a team member with the user's profile attached.

@@ -167,6 +167,10 @@ func (f *fakeLlmRequests) GetRequests(context.Context, uuid.UUID, domain.UsageFi
 	return nil, nil
 }
 
+func (f *fakeLlmRequests) PurgeExpired(context.Context, uuid.UUID, time.Time) (int64, error) {
+	return 0, nil
+}
+
 type fakeUsageEvents struct {
 	err    error
 	calls  int

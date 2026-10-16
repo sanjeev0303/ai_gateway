@@ -40,9 +40,17 @@ func NewService(deps ServiceDeps) *Service {
 	}
 }
 
+func isPrivilegedRole(role string) bool {
+	return role == domain.RoleAdmin || role == domain.RoleOwner || role == domain.RoleAuditor
+}
+
 func (s *Service) List(ctx context.Context, actor domain.Actor, filter domain.ConversationFilter, limit, offset int32) ([]domain.ConversationSummary, bool, error) {
 	if err := s.require(actor); err != nil {
 		return nil, false, err
+	}
+	// Subject access control: non-privileged members only view their own conversations
+	if !isPrivilegedRole(actor.Role) {
+		filter.UserID = &actor.UserID
 	}
 	org, err := s.organizations.GetByID(ctx, actor.OrganizationID)
 	if err != nil {
@@ -69,16 +77,21 @@ func (s *Service) Get(ctx context.Context, actor domain.Actor, id uuid.UUID) (do
 	if err := s.require(actor); err != nil {
 		return domain.ConversationSummary{}, err
 	}
+	summary, err := s.conversations.Detail(ctx, actor.OrganizationID, id)
+	if err != nil {
+		return domain.ConversationSummary{}, err
+	}
+	// Subject access control: non-privileged members can only access their own conversations
+	if !isPrivilegedRole(actor.Role) && summary.UserID != actor.UserID {
+		return domain.ConversationSummary{}, repositories.ErrForbidden
+	}
+
 	org, err := s.organizations.GetByID(ctx, actor.OrganizationID)
 	if err != nil {
 		return domain.ConversationSummary{}, err
 	}
 	defaultPrivacy := org.PrivacyDefault
 
-	summary, err := s.conversations.Detail(ctx, actor.OrganizationID, id)
-	if err != nil {
-		return domain.ConversationSummary{}, err
-	}
 	summary.PrivacyState = s.effective(summary.PrivacyState, defaultPrivacy)
 	return summary, nil
 }
@@ -90,16 +103,21 @@ func (s *Service) ListMessages(ctx context.Context, actor domain.Actor, id uuid.
 	if err := s.require(actor); err != nil {
 		return nil, err
 	}
+	conversation, err := s.conversations.Get(ctx, actor.OrganizationID, id)
+	if err != nil {
+		return nil, err
+	}
+	// Subject access control: non-privileged members can only access their own conversations
+	if !isPrivilegedRole(actor.Role) && conversation.UserID != actor.UserID {
+		return nil, repositories.ErrForbidden
+	}
+
 	org, err := s.organizations.GetByID(ctx, actor.OrganizationID)
 	if err != nil {
 		return nil, err
 	}
 	defaultPrivacy := org.PrivacyDefault
 
-	conversation, err := s.conversations.Get(ctx, actor.OrganizationID, id)
-	if err != nil {
-		return nil, err
-	}
 	mode := s.resolve(conversation.PrivacyState, defaultPrivacy)
 	messages, err := s.messages.List(ctx, actor.OrganizationID, id)
 	if err != nil {
@@ -109,6 +127,49 @@ func (s *Service) ListMessages(ctx context.Context, actor domain.Actor, id uuid.
 		messages[i] = messages[i].Redacted(mode)
 	}
 	return messages, nil
+}
+
+func (s *Service) Create(ctx context.Context, actor domain.Actor, title string) (domain.Conversation, error) {
+	if err := s.require(actor); err != nil {
+		return domain.Conversation{}, err
+	}
+	if title == "" {
+		title = "New Conversation"
+	}
+	return s.conversations.Create(ctx, actor.OrganizationID, domain.NewConversation{
+		UserID: actor.UserID,
+		Title:  title,
+	})
+}
+
+func (s *Service) CreateMessage(ctx context.Context, actor domain.Actor, convID uuid.UUID, role, content string, tokens int32) (domain.ConversationMessage, error) {
+	if err := s.require(actor); err != nil {
+		return domain.ConversationMessage{}, err
+	}
+	conv, err := s.conversations.Get(ctx, actor.OrganizationID, convID)
+	if err != nil {
+		return domain.ConversationMessage{}, err
+	}
+	if !isPrivilegedRole(actor.Role) && conv.UserID != actor.UserID {
+		return domain.ConversationMessage{}, repositories.ErrForbidden
+	}
+
+	org, err := s.organizations.GetByID(ctx, actor.OrganizationID)
+	if err != nil {
+		return domain.ConversationMessage{}, err
+	}
+	mode := s.resolve(conv.PrivacyState, org.PrivacyDefault)
+	if !mode.ContentVisible(role) {
+		content = ""
+	}
+
+	return s.messages.Create(ctx, actor.OrganizationID, domain.NewConversationMessage{
+		ConversationID: convID,
+		UserID:         actor.UserID,
+		Role:           role,
+		Content:        content,
+		Tokens:         tokens,
+	})
 }
 
 func (s *Service) require(actor domain.Actor) error {
@@ -128,3 +189,4 @@ func (s *Service) effective(override *string, defaultPrivacy domain.PrivacyMode)
 func (s *Service) resolve(override *string, defaultPrivacy domain.PrivacyMode) domain.PrivacyMode {
 	return domain.ResolvePrivacyMode(override, defaultPrivacy)
 }
+

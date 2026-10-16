@@ -17,6 +17,7 @@ func registerAuditLogRoutes(mux *http.ServeMux, deps Deps) {
 	a := newAPI(deps)
 	mux.Handle("GET /v1/audit-logs", a.requireAuth(a.listAuditLogs))
 	mux.Handle("GET /v1/audit-logs/{id}", a.requireAuth(a.getAuditLog))
+	mux.Handle("GET /v1/audit/logs", a.requireAuth(a.listAuditLogs))
 }
 
 // auditLogDTO is the wire shape of one immutable audit record.

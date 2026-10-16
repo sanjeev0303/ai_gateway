@@ -24,13 +24,26 @@ export async function updateOrganization(
 ): Promise<OrganizationSettingsState> {
   const name = String(formData.get("name") ?? "").trim();
   const slug = String(formData.get("slug") ?? "").trim();
+  const privacyDefault = String(formData.get("privacy_default") ?? "").trim();
+  const retentionConversations = formData.get("retention_conversations_days");
+  const retentionUsage = formData.get("retention_usage_days");
+  const retentionAudits = formData.get("retention_audits_days");
+  const retentionBilling = formData.get("retention_billing_days");
 
   if (!name) return { error: "Organization name is required." };
   if (!slug) return { error: "URL slug is required." };
 
   try {
     const { organization } = await getApiClient();
-    await organization.update({ name, slug });
+    await organization.update({
+      name,
+      slug,
+      ...(privacyDefault ? { privacy_default: privacyDefault } : {}),
+      ...(retentionConversations ? { retention_conversations_days: Number(retentionConversations) } : {}),
+      ...(retentionUsage ? { retention_usage_days: Number(retentionUsage) } : {}),
+      ...(retentionAudits ? { retention_audits_days: Number(retentionAudits) } : {}),
+      ...(retentionBilling ? { retention_billing_days: Number(retentionBilling) } : {}),
+    });
   } catch (error) {
     return {
       error:

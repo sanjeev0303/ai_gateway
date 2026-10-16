@@ -16,6 +16,7 @@ const maxSecurityEventPage = 200
 func registerSecurityEventRoutes(mux *http.ServeMux, deps Deps) {
 	a := newAPI(deps)
 	mux.Handle("GET /v1/security-events", a.requireAuth(a.listSecurityEvents))
+	mux.Handle("GET /v1/security/events", a.requireAuth(a.listSecurityEvents))
 }
 
 // securityEventDTO is the wire shape of one append-only platform event.

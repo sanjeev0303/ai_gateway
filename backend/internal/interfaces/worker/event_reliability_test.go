@@ -58,6 +58,10 @@ func (f *flappyRequests) GetRequests(context.Context, uuid.UUID, domain.UsageFil
 	return nil, nil
 }
 
+func (f *flappyRequests) PurgeExpired(context.Context, uuid.UUID, time.Time) (int64, error) {
+	return 0, nil
+}
+
 type flappyEvents struct {
 	mu       sync.Mutex
 	recorded map[string]domain.NewUsageEvent

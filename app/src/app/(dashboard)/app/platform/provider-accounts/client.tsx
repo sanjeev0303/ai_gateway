@@ -54,9 +54,9 @@ export function CreateProviderAccountButton() {
               <SelectContent>
                 <SelectItem value="openai">OpenAI</SelectItem>
                 <SelectItem value="anthropic">Anthropic</SelectItem>
-                <SelectItem value="google">Google</SelectItem>
-                <SelectItem value="cohere">Cohere</SelectItem>
-                <SelectItem value="mistral">Mistral</SelectItem>
+                <SelectItem value="gemini">Google Gemini</SelectItem>
+                <SelectItem value="azure_openai">Azure OpenAI</SelectItem>
+                <SelectItem value="custom">Custom (OpenAI-compatible)</SelectItem>
               </SelectContent>
             </Select>
           </div>

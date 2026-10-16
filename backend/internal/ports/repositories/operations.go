@@ -36,6 +36,7 @@ type LlmRequestRepository interface {
 	List(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.LlmRequest, error)
 	GetRecent(ctx context.Context, orgID uuid.UUID) ([]domain.LlmRequest, error)
 	GetRequests(ctx context.Context, orgID uuid.UUID, filter domain.UsageFilter, limit, offset int32) ([]domain.LlmRequest, error)
+	PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error)
 }
 
 // UsageEventRepository records and reads the append-only usage ledger.
@@ -88,6 +89,8 @@ type SubscriptionRepository interface {
 	// ActiveWithPlan returns the organization's active or trialing subscription
 	// joined to its plan, or ErrNotFound when it has none.
 	ActiveWithPlan(ctx context.Context, orgID uuid.UUID) (domain.OrganizationPlan, error)
+	SetPlan(ctx context.Context, orgID, planID uuid.UUID) error
+	Cancel(ctx context.Context, orgID uuid.UUID) error
 }
 
 // BillingEventRepository records the append-only billing ledger.
@@ -96,6 +99,7 @@ type BillingEventRepository interface {
 	// returns ErrConflict.
 	Record(ctx context.Context, orgID uuid.UUID, input domain.NewBillingEvent) (domain.BillingEvent, error)
 	Get(ctx context.Context, orgID uuid.UUID, billingEventID string) (domain.BillingEvent, error)
+	PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error)
 }
 
 // InvoiceRepository reads locally computed billing statements.
@@ -129,6 +133,11 @@ type AlertRepository interface {
 	CreateEvent(ctx context.Context, orgID uuid.UUID, input domain.NewAlertEvent) (domain.AlertEvent, error)
 	ListEvents(ctx context.Context, orgID uuid.UUID, alertID *uuid.UUID, limit, offset int32) ([]domain.AlertEvent, error)
 	GetLatestEvent(ctx context.Context, orgID, alertID uuid.UUID) (*domain.AlertEvent, error)
+	UpdateEventStatus(ctx context.Context, orgID, eventID uuid.UUID, status string) (domain.AlertEvent, error)
+	CreateNotification(ctx context.Context, orgID uuid.UUID, input domain.NewInAppNotification) (domain.InAppNotification, error)
+	ListNotifications(ctx context.Context, orgID uuid.UUID, unreadOnly bool, limit, offset int32) ([]domain.InAppNotification, error)
+	MarkNotificationRead(ctx context.Context, orgID, id uuid.UUID) error
+	MarkAllNotificationsRead(ctx context.Context, orgID uuid.UUID) error
 }
 
 // AuditLogRepository appends immutable audit records and reads them back.
@@ -136,4 +145,5 @@ type AuditLogRepository interface {
 	Append(ctx context.Context, orgID uuid.UUID, input domain.NewAuditLog) (domain.AuditLog, error)
 	List(ctx context.Context, orgID uuid.UUID, filter domain.AuditLogFilter, limit, offset int32) ([]domain.AuditLog, error)
 	Get(ctx context.Context, orgID, id uuid.UUID) (domain.AuditLog, error)
+	PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error)
 }

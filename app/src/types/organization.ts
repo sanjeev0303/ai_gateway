@@ -15,6 +15,11 @@ export interface Organization {
   status: OrganizationStatus;
   createdAt: ISODateString;
   updatedAt: ISODateString;
+  privacyDefault?: string;
+  retentionConversationsDays?: number;
+  retentionUsageDays?: number;
+  retentionAuditsDays?: number;
+  retentionBillingDays?: number;
 }
 
 export interface OrganizationSummary {

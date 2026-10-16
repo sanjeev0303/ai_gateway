@@ -1,40 +1,46 @@
 import type { Metadata } from "next";
 
-import { EmptyState, PageShell } from "@/components/dashboard";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import type { Guardrail, GuardrailEvent } from "@ai-governance/api-client";
+import { PageShell } from "@/components/dashboard";
+import { getApiClient } from "@/lib/session";
+import { GuardrailsClient } from "./client";
 
 export const metadata: Metadata = {
   title: "Guardrails · Sentinel",
-  description: "Input and output detectors, their thresholds, and how often each one actually intervenes.",
+  description: "Input and output detectors, PII scanners, and policy intervention controls.",
 };
 
-export default function GuardrailsPage() {
+export default async function GuardrailsPage() {
+  let initialGuardrails: Guardrail[] = [];
+  let initialEvents: GuardrailEvent[] = [];
+
+  try {
+    const { guardrails } = await getApiClient();
+    const [resGuardrails, resEvents] = await Promise.allSettled([
+      guardrails.list(),
+      guardrails.listEvents(),
+    ]);
+
+    if (resGuardrails.status === "fulfilled") {
+      initialGuardrails = resGuardrails.value.items ?? [];
+    }
+    if (resEvents.status === "fulfilled") {
+      initialEvents = resEvents.value.items ?? [];
+    }
+  } catch (err) {
+    console.error("Failed to load initial guardrails:", err);
+  }
+
   return (
     <div className="p-4 sm:p-6">
       <PageShell
-        title="Guardrails"
-        description="Input and output detectors, their thresholds, and how often each one actually intervenes."
+        title="Guardrails & Content Detectors"
+        description="Inspect and intercept requests containing PII, API secrets, or disallowed keywords with automated blocking and audit logging."
       >
-        <Card>
-          <CardHeader>
-            <CardTitle>No guardrail data</CardTitle>
-            <CardDescription>
-              The control API exposes no guardrail, detector, or intervention endpoint.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <EmptyState
-              title="No detectors are running"
-              description="No detector, threshold, or intervention count is recorded anywhere, so there is nothing to configure or tune here. The request outcomes a guardrail would be judged on are real and visible under Observe → Live activity."
-            />
-          </CardContent>
-        </Card>
+        <GuardrailsClient
+          initialGuardrails={initialGuardrails}
+          initialEvents={initialEvents}
+        />
       </PageShell>
     </div>
   );

@@ -273,7 +273,7 @@ func (r *providerAccountRepo) Create(ctx context.Context, orgID uuid.UUID, input
 			Status:         domain.ProviderStatusActive,
 		})
 		if err != nil {
-			return err
+			return mapUniqueViolation(err)
 		}
 		account = toProviderAccount(row)
 		return nil

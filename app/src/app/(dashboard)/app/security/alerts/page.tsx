@@ -98,56 +98,90 @@ const columns: readonly Column<AlertRow>[] = [
   { key: "updatedAt", header: "Updated", primary: "updatedAt", format: "relative", align: "right", sort: "updatedAt" },
 ];
 
-async function loadAlerts() {
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ShieldAlert, Settings2 } from "lucide-react";
+import { IncidentsClient } from "./incidents-client";
+
+async function loadAlertData() {
   const { alerts } = await getApiClient();
-  return alerts.list();
+  const [resAlerts, resEvents, resNotifs] = await Promise.allSettled([
+    alerts.list(),
+    alerts.listEvents(),
+    alerts.listNotifications(),
+  ]);
+
+  return {
+    rules: resAlerts.status === "fulfilled" ? resAlerts.value.items ?? [] : [],
+    events: resEvents.status === "fulfilled" ? resEvents.value.items ?? [] : [],
+    notifications: resNotifs.status === "fulfilled" ? resNotifs.value.items ?? [] : [],
+  };
 }
 
 export default async function AlertsPage() {
-  const { items } = await loadAlerts();
-  const rows = items.map(toRow);
+  const { rules, events, notifications } = await loadAlertData();
+  const rows = rules.map(toRow);
 
   return (
     <div className="p-4 sm:p-6">
       <PageShell
-        title="Alerts"
-        description="Alert rules configured for your organization."
+        title="Alerts & Incident Watchdog"
+        description="Active incidents, continuous anomaly triggers, and watchdog rule configurations."
       >
-        <Card>
-          <CardHeader>
-            <CardTitle>Configured rules</CardTitle>
-            <CardDescription>
-              These rules only store configuration. No evaluator is wired to any rule type, so
-              nothing is ever triggered and no notification is ever sent — &ldquo;Last
-              triggered&rdquo; stays empty by design, not by failure.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {rows.length === 0 ? (
-              <EmptyState
-                title="No alert rules configured"
-                description="No alert rules exist yet."
-              />
-            ) : (
-              <DataTable
-                columns={columns}
-                rows={rows}
-                rowKey="id"
-                pageSize={25}
-                emptyMessage="No alert rules configured"
-                ActionsComponent={AlertActionsCell}
-                toolbar={
-                  <div className="flex w-full items-center justify-between gap-4">
-                    <p className="text-muted-foreground text-sm">
-                      {rows.length} rule{rows.length === 1 ? "" : "s"}
-                    </p>
-                    <CreateAlertDialog />
-                  </div>
-                }
-              />
-            )}
-          </CardContent>
-        </Card>
+        <Tabs defaultValue="incidents" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="incidents" className="gap-2">
+              <ShieldAlert className="h-4 w-4" />
+              Incidents & Dispatch ({events.filter((e) => e.status !== "resolved").length})
+            </TabsTrigger>
+            <TabsTrigger value="rules" className="gap-2">
+              <Settings2 className="h-4 w-4" />
+              Configured Rules ({rows.length})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="incidents">
+            <IncidentsClient
+              initialEvents={events}
+              initialNotifications={notifications}
+            />
+          </TabsContent>
+
+          <TabsContent value="rules">
+            <Card>
+              <CardHeader>
+                <CardTitle>Configured rules</CardTitle>
+                <CardDescription>
+                  Configured watchdog rules evaluated continuously by the Sentinel background engine against real gateway usage, spend, errors, and provider metrics.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {rows.length === 0 ? (
+                  <EmptyState
+                    title="No alert rules configured"
+                    description="No alert rules exist yet."
+                  />
+                ) : (
+                  <DataTable
+                    columns={columns}
+                    rows={rows}
+                    rowKey="id"
+                    pageSize={25}
+                    emptyMessage="No alert rules configured"
+                    ActionsComponent={AlertActionsCell}
+                    toolbar={
+                      <div className="flex w-full items-center justify-between gap-4">
+                        <p className="text-muted-foreground text-sm">
+                          {rows.length} rule{rows.length === 1 ? "" : "s"}
+                        </p>
+                        <CreateAlertDialog />
+                      </div>
+                    }
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </PageShell>
     </div>
   );

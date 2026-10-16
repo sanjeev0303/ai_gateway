@@ -9,6 +9,7 @@ import (
 	"ai-governance-saas/backend/internal/domain"
 	"encoding/json"
 	"ai-governance-saas/backend/internal/ports"
+	"ai-governance-saas/backend/internal/ports/repositories"
 )
 
 // RunUsageConsumer subscribes to the usage event bus and hands every message to
@@ -29,20 +30,30 @@ func RunUsageConsumer(ctx context.Context, bus ports.EventBus, svc *usage.Servic
 }
 
 // RunSecurityConsumer subscribes to the security event bus and hands every message
-// to the security event service to persist.
-func RunSecurityConsumer(ctx context.Context, bus ports.EventBus, svc *securityevent.Service, log *slog.Logger) {
+// to the security event service and audit log to persist.
+func RunSecurityConsumer(ctx context.Context, bus ports.EventBus, svc *securityevent.Service, audits repositories.AuditLogRepository, log *slog.Logger) {
 	if log == nil {
 		log = slog.Default()
 	}
 	if err := bus.RunSecurity(ctx, func(ctx context.Context, msg ports.SecurityEventMessage) error {
 		detail, _ := json.Marshal(msg.Details)
-		return svc.Record(ctx, msg.OrganizationID, domain.NewSecurityEvent{
-			Category: domain.SecurityEventCategory(msg.Category),
-			Severity: domain.SecurityEventSeverity(msg.Severity),
-			Title:    msg.Title,
-			Source:   msg.Source,
-			Detail:   detail,
-		})
+		if svc != nil {
+			_ = svc.Record(ctx, msg.OrganizationID, domain.NewSecurityEvent{
+				Category: domain.SecurityEventCategory(msg.Category),
+				Severity: domain.SecurityEventSeverity(msg.Severity),
+				Title:    msg.Title,
+				Source:   msg.Source,
+				Detail:   detail,
+			})
+		}
+		if audits != nil && msg.Category == "policy_violation" {
+			_, _ = audits.Append(ctx, msg.OrganizationID, domain.NewAuditLog{
+				Action:       "policy.denied",
+				ResourceType: "gateway_request",
+				After:        detail,
+			})
+		}
+		return nil
 	}); err != nil && ctx.Err() == nil {
 		log.Error("security consumer stopped", "error", err)
 		return

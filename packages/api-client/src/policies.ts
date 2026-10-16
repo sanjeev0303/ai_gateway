@@ -8,6 +8,37 @@ export type UpdatePolicyRequest = components["schemas"]["UpdatePolicyRequest"];
 export type CreatePolicyRuleRequest = components["schemas"]["CreatePolicyRuleRequest"];
 export type UpdatePolicyRuleRequest = components["schemas"]["UpdatePolicyRuleRequest"];
 
+export interface PolicyValidationResult {
+  valid: boolean;
+  policy_id: string;
+  name: string;
+  enforcement: string;
+  rules_count: number;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface PolicyPreviewRequest {
+  model: string;
+  provider?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  team_id?: string;
+  project_id?: string;
+  user_id?: string;
+  service_account_id?: string;
+  credential_id?: string;
+  scopes?: string[];
+}
+
+export interface PolicyPreviewResponse {
+  allowed: boolean;
+  decision: "allow" | "deny";
+  reason: string;
+  effective_scope: string;
+  matched_rules: PolicyRule[];
+}
+
 export interface PoliciesModule {
   list(options?: RequestOptions): Promise<ListResponse<Policy>>;
   get(id: string, options?: RequestOptions): Promise<Policy>;
@@ -19,6 +50,9 @@ export interface PoliciesModule {
   createRule(policyId: string, data: CreatePolicyRuleRequest, options?: RequestOptions): Promise<PolicyRule>;
   updateRule(policyId: string, ruleId: string, data: UpdatePolicyRuleRequest, options?: RequestOptions): Promise<PolicyRule>;
   deleteRule(policyId: string, ruleId: string, options?: RequestOptions): Promise<void>;
+
+  validate(id: string, options?: RequestOptions): Promise<PolicyValidationResult>;
+  preview(data: PolicyPreviewRequest, options?: RequestOptions): Promise<PolicyPreviewResponse>;
 }
 
 export function createPoliciesModule(t: Transport): PoliciesModule {
@@ -41,5 +75,9 @@ export function createPoliciesModule(t: Transport): PoliciesModule {
       t.requestAt<PolicyRule>(`/v1/policies/${encodeURIComponent(policyId)}/rules/${encodeURIComponent(ruleId)}`, { ...opts, method: "PATCH", body: data }),
     deleteRule: (policyId, ruleId, opts) =>
       t.requestAt<void>(`/v1/policies/${encodeURIComponent(policyId)}/rules/${encodeURIComponent(ruleId)}`, { ...opts, method: "DELETE" }),
+    validate: (id, opts) =>
+      t.requestAt<PolicyValidationResult>(`/v1/policies/${encodeURIComponent(id)}/validate`, { ...opts, method: "POST" }),
+    preview: (data, opts) =>
+      t.request<PolicyPreviewResponse>("/v1/policies/preview", { ...opts, method: "POST", body: data }),
   };
 }

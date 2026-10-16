@@ -46,7 +46,8 @@ const COLUMNS: readonly Column<MemberRow>[] = [
 export function MembersClient({ initialRows }: { initialRows: MemberRow[] }) {
   const router = useRouter();
   const session = useSession();
-  const isAdmin = session.status === "authenticated" && session.session.user.role === "admin";
+  const currentUserRole = session.status === "authenticated" ? session.session.user.role : "";
+  const isAdmin = session.status === "authenticated" && (currentUserRole === "admin" || currentUserRole === "owner");
   const currentUserEmail = session.status === "authenticated" ? session.session.user.email : "";
 
   const [rows, setRows] = React.useState(initialRows);
@@ -86,7 +87,17 @@ export function MembersClient({ initialRows }: { initialRows: MemberRow[] }) {
   };
 
   function MemberActionsCellWrapper({ row }: { row: MemberRow }) {
-    return <MemberActionsCell row={row} isAdmin={isAdmin} currentUserEmail={currentUserEmail} onRoleChange={handleRoleChange} onRemove={handleRemove} isUpdating={isUpdating} />;
+    return (
+      <MemberActionsCell
+        row={row}
+        isAdmin={isAdmin}
+        currentUserRole={currentUserRole}
+        currentUserEmail={currentUserEmail}
+        onRoleChange={handleRoleChange}
+        onRemove={handleRemove}
+        isUpdating={isUpdating}
+      />
+    );
   }
 
   return (

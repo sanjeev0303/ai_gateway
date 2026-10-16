@@ -17,6 +17,9 @@ func Execute() error {
 
 func init() {
 	rootCmd.AddCommand(authCmd)
-	rootCmd.AddCommand(credentialCmd)
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(credentialCmd)
+	rootCmd.AddCommand(projectsCmd)
+	rootCmd.AddCommand(modelsCmd)
+	rootCmd.AddCommand(requestCmd)
 }

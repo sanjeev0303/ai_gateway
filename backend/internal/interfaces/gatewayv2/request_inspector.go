@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -42,10 +43,41 @@ func (i *RequestInspectorImpl) Inspect(ctx context.Context, body io.Reader) (Ins
 		RoutingTags: make(map[string]string),
 	}
 
-	// Extract model
+	// Extract model and provider
 	if model, ok := req["model"].(string); ok {
-		hints.Model = model
-		hints.RoutingTags["model"] = model
+		hints.Model = strings.TrimSpace(model)
+	}
+
+	if provider, ok := req["provider"].(string); ok && provider != "" {
+		hints.Provider = strings.ToLower(strings.TrimSpace(provider))
+	}
+
+	// If model has a provider prefix (e.g. "openai/gpt-4o", "anthropic/claude-sonnet-4-5", "gemini/gemini-1.5-pro")
+	if idx := strings.Index(hints.Model, "/"); idx != -1 {
+		prefix := strings.ToLower(hints.Model[:idx])
+		if prefix == "openai" || prefix == "anthropic" || prefix == "gemini" || prefix == "azure_openai" || prefix == "custom" {
+			hints.Provider = prefix
+			hints.Model = hints.Model[idx+1:]
+		}
+	}
+
+	// Deduce provider from model naming if still unspecified
+	if hints.Provider == "" && hints.Model != "" {
+		switch {
+		case strings.HasPrefix(hints.Model, "claude-"):
+			hints.Provider = "anthropic"
+		case strings.HasPrefix(hints.Model, "gpt-") || strings.HasPrefix(hints.Model, "o1") || strings.HasPrefix(hints.Model, "o3") || strings.HasPrefix(hints.Model, "text-embedding") || strings.HasPrefix(hints.Model, "dall-e"):
+			hints.Provider = "openai"
+		case strings.HasPrefix(hints.Model, "gemini-"):
+			hints.Provider = "gemini"
+		}
+	}
+
+	if hints.Model != "" {
+		hints.RoutingTags["model"] = hints.Model
+	}
+	if hints.Provider != "" {
+		hints.RoutingTags["provider"] = hints.Provider
 	}
 
 	// Extract messages for token estimation

@@ -51,6 +51,11 @@ export function niceMax(max: number, count = 4): number {
 }
 
 export function linePath(points: readonly Point[]): string {
+  if (points.length === 0) return "";
+  if (points.length === 1) {
+    const p = points[0]!;
+    return `M${(p.x - 15).toFixed(2)},${p.y.toFixed(2)} L${(p.x + 15).toFixed(2)},${p.y.toFixed(2)}`;
+  }
   return points
     .map(
       (point, index) =>
@@ -62,6 +67,10 @@ export function linePath(points: readonly Point[]): string {
 /** Closes a line path down to the baseline to make a fillable area. */
 export function areaPath(points: readonly Point[], baselineY: number): string {
   if (points.length === 0) return "";
+  if (points.length === 1) {
+    const p = points[0]!;
+    return `M${(p.x - 15).toFixed(2)},${p.y.toFixed(2)} L${(p.x + 15).toFixed(2)},${p.y.toFixed(2)} L${(p.x + 15).toFixed(2)},${baselineY.toFixed(2)} L${(p.x - 15).toFixed(2)},${baselineY.toFixed(2)} Z`;
+  }
   const first = points[0]!;
   const last = points[points.length - 1]!;
   return `${linePath(points)} L${last.x.toFixed(2)},${baselineY.toFixed(2)} L${first.x.toFixed(2)},${baselineY.toFixed(2)} Z`;

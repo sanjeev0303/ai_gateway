@@ -18,8 +18,10 @@ const maxConversationPage = 200
 func registerConversationRoutes(mux *http.ServeMux, deps Deps) {
 	a := newAPI(deps)
 	mux.Handle("GET /v1/conversations", a.requireAuth(a.listConversations))
+	mux.Handle("POST /v1/conversations", a.requireAuth(a.createConversation))
 	mux.Handle("GET /v1/conversations/{id}", a.requireAuth(a.getConversation))
 	mux.Handle("GET /v1/conversations/{id}/messages", a.requireAuth(a.listConversationMessages))
+	mux.Handle("POST /v1/conversations/{id}/messages", a.requireAuth(a.createConversationMessage))
 }
 
 // conversationSummaryDTO is the wire shape of one conversation row. Cost is
@@ -215,3 +217,60 @@ func uuidPtrString(id *uuid.UUID) *string {
 	s := id.String()
 	return &s
 }
+
+type createConversationRequest struct {
+	Title string `json:"title"`
+}
+
+func (a *api) createConversation(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	var req createConversationRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	conv, err := a.conversations.Create(r.Context(), actor, req.Title)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, map[string]any{
+		"id":         conv.ID.String(),
+		"title":      conv.Title,
+		"user_id":    conv.UserID.String(),
+		"created_at": conv.CreatedAt.Format(time.RFC3339),
+	})
+}
+
+type createMessageRequest struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+	Tokens  int32  `json:"tokens,omitempty"`
+}
+
+func (a *api) createConversationMessage(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	id, err := pathUUID(r, "id")
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	var req createMessageRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	msg, err := a.conversations.CreateMessage(r.Context(), actor, id, req.Role, req.Content, req.Tokens)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, map[string]any{
+		"id":              msg.ID.String(),
+		"conversation_id": msg.ConversationID.String(),
+		"role":            msg.Role,
+		"content":         msg.Content,
+		"created_at":      msg.CreatedAt.Format(time.RFC3339),
+	})
+}
+

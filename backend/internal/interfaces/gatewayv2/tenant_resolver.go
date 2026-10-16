@@ -4,6 +4,7 @@ package gatewayv2
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,7 +27,7 @@ type TenantResolverImpl struct {
 // UpstreamCache caches resolved upstream connections.
 type UpstreamCache struct {
 	mu      sync.RWMutex
-	entries map[uuid.UUID]*CachedUpstream
+	entries map[string]*CachedUpstream
 	maxSize int
 	ttl     time.Duration
 	clock   func() time.Time
@@ -36,6 +37,10 @@ type CachedUpstream struct {
 	Upstream  ResolvedUpstream
 	ExpiresAt time.Time
 	CreatedAt time.Time
+}
+
+func cacheKey(orgID uuid.UUID, providerKind string) string {
+	return orgID.String() + ":" + providerKind
 }
 
 // NewTenantResolver creates a new tenant resolver.
@@ -56,46 +61,61 @@ func NewTenantResolver(
 // NewUpstreamCache creates a new upstream cache.
 func NewUpstreamCache(maxSize int, ttl time.Duration) *UpstreamCache {
 	return &UpstreamCache{
-		entries: make(map[uuid.UUID]*CachedUpstream, maxSize),
+		entries: make(map[string]*CachedUpstream, maxSize),
 		maxSize: maxSize,
 		ttl:     ttl,
 		clock:   time.Now,
 	}
 }
 
-// ResolveUpstream resolves the upstream provider for an organization.
+// ResolveUpstream resolves the upstream provider for an organization (defaults to Anthropic for backwards compatibility).
 func (t *TenantResolverImpl) ResolveUpstream(ctx context.Context, orgID uuid.UUID) (ResolvedUpstream, error) {
+	return t.ResolveUpstreamForProvider(ctx, orgID, "")
+}
+
+// ResolveUpstreamForProvider resolves the upstream provider account and credential for an organization and provider kind.
+func (t *TenantResolverImpl) ResolveUpstreamForProvider(ctx context.Context, orgID uuid.UUID, providerKind string) (ResolvedUpstream, error) {
 	// Try cache first
-	if cached := t.cache.Get(orgID); cached != nil {
+	if cached := t.cache.GetForProvider(orgID, providerKind); cached != nil {
 		return *cached, nil
 	}
 
 	// Resolve from database
-	upstream, err := t.resolveFromDB(ctx, orgID)
+	upstream, err := t.resolveFromDB(ctx, orgID, providerKind)
 	if err != nil {
 		return ResolvedUpstream{}, err
 	}
 
 	// Cache the result
-	t.cache.Set(orgID, upstream)
+	t.cache.SetForProvider(orgID, providerKind, upstream)
 
 	return upstream, nil
 }
 
-// resolveFromDB performs the actual database resolution.
-func (t *TenantResolverImpl) resolveFromDB(ctx context.Context, orgID uuid.UUID) (ResolvedUpstream, error) {
-	// Find active Anthropic provider account
+// resolveFromDB performs the actual database resolution for a given provider kind.
+func (t *TenantResolverImpl) resolveFromDB(ctx context.Context, orgID uuid.UUID, providerKind string) (ResolvedUpstream, error) {
 	accounts, err := t.providerAccounts.List(ctx, orgID)
 	if err != nil {
 		return ResolvedUpstream{}, err
 	}
 
 	var account *domain.ProviderAccount
-	for i := range accounts {
-		if accounts[i].ProviderKind == domain.ProviderKindAnthropic &&
-			accounts[i].Status == domain.ProviderStatusActive {
-			account = &accounts[i]
-			break
+	if providerKind != "" {
+		for i := range accounts {
+			if accounts[i].ProviderKind == providerKind &&
+				accounts[i].Status == domain.ProviderStatusActive {
+				account = &accounts[i]
+				break
+			}
+		}
+	} else {
+		// Default: find active Anthropic provider account
+		for i := range accounts {
+			if accounts[i].ProviderKind == domain.ProviderKindAnthropic &&
+				accounts[i].Status == domain.ProviderStatusActive {
+				account = &accounts[i]
+				break
+			}
 		}
 	}
 	if account == nil {
@@ -120,10 +140,22 @@ func (t *TenantResolverImpl) resolveFromDB(ctx context.Context, orgID uuid.UUID)
 		return ResolvedUpstream{}, err
 	}
 
-	// Build base URL
-	baseURL := "https://api.anthropic.com"
-	if account.BaseURL != "" {
-		baseURL = account.BaseURL
+	// Build base URL according to provider kind
+	baseURL := account.BaseURL
+	if baseURL == "" {
+		switch account.ProviderKind {
+		case domain.ProviderKindAnthropic:
+			baseURL = "https://api.anthropic.com"
+		case domain.ProviderKindOpenAI:
+			baseURL = "https://api.openai.com/"
+		case domain.ProviderKindGemini:
+			baseURL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+		default:
+			baseURL = "https://api.anthropic.com/"
+		}
+	}
+	if !strings.HasSuffix(baseURL, "/") {
+		baseURL += "/"
 	}
 
 	return ResolvedUpstream{
@@ -132,7 +164,7 @@ func (t *TenantResolverImpl) resolveFromDB(ctx context.Context, orgID uuid.UUID)
 			OrganizationID: account.OrganizationID,
 			ProviderKind:   account.ProviderKind,
 			Name:           account.Name,
-			BaseURL:        account.BaseURL,
+			BaseURL:        baseURL,
 			Status:         account.Status,
 			CreatedAt:      account.CreatedAt,
 			UpdatedAt:      account.UpdatedAt,
@@ -155,8 +187,13 @@ func (t *TenantResolverImpl) resolveFromDB(ctx context.Context, orgID uuid.UUID)
 
 // UpstreamCache methods with pointer receivers
 func (c *UpstreamCache) Get(orgID uuid.UUID) *ResolvedUpstream {
+	return c.GetForProvider(orgID, "")
+}
+
+func (c *UpstreamCache) GetForProvider(orgID uuid.UUID, providerKind string) *ResolvedUpstream {
+	key := cacheKey(orgID, providerKind)
 	c.mu.RLock()
-	entry, ok := c.entries[orgID]
+	entry, ok := c.entries[key]
 	c.mu.RUnlock()
 
 	if !ok {
@@ -165,7 +202,7 @@ func (c *UpstreamCache) Get(orgID uuid.UUID) *ResolvedUpstream {
 
 	if c.clock().After(entry.ExpiresAt) {
 		c.mu.Lock()
-		delete(c.entries, orgID)
+		delete(c.entries, key)
 		c.mu.Unlock()
 		return nil
 	}
@@ -174,6 +211,11 @@ func (c *UpstreamCache) Get(orgID uuid.UUID) *ResolvedUpstream {
 }
 
 func (c *UpstreamCache) Set(orgID uuid.UUID, upstream ResolvedUpstream) {
+	c.SetForProvider(orgID, "", upstream)
+}
+
+func (c *UpstreamCache) SetForProvider(orgID uuid.UUID, providerKind string, upstream ResolvedUpstream) {
+	key := cacheKey(orgID, providerKind)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -185,15 +227,20 @@ func (c *UpstreamCache) Set(orgID uuid.UUID, upstream ResolvedUpstream) {
 	}
 
 	now := c.clock()
-	c.entries[orgID] = &CachedUpstream{
+	c.entries[key] = &CachedUpstream{
 		Upstream:  upstream,
 		ExpiresAt: now.Add(c.ttl),
 	}
 }
 
-// Invalidate removes an organization's cached upstream.
+// Invalidate removes an organization's cached upstream entries.
 func (c *UpstreamCache) Invalidate(orgID uuid.UUID) {
+	prefix := orgID.String() + ":"
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.entries, orgID)
+	for k := range c.entries {
+		if strings.HasPrefix(k, prefix) {
+			delete(c.entries, k)
+		}
+	}
 }

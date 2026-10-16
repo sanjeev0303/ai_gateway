@@ -199,3 +199,22 @@ func (q *Queries) ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([
 	}
 	return items, nil
 }
+
+const purgeExpiredAuditLogs = `-- name: PurgeExpiredAuditLogs :execrows
+DELETE FROM audit_logs
+WHERE organization_id = $1
+  AND created_at < $2::timestamptz
+`
+
+type PurgeExpiredAuditLogsParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	OlderThan      time.Time `json:"older_than"`
+}
+
+func (q *Queries) PurgeExpiredAuditLogs(ctx context.Context, arg PurgeExpiredAuditLogsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeExpiredAuditLogs, arg.OrganizationID, arg.OlderThan)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}

@@ -264,6 +264,7 @@ func (s *Service) AcceptInvitation(ctx context.Context, actor domain.Actor, rawT
 		return domain.OrgMember{}, ErrInvitationEmailMismatch
 	}
 	if member, err := s.members.Get(ctx, invitation.OrganizationID, actor.UserID); err == nil {
+		member.OrganizationID = invitation.OrganizationID
 		return member, nil
 	} else if !errors.Is(err, repositories.ErrNotFound) {
 		return domain.OrgMember{}, err
@@ -277,7 +278,11 @@ func (s *Service) AcceptInvitation(ctx context.Context, actor domain.Actor, rawT
 	if _, err := s.members.Add(ctx, invitation.OrganizationID, actor.UserID, invitation.Role); err != nil {
 		if errors.Is(err, repositories.ErrConflict) {
 			// A concurrent accept won the race; the membership now exists.
-			return s.members.Get(ctx, invitation.OrganizationID, actor.UserID)
+			member, err := s.members.Get(ctx, invitation.OrganizationID, actor.UserID)
+			if err == nil {
+				member.OrganizationID = invitation.OrganizationID
+			}
+			return member, err
 		}
 		return domain.OrgMember{}, err
 	}
@@ -288,6 +293,7 @@ func (s *Service) AcceptInvitation(ctx context.Context, actor domain.Actor, rawT
 	if err != nil {
 		return domain.OrgMember{}, err
 	}
+	member.OrganizationID = invitation.OrganizationID
 	// The mutated tenant is the invited organization (a member joined), so the
 	// audit record is attributed to that org, not the acceptor's own org.
 	acceptActor := domain.Actor{
@@ -449,6 +455,12 @@ func (s *Service) CreateProject(ctx context.Context, actor domain.Actor, input d
 	}
 	if strings.TrimSpace(input.Name) == "" {
 		return domain.Project{}, repositories.ErrInvalid
+	}
+	if strings.TrimSpace(input.Slug) == "" {
+		input.Slug = slugify(input.Name)
+		if input.Slug == "" {
+			input.Slug = "project"
+		}
 	}
 	project, err := s.projects.Create(ctx, actor.OrganizationID, input)
 	if err != nil {

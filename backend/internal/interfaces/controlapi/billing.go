@@ -17,6 +17,8 @@ func registerBillingRoutes(mux *http.ServeMux, deps Deps) {
 	a := newAPI(deps)
 	mux.Handle("GET /v1/billing/plans", a.requireAuth(a.listBillingPlans))
 	mux.Handle("GET /v1/billing/subscription", a.requireAuth(a.getBillingSubscription))
+	mux.Handle("PUT /v1/billing/subscription", a.requireAuth(a.updateBillingSubscription))
+	mux.Handle("DELETE /v1/billing/subscription", a.requireAuth(a.cancelBillingSubscription))
 	mux.Handle("GET /v1/billing/usage", a.requireAuth(a.getBillingUsage))
 	mux.Handle("GET /v1/billing/invoices", a.requireAuth(a.listBillingInvoices))
 }
@@ -156,6 +158,39 @@ func (a *api) getBillingSubscription(w http.ResponseWriter, r *http.Request) {
 	}
 	if subscription == nil {
 		writeServiceError(w, r, repositories.ErrNotFound)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toSubscriptionDTO(*subscription))
+}
+
+type updateSubscriptionRequest struct {
+	PlanCode string `json:"plan_code"`
+}
+
+func (a *api) updateBillingSubscription(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	var req updateSubscriptionRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	if req.PlanCode == "" {
+		writeServiceError(w, r, repositories.ErrInvalid)
+		return
+	}
+	subscription, err := a.billing.UpdateSubscription(r.Context(), actor, req.PlanCode)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toSubscriptionDTO(*subscription))
+}
+
+func (a *api) cancelBillingSubscription(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	subscription, err := a.billing.CancelSubscription(r.Context(), actor)
+	if err != nil {
+		writeServiceError(w, r, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, toSubscriptionDTO(*subscription))

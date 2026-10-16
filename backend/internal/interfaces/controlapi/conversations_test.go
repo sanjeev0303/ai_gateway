@@ -35,7 +35,14 @@ func (f *fakeConversationRepo) Create(context.Context, uuid.UUID, domain.NewConv
 }
 
 func (f *fakeConversationRepo) Get(context.Context, uuid.UUID, uuid.UUID) (domain.Conversation, error) {
-	return domain.Conversation{}, nil
+	if f.detailErr != nil {
+		return domain.Conversation{}, f.detailErr
+	}
+	return domain.Conversation{
+		ID:           f.detail.ID,
+		UserID:       f.detail.UserID,
+		PrivacyState: f.detail.PrivacyState,
+	}, nil
 }
 
 func (f *fakeConversationRepo) Detail(context.Context, uuid.UUID, uuid.UUID) (domain.ConversationSummary, error) {
@@ -84,6 +91,9 @@ func newConversationServer(t *testing.T, st *controlStubs, conv *fakeConversatio
 // already drained.
 func getConv(t *testing.T, st *controlStubs, conv *fakeConversationRepo, msg *fakeMessageRepo, mode domain.PrivacyMode, path string) (*http.Response, string) {
 	t.Helper()
+	if conv.detail.UserID == uuid.Nil {
+		conv.detail.UserID = testUserID
+	}
 	srv := newConversationServer(t, st, conv, msg, mode)
 	req, err := http.NewRequest(http.MethodGet, srv.URL+path, nil)
 	if err != nil {
@@ -351,3 +361,25 @@ func TestConversationMessagesRedacted(t *testing.T) {
 		t.Errorf("FULL_CONTENT should show all content, got: %s", body)
 	}
 }
+
+func TestSubjectAccessControlForbiddenForOtherUser(t *testing.T) {
+	st := newControlStubs()
+	otherUserID := uuid.New()
+	conv := &fakeConversationRepo{
+		detail: domain.ConversationSummary{
+			ID:        uuid.New(),
+			UserID:    otherUserID,
+			StartedAt: testNow,
+		},
+	}
+	resp, _ := getConv(t, st, conv, &fakeMessageRepo{}, domain.PrivacyFullContent, "/v1/conversations/"+conv.detail.ID.String())
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 Forbidden for another user's conversation, got %d", resp.StatusCode)
+	}
+
+	respMsg, _ := getConv(t, st, conv, &fakeMessageRepo{}, domain.PrivacyFullContent, "/v1/conversations/"+conv.detail.ID.String()+"/messages")
+	if respMsg.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 Forbidden for another user's conversation messages, got %d", respMsg.StatusCode)
+	}
+}
+

@@ -96,6 +96,7 @@ export default async function ProviderAccountsPage() {
       <PageShell
         title="Provider accounts"
         description="Every upstream account behind one gateway key."
+        actions={<CreateProviderAccountButton />}
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard

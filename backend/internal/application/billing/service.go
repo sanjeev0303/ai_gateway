@@ -90,3 +90,40 @@ func (s *Service) ListInvoices(ctx context.Context, actor domain.Actor) ([]domai
 	}
 	return s.invoices.List(ctx, actor.OrganizationID)
 }
+
+// UpdateSubscription changes the organization's plan to target planCode.
+func (s *Service) UpdateSubscription(ctx context.Context, actor domain.Actor, planCode string) (*domain.OrganizationPlan, error) {
+	if !actor.Can(domain.PermissionBillingManage) && actor.Role != domain.RoleAdmin {
+		return nil, repositories.ErrForbidden
+	}
+	plans, err := s.plans.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var targetPlan *domain.Plan
+	for _, p := range plans {
+		if p.Code == planCode {
+			targetPlan = &p
+			break
+		}
+	}
+	if targetPlan == nil {
+		return nil, repositories.ErrNotFound
+	}
+	if err := s.subscriptions.SetPlan(ctx, actor.OrganizationID, targetPlan.ID); err != nil {
+		return nil, err
+	}
+	return s.GetSubscription(ctx, actor)
+}
+
+// CancelSubscription marks the organization's active subscription to cancel at period end.
+func (s *Service) CancelSubscription(ctx context.Context, actor domain.Actor) (*domain.OrganizationPlan, error) {
+	if !actor.Can(domain.PermissionBillingManage) && actor.Role != domain.RoleAdmin {
+		return nil, repositories.ErrForbidden
+	}
+	if err := s.subscriptions.Cancel(ctx, actor.OrganizationID); err != nil {
+		return nil, err
+	}
+	return s.GetSubscription(ctx, actor)
+}
+

@@ -24,7 +24,7 @@ import {
 import { toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
-import { ModelRegistryClient } from "./client";
+import { ModelRegistryClient, SyncModelsDialog } from "./client";
 
 export const metadata: Metadata = {
   title: "Model registry · Sentinel",
@@ -122,6 +122,7 @@ export default async function ModelRegistryPage() {
       <PageShell
         title="Model registry"
         description="Every model the gateway can route to, grouped by the provider that serves it."
+        actions={<SyncModelsDialog />}
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard

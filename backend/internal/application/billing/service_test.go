@@ -74,6 +74,14 @@ func (f *fakeSubscriptions) ActiveWithPlan(_ context.Context, orgID uuid.UUID) (
 	return f.plan, f.err
 }
 
+func (f *fakeSubscriptions) SetPlan(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
+	return f.err
+}
+
+func (f *fakeSubscriptions) Cancel(_ context.Context, _ uuid.UUID) error {
+	return f.err
+}
+
 type fakeInvoices struct {
 	invoices []domain.Invoice
 	err      error

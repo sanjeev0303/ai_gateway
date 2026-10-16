@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -85,6 +87,14 @@ func (p *PolicyResolverImpl) buildSnapshot(ctx context.Context, orgID uuid.UUID)
 		return PolicySnapshot{}, err
 	}
 
+	// Sort active policies by priority (lower priority number runs first)
+	sort.SliceStable(policies, func(i, j int) bool {
+		if policies[i].Priority != policies[j].Priority {
+			return policies[i].Priority < policies[j].Priority
+		}
+		return policies[i].CreatedAt.Before(policies[j].CreatedAt)
+	})
+
 	var allRules []PolicyRule
 	rateLimits := make(map[string]RateLimitConfig)
 	budgets := make(map[string]BudgetConfig)
@@ -119,21 +129,34 @@ func (p *PolicyResolverImpl) buildSnapshot(ctx context.Context, orgID uuid.UUID)
 				}
 			}
 
+			scope := toString(conditions["scope"])
+			if scope == "" {
+				scope = toString(parameters["scope"])
+			}
+			if scope == "" {
+				scope = "organization"
+			}
+			scopeID := toString(conditions["scope_id"])
+			if scopeID == "" {
+				scopeID = toString(parameters["scope_id"])
+			}
+
 			allRules = append(allRules, PolicyRule{
 				ID:         rule.ID.String(),
+				PolicyID:   policy.ID.String(),
+				Priority:   policy.Priority,
 				Type:       rule.RuleType,
+				Scope:      scope,
+				ScopeID:    scopeID,
 				Conditions: conditions,
 				Actions:    parameters,
 				Enabled:    rule.Enabled,
 			})
 
 			// Extract rate limit and budget configs from rule
-			p.extractConfigs(conditions, parameters, &rateLimits, &budgets, rule.RuleType)
+			p.extractConfigs(conditions, parameters, &rateLimits, &budgets, rule.RuleType, scope, scopeID)
 		}
 	}
-
-	// Sort rules by priority (higher first)
-	// ... sort implementation
 
 	return PolicySnapshot{
 		OrganizationID: orgID,
@@ -146,28 +169,106 @@ func (p *PolicyResolverImpl) buildSnapshot(ctx context.Context, orgID uuid.UUID)
 }
 
 // extractConfigs extracts rate limit and budget configs from a rule.
-func (p *PolicyResolverImpl) extractConfigs(conditions, parameters map[string]any, rateLimits *map[string]RateLimitConfig, budgets *map[string]BudgetConfig, ruleType string) {
+func (p *PolicyResolverImpl) extractConfigs(
+	conditions, parameters map[string]any,
+	rateLimits *map[string]RateLimitConfig,
+	budgets *map[string]BudgetConfig,
+	ruleType, scope, scopeID string,
+) {
+	key := toString(conditions["key"])
+	if key == "" {
+		if scopeID != "" {
+			key = scope + ":" + scopeID
+		} else {
+			key = scope
+		}
+	}
+
 	switch ruleType {
 	case "rate_limit":
-		if key, ok := conditions["key"].(string); ok {
-			(*rateLimits)[key] = RateLimitConfig{
-				Key:        key,
-				Limit:      int(toFloat64(parameters["limit"])),
-				Window:     time.Duration(toFloat64(parameters["window_seconds"])) * time.Second,
-				Scope:      toString(parameters["scope"]),
-				BurstAllow: int(toFloat64(parameters["burst"])),
+		limit := int(toFloat64(parameters["limit"]))
+		if limit <= 0 {
+			limit = int(toFloat64(conditions["limit"]))
+		}
+		windowSec := toFloat64(parameters["window_seconds"])
+		if windowSec <= 0 {
+			windowSec = toFloat64(conditions["window_seconds"])
+		}
+		if windowSec <= 0 {
+			windowSec = 60
+		}
+		cfg := RateLimitConfig{
+			Key:        key,
+			Limit:      limit,
+			Window:     time.Duration(windowSec) * time.Second,
+			Scope:      scope,
+			ScopeID:    scopeID,
+			BurstAllow: int(toFloat64(parameters["burst"])),
+		}
+		(*rateLimits)[key] = cfg
+
+	case "budget", "token_budget":
+		limit := toFloat64(parameters["limit"])
+		if limit <= 0 {
+			limit = toFloat64(parameters["limit_amount"])
+		}
+		if limit <= 0 {
+			limit = toFloat64(parameters["max_budget"])
+		}
+		if limit <= 0 {
+			limit = toFloat64(conditions["limit"])
+		}
+		if limit <= 0 {
+			limit = toFloat64(conditions["limit_amount"])
+		}
+		windowSec := toFloat64(parameters["window_seconds"])
+		if windowSec <= 0 {
+			windowSec = toFloat64(conditions["window_seconds"])
+		}
+		if windowSec <= 0 {
+			period := toString(parameters["period"])
+			if period == "" {
+				period = toString(conditions["period"])
+			}
+			switch strings.ToLower(period) {
+			case "hourly":
+				windowSec = 3600
+			case "daily":
+				windowSec = 86400
+			case "weekly":
+				windowSec = 604800
+			case "monthly":
+				windowSec = 2592000
+			default:
+				windowSec = 86400
 			}
 		}
-	case "budget":
-		if key, ok := conditions["key"].(string); ok {
-			(*budgets)[key] = BudgetConfig{
-				Key:     key,
-				Limit:   toFloat64(parameters["limit"]),
-				Window:  time.Duration(toFloat64(parameters["window_seconds"])) * time.Second,
-				Scope:   toString(parameters["scope"]),
-				AlertAt: toFloat64(parameters["alert_at"]),
+		limitType := toString(conditions["limit_type"])
+		if limitType == "" {
+			limitType = toString(parameters["limit_type"])
+		}
+		if limitType == "" {
+			if ruleType == "token_budget" {
+				limitType = "tokens"
+			} else {
+				limitType = "spend"
 			}
 		}
+		alertAt := toFloat64(parameters["alert_at"])
+		if alertAt <= 0 {
+			alertAt = limit * 0.8
+		}
+
+		cfg := BudgetConfig{
+			Key:       key,
+			Limit:     limit,
+			Window:    time.Duration(windowSec) * time.Second,
+			Scope:     scope,
+			ScopeID:   scopeID,
+			LimitType: limitType,
+			AlertAt:   alertAt,
+		}
+		(*budgets)[key] = cfg
 	}
 }
 

@@ -51,3 +51,33 @@ SELECT * FROM alert_events
 WHERE organization_id = $1 AND alert_id = $2
 ORDER BY triggered_at DESC
 LIMIT 1;
+
+-- name: UpdateAlertEventStatus :one
+UPDATE alert_events
+SET status = $3,
+    resolved_at = CASE WHEN $3 = 'resolved' THEN now() ELSE resolved_at END
+WHERE organization_id = $1 AND id = $2
+RETURNING *;
+
+-- name: CreateInAppNotification :one
+INSERT INTO in_app_notifications (organization_id, alert_id, alert_event_id, title, message, severity, read)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING *;
+
+-- name: ListInAppNotifications :many
+SELECT * FROM in_app_notifications
+WHERE organization_id = $1
+  AND (sqlc.narg(unread_only)::boolean IS NULL OR (sqlc.narg(unread_only)::boolean = true AND read = false))
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: MarkNotificationRead :one
+UPDATE in_app_notifications
+SET read = true
+WHERE organization_id = $1 AND id = $2
+RETURNING *;
+
+-- name: MarkAllNotificationsRead :execrows
+UPDATE in_app_notifications
+SET read = true
+WHERE organization_id = $1 AND read = false;

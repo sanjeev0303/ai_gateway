@@ -22,6 +22,7 @@ import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
 import { SecurityEventActions } from "./client";
 import { EventActionsCell } from "./actions-cell";
+import { ExportEventsButton } from "./export-button";
 
 export const metadata: Metadata = {
   title: "Events · Sentinel",
@@ -147,6 +148,7 @@ export default async function EventsPage({
       <PageShell
         title="Events"
         description="Platform-originated events: provider health transitions and failed usage rollups."
+        actions={<ExportEventsButton rows={rows} />}
       >
         <Card>
           <CardHeader>

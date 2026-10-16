@@ -119,6 +119,8 @@ export function AreaChart({
         const d =
           points.length === 0
             ? ""
+            : points.length === 1
+            ? `M${(first.x - 15).toFixed(2)},${first.y.toFixed(2)} L${(first.x + 15).toFixed(2)},${first.y.toFixed(2)} L${(first.x + 15).toFixed(2)},${areaFloor[0]!.toFixed(2)} L${(first.x - 15).toFixed(2)},${areaFloor[0]!.toFixed(2)} Z`
             : `M${band} L${last.x.toFixed(2)},${areaFloor[length - 1]!.toFixed(2)} L${first.x.toFixed(2)},${areaFloor[0]!.toFixed(2)} Z`;
 
         return (
@@ -131,6 +133,17 @@ export function AreaChart({
                 fillOpacity={0.18}
               />
             )}
+            {points.map((p, idx) => (
+              <circle
+                key={idx}
+                cx={p.x}
+                cy={p.y}
+                r={length === 1 ? 5 : 3.5}
+                fill={entry.color}
+                stroke="var(--background)"
+                strokeWidth={1.5}
+              />
+            ))}
           </g>
         );
       })}

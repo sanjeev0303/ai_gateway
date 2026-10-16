@@ -72,6 +72,10 @@ func (m *mockLlmRequestRepo) GetRequests(_ context.Context, _ uuid.UUID, _ domai
 	return m.requests[start:end], nil
 }
 
+func (m *mockLlmRequestRepo) PurgeExpired(context.Context, uuid.UUID, time.Time) (int64, error) {
+	return 0, nil
+}
+
 type mockRollupRepo struct {
 	fakeRollups
 	summary         domain.UsageSummary

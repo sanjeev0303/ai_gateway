@@ -59,6 +59,15 @@ func (r *ProviderRouterImpl) Route(ctx context.Context, upstream ResolvedUpstrea
 		return r.routeAnthropic(upstreamURL, headers, upstream, hints)
 	case "openai":
 		return r.routeOpenAI(upstreamURL, headers, upstream, hints)
+	case "gemini":
+		if upstream.BaseURL == "" {
+			upstreamURL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+		}
+		return r.routeGemini(upstreamURL, headers, upstream, hints)
+	case "azure_openai":
+		return r.routeAzureOpenAI(upstreamURL, headers, upstream, hints)
+	case "custom":
+		return r.routeCustom(upstreamURL, headers, upstream, hints)
 	default:
 		return upstreamURL, headers, nil
 	}
@@ -74,6 +83,36 @@ func (r *ProviderRouterImpl) routeAnthropic(baseURL string, headers http.Header,
 // routeOpenAI handles OpenAI-compatible routing.
 func (r *ProviderRouterImpl) routeOpenAI(baseURL string, headers http.Header, upstream ResolvedUpstream, hints InspectorHints) (string, http.Header, error) {
 	// OpenAI-compatible providers use Authorization: Bearer
+	if key := headers.Get("x-api-key"); key != "" {
+		headers.Set("Authorization", "Bearer "+key)
+		headers.Del("x-api-key")
+	}
+	headers.Del("anthropic-version")
+	headers.Del("anthropic-beta")
+	return baseURL, headers, nil
+}
+
+// routeGemini handles Gemini-specific routing.
+func (r *ProviderRouterImpl) routeGemini(baseURL string, headers http.Header, upstream ResolvedUpstream, hints InspectorHints) (string, http.Header, error) {
+	headers.Set("Authorization", "Bearer "+upstream.UpstreamKey)
+	headers.Set("x-goog-api-key", upstream.UpstreamKey)
+	headers.Del("x-api-key")
+	headers.Del("anthropic-version")
+	headers.Del("anthropic-beta")
+	return baseURL, headers, nil
+}
+
+// routeAzureOpenAI handles Azure OpenAI-specific routing.
+func (r *ProviderRouterImpl) routeAzureOpenAI(baseURL string, headers http.Header, upstream ResolvedUpstream, hints InspectorHints) (string, http.Header, error) {
+	headers.Set("api-key", upstream.UpstreamKey)
+	headers.Del("x-api-key")
+	headers.Del("anthropic-version")
+	headers.Del("anthropic-beta")
+	return baseURL, headers, nil
+}
+
+// routeCustom handles Custom provider routing with Authorization Bearer.
+func (r *ProviderRouterImpl) routeCustom(baseURL string, headers http.Header, upstream ResolvedUpstream, hints InspectorHints) (string, http.Header, error) {
 	if key := headers.Get("x-api-key"); key != "" {
 		headers.Set("Authorization", "Bearer "+key)
 		headers.Del("x-api-key")

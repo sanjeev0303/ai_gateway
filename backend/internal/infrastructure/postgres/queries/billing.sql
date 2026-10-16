@@ -62,3 +62,9 @@ WHERE organization_id = $1 AND id = $2;
 SELECT * FROM invoice_lines
 WHERE organization_id = $1 AND invoice_id = $2
 ORDER BY created_at, id;
+
+-- name: PurgeExpiredBillingEvents :execrows
+DELETE FROM billing_events
+WHERE organization_id = sqlc.arg(organization_id)
+  AND created_at < sqlc.arg(older_than)::timestamptz;
+

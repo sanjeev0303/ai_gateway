@@ -156,6 +156,52 @@ func (s *Service) ListEvents(ctx context.Context, actor domain.Actor, alertID *u
 	return s.alerts.ListEvents(ctx, actor.OrganizationID, alertID, limit, offset)
 }
 
+func (s *Service) AcknowledgeEvent(ctx context.Context, actor domain.Actor, eventID uuid.UUID) (domain.AlertEvent, error) {
+	if !actor.Can(domain.PermissionAlertsManage) {
+		return domain.AlertEvent{}, repositories.ErrForbidden
+	}
+	event, err := s.alerts.UpdateEventStatus(ctx, actor.OrganizationID, eventID, "acknowledged")
+	if err == nil {
+		s.audit(ctx, actor, "alert_event.acknowledge", "alert_event", &eventID, nil, nil)
+	}
+	return event, err
+}
+
+func (s *Service) ResolveEvent(ctx context.Context, actor domain.Actor, eventID uuid.UUID) (domain.AlertEvent, error) {
+	if !actor.Can(domain.PermissionAlertsManage) {
+		return domain.AlertEvent{}, repositories.ErrForbidden
+	}
+	event, err := s.alerts.UpdateEventStatus(ctx, actor.OrganizationID, eventID, "resolved")
+	if err == nil {
+		if event.AlertID != uuid.Nil {
+			_, _ = s.alerts.UpdateTriggered(ctx, actor.OrganizationID, event.AlertID, domain.AlertStatusResolved)
+		}
+		s.audit(ctx, actor, "alert_event.resolve", "alert_event", &eventID, nil, nil)
+	}
+	return event, err
+}
+
+func (s *Service) ListNotifications(ctx context.Context, actor domain.Actor, unreadOnly bool, limit, offset int32) ([]domain.InAppNotification, error) {
+	if !actor.Can(domain.PermissionAlertsRead) {
+		return nil, repositories.ErrForbidden
+	}
+	return s.alerts.ListNotifications(ctx, actor.OrganizationID, unreadOnly, limit, offset)
+}
+
+func (s *Service) MarkNotificationRead(ctx context.Context, actor domain.Actor, id uuid.UUID) error {
+	if !actor.Can(domain.PermissionAlertsRead) {
+		return repositories.ErrForbidden
+	}
+	return s.alerts.MarkNotificationRead(ctx, actor.OrganizationID, id)
+}
+
+func (s *Service) MarkAllNotificationsRead(ctx context.Context, actor domain.Actor) error {
+	if !actor.Can(domain.PermissionAlertsRead) {
+		return repositories.ErrForbidden
+	}
+	return s.alerts.MarkAllNotificationsRead(ctx, actor.OrganizationID)
+}
+
 func testMessage(muted bool) string {
 	if muted {
 		return "Rule is muted, so no evaluator would report it. No evaluator is wired to this rule type and no notification was sent."

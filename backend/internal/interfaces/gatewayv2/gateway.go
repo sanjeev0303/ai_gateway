@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -55,6 +56,8 @@ type Gateway struct {
 	telemetry        TelemetryEmitter
 	activity         *ActivityTracker
 	guardrails       *GuardrailEvaluator // Wrapper for the domain evaluator
+	modelRepo        repositories.ModelRepository
+	projectRepo      repositories.ProjectRepository
 
 	// State
 	mu           sync.RWMutex
@@ -77,6 +80,8 @@ type GatewayDeps struct {
 	ProviderAccounts    repositories.ProviderAccountRepository
 	ProviderCredentials repositories.ProviderCredentialRepository
 	Secrets             secrets.Store
+	ModelRepo           repositories.ModelRepository
+	ProjectRepo         repositories.ProjectRepository
 
 	// Policy
 	PolicyRepo repositories.PolicyRepository
@@ -172,6 +177,8 @@ func NewGateway(deps GatewayDeps) (*Gateway, error) {
 		streamProxy:      streamProxy,
 		telemetry:        telemetry,
 		guardrails:       NewGuardrailEvaluator(deps.Guardrails),
+		modelRepo:        deps.ModelRepo,
+		projectRepo:      deps.ProjectRepo,
 	}
 
 	return g, nil
@@ -185,7 +192,13 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Add request ID to response headers
 	w.Header().Set("x-request-id", reqID)
 
-	// Only handle POST /v1/messages and related endpoints
+	// Model listing endpoint
+	if r.Method == http.MethodGet && (r.URL.Path == "/v1/models" || strings.HasSuffix(r.URL.Path, "/models")) {
+		g.handleListModels(w, r, reqID)
+		return
+	}
+
+	// Only handle POST /v1/messages and completion endpoints
 	if r.Method != http.MethodPost {
 		g.writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -264,17 +277,100 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 	// Stage 1: Authenticate
 	cred, err := g.authenticate(ctx, r)
 	if err != nil {
+		if errors.Is(err, ErrWrongScope) {
+			return g.pipelineError("authenticate", err, http.StatusForbidden, "permission_error")
+		}
 		return g.pipelineError("authenticate", err, http.StatusUnauthorized, "authentication_error")
 	}
 
-	// Stage 2: Resolve tenant/upstream
-	upstream, err := g.tenantResolver.ResolveUpstream(ctx, cred.OrganizationID)
-	if err != nil {
-		return g.pipelineError("tenant_resolver", err, http.StatusServiceUnavailable, "upstream_unavailable")
+	// Verify tenant and identity isolation: reject spoofed headers
+	if clientOrg := r.Header.Get("X-Organization-ID"); clientOrg != "" {
+		if clientOrg != cred.OrganizationID.String() {
+			return g.pipelineError("authenticate", errors.New("cross-tenant header spoofing rejected"), http.StatusForbidden, "tenant_isolation_violation")
+		}
+	}
+	if clientUser := r.Header.Get("X-User-ID"); clientUser != "" {
+		if cred.SubjectType == "user" && clientUser != cred.SubjectID.String() {
+			return g.pipelineError("authenticate", errors.New("user header spoofing rejected"), http.StatusForbidden, "permission_error")
+		}
+	}
+	if clientProj := r.Header.Get("X-Project-ID"); clientProj != "" {
+		if cred.ProjectID != nil && clientProj != cred.ProjectID.String() {
+			return g.pipelineError("authenticate", errors.New("project header mismatch rejected"), http.StatusForbidden, "permission_error")
+		}
+		if cred.ProjectID == nil {
+			if pID, err := uuid.Parse(clientProj); err == nil && g.projectRepo != nil {
+				proj, err := g.projectRepo.Get(ctx, cred.OrganizationID, pID)
+				if err != nil || proj.ID != pID {
+					return g.pipelineError("authenticate", errors.New("unauthorized project header"), http.StatusForbidden, "permission_error")
+				}
+				cred.ProjectID = &pID
+			}
+		}
 	}
 
-	// Stage 3: Load policy snapshot (fail closed: an unavailable policy denies
-	// the request instead of degrading to defaults).
+	// Stage 2: Inspect request for routing hints and model.
+	body, err := readAndRestoreBody(r)
+	if err != nil {
+		return g.pipelineError("request_inspector", err, http.StatusRequestEntityTooLarge, "request_too_large")
+	}
+
+	hints, err := g.requestInspector.Inspect(ctx, bytes.NewReader(body))
+	if err != nil {
+		g.logger.Warn("request inspection failed", "error", err)
+		hints = InspectorHints{}
+	}
+
+	// Verify payload project_id integrity
+	if hints.ProjectID != nil {
+		if cred.ProjectID != nil && *hints.ProjectID != *cred.ProjectID {
+			return g.pipelineError("authenticate", errors.New("payload project_id conflicts with credential project"), http.StatusForbidden, "permission_error")
+		}
+		if cred.ProjectID == nil && g.projectRepo != nil {
+			proj, err := g.projectRepo.Get(ctx, cred.OrganizationID, *hints.ProjectID)
+			if err != nil || proj.ID != *hints.ProjectID {
+				return g.pipelineError("authenticate", errors.New("unauthorized payload project_id"), http.StatusForbidden, "permission_error")
+			}
+			cred.ProjectID = hints.ProjectID
+		}
+	}
+
+	// Determine requested provider
+	providerKind := hints.Provider
+	if providerKind == "" {
+		if p := r.Header.Get("x-provider"); p != "" {
+			providerKind = strings.ToLower(strings.TrimSpace(p))
+		}
+	}
+	if providerKind == "" && hints.Model != "" {
+		switch {
+		case strings.HasPrefix(hints.Model, "claude-"):
+			providerKind = domain.ProviderKindAnthropic
+		case strings.HasPrefix(hints.Model, "gpt-") || strings.HasPrefix(hints.Model, "o1") || strings.HasPrefix(hints.Model, "o3") || strings.HasPrefix(hints.Model, "text-embedding") || strings.HasPrefix(hints.Model, "dall-e"):
+			providerKind = domain.ProviderKindOpenAI
+		case strings.HasPrefix(hints.Model, "gemini-"):
+			providerKind = domain.ProviderKindGemini
+		}
+	}
+	if providerKind == "" {
+		if strings.Contains(r.URL.Path, "/chat/completions") || strings.Contains(r.URL.Path, "/completions") || strings.Contains(r.URL.Path, "/embeddings") {
+			providerKind = domain.ProviderKindOpenAI
+		} else {
+			providerKind = domain.ProviderKindAnthropic
+		}
+	}
+	hints.Provider = providerKind
+
+	// Stage 3: Resolve tenant/upstream for the specific provider (with fallback)
+	upstream, err := g.tenantResolver.ResolveUpstreamForProvider(ctx, cred.OrganizationID, providerKind)
+	if err != nil {
+		upstream, err = g.tenantResolver.ResolveUpstream(ctx, cred.OrganizationID)
+		if err != nil {
+			return g.pipelineError("tenant_resolver", err, http.StatusServiceUnavailable, "upstream_unavailable")
+		}
+	}
+
+	// Stage 4: Load policy snapshot (fail closed)
 	policy, err := g.policyResolver.GetSnapshot(ctx, cred.OrganizationID)
 	if err != nil {
 		return g.pipelineError("policy_resolver", err, http.StatusServiceUnavailable, "policy_unavailable")
@@ -285,75 +381,115 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 		bg.SyncFromSnapshot(policy)
 	}
 
-	// Stage 4: Inspect request for routing hints. The body must survive
-	// inspection, so it is buffered once under a bound and restored.
-	body, err := readAndRestoreBody(r)
-	if err != nil {
-		return g.pipelineError("request_inspector", err, http.StatusRequestEntityTooLarge, "request_too_large")
-	}
-
-	hints, err := g.requestInspector.Inspect(ctx, bytes.NewReader(body))
-	if err != nil {
-		g.logger.Warn("request inspection failed", "error", err)
-		// Continue with empty hints
-		hints = InspectorHints{}
+	reqCtx := &RequestContext{
+		Credential:     cred,
+		Upstream:       upstream,
+		PolicySnapshot: policy,
+		InspectorHints: hints,
+		StartTime:      time.Now(),
 	}
 
 	// Stage 4.5: Guardrails
 	if g.guardrails != nil {
 		gResult := g.guardrails.CheckInput(ctx, body, cred.OrganizationID.String(), reqID, cred)
 		if gResult.Triggered && gResult.Action == domain.GuardrailActionBlock {
-			return g.pipelineError("guardrails", errors.New("blocked by guardrail: "+gResult.MatchedCategory), http.StatusForbidden, "guardrail_blocked")
+			res := g.pipelineError("guardrails", errors.New("blocked by guardrail: "+gResult.MatchedCategory), http.StatusForbidden, "guardrail_blocked")
+			res.Context = reqCtx
+			return res
 		}
 	}
 
-	// Stage 5: Authorize the requested model against policy. This runs before
-	// rate/budget so denied requests consume no quota.
-	if allowed, reason := policy.Authorize(hints); !allowed {
-		return g.pipelineError("policy_authorizer", errors.New(reason), http.StatusForbidden, "policy_denied")
+	// Stage 5: Authorize the requested model against policy.
+	if allowed, reason := policy.Authorize(hints, cred); !allowed {
+		res := g.pipelineError("policy_authorizer", errors.New(reason), http.StatusForbidden, "policy_denied")
+		res.Context = reqCtx
+		return res
 	}
 
-	// Stage 6: Rate limiting (snapshot config when present, else defaults)
-	rateKey := g.buildRateLimitKey(cred, upstream)
-	rateLimitCfg, rateLimitWindow := g.config.DefaultRateLimit, g.config.DefaultRateWindow
-	if cfg, ok := policy.rateLimitFor("credential"); ok {
-		rateLimitCfg, rateLimitWindow = cfg.Limit, cfg.Window
-	}
-	rateLimitResult := g.rateLimiter.Check(ctx, rateKey, rateLimitCfg, rateLimitWindow)
-	if !rateLimitResult.Allowed {
-		return g.rateLimitedResult(rateLimitResult)
+	// Validate model is supported
+	if hints.Model != "" && !g.isModelSupported(ctx, hints.Model) {
+		res := g.pipelineError("model_resolver", fmt.Errorf("model %q is not supported", hints.Model), http.StatusBadRequest, "unsupported_model")
+		res.Context = reqCtx
+		return res
 	}
 
-	// Stage 7: Budget check (snapshot config when present, else defaults)
-	budgetKey := g.buildBudgetKey(cred, upstream)
-	estimatedCost := g.estimateCost(hints)
-	budgetCfg, budgetWindow := g.config.DefaultBudgetLimit, g.config.DefaultBudgetWindow
-	if cfg, ok := policy.budgetFor("organization"); ok {
-		budgetCfg, budgetWindow = cfg.Limit, cfg.Window
+	// Stage 6: Rate limiting across all applicable scopes
+	applicableRLs := policy.applicableRateLimits(cred)
+	var finalRateLimitResult RateLimitResult
+	if len(applicableRLs) == 0 {
+		rateKey := g.buildRateLimitKey(cred, upstream)
+		rateLimitCfg, rateLimitWindow := g.config.DefaultRateLimit, g.config.DefaultRateWindow
+		if cfg, ok := policy.rateLimitFor("credential"); ok {
+			rateLimitCfg, rateLimitWindow = cfg.Limit, cfg.Window
+		}
+		finalRateLimitResult = g.rateLimiter.Check(ctx, rateKey, rateLimitCfg, rateLimitWindow)
+		if !finalRateLimitResult.Allowed {
+			return g.rateLimitedResult(finalRateLimitResult, reqCtx)
+		}
+	} else {
+		for _, cfg := range applicableRLs {
+			rlKey := cfg.Key
+			if rlKey == "" {
+				rlKey = cfg.Scope
+			}
+			rlResult := g.rateLimiter.Check(ctx, rlKey, cfg.Limit, cfg.Window)
+			if !rlResult.Allowed {
+				return g.rateLimitedResult(rlResult, reqCtx)
+			}
+			finalRateLimitResult = rlResult
+		}
 	}
-	budgetResult := g.budgetGuard.Check(ctx, budgetKey, budgetCfg, budgetWindow, estimatedCost)
-	if !budgetResult.Allowed {
-		return g.budgetExceededResult(budgetResult)
+
+	// Stage 7: Budget check across all applicable scopes (spend and token budgets)
+	applicableBudgets := policy.applicableBudgets(cred)
+	var finalBudgetResult BudgetResult
+	if len(applicableBudgets) == 0 {
+		budgetKey := g.buildBudgetKey(cred, upstream)
+		estimatedCost := g.estimateCost(hints)
+		budgetCfg, budgetWindow := g.config.DefaultBudgetLimit, g.config.DefaultBudgetWindow
+		if cfg, ok := policy.budgetFor("organization"); ok {
+			budgetCfg, budgetWindow = cfg.Limit, cfg.Window
+		}
+		finalBudgetResult = g.budgetGuard.Check(ctx, budgetKey, budgetCfg, budgetWindow, estimatedCost)
+		if !finalBudgetResult.Allowed {
+			return g.budgetExceededResult(finalBudgetResult, reqCtx)
+		}
+	} else {
+		for _, cfg := range applicableBudgets {
+			budgetKey := cfg.Key
+			if budgetKey == "" {
+				budgetKey = cfg.Scope
+			}
+			var checkCost float64
+			if cfg.LimitType == "tokens" {
+				checkCost = float64(hints.EstimatedInputTokens + hints.EstimatedOutputTokens)
+				if checkCost <= 0 {
+					checkCost = 1
+				}
+			} else {
+				checkCost = g.estimateCost(hints)
+			}
+			bResult := g.budgetGuard.Check(ctx, budgetKey, cfg.Limit, cfg.Window, checkCost)
+			if !bResult.Allowed {
+				return g.budgetExceededResult(bResult, reqCtx)
+			}
+			finalBudgetResult = bResult
+		}
 	}
 
 	// Stage 8: Route to provider
 	upstreamURL, upstreamHeaders, err := g.providerRouter.Route(ctx, upstream, hints)
 	if err != nil {
-		return g.pipelineError("provider_router", err, http.StatusInternalServerError, "routing_error")
+		res := g.pipelineError("provider_router", err, http.StatusInternalServerError, "routing_error")
+		res.Context = reqCtx
+		return res
 	}
 
-	// Build request context for downstream
-	reqCtx := &RequestContext{
-		Credential:      cred,
-		Upstream:        upstream,
-		PolicySnapshot:  policy,
-		RateLimit:       rateLimitResult,
-		BudgetResult:    budgetResult,
-		InspectorHints:  hints,
-		StartTime:       time.Now(),
-		UpstreamURL:     upstreamURL,
-		UpstreamHeaders: upstreamHeaders,
-	}
+	// Enrich request context for downstream
+	reqCtx.RateLimit = finalRateLimitResult
+	reqCtx.BudgetResult = finalBudgetResult
+	reqCtx.UpstreamURL = upstreamURL
+	reqCtx.UpstreamHeaders = upstreamHeaders
 
 	return PipelineResult{
 		Allowed:    true,
@@ -404,7 +540,7 @@ func (g *Gateway) buildRateLimitKey(cred GatewayCredential, upstream ResolvedUps
 // buildBudgetKey constructs the budget key from credential and upstream.
 // The key format matches the budget rule key: scope:scope_id
 func (g *Gateway) buildBudgetKey(cred GatewayCredential, upstream ResolvedUpstream) string {
-	// Budget by credential scope - supports organization, team, project, gateway_credential, service_account
+	// Budget by credential scope - supports organization, team, project, service_account
 	if cred.TeamID != nil {
 		return "team:" + cred.TeamID.String()
 	}
@@ -413,14 +549,6 @@ func (g *Gateway) buildBudgetKey(cred GatewayCredential, upstream ResolvedUpstre
 	}
 	if cred.SubjectType == "service_account" {
 		return "service_account:" + cred.SubjectID.String()
-	}
-	// Gateway credential itself as scope
-	if len(cred.Scopes) > 0 {
-		for _, s := range cred.Scopes {
-			if s == "gateway" {
-				return "gateway_credential:" + cred.ID.String()
-			}
-		}
 	}
 	// Default to organization scope
 	return "org:" + cred.OrganizationID.String()
@@ -435,28 +563,38 @@ func (g *Gateway) estimateCost(hints InspectorHints) float64 {
 }
 
 // rateLimitedResult creates a rate limited response.
-func (g *Gateway) rateLimitedResult(rl RateLimitResult) PipelineResult {
+func (g *Gateway) rateLimitedResult(rl RateLimitResult, reqCtx ...*RequestContext) PipelineResult {
+	var ctx *RequestContext
+	if len(reqCtx) > 0 && reqCtx[0] != nil {
+		ctx = reqCtx[0]
+		ctx.RateLimit = rl
+	} else {
+		ctx = &RequestContext{RateLimit: rl}
+	}
 	return PipelineResult{
 		Allowed:      false,
 		StatusCode:   429,
 		ErrorType:    "rate_limit_exceeded",
 		ErrorMessage: "rate limit exceeded",
-		Context: &RequestContext{
-			RateLimit: rl,
-		},
+		Context:      ctx,
 	}
 }
 
 // budgetExceededResult creates a budget exceeded response.
-func (g *Gateway) budgetExceededResult(br BudgetResult) PipelineResult {
+func (g *Gateway) budgetExceededResult(br BudgetResult, reqCtx ...*RequestContext) PipelineResult {
+	var ctx *RequestContext
+	if len(reqCtx) > 0 && reqCtx[0] != nil {
+		ctx = reqCtx[0]
+		ctx.BudgetResult = br
+	} else {
+		ctx = &RequestContext{BudgetResult: br}
+	}
 	return PipelineResult{
 		Allowed:      false,
 		StatusCode:   402,
 		ErrorType:    "budget_exceeded",
 		ErrorMessage: "budget exceeded",
-		Context: &RequestContext{
-			BudgetResult: br,
-		},
+		Context:      ctx,
 	}
 }
 
@@ -607,11 +745,37 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 		}
 		usage.CostMicros = costMicros
 
-		// Record usage against local budget tracker
+		allowedDecision := domain.PolicyDecisionAllowed
+		usage.PolicyDecision = &allowedDecision
+		if observed != nil && observed.ReasoningTokens > 0 {
+			usage.ReasoningTokens = observed.ReasoningTokens
+		}
+		if costMicros > 0 {
+			usage.CostStatus = domain.CostStatusCalculated
+		} else if usage.InputTokens > 0 || usage.OutputTokens > 0 {
+			usage.CostStatus = domain.CostStatusUnavailable
+		} else {
+			usage.CostStatus = domain.CostStatusFree
+		}
+
+		// Record usage against all applicable budget trackers
 		cost := (float64(usage.InputTokens)/1000*0.01) + (float64(usage.OutputTokens)/1000*0.03)
-		budgetKey := g.buildBudgetKey(result.Context.Credential, result.Context.Upstream)
-		if err := g.budgetGuard.RecordUsage(ctx, budgetKey, cost); err != nil {
-			g.logger.Warn("failed to record local budget usage", "error", err, "key", budgetKey)
+		appBudgets := result.Context.PolicySnapshot.applicableBudgets(result.Context.Credential)
+		if len(appBudgets) == 0 {
+			budgetKey := g.buildBudgetKey(result.Context.Credential, result.Context.Upstream)
+			if err := g.budgetGuard.RecordUsage(ctx, budgetKey, cost); err != nil {
+				g.logger.Warn("failed to record local budget usage", "error", err, "key", budgetKey)
+			}
+		} else {
+			for _, cfg := range appBudgets {
+				usageAmt := cost
+				if cfg.LimitType == "tokens" {
+					usageAmt = float64(usage.InputTokens + usage.OutputTokens)
+				}
+				if err := g.budgetGuard.RecordUsage(ctx, cfg.Key, usageAmt); err != nil {
+					g.logger.Warn("failed to record local budget usage", "error", err, "key", cfg.Key)
+				}
+			}
 		}
 
 		g.telemetry.EmitUsage(ctx, usage)
@@ -648,6 +812,11 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 			if provKind == "" {
 				provKind = "unknown"
 			}
+			deniedDecision := domain.PolicyDecisionDenied
+			denialReason := result.ErrorType
+			if denialReason == "" {
+				denialReason = result.ErrorMessage
+			}
 			failedUsage := UsageRecord{
 				RequestID:        reqID,
 				OrganizationID:   orgID,
@@ -662,6 +831,9 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 				Timestamp:        completedAt,
 				RequestStartedAt: startUTC,
 				CompletedAt:      completedAt,
+				PolicyDecision:   &deniedDecision,
+				DenialReason:     &denialReason,
+				CostStatus:       domain.CostStatusUnavailable,
 				ProviderMeta:     map[string]any{"provider": provKind},
 			}
 			g.telemetry.EmitUsage(ctx, failedUsage)
@@ -759,5 +931,108 @@ func (g *Gateway) InvalidateCredentialByID(ctx context.Context, id string) {
 	if authImpl, ok := g.authenticator.(*AuthenticatorImpl); ok {
 		authImpl.InvalidateByID(ctx, id)
 	}
+}
+
+// handleListModels serves GET /v1/models, returning permitted models for the authenticated credential.
+func (g *Gateway) handleListModels(w http.ResponseWriter, r *http.Request, reqID string) {
+	cred, err := g.authenticate(r.Context(), r)
+	if err != nil {
+		if errors.Is(err, ErrWrongScope) {
+			g.writeError(w, http.StatusForbidden, "permission_error", err.Error())
+			return
+		}
+		g.writeError(w, http.StatusUnauthorized, "authentication_error", "invalid credential")
+		return
+	}
+
+	policy, err := g.policyResolver.GetSnapshot(r.Context(), cred.OrganizationID)
+	if err != nil {
+		g.writeError(w, http.StatusServiceUnavailable, "policy_unavailable", "failed to load policy")
+		return
+	}
+
+	type modelEntry struct {
+		ID          string `json:"id"`
+		Object      string `json:"object"`
+		Created     int64  `json:"created"`
+		OwnedBy     string `json:"owned_by"`
+		Provider    string `json:"provider"`
+		DisplayName string `json:"display_name,omitempty"`
+	}
+
+	var allModels []modelEntry
+	if g.modelRepo != nil {
+		if dbModels, err := g.modelRepo.List(r.Context()); err == nil && len(dbModels) > 0 {
+			for _, m := range dbModels {
+				allModels = append(allModels, modelEntry{
+					ID:          m.ModelSlug,
+					Object:      "model",
+					Created:     m.CreatedAt.Unix(),
+					OwnedBy:     m.ProviderKind,
+					Provider:    m.ProviderKind,
+					DisplayName: m.DisplayName,
+				})
+			}
+		}
+	}
+
+	if len(allModels) == 0 {
+		// Standard default catalog across supported providers
+		allModels = []modelEntry{
+			{ID: "claude-sonnet-4-5", Object: "model", Created: 1700000000, OwnedBy: "anthropic", Provider: "anthropic", DisplayName: "Claude 3.5 Sonnet"},
+			{ID: "claude-3-5-sonnet-20241022", Object: "model", Created: 1700000000, OwnedBy: "anthropic", Provider: "anthropic", DisplayName: "Claude 3.5 Sonnet (20241022)"},
+			{ID: "claude-3-haiku-20240307", Object: "model", Created: 1700000000, OwnedBy: "anthropic", Provider: "anthropic", DisplayName: "Claude 3 Haiku"},
+			{ID: "claude-3-opus-20240229", Object: "model", Created: 1700000000, OwnedBy: "anthropic", Provider: "anthropic", DisplayName: "Claude 3 Opus"},
+			{ID: "gpt-4o", Object: "model", Created: 1700000000, OwnedBy: "openai", Provider: "openai", DisplayName: "GPT-4o"},
+			{ID: "gpt-4o-mini", Object: "model", Created: 1700000000, OwnedBy: "openai", Provider: "openai", DisplayName: "GPT-4o Mini"},
+			{ID: "o1", Object: "model", Created: 1700000000, OwnedBy: "openai", Provider: "openai", DisplayName: "o1"},
+			{ID: "o3-mini", Object: "model", Created: 1700000000, OwnedBy: "openai", Provider: "openai", DisplayName: "o3 Mini"},
+			{ID: "text-embedding-3-small", Object: "model", Created: 1700000000, OwnedBy: "openai", Provider: "openai", DisplayName: "Text Embedding 3 Small"},
+			{ID: "gemini-1.5-pro", Object: "model", Created: 1700000000, OwnedBy: "gemini", Provider: "gemini", DisplayName: "Gemini 1.5 Pro"},
+			{ID: "gemini-1.5-flash", Object: "model", Created: 1700000000, OwnedBy: "gemini", Provider: "gemini", DisplayName: "Gemini 1.5 Flash"},
+			{ID: "gemini-2.5-flash", Object: "model", Created: 1700000000, OwnedBy: "gemini", Provider: "gemini", DisplayName: "Gemini 2.5 Flash"},
+			{ID: "gemini-2.5-pro", Object: "model", Created: 1700000000, OwnedBy: "gemini", Provider: "gemini", DisplayName: "Gemini 2.5 Pro"},
+		}
+	}
+
+	var permitted []modelEntry
+	for _, m := range allModels {
+		allowed, _ := policy.Authorize(InspectorHints{Model: m.ID, Provider: m.Provider}, cred)
+		if allowed {
+			permitted = append(permitted, m)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"object": "list",
+		"data":   permitted,
+		"items":  permitted,
+	})
+}
+
+// isModelSupported checks whether a requested model matches known provider patterns or catalog entries.
+func (g *Gateway) isModelSupported(ctx context.Context, model string) bool {
+	if model == "" {
+		return true
+	}
+	if strings.HasPrefix(model, "claude-") ||
+		strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") ||
+		strings.HasPrefix(model, "text-embedding") || strings.HasPrefix(model, "dall-e") ||
+		strings.HasPrefix(model, "gemini-") {
+		return true
+	}
+
+	if g.modelRepo != nil {
+		if models, err := g.modelRepo.List(ctx); err == nil {
+			for _, m := range models {
+				if m.ModelSlug == model || m.DisplayName == model {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 

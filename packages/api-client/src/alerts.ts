@@ -69,6 +69,30 @@ export interface AlertTestResult {
   message: string;
 }
 
+export interface AlertEvent {
+  id: string;
+  alert_id: string;
+  alert_type: string;
+  severity: string;
+  status: string;
+  message: string;
+  context: Record<string, unknown>;
+  triggered_at: string;
+  resolved_at?: string | null;
+  created_at: string;
+}
+
+export interface InAppNotification {
+  id: string;
+  alert_id?: string | null;
+  alert_event_id?: string | null;
+  title: string;
+  message: string;
+  severity: string;
+  read: boolean;
+  created_at: string;
+}
+
 export interface AlertsModule {
   list(options?: RequestOptions): Promise<ListResponse<Alert>>;
   get(alertId: string, options?: RequestOptions): Promise<Alert>;
@@ -80,6 +104,12 @@ export interface AlertsModule {
   ): Promise<Alert>;
   delete(alertId: string, options?: RequestOptions): Promise<void>;
   test(alertId: string, options?: RequestOptions): Promise<AlertTestResult>;
+  listEvents(alertId?: string, options?: RequestOptions): Promise<ListResponse<AlertEvent>>;
+  acknowledgeEvent(eventId: string, options?: RequestOptions): Promise<AlertEvent>;
+  resolveEvent(eventId: string, options?: RequestOptions): Promise<AlertEvent>;
+  listNotifications(unreadOnly?: boolean, options?: RequestOptions): Promise<ListResponse<InAppNotification>>;
+  markNotificationRead(notificationId: string, options?: RequestOptions): Promise<void>;
+  markAllNotificationsRead(options?: RequestOptions): Promise<void>;
 }
 
 export function createAlertsModule(transport: Transport): AlertsModule {
@@ -109,5 +139,36 @@ export function createAlertsModule(transport: Transport): AlertsModule {
         `/v1/alerts/${encodeURIComponent(alertId)}/test`,
         { ...options, method: "POST" },
       ),
+    listEvents: (alertId, options) => {
+      const path = alertId
+        ? `/v1/alerts/${encodeURIComponent(alertId)}/events`
+        : "/v1/alert-events";
+      return transport.request<ListResponse<AlertEvent>>(path, options);
+    },
+    acknowledgeEvent: (eventId, options) =>
+      transport.request<AlertEvent>(
+        `/v1/alert-events/${encodeURIComponent(eventId)}/acknowledge`,
+        { ...options, method: "POST" },
+      ),
+    resolveEvent: (eventId, options) =>
+      transport.request<AlertEvent>(
+        `/v1/alert-events/${encodeURIComponent(eventId)}/resolve`,
+        { ...options, method: "POST" },
+      ),
+    listNotifications: (unreadOnly, options) =>
+      transport.request<ListResponse<InAppNotification>>(
+        unreadOnly ? "/v1/notifications?unread_only=true" : "/v1/notifications",
+        options,
+      ),
+    markNotificationRead: (notificationId, options) =>
+      transport.request<void>(
+        `/v1/notifications/${encodeURIComponent(notificationId)}/read`,
+        { ...options, method: "PATCH" },
+      ),
+    markAllNotificationsRead: (options) =>
+      transport.request<void>("/v1/notifications/read-all", {
+        ...options,
+        method: "POST",
+      }),
   };
 }

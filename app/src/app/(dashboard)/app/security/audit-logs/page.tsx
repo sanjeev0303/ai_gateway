@@ -17,6 +17,7 @@ import { getApiClient } from "@/lib/session";
 import { AuditLogActions } from "./client";
 import { AuditFilters } from "./filters";
 import { AuditActionsCell } from "./actions-cell";
+import { ExportAuditLogsButton } from "./export-button";
 
 export const metadata: Metadata = {
   title: "Audit logs · Sentinel",
@@ -140,6 +141,7 @@ export default async function AuditLogsPage({
       <PageShell
         title="Audit logs"
         description="Append-only record of every actor, action, and resource touched in the console."
+        actions={<ExportAuditLogsButton rows={rows} />}
       >
         <AuditFilters />
         <Card>

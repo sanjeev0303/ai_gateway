@@ -12,6 +12,9 @@ type RetentionDeps struct {
 	Orgs          repositories.OrganizationRepository
 	Conversations repositories.ConversationRepository
 	UsageEvents   repositories.UsageEventRepository
+	LlmRequests   repositories.LlmRequestRepository
+	AuditLogs     repositories.AuditLogRepository
+	BillingEvents repositories.BillingEventRepository
 	Log           *slog.Logger
 }
 
@@ -19,6 +22,9 @@ type RetentionJob struct {
 	orgs          repositories.OrganizationRepository
 	conversations repositories.ConversationRepository
 	usageEvents   repositories.UsageEventRepository
+	llmRequests   repositories.LlmRequestRepository
+	auditLogs     repositories.AuditLogRepository
+	billingEvents repositories.BillingEventRepository
 	log           *slog.Logger
 }
 
@@ -30,6 +36,9 @@ func NewRetentionJob(deps RetentionDeps) *RetentionJob {
 		orgs:          deps.Orgs,
 		conversations: deps.Conversations,
 		usageEvents:   deps.UsageEvents,
+		llmRequests:   deps.LlmRequests,
+		auditLogs:     deps.AuditLogs,
+		billingEvents: deps.BillingEvents,
 		log:           deps.Log,
 	}
 }
@@ -84,23 +93,55 @@ func (j *RetentionJob) RunOnce(ctx context.Context) error {
 			}
 		}
 
-		// 2. Retention for raw usage events
+		// 2. Retention for raw usage events and detailed llm requests
 		// Prunes raw usage ledger events older than retention_usage_days
 		usageDays := org.RetentionUsageDays
 		if usageDays > 0 {
 			olderThan := now.Add(-time.Duration(usageDays) * 24 * time.Hour)
-			deleted, err := j.usageEvents.PurgeExpired(ctx, orgID, olderThan)
-			if err != nil {
-				j.log.ErrorContext(ctx, "retention: usage event purge failed", "org_id", orgID, "error", err)
-			} else if deleted > 0 {
-				j.log.InfoContext(ctx, "retention: pruned expired usage events", "org_id", orgID, "count", deleted)
+			if j.usageEvents != nil {
+				deleted, err := j.usageEvents.PurgeExpired(ctx, orgID, olderThan)
+				if err != nil {
+					j.log.ErrorContext(ctx, "retention: usage event purge failed", "org_id", orgID, "error", err)
+				} else if deleted > 0 {
+					j.log.InfoContext(ctx, "retention: pruned expired usage events", "org_id", orgID, "count", deleted)
+				}
+			}
+			if j.llmRequests != nil {
+				deleted, err := j.llmRequests.PurgeExpired(ctx, orgID, olderThan)
+				if err != nil {
+					j.log.ErrorContext(ctx, "retention: llm requests purge failed", "org_id", orgID, "error", err)
+				} else if deleted > 0 {
+					j.log.InfoContext(ctx, "retention: pruned expired llm requests", "org_id", orgID, "count", deleted)
+				}
 			}
 		}
 
-		// CRITICAL SAFETY REQUIREMENT:
-		// Audit records (retention_audits_days) and financial records (retention_billing_days)
-		// are strictly retained according to their own requirements (minimum 365 days / 2555 days).
-		// Expired conversations NEVER delete immutable audit logs or financial billing records.
+		// 3. Retention for audit logs (SEPARATE RETENTION CATEGORY)
+		// Prunes administrative audit records older than retention_audits_days
+		auditDays := org.RetentionAuditsDays
+		if auditDays > 0 && j.auditLogs != nil {
+			olderThan := now.Add(-time.Duration(auditDays) * 24 * time.Hour)
+			deleted, err := j.auditLogs.PurgeExpired(ctx, orgID, olderThan)
+			if err != nil {
+				j.log.ErrorContext(ctx, "retention: audit log purge failed", "org_id", orgID, "error", err)
+			} else if deleted > 0 {
+				j.log.InfoContext(ctx, "retention: pruned expired audit logs", "org_id", orgID, "count", deleted)
+			}
+		}
+
+		// 4. Retention for billing events (SEPARATE RETENTION CATEGORY)
+		// Prunes financial ledger records older than retention_billing_days
+		// Never deleted just because conversation or usage retention has expired!
+		billingDays := org.RetentionBillingDays
+		if billingDays > 0 && j.billingEvents != nil {
+			olderThan := now.Add(-time.Duration(billingDays) * 24 * time.Hour)
+			deleted, err := j.billingEvents.PurgeExpired(ctx, orgID, olderThan)
+			if err != nil {
+				j.log.ErrorContext(ctx, "retention: billing event purge failed", "org_id", orgID, "error", err)
+			} else if deleted > 0 {
+				j.log.InfoContext(ctx, "retention: pruned expired billing events", "org_id", orgID, "count", deleted)
+			}
+		}
 	}
 
 	return nil

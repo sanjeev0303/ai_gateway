@@ -11,19 +11,23 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function ConversationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { conversations } = await getApiClient();
+  const { conversations, members } = await getApiClient();
 
   try {
-    const [conversation, messages] = await Promise.all([
+    const [conversation, messages, membersList] = await Promise.all([
       conversations.get(id),
       conversations.messages(id),
+      members.list().catch(() => ({ items: [] })),
     ]);
+
+    const member = membersList.items.find((m) => m.user.id === conversation.user_id);
+    const userName = member ? member.user.display_name || member.user.email : conversation.user_id;
 
     return (
       <div className="p-4 sm:p-6 space-y-6">
         <PageShell title={conversation.title || `Conversation ${id}`} description={`Detailed conversation trace.`}>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-6">
-          <StatCard label="User" value={conversation.user_id} />
+          <StatCard label="User" value={userName} />
           <StatCard label="Provider" value={conversation.provider ?? "—"} />
           <StatCard label="Model" value={conversation.model ?? "—"} />
           <StatCard label="Tokens" value={formatCompact(conversation.total_tokens)} />

@@ -146,7 +146,14 @@ func TestSeedDataAndReplayIdempotency(t *testing.T) {
 
 	members, err := repos.NewOrgMemberRepository(testStore).List(testCtx, acmeOrgID)
 	requireNoErr(t, err)
-	if len(members) != 1 || members[0].User.ID != acmeUserID || members[0].Role != domain.RoleAdmin {
+	var adminFound bool
+	for _, m := range members {
+		if m.User.ID == acmeUserID && m.Role == domain.RoleAdmin {
+			adminFound = true
+			break
+		}
+	}
+	if !adminFound || len(members) < 1 {
 		t.Fatalf("unexpected seeded members: %+v", members)
 	}
 

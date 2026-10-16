@@ -1,8 +1,8 @@
 import type { paths } from "@ai-governance/contracts";
 import { ApiError, parseErrorEnvelope } from "./errors";
 
-/** Any route literal declared in the OpenAPI contract. */
-export type ContractPath = keyof paths & string;
+/** Any route literal declared in the OpenAPI contract or extended endpoints. */
+export type ContractPath = (keyof paths & string) | (string & {});
 
 export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 

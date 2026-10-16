@@ -326,6 +326,18 @@ type IdempotencyKey struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+type InAppNotification struct {
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	AlertID        *uuid.UUID `json:"alert_id"`
+	AlertEventID   *uuid.UUID `json:"alert_event_id"`
+	Title          string     `json:"title"`
+	Message        string     `json:"message"`
+	Severity       string     `json:"severity"`
+	Read           bool       `json:"read"`
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
 type Invitation struct {
 	ID             uuid.UUID  `json:"id"`
 	OrganizationID uuid.UUID  `json:"organization_id"`
@@ -393,6 +405,12 @@ type LlmRequest struct {
 	TotalLatencyMs      *int32     `json:"total_latency_ms"`
 	ServiceAccountID    *uuid.UUID `json:"service_account_id"`
 	TeamID              *uuid.UUID `json:"team_id"`
+	ReasoningTokens     int32      `json:"reasoning_tokens"`
+	ToolTokens          int32      `json:"tool_tokens"`
+	PricingVersion      *int32     `json:"pricing_version"`
+	CostStatus          string     `json:"cost_status"`
+	PolicyDecision      *string    `json:"policy_decision"`
+	DenialReason        *string    `json:"denial_reason"`
 }
 
 type Model struct {

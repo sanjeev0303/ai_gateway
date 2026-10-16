@@ -8,9 +8,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"ai-governance-saas/backend/internal/application/identity"
+	"ai-governance-saas/backend/internal/domain"
 	perrors "ai-governance-saas/backend/internal/platform/errors"
 	"ai-governance-saas/backend/internal/platform/httpx"
+	"ai-governance-saas/backend/internal/ports/repositories"
 )
 
 const (
@@ -221,4 +225,32 @@ func retrySeconds(d time.Duration) string {
 		secs = 1
 	}
 	return strconv.Itoa(secs)
+}
+
+type switchOrganizationRequest struct {
+	OrganizationID string `json:"organization_id"`
+}
+
+func (a *api) switchOrg(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	if actor.Kind != domain.ActorKindUser {
+		writeServiceError(w, r, identity.ErrUnauthorized)
+		return
+	}
+	var req switchOrganizationRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	orgID, err := uuid.Parse(req.OrganizationID)
+	if err != nil {
+		writeServiceError(w, r, repositories.ErrInvalid)
+		return
+	}
+	session, err := a.svc.SwitchOrganization(r.Context(), actor.UserID, orgID)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	a.writeSession(w, session, http.StatusOK)
 }

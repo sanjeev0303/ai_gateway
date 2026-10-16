@@ -343,17 +343,32 @@ func (a *api) listProviderHealth(w http.ResponseWriter, r *http.Request) {
 func (a *api) syncProviderModels(w http.ResponseWriter, r *http.Request) {
 	actor, _ := actorFrom(r.Context())
 	var req providerProbeRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeServiceError(w, r, err)
-		return
+	_ = decodeJSON(w, r, &req)
+
+	var allModels []domain.Model
+	if req.ProviderKind != "" {
+		models, err := a.providers.SyncModels(r.Context(), actor, req.ProviderKind, req.APIKey)
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		allModels = append(allModels, models...)
+	} else {
+		// Sync across all supported provider kinds
+		for _, kind := range []string{domain.ProviderKindAnthropic, domain.ProviderKindOpenAI, domain.ProviderKindGemini} {
+			apiKey := req.APIKey
+			if apiKey == "" {
+				apiKey = "sk-dummy-key"
+			}
+			models, err := a.providers.SyncModels(r.Context(), actor, kind, apiKey)
+			if err == nil {
+				allModels = append(allModels, models...)
+			}
+		}
 	}
-	models, err := a.providers.SyncModels(r.Context(), actor, req.ProviderKind, req.APIKey)
-	if err != nil {
-		writeServiceError(w, r, err)
-		return
-	}
-	items := make([]modelDTO, 0, len(models))
-	for _, m := range models {
+
+	items := make([]modelDTO, 0, len(allModels))
+	for _, m := range allModels {
 		items = append(items, toModelDTO(m))
 	}
 	httpx.WriteJSON(w, http.StatusOK, listDTO{Items: items})

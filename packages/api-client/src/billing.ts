@@ -100,6 +100,10 @@ export interface BillingModule {
   getUsage(query?: UsageQuery, options?: RequestOptions): Promise<UsageSummary>;
   /** Invoices newest issued first, each with its itemisation lines. */
   listInvoices(options?: RequestOptions): Promise<ListResponse<Invoice>>;
+  /** Update the organization's plan. */
+  updateSubscription(planCode: string, options?: RequestOptions): Promise<Subscription>;
+  /** Cancel the subscription at the end of the current billing period. */
+  cancelSubscription(options?: RequestOptions): Promise<Subscription>;
 }
 
 export function createBillingModule(transport: Transport): BillingModule {
@@ -112,5 +116,16 @@ export function createBillingModule(transport: Transport): BillingModule {
         query: { from: query?.from, to: query?.to },
       }),
     listInvoices: (options) => transport.request<ListResponse<Invoice>>("/v1/billing/invoices", options),
+    updateSubscription: (planCode, options) =>
+      transport.request<Subscription>("/v1/billing/subscription", {
+        ...options,
+        method: "PUT",
+        body: { plan_code: planCode },
+      }),
+    cancelSubscription: (options) =>
+      transport.request<Subscription>("/v1/billing/subscription", {
+        ...options,
+        method: "DELETE",
+      }),
   };
 }

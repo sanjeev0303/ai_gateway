@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -46,6 +47,10 @@ func (f *fakeAuditRepo) Get(_ context.Context, orgID, id uuid.UUID) (domain.Audi
 		return domain.AuditLog{}, f.getErr
 	}
 	return f.record, nil
+}
+
+func (f *fakeAuditRepo) PurgeExpired(context.Context, uuid.UUID, time.Time) (int64, error) {
+	return 0, nil
 }
 
 func newAuditServer(t *testing.T, st *controlStubs, repo *fakeAuditRepo) *httptest.Server {

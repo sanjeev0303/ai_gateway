@@ -39,6 +39,21 @@ const (
 	MessageRoleTool      = "tool"
 )
 
+// Cost statuses mirroring CHECK in llm_requests.
+const (
+	CostStatusCalculated  = "calculated"
+	CostStatusUnavailable = "unavailable"
+	CostStatusFree        = "free"
+	CostStatusEstimated   = "estimated"
+)
+
+// Policy decisions mirroring CHECK in llm_requests.
+const (
+	PolicyDecisionAllowed = "allowed"
+	PolicyDecisionDenied  = "denied"
+	PolicyDecisionNone    = "none"
+)
+
 // LlmRequest is a normalized record of one gateway request to a provider.
 type LlmRequest struct {
 	ID                  uuid.UUID
@@ -57,9 +72,15 @@ type LlmRequest struct {
 	PromptTokens        int32
 	CompletionTokens    int32
 	CachedInputTokens   int32
+	ReasoningTokens     int32
+	ToolTokens          int32
 	TotalTokens         int32
 	LatencyMs           int32
 	CostMicros          int64
+	PricingVersion      *int32
+	CostStatus          string
+	PolicyDecision      *string
+	DenialReason        *string
 	CreatedAt           time.Time
 	RequestStartedAt    *time.Time
 	FirstTokenAt        *time.Time
@@ -109,10 +130,13 @@ type UsageSummary struct {
 	InputTokens     int64
 	OutputTokens    int64
 	CachedTokens    int64
+	ReasoningTokens int64
+	ToolTokens      int64
 	TotalTokens     int64
 	TotalCostMicros int64
 	Errors          int64
 	AvgLatencyMs    *float64
+	ActiveUsers     int64
 	LastActivityAt  time.Time
 }
 
@@ -235,9 +259,15 @@ type NewLlmRequest struct {
 	PromptTokens        int32
 	CompletionTokens    int32
 	CachedInputTokens   int32
+	ReasoningTokens     int32
+	ToolTokens          int32
 	TotalTokens         int32
 	LatencyMs           int32
 	CostMicros          int64
+	PricingVersion      *int32
+	CostStatus          string
+	PolicyDecision      *string
+	DenialReason        *string
 	CreatedAt           time.Time
 	RequestStartedAt    *time.Time
 	FirstTokenAt        *time.Time

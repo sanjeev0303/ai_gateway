@@ -87,8 +87,14 @@ const COLUMNS: readonly Column<CredentialRow>[] = [
 ];
 
 async function loadGatewayCredentials() {
-  const { credentials } = await getApiClient();
-  const list = await credentials.listGateway();
+  const { credentials, members, teams, projects, serviceAccounts } = await getApiClient();
+  const [list, memberList, teamList, projectList, saList] = await Promise.all([
+    credentials.listGateway(),
+    members.list().catch(() => ({ items: [] })),
+    teams.list().catch(() => ({ items: [] })),
+    projects.list().catch(() => ({ items: [] })),
+    serviceAccounts.list().catch(() => ({ items: [] })),
+  ]);
   const now = new Date();
   const windowEnd = now.getTime() + EXPIRY_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
@@ -143,17 +149,33 @@ async function loadGatewayCredentials() {
       tone: toneFor(CREDENTIAL_TONE, credential.status),
       expires: formatDate(credential.expires_at ?? ""),
     })),
+    members: (memberList.items || []).map((m: any) => ({
+      id: m.user.id,
+      name: m.user.display_name || m.user.email,
+      email: m.user.email,
+    })),
+    teams: (teamList.items || []).map((t: any) => ({ id: t.id, name: t.name })),
+    projects: (projectList.items || []).map((p: any) => ({ id: p.id, name: p.name })),
+    serviceAccounts: (saList.items || []).map((s: any) => ({ id: s.id, name: s.name })),
   };
 }
 
 export default async function GatewayCredentialsPage() {
-  const { rows, total, active, expiring, expired, schedule } = await loadGatewayCredentials();
+  const { rows, total, active, expiring, expired, schedule, members, teams, projects, serviceAccounts } = await loadGatewayCredentials();
 
   return (
     <div className="p-4 sm:p-6">
       <PageShell
         title="Gateway credentials"
         description="Keys the gateway accepts from callers, scoped to a subject and optionally to one team or project."
+        actions={
+          <CreateCredentialButton
+            members={members}
+            teams={teams}
+            projects={projects}
+            serviceAccounts={serviceAccounts}
+          />
+        }
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
@@ -198,7 +220,12 @@ export default async function GatewayCredentialsPage() {
               emptyMessage="No gateway credentials yet."
               toolbar={
                 <div className="flex justify-end mb-4">
-                  <CreateCredentialButton />
+                  <CreateCredentialButton
+                    members={members}
+                    teams={teams}
+                    projects={projects}
+                    serviceAccounts={serviceAccounts}
+                  />
                 </div>
               }
               ActionsComponent={CredentialActionsCell}

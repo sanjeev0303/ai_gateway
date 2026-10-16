@@ -48,6 +48,10 @@ func (f *recordingRequests) GetRequests(context.Context, uuid.UUID, domain.Usage
 	return nil, nil
 }
 
+func (f *recordingRequests) PurgeExpired(context.Context, uuid.UUID, time.Time) (int64, error) {
+	return 0, nil
+}
+
 func (f *recordingRequests) count() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()

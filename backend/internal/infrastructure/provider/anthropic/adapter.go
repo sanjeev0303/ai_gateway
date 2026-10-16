@@ -3,6 +3,8 @@ package anthropic
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"ai-governance-saas/backend/internal/domain"
 	"ai-governance-saas/backend/internal/ports/provider"
@@ -28,7 +30,13 @@ func (a *ProviderAdapter) ValidateCredentials(ctx context.Context, apiKey string
 	if err != nil {
 		return err
 	}
-	return client.ValidateCredentials(ctx, apiKey)
+	if err := client.ValidateCredentials(ctx, apiKey); err != nil {
+		if errors.Is(err, ErrInvalidAPIKey) {
+			return fmt.Errorf("%w: %w", ErrInvalidAPIKey, provider.ErrInvalidCredentials)
+		}
+		return err
+	}
+	return nil
 }
 
 // HealthCheck proves connectivity to Anthropic.

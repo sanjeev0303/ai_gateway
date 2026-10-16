@@ -23,6 +23,7 @@ import {
   microsToUsd,
 } from "@/lib/format";
 import { getApiClient } from "@/lib/session";
+import { ExportBillingUsageButton } from "./export-button";
 
 export const metadata: Metadata = {
   title: "Usage · Sentinel",
@@ -177,6 +178,7 @@ export default async function BillingUsagePage() {
         title="Usage"
         description="Metered consumption recorded against this organization over the trailing 30 days."
         eyebrow={<p className="text-xs text-muted-foreground">{subscriptionLine}</p>}
+        actions={<ExportBillingUsageButton summary={summary} />}
       >
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard

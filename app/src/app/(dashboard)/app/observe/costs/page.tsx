@@ -107,7 +107,7 @@ async function loadCosts(
     status?: string;
   },
 ) {
-  const { usage, teams, projects } = await getApiClient();
+  const { usage, teams, projects, members } = await getApiClient();
 
   const now = Date.now();
   const ms = RANGE_MS[range];
@@ -125,6 +125,7 @@ async function loadCosts(
     byUser,
     teamList,
     projectList,
+    membersList,
   ] = await Promise.all([
     usage.summary(current),
     usage.summary(previous),
@@ -136,6 +137,7 @@ async function loadCosts(
     usage.byUser(current),
     teams.list(),
     projects.list(),
+    members.list().catch(() => ({ items: [] })),
   ]);
 
   return {
@@ -149,6 +151,7 @@ async function loadCosts(
     byUser,
     teamNames: new Map(teamList.items.map((team) => [team.id, team.name])),
     projectNames: new Map(projectList.items.map((project) => [project.id, project.name])),
+    userNames: new Map(membersList.items.map((m) => [m.user.id, m.user.display_name || m.user.email])),
   };
 }
 
@@ -181,6 +184,7 @@ export default async function CostsPage({
     byUser,
     teamNames,
     projectNames,
+    userNames,
   } = await loadCosts(range, filters);
 
   const spend = microsToUsd(summary.TotalCostMicros);
@@ -262,7 +266,7 @@ export default async function CostsPage({
     const shareFraction = totalByUser > 0 ? cost / totalByUser : 0;
     return {
       id: row.UserID,
-      name: row.UserID,
+      name: userNames.get(row.UserID) ?? row.UserID,
       href: `/app/observe/users/${encodeURIComponent(row.UserID)}`,
       calls: row.Requests,
       tokens: row.TotalTokens,

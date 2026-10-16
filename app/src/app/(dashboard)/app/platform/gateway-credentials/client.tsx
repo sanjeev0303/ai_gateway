@@ -140,9 +140,47 @@ export function GatewayCredentialActions({ credential }: { credential: any }) {
   );
 }
 
-export function CreateCredentialButton() {
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+export interface CreateCredentialButtonProps {
+  members?: Array<{ id: string; name: string; email: string }>;
+  serviceAccounts?: Array<{ id: string; name: string }>;
+  teams?: Array<{ id: string; name: string }>;
+  projects?: Array<{ id: string; name: string }>;
+  currentUserId?: string;
+}
+
+export function CreateCredentialButton({
+  members = [],
+  serviceAccounts = [],
+  teams = [],
+  projects = [],
+  currentUserId,
+}: CreateCredentialButtonProps) {
   const [open, setOpen] = React.useState(false);
   const [secret, setSecret] = React.useState<string | null>(null);
+
+  const [subjectType, setSubjectType] = React.useState<"user" | "service_account">("user");
+  const [subjectId, setSubjectId] = React.useState(
+    currentUserId || members[0]?.id || serviceAccounts[0]?.id || ""
+  );
+  const [teamId, setTeamId] = React.useState<string>("none");
+  const [projectId, setProjectId] = React.useState<string>("none");
+  const [expiryOption, setExpiryOption] = React.useState<string>("90");
+
+  React.useEffect(() => {
+    if (subjectType === "user") {
+      setSubjectId(currentUserId || members[0]?.id || "");
+    } else {
+      setSubjectId(serviceAccounts[0]?.id || "");
+    }
+  }, [subjectType, currentUserId, members, serviceAccounts]);
 
   if (secret) {
     return (
@@ -155,8 +193,8 @@ export function CreateCredentialButton() {
           }
         }}
         secret={secret}
-        title="Credential Created"
-        description="Copy your new secret key now. It will not be shown again. It cannot be recovered later."
+        title="Gateway Credential Created"
+        description="Copy your new secret key now. It will not be shown again and cannot be recovered."
       />
     );
   }
@@ -172,49 +210,163 @@ export function CreateCredentialButton() {
         open={open}
         onOpenChange={setOpen}
         title="Create Gateway Credential"
-        description="Issue a new key for workloads to call the gateway."
+        description="Issue a new API key for callers to invoke models through the Sentinel gateway."
         action={createGatewayCredential}
-        submitLabel="Create"
+        submitLabel="Create Key"
         onSuccess={(state: unknown) => {
           const result = state as CreateCredentialState;
           if (result?.secret) setSecret(result.secret);
         }}
       >
-        <div className="grid gap-4">
+        <div className="grid gap-4 py-2">
           <div className="grid gap-2">
-            <Label htmlFor="name">Name</Label>
-            <Input id="name" name="name" placeholder="e.g. Production API" required />
+            <Label htmlFor="name">Credential Name</Label>
+            <Input id="name" name="name" placeholder="e.g. My Dev Key, Ingestion Worker" required />
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="subject_type">Subject Type</Label>
-              <Input id="subject_type" name="subject_type" placeholder="e.g. service_account" required />
+              <Label>Identity Type</Label>
+              <Select
+                value={subjectType}
+                onValueChange={(val: "user" | "service_account") => setSubjectType(val)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">Human Employee (User)</SelectItem>
+                  <SelectItem value="service_account">Service Account (Machine)</SelectItem>
+                </SelectContent>
+              </Select>
+              <input type="hidden" name="subject_type" value={subjectType} />
             </div>
+
             <div className="grid gap-2">
-              <Label htmlFor="subject_id">Subject ID</Label>
-              <Input id="subject_id" name="subject_id" required />
+              <Label>Subject Identity</Label>
+              {subjectType === "user" ? (
+                members.length > 0 ? (
+                  <Select value={subjectId} onValueChange={setSubjectId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select member" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {members.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.name} ({m.email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    name="subject_id"
+                    value={subjectId}
+                    onChange={(e) => setSubjectId(e.target.value)}
+                    placeholder="User ID UUID"
+                    required
+                  />
+                )
+              ) : serviceAccounts.length > 0 ? (
+                <Select value={subjectId} onValueChange={setSubjectId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select service account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {serviceAccounts.map((sa) => (
+                      <SelectItem key={sa.id} value={sa.id}>
+                        {sa.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  name="subject_id"
+                  value={subjectId}
+                  onChange={(e) => setSubjectId(e.target.value)}
+                  placeholder="Service Account UUID"
+                  required
+                />
+              )}
+              <input type="hidden" name="subject_id" value={subjectId} />
             </div>
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="scopes">Scopes (comma-separated)</Label>
-            <Input id="scopes" name="scopes" placeholder="e.g. models.invoke, audit.read" />
-          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="team_id">Team ID (Optional)</Label>
-              <Input id="team_id" name="team_id" placeholder="Optional" />
+              <Label>Team Scope (Optional)</Label>
+              <Select value={teamId} onValueChange={setTeamId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Organization-wide" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None (Organization-wide)</SelectItem>
+                  {teams.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <input type="hidden" name="team_id" value={teamId === "none" ? "" : teamId} />
             </div>
+
             <div className="grid gap-2">
-              <Label htmlFor="project_id">Project ID (Optional)</Label>
-              <Input id="project_id" name="project_id" placeholder="Optional" />
+              <Label>Project Scope (Optional)</Label>
+              <Select value={projectId} onValueChange={setProjectId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All projects" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None (All projects)</SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <input type="hidden" name="project_id" value={projectId === "none" ? "" : projectId} />
             </div>
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="expiry_days">Expiry (days)</Label>
-            <Input id="expiry_days" name="expiry_days" type="number" placeholder="Optional" min={1} />
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="scopes">Permitted Scopes</Label>
+              <Input
+                id="scopes"
+                name="scopes"
+                defaultValue="gateway"
+                placeholder="e.g. gateway"
+                required
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Expiration</Label>
+              <Select value={expiryOption} onValueChange={setExpiryOption}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select expiry" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">30 days</SelectItem>
+                  <SelectItem value="60">60 days</SelectItem>
+                  <SelectItem value="90">90 days</SelectItem>
+                  <SelectItem value="365">1 year (365 days)</SelectItem>
+                  <SelectItem value="never">Never expires</SelectItem>
+                </SelectContent>
+              </Select>
+              <input
+                type="hidden"
+                name="expiry_days"
+                value={expiryOption === "never" ? "" : expiryOption}
+              />
+            </div>
           </div>
         </div>
       </FormDialog>
     </>
   );
 }
+

@@ -116,19 +116,40 @@ func TestProviderRouter_Route_OpenAIConvertsToBearer(t *testing.T) {
 func TestProviderRouter_Route_UnknownKindPassthrough(t *testing.T) {
 	r := testRouter(t)
 	upstream := ResolvedUpstream{
-		ProviderAccount: ProviderAccount{ProviderKind: "gemini"},
-		UpstreamKey:     "sk-gem-test",
+		ProviderAccount: ProviderAccount{ProviderKind: "cohere"},
+		UpstreamKey:     "sk-coh-test",
 	}
 
 	_, headers, err := r.Route(context.Background(), upstream, InspectorHints{})
 	requireNoErr(t, err)
 
 	// Unknown providers keep the generic header shape untouched.
-	if headers.Get("x-api-key") != "sk-gem-test" {
+	if headers.Get("x-api-key") != "sk-coh-test" {
 		t.Fatalf("expected x-api-key passthrough, got %q", headers.Get("x-api-key"))
 	}
 	if headers.Get("Authorization") != "" {
 		t.Fatalf("expected no Authorization header, got %q", headers.Get("Authorization"))
+	}
+}
+
+func TestProviderRouter_Route_Gemini(t *testing.T) {
+	r := testRouter(t)
+	upstream := ResolvedUpstream{
+		ProviderAccount: ProviderAccount{ProviderKind: "gemini"},
+		UpstreamKey:     "AIzaSyTestKey",
+	}
+
+	url, headers, err := r.Route(context.Background(), upstream, InspectorHints{})
+	requireNoErr(t, err)
+
+	if headers.Get("x-goog-api-key") != "AIzaSyTestKey" {
+		t.Fatalf("expected x-goog-api-key, got %q", headers.Get("x-goog-api-key"))
+	}
+	if headers.Get("x-api-key") != "" {
+		t.Fatalf("expected no x-api-key header, got %q", headers.Get("x-api-key"))
+	}
+	if !strings.Contains(url, "googleapis.com") {
+		t.Fatalf("expected googleapis.com in url, got %q", url)
 	}
 }
 
