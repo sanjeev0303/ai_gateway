@@ -67,9 +67,9 @@ func (r *organizationRepo) Update(ctx context.Context, id uuid.UUID, input domai
 	var org domain.Organization
 	err := r.store.WithTx(ctx, func(q *db.Queries) error {
 		row, err := q.UpdateOrganization(ctx, db.UpdateOrganizationParams{
-			ID:   id,
-			Name: input.Name,
-			Slug: input.Slug,
+			ID:                         id,
+			Name:                       input.Name,
+			Slug:                       input.Slug,
 			PrivacyDefault:             input.PrivacyDefault,
 			RetentionConversationsDays: input.RetentionConversationsDays,
 			RetentionUsageDays:         input.RetentionUsageDays,

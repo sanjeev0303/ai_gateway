@@ -111,19 +111,19 @@ type invitationDTO struct {
 }
 
 type organizationDTO struct {
-	ID        string                  `json:"id"`
-	Name      string                  `json:"name"`
-	Slug      string                  `json:"slug"`
-	Status    string                  `json:"status"`
-	CreatedAt string                  `json:"created_at"`
+	ID                         string                  `json:"id"`
+	Name                       string                  `json:"name"`
+	Slug                       string                  `json:"slug"`
+	Status                     string                  `json:"status"`
+	CreatedAt                  string                  `json:"created_at"`
 	UpdatedAt                  string                  `json:"updated_at"`
 	PrivacyDefault             string                  `json:"privacy_default"`
 	RetentionConversationsDays int                     `json:"retention_conversations_days"`
 	RetentionUsageDays         int                     `json:"retention_usage_days"`
 	RetentionAuditsDays        int                     `json:"retention_audits_days"`
 	RetentionBillingDays       int                     `json:"retention_billing_days"`
-	Plan      *organizationPlanDTO    `json:"plan"`
-	Billing   *organizationBillingDTO `json:"billing"`
+	Plan                       *organizationPlanDTO    `json:"plan"`
+	Billing                    *organizationBillingDTO `json:"billing"`
 }
 
 type organizationPlanDTO struct {
@@ -280,7 +280,6 @@ type updateTeamRequest struct {
 	Description *string `json:"description"`
 }
 
-
 type addMemberRequest struct {
 	UserID string `json:"user_id"`
 	Role   string `json:"role"`
@@ -364,11 +363,11 @@ func toProjectDTO(p domain.Project) projectDTO {
 
 func toOrganizationDTO(o domain.Organization, plan *domain.OrganizationPlan) organizationDTO {
 	dto := organizationDTO{
-		ID:        o.ID.String(),
-		Name:      o.Name,
-		Slug:      o.Slug,
-		Status:    o.Status,
-		CreatedAt: ts(o.CreatedAt),
+		ID:                         o.ID.String(),
+		Name:                       o.Name,
+		Slug:                       o.Slug,
+		Status:                     o.Status,
+		CreatedAt:                  ts(o.CreatedAt),
 		UpdatedAt:                  ts(o.UpdatedAt),
 		PrivacyDefault:             string(o.PrivacyDefault),
 		RetentionConversationsDays: o.RetentionConversationsDays,
@@ -1162,14 +1161,14 @@ func (a *api) revokeCredential(w http.ResponseWriter, r *http.Request) {
 type searchResultType string
 
 const (
-	SearchTypeRequest        searchResultType = "request"
-	SearchTypeUser           searchResultType = "user"
-	SearchTypeTeam           searchResultType = "team"
-	SearchTypeProject        searchResultType = "project"
-	SearchTypePolicy         searchResultType = "policy"
-	SearchTypeModel          searchResultType = "model"
-	SearchTypeProvider       searchResultType = "provider"
-	SearchTypeConversation   searchResultType = "conversation"
+	SearchTypeRequest           searchResultType = "request"
+	SearchTypeUser              searchResultType = "user"
+	SearchTypeTeam              searchResultType = "team"
+	SearchTypeProject           searchResultType = "project"
+	SearchTypePolicy            searchResultType = "policy"
+	SearchTypeModel             searchResultType = "model"
+	SearchTypeProvider          searchResultType = "provider"
+	SearchTypeConversation      searchResultType = "conversation"
 	SearchTypeGatewayCredential searchResultType = "gateway_credential"
 )
 
@@ -1187,9 +1186,9 @@ type searchResponse struct {
 }
 
 type searchRequest struct {
-	Query  string   `json:"q" form:"q"`
-	Types  []string `json:"types" form:"types"`
-	Limit  int      `json:"limit" form:"limit"`
+	Query string   `json:"q" form:"q"`
+	Types []string `json:"types" form:"types"`
+	Limit int      `json:"limit" form:"limit"`
 }
 
 func (a *api) search(w http.ResponseWriter, r *http.Request) {

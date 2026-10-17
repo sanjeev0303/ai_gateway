@@ -331,7 +331,7 @@ func TestConversationRoutesRequireAuth(t *testing.T) {
 
 func TestConversationMessagesRedacted(t *testing.T) {
 	st := newControlStubs()
-	
+
 	msg := &fakeMessageRepo{
 		messages: []domain.ConversationMessage{
 			{ID: uuid.New(), Role: "user", Content: "Hello"},
@@ -339,7 +339,7 @@ func TestConversationMessagesRedacted(t *testing.T) {
 		},
 	}
 	conv := &fakeConversationRepo{detail: domain.ConversationSummary{ID: uuid.New(), StartedAt: testNow}}
-	
+
 	// Test METADATA_ONLY (hides both user and assistant)
 	_, body := getConv(t, st, conv, msg, domain.PrivacyMetadataOnly, "/v1/conversations/"+uuid.New().String()+"/messages")
 	if strings.Contains(body, "Hello") || strings.Contains(body, "Hi") {
@@ -382,4 +382,3 @@ func TestSubjectAccessControlForbiddenForOtherUser(t *testing.T) {
 		t.Errorf("expected 403 Forbidden for another user's conversation messages, got %d", respMsg.StatusCode)
 	}
 }
-

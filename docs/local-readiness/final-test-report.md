@@ -4,7 +4,7 @@
 
 - **Evaluation Date**: 2026-10-17
 - **Final Verdict**: **`READY WITH DOCUMENTED LIMITATIONS`**
-- **Repository Revision / Commit**: `c8e84d888846ff62d411b7a580cd391059e371c5`
+- **Repository Revision / Commit**: `c8e84d8`
 - **Git Branch**: `main`
 - **Environment**:
   - **OS / Kernel**: Linux fedora 6.19.14-108.fc42.x86_64
@@ -28,6 +28,7 @@
 | **Static Analysis** | `go vet ./...` | `backend/` | `0` | **PASS** |
 | **Go Unit Tests** | `go test ./...` | `backend/` & `packages/cli` | `0` | **PASS** |
 | **Integration Test Suite** | `go test -v ./internal/interfaces/controlapi` | `backend/` | `0` | **PASS** |
+| **Durable Event Lifecycle** | `go test -v ./internal/interfaces/worker/` | `backend/` | `0` | **PASS** (10/10) |
 | **Race Detector** | `go test -race ./internal/...` | `backend/` | `0` | **PASS** |
 | **Frontend Linter** | `npm run lint` | `app/` | `0` | **PASS** |
 | **TypeScript Typecheck** | `npm run typecheck` | `app/` | `0` | **PASS** |
@@ -104,13 +105,13 @@
 | Category | Passed | Failed | Blocked | Skipped / Not Tested | Total |
 |---|---|---|---|---|---|
 | **Core Platform & Auth** | 4 | 0 | 0 | 1 (Enterprise SAML) | 5 |
-| **Gateway & Routing** | 6 | 0 | 1 (Live Cloud Key) | 0 | 7 |
+| **Gateway & Routing** | 7 | 0 | 1 (Live Cloud Key) | 0 | 8 |
 | **Governance & Policies** | 5 | 0 | 0 | 0 | 5 |
 | **Guardrails & Security** | 4 | 0 | 0 | 0 | 4 |
-| **Observability & Usage** | 8 | 0 | 0 | 0 | 8 |
+| **Observability & Usage** | 9 | 0 | 0 | 0 | 9 |
 | **Organization & Billing** | 6 | 0 | 0 | 0 | 6 |
 | **Client Tooling (SDK/CLI)** | 4 | 0 | 0 | 0 | 4 |
-| **Total Capabilities** | **37** | **0** | **1** | **1** | **39** |
+| **Total Capabilities** | **39** | **0** | **1** | **1** | **41** |
 
 ---
 

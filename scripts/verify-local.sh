@@ -157,7 +157,8 @@ check_service_readiness() {
 
     # Check Redis
     if docker ps --format '{{.Names}}' | grep -q 'ai-gateway-redis-1'; then
-        docker exec ai-gateway-redis-1 redis-cli -a change-me ping >/dev/null 2>&1 || {
+        local redis_pass="${AIGW_REDIS_PASSWORD:-${REDIS_PASSWORD:-change-me}}"
+        docker exec -e REDISCLI_AUTH="$redis_pass" ai-gateway-redis-1 redis-cli ping >/dev/null 2>&1 || {
             echo "Redis ping check failed." >&2
             return 1
         }

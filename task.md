@@ -2,7 +2,88 @@
 
 Updated after each completed prompt.
 
-## COMPLETED TASK: Git Commit and Push to GitHub on Explicit User Command
+## CURRENT TASK: Git Commit and Push
+- [ ] Step 1: Stage modified and untracked repository changes.
+- [ ] Step 2: Commit staged changes with descriptive message.
+- [ ] Step 3: Push commits to remote origin main branch.
+
+## COMPLETED TASK: Phase J — Full Regression and Recovery Tests
+- [x] Step 1: Go Test Suite, Formatting, Vetting & Race: run `gofmt`, `go vet`, `go test ./...`, and `go test -race` across backend packages.
+- [x] Step 2: Frontend Validation: run `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` in `app/`.
+- [x] Step 3: SDK & CLI Test Suites: execute test suites in `packages/api-client` and `packages/cli`.
+- [x] Step 4: Database Migrations, API Contracts & Multi-Tenant Isolation: validate migrations, auth, tenant isolation, and contract tests.
+- [x] Step 5: Gateway, Usage, Cost & Worker Recovery Tests: run gateway integration, rate limiting/budget recovery, and durable worker tests.
+- [x] Step 6: End-to-End Suite & Final Verification: run `go run ./cmd/e2e`, `./scripts/verify-local.sh`, and `go run ./cmd/perf`.
+- [x] Step 7: Final Deliverables: update `docs/local-readiness/final-test-report.md`, `docs/local-readiness/remaining-gaps.md`, `docs/local-readiness/local-runbook.md`, and `docs/local-readiness/known-limitations.md`, assign final status (`READY WITH DOCUMENTED LIMITATIONS`), and update `task.md`.
+
+## COMPLETED TASK: Phase I — Test Three Users Through SDK and CLI
+- [x] Step 1: Fixture Setup & Secret Protection: create 1 organization, 3 independent users with separate Sentinel credentials, explicit model access rules, and budget settings; verify employee credentials never contain provider master API keys.
+- [x] Step 2: SDK & CLI Inference Protocol Verification: verify requests through CLI (`packages/cli`) and SDK (`packages/api-client`) across all 3 users (non-streaming, streaming SSE, valid/invalid models) authenticating with individual Sentinel keys.
+- [x] Step 3: Multi-Dimension Attribution & Analytics: verify usage, token counts, latency, and cost attribution per user/org/project across `/v1/usage/*` and Next.js analytics views.
+- [x] Step 4: Authorization, Isolation & Credential Revocation: verify subject-level isolation (users cannot access another user's requests/history without permission) and immediate 401 revocation enforcement without affecting other users.
+- [x] Step 5: Deterministic Fixtures & Live Gemini Smoke Test: support deterministic mock responses for CI/repeatable testing, and execute a live Gemini smoke test when `GEMINI_API_KEY` is provided.
+- [x] Step 6: Automated Testing & Deliverables: update `backend/cmd/e2e/gemini_master_execution.go`, add unit/regression test `backend/internal/interfaces/controlapi/three_user_fixture_test.go`, execute verification suite, update `task.md`, and document in `docs/local-readiness/three-user-sdk-cli-verification.md` and `docs/local-readiness/final-test-report.md`.
+
+## PREVIOUS TASK: Phase H — Verify the Frontend and Dashboard
+- [x] Step 1: Frontend Route & Layout Audit: audit Next.js routes under `app/src/app/(dashboard)/app/` (Overview, Observe, Govern, Security, Platform, Organization, Billing, Developer), navigation links, and redirects.
+- [x] Step 2: Widget Resilience & Isolation: verify loading, empty, error, and populated states; ensure error boundaries or try/catch blocks prevent one failed widget from blanking unrelated widgets.
+- [x] Step 3: API Contract & Data Consistency: verify data formatting and agreement between backend JSON envelopes (`/v1/usage/*`, `/v1/audit-logs`, `/v1/alerts`, `/v1/guardrails`, `/v1/conversations`) and UI components (charts, token counts, cost micro-dollars, request history, guardrails, alerts).
+- [x] Step 4: Filtering, Pagination & Authorization: test date filtering, pagination controls, search parameters, and role-based view enforcement.
+- [x] Step 5: Automated Testing & Deliverables: execute frontend test suite (`npm run typecheck`, `npm test`, `npm run build`), verify e2e UI tests (`cmd/e2e`), update `task.md`, and document verification results in `docs/local-readiness/frontend-dashboard-verification.md`.
+
+## PREVIOUS TASK: Phase G — Verify Policies, Guardrails, and Alerts
+- [x] Step 1: Policy Management & Model Access: audit and test policy CRUD (creation, editing, enabling, disabling, deletion), allow/deny rule precedence, model access restrictions, and gateway cache invalidation timebounds (<10ms).
+- [x] Step 2: Guardrails Pipeline: verify pre-forwarding blocking for PII, secrets, unsafe keywords, and prompt length; confirm zero upstream calls on violation and security event recording.
+- [x] Step 3: Budgets & Rate Limits: verify concurrent sliding window rate limits (50 concurrent workers) and budget guard zero-accrual on rejection.
+- [x] Step 4: Alerts Engine & Incident Persistence: verify alert rules trigger strictly on real conditions (spend thresholds, error rate, provider failures, policy violations); verify repeat suppression, auto-recovery resolution, and timestamp persistence.
+- [x] Step 5: Audit Events & Tenant Isolation: verify immutable audit trail triggers, sensitive token redaction, and multi-tenant isolation across policies, alerts, and audit endpoints.
+- [x] Step 6: Automated Testing & Deliverables: add `backend/internal/application/policy/service_test.go`, execute verification tests, and update `task.md`.
+
+## PREVIOUS TASK: Phase F — Verify Event Processing and Durable Usage
+- [x] Step 1: Event Bus & Worker Pipeline Audit: audit publisher in `gatewayv2/telemetry_emitter.go`, `telemetry_sink.go`, `nats_publisher.go`, and consumer in `backend/internal/interfaces/worker/` and repositories for ack semantics, deduplication, backoff retries, dead-letter/unrecoverable event observability, and queue groups.
+- [x] Step 2: Durable Idempotency & Aggregation Verification: verify that duplicate events (same `request_id`) are deduplicated at ingestion and in rollup tables (`ON CONFLICT DO NOTHING` / unique constraint), and verify reconciliation between request records and org/user rollup aggregates.
+- [x] Step 3: Outage & Recovery Lifecycle Verification: verify worker restarts, NATS restarts (spooling / buffer drain), temporary DB outages, and retry limits with exponential backoff.
+- [x] Step 4: Multi-Tenant Attribution & Analytics Cache Isolation: verify Redis analytics caching keys (`aigw:analytics:<orgID>:...`), TTLs, and cross-tenant isolation.
+- [x] Step 5: Verification & Deliverables: write automated regression/recovery tests in `backend/internal/interfaces/worker/`, execute full test suite, update `task.md`, and document findings in `docs/local-readiness/durable-event-processing.md`.
+
+## PREVIOUS TASK: Phase E — Complete the End-to-End Request Lifecycle
+- [x] Step 1: Provider Adapters & Gateway Pipeline Audit: audit OpenAI, Anthropic, and Gemini implementations in `backend/internal/infrastructure/provider/*`, `gatewayv2/stream_proxy.go`, `gateway.go`, and `inspector.go` for auth retrieval, model validation, request/response translation, streaming/non-streaming, token accounting, error handling, and cancellation.
+- [x] Step 2: Protocol Translation & Token Accounting Hardening: verify and fix parsing of provider-specific usage payloads (e.g. Gemini `usageMetadata`, OpenAI `usage`, Anthropic `message_delta`/`message_start`), missing usage metadata fallbacks, and cost calculations.
+- [x] Step 3: Stream Interruption, Timeout & Error Lifecycle: ensure client disconnects (`context.Canceled`), timeouts, and malformed provider chunks cancel upstream calls, finalize reserved budgets, and record attribution with appropriate status/error codes.
+- [x] Step 4: Comprehensive Multi-Provider Test Suite: write deterministic mock-server tests covering all 3 providers (OpenAI, Anthropic, Gemini) across streaming/non-streaming, valid/invalid models, 429/500 errors, client disconnects, missing usage metadata, correlation IDs, latency tracking, policy/guardrail enforcement, and persistence.
+- [x] Step 5: Verification & Deliverables: execute tests (`go test ./...`, `./scripts/verify-local.sh`), update `task.md`, and document findings in `docs/local-readiness/provider-lifecycle-matrix.md`.
+
+## PREVIOUS TASK: Phase D — Harden the Local Environment
+- [x] Step 1: Configuration & Secret Audit: audit `deploy/compose/docker-compose.yml`, `.env.example`, `config.go`, and diagnostics for placeholder secret detection, missing configs, never printing secret values, and dev-bypass opt-in flags.
+- [x] Step 2: Auth, CSRF & Lifecycle Verification: audit and verify CSRF protection, session expiry, logout revocation, and credential revocation behavior.
+- [x] Step 3: Script & Database Guarding: audit startup and migration scripts (`dev-ctl.sh`, `verify-local.sh`, `migrate`, `seed`) to ensure explicit confirmation on destructive resets, correct checkout/endpoints testing, and clean readiness probes.
+- [x] Step 4: Automated Testing: add tests for configuration validation, authentication lifecycle, startup failures, and safe setup scripts.
+- [x] Step 5: Verification & Deliverables: run full verification suite (`./scripts/verify-local.sh`, `go test ./...`), update `task.md`, and document security posture in `docs/local-readiness/local-security-hardening.md`.
+
+## PREVIOUS TASK: Phase C — Fix Rate-Limit Behavior
+- [x] Step 1: Inspect `redis_rate_limiter.go`, `rate_limiter.go`, `gateway.go`, and `bootstrap/run.go`: audit key derivation, Redis usage, fallback behavior, failure modes, and header spoofing protections.
+- [x] Step 2: Implement robust rate limiting: ensure authentic credential scope binding, explicit documented degraded/fail-closed policy when Redis is unavailable, correct Redis sliding window Lua script, counter TTLs, and reject header spoofing.
+- [x] Step 3: Attribution & usage integrity: ensure rejected 429 requests are attributed and recorded in security/audit logs without creating false provider token/spend usage.
+- [x] Step 4: Write comprehensive tests: concurrency, window expiration, Redis outage & recovery, degraded mode guarantees, key revocation, and cross-user/cross-org isolation.
+- [x] Step 5: Verify regression tests and full test suite (`go test ./...`, `./scripts/verify-local.sh`).
+- [x] Step 6: Update documentation & task tracker: update `task.md`, `docs/local-readiness/feature-matrix.md`.
+
+## PREVIOUS TASK: Phase B — Fix Budget Enforcement
+- [x] Step 1: Design & Architecture: define source of truth, reservation lifecycle (reserve, finalize, release, timeout expiry), Redis store with in-memory fallback, and idempotency guarantees.
+- [x] Step 2: Update `BudgetGuard` interface and implementation: add atomic reservation with request ID tracking, Redis integration with in-memory fallback, abandoned reservation expiry, and duplicate event deduplication.
+- [x] Step 3: Wire `BudgetGuard` in `gateway.go` and `bootstrap/run.go`: pass `redisClient` and SpendLoader, execute `Reserve` in Stage 7 before upstream forwarding, and finalize/release in stream handling.
+- [x] Step 4: Write comprehensive tests covering all required scenarios: below/at/above limit, concurrent competition, gateway restart, duplicate events, failed/interrupted provider calls, reservation expiration, cross-org isolation, and persistence outages.
+- [x] Step 5: Verify regression tests and full test suite (`go test ./...`, `./scripts/verify-local.sh`).
+- [x] Step 6: Deliverables & documentation update: update `task.md`, `docs/local-readiness/feature-matrix.md`.
+
+## PREVIOUS TASK: Phase A — Establish the Actual Baseline
+- [x] Step 1: Structural & Entry Point Inventory: inspect repo layout, git status, compose files, env examples, migrations, and exact entry points (Web UI, Control API, Gateway v2, Worker, SDK, CLI).
+- [x] Step 2: Implementation & Engine Audit: audit budget enforcement, rate limiting, policy resolution, usage recording, event handling, and analytics pipelines.
+- [x] Step 3: Comprehensive Test Execution: run all available test suites, record exact commands, exit codes, durations, and outputs (Go vet/tests/race, Frontend lint/typecheck/tests/build, SDK tests, CLI tests, E2E journeys, and performance benchmarks).
+- [x] Step 4: Capability Classification & Gap Reconciliation: categorize features across PASS, FAIL, PARTIAL, BLOCKED, and NOT TESTED against current source code.
+- [x] Step 5: Deliverables: update `docs/local-readiness/current-state.md`, `docs/local-readiness/feature-matrix.md`, `docs/local-readiness/baseline-test-results.md`, and `docs/local-readiness/risk-register.md`, then update `task.md`.
+
+## PREVIOUS TASK: Git Commit and Push to GitHub on Explicit User Command
 - [x] Step 1: Stage verified modifications and untracked readiness files (`git add -A`)
 - [x] Step 2: Commit changes with descriptive message (`b1b39d9`)
 - [x] Step 3: Push to remote repository (`git push origin main`)

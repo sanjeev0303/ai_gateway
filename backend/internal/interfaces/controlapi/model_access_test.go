@@ -17,13 +17,13 @@ var (
 )
 
 var testModelAccessEntry = domain.ModelAccessEntry{
-	Provider: "anthropic",
-	Model:    "claude-3-5-sonnet",
-	Allowed:  true,
-	Source:   "allowlist",
-	PolicyID: testPolicyID,
-	RuleID:   testRuleID,
-	Priority: 50,
+	Provider:  "anthropic",
+	Model:     "claude-3-5-sonnet",
+	Allowed:   true,
+	Source:    "allowlist",
+	PolicyID:  testPolicyID,
+	RuleID:    testRuleID,
+	Priority:  50,
 	Effective: true,
 }
 
@@ -202,16 +202,16 @@ func TestModelAccessPreview(t *testing.T) {
 		t.Fatalf("got %d, want 200", resp.StatusCode)
 	}
 	var body struct {
-		Provider          string `json:"provider"`
-		Model             string `json:"model"`
-		CurrentDecision   string `json:"current_decision"`
-		PreviewDecision   string `json:"preview_decision"`
-		WouldChange       bool   `json:"would_change"`
-		BlockingRules     []struct {
+		Provider        string `json:"provider"`
+		Model           string `json:"model"`
+		CurrentDecision string `json:"current_decision"`
+		PreviewDecision string `json:"preview_decision"`
+		WouldChange     bool   `json:"would_change"`
+		BlockingRules   []struct {
 			Provider string `json:"provider"`
 			Model    string `json:"model"`
 		} `json:"blocking_rules"`
-		AllowingRules     []struct {
+		AllowingRules []struct {
 			Provider string `json:"provider"`
 			Model    string `json:"model"`
 		} `json:"allowing_rules"`

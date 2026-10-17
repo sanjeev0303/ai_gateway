@@ -421,7 +421,7 @@ ORDER BY total_samples DESC;
 -- name: PurgeExpiredUsageEvents :execrows
 DELETE FROM usage_events
 WHERE organization_id = sqlc.arg(organization_id)
-  AND timestamp < sqlc.arg(older_than)::timestamptz;
+  AND created_at < sqlc.arg(older_than)::timestamptz;
 
 -- name: PurgeExpiredLlmRequests :execrows
 DELETE FROM llm_requests

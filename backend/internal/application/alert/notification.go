@@ -17,11 +17,11 @@ import (
 
 // NotificationEvent represents the trigger of an alert.
 type NotificationEvent struct {
-	AlertID      uuid.UUID
-	AlertType    string
-	Severity     string
-	Message      string
-	Context      map[string]any
+	AlertID   uuid.UUID
+	AlertType string
+	Severity  string
+	Message   string
+	Context   map[string]any
 }
 
 // Notifier abstracts delivery mechanisms (in-app, email, webhook).

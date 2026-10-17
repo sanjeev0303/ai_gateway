@@ -112,6 +112,7 @@ func (s *stubPolicyRuleRepo) Update(context.Context, uuid.UUID, uuid.UUID, uuid.
 func (s *stubPolicyRuleRepo) Delete(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error {
 	panic("stubPolicyRuleRepo.Delete not configured")
 }
+
 type stubSecretStore struct {
 	values map[string]string
 	getErr error

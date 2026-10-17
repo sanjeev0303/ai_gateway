@@ -48,4 +48,3 @@ type EventBus interface {
 	Run(ctx context.Context, handle func(context.Context, UsageEventMessage) error) error
 	RunSecurity(ctx context.Context, handle func(context.Context, SecurityEventMessage) error) error
 }
-

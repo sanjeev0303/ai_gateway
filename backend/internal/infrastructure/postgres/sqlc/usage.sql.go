@@ -1355,7 +1355,7 @@ func (q *Queries) PurgeExpiredLlmRequests(ctx context.Context, arg PurgeExpiredL
 const purgeExpiredUsageEvents = `-- name: PurgeExpiredUsageEvents :execrows
 DELETE FROM usage_events
 WHERE organization_id = $1
-  AND timestamp < $2::timestamptz
+  AND created_at < $2::timestamptz
 `
 
 type PurgeExpiredUsageEventsParams struct {

@@ -14,10 +14,10 @@ import (
 
 type mockAlertRepo struct {
 	repositories.AlertRepository
-	alerts        map[uuid.UUID]domain.Alert
-	events        []domain.AlertEvent
-	lastStatus    string
-	triggeredID   uuid.UUID
+	alerts      map[uuid.UUID]domain.Alert
+	events      []domain.AlertEvent
+	lastStatus  string
+	triggeredID uuid.UUID
 }
 
 func newMockAlertRepo() *mockAlertRepo {
@@ -142,11 +142,11 @@ func TestAlertEvaluator_AllConditions(t *testing.T) {
 	orgID := uuid.New()
 
 	tests := []struct {
-		name          string
-		alertType     string
-		config        map[string]any
-		setup         func(*mockRollups, *mockHealthRepo, *mockSecurityEvents, *mockLlmRequests)
-		wantTrigger   bool
+		name        string
+		alertType   string
+		config      map[string]any
+		setup       func(*mockRollups, *mockHealthRepo, *mockSecurityEvents, *mockLlmRequests)
+		wantTrigger bool
 	}{
 		{
 			name:      "spend threshold triggered",

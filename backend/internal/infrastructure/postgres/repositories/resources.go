@@ -1196,16 +1196,16 @@ func (r *budgetRepo) Create(ctx context.Context, orgID uuid.UUID, input domain.N
 	var budget domain.Budget
 	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
 		row, err := q.CreateBudget(ctx, db.CreateBudgetParams{
-			OrganizationID:  orgID,
-			Name:            input.Name,
-			Description:     input.Description,
-			Scope:           string(input.Scope),
-			ScopeID:         input.ScopeID,
-			LimitType:       string(input.LimitType),
-			LimitAmount:     floatToNumeric(input.LimitAmount),
-			Window:          string(input.Window),
-			AlertThreshold:  floatToNumeric(input.AlertThreshold),
-			Enabled:         input.Enabled,
+			OrganizationID: orgID,
+			Name:           input.Name,
+			Description:    input.Description,
+			Scope:          string(input.Scope),
+			ScopeID:        input.ScopeID,
+			LimitType:      string(input.LimitType),
+			LimitAmount:    floatToNumeric(input.LimitAmount),
+			Window:         string(input.Window),
+			AlertThreshold: floatToNumeric(input.AlertThreshold),
+			Enabled:        input.Enabled,
 		})
 		if err != nil {
 			return err
@@ -1266,13 +1266,13 @@ func (r *budgetRepo) Update(ctx context.Context, orgID, id uuid.UUID, input doma
 	var budget domain.Budget
 	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
 		row, err := q.UpdateBudget(ctx, db.UpdateBudgetParams{
-			OrganizationID:  orgID,
-			ID:              id,
-			Name:            input.Name,
-			Description:     input.Description,
-			LimitAmount:     floatPtrToNumeric(input.LimitAmount),
-			AlertThreshold:  floatPtrToNumeric(input.AlertThreshold),
-			Enabled:         input.Enabled,
+			OrganizationID: orgID,
+			ID:             id,
+			Name:           input.Name,
+			Description:    input.Description,
+			LimitAmount:    floatPtrToNumeric(input.LimitAmount),
+			AlertThreshold: floatPtrToNumeric(input.AlertThreshold),
+			Enabled:        input.Enabled,
 		})
 		if err != nil {
 			return err

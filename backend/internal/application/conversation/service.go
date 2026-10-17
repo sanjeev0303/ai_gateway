@@ -12,19 +12,19 @@ import (
 
 // ServiceDeps carries the repositories and the server-side privacy fallback.
 type ServiceDeps struct {
-	Organizations  repositories.OrganizationRepository
-	Conversations  repositories.ConversationRepository
-	Messages       repositories.ConversationMessageRepository
-	Log            *slog.Logger
+	Organizations repositories.OrganizationRepository
+	Conversations repositories.ConversationRepository
+	Messages      repositories.ConversationMessageRepository
+	Log           *slog.Logger
 }
 
 // Service reads conversations for authenticated actors and applies privacy
 // redaction on the way out. Callers cannot influence the resolved mode.
 type Service struct {
-	organizations  repositories.OrganizationRepository
-	conversations  repositories.ConversationRepository
-	messages       repositories.ConversationMessageRepository
-	log            *slog.Logger
+	organizations repositories.OrganizationRepository
+	conversations repositories.ConversationRepository
+	messages      repositories.ConversationMessageRepository
+	log           *slog.Logger
 }
 
 // NewService returns a conversation read service. Log is optional.
@@ -33,10 +33,10 @@ func NewService(deps ServiceDeps) *Service {
 		deps.Log = slog.Default()
 	}
 	return &Service{
-		organizations:  deps.Organizations,
-		conversations:  deps.Conversations,
-		messages:       deps.Messages,
-		log:            deps.Log,
+		organizations: deps.Organizations,
+		conversations: deps.Conversations,
+		messages:      deps.Messages,
+		log:           deps.Log,
 	}
 }
 
@@ -189,4 +189,3 @@ func (s *Service) effective(override *string, defaultPrivacy domain.PrivacyMode)
 func (s *Service) resolve(override *string, defaultPrivacy domain.PrivacyMode) domain.PrivacyMode {
 	return domain.ResolvePrivacyMode(override, defaultPrivacy)
 }
-

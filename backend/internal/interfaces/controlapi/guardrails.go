@@ -81,13 +81,13 @@ func (a *api) createGuardrail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	actor, _ := actorFrom(r.Context())
-	
+
 	// Normalize empty string target_id to nil for global guardrails
 	targetID := req.TargetID
 	if targetID != nil && *targetID == "" {
 		targetID = nil
 	}
-	
+
 	g := domain.Guardrail{
 		Name:          req.Name,
 		Description:   req.Description,

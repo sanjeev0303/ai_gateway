@@ -44,7 +44,7 @@ func (s *Service) Create(ctx context.Context, actor domain.Actor, g domain.Guard
 	if g.ID == "" {
 		g.ID = uuid.New().String()
 	}
-	
+
 	if err := s.repo.Create(ctx, g); err != nil {
 		return domain.Guardrail{}, err
 	}

@@ -171,11 +171,64 @@ func TestValidate(t *testing.T) {
 			c.Auth.CSRFEnabled = true
 			c.Auth.HMACSigningKey = "change-me-change-me-change-me-change-me"
 		}, "AUTH_HMAC_SIGNING_KEY uses a known placeholder secret, prohibited in production"},
+		{"production with missing hmac fails", func(c *Config) {
+			c.Env = "production"
+			c.Auth.SessionCookieSecure = true
+			c.Auth.CSRFEnabled = true
+			c.Auth.HMACSigningKey = ""
+		}, "AUTH_HMAC_SIGNING_KEY is required in production"},
+		{"production with placeholder database url fails", func(c *Config) {
+			c.Env = "production"
+			c.Auth.SessionCookieSecure = true
+			c.Auth.CSRFEnabled = true
+			c.Auth.HMACSigningKey = "0123456789abcdef0123456789abcdef"
+			c.Database.Enabled = true
+			c.Database.URL = "postgres://gateway:password@localhost:5432/ai_gateway"
+		}, "DATABASE_URL contains a known placeholder secret, prohibited in production"},
+		{"production with missing secrets key when env fails", func(c *Config) {
+			c.Env = "production"
+			c.Auth.SessionCookieSecure = true
+			c.Auth.CSRFEnabled = true
+			c.Auth.HMACSigningKey = "0123456789abcdef0123456789abcdef"
+			c.Secrets.Provider = "env"
+			c.Secrets.Key = ""
+		}, "SECRETS_KEY is required in production"},
+		{"production with placeholder secrets key fails", func(c *Config) {
+			c.Env = "production"
+			c.Auth.SessionCookieSecure = true
+			c.Auth.CSRFEnabled = true
+			c.Auth.HMACSigningKey = "0123456789abcdef0123456789abcdef"
+			c.Secrets.Provider = "env"
+			c.Secrets.Key = "change-me-change-me-change-me-change-me"
+		}, "SECRETS_KEY uses a known placeholder secret, prohibited in production"},
+		{"production with redis enabled and missing password fails", func(c *Config) {
+			c.Env = "production"
+			c.Auth.SessionCookieSecure = true
+			c.Auth.CSRFEnabled = true
+			c.Auth.HMACSigningKey = "0123456789abcdef0123456789abcdef"
+			c.Secrets.Key = "0123456789abcdef0123456789abcdef"
+			c.Redis.Enabled = true
+			c.Redis.Password = ""
+		}, "REDIS_PASSWORD is required in production"},
+		{"production with redis enabled and placeholder password fails", func(c *Config) {
+			c.Env = "production"
+			c.Auth.SessionCookieSecure = true
+			c.Auth.CSRFEnabled = true
+			c.Auth.HMACSigningKey = "0123456789abcdef0123456789abcdef"
+			c.Secrets.Key = "0123456789abcdef0123456789abcdef"
+			c.Redis.Enabled = true
+			c.Redis.Password = "change-me"
+		}, "REDIS_PASSWORD uses a known placeholder secret, prohibited in production"},
 		{"production valid config passes", func(c *Config) {
 			c.Env = "production"
 			c.Auth.SessionCookieSecure = true
 			c.Auth.CSRFEnabled = true
 			c.Auth.HMACSigningKey = "0123456789abcdef0123456789abcdef"
+			c.Secrets.Key = "0123456789abcdef0123456789abcdef"
+			c.Redis.Enabled = true
+			c.Redis.Password = "strong-prod-redis-auth-9872149"
+			c.Database.Enabled = true
+			c.Database.URL = "postgres://gateway:prod-pg-creds-9812739@localhost:5432/ai_gateway"
 		}, ""},
 		{"dev with dev login without allow insecure fails", func(c *Config) {
 			c.Env = "development"
@@ -188,11 +241,24 @@ func TestValidate(t *testing.T) {
 			c.AllowInsecureDev = false
 			c.Auth.HMACSigningKey = "change-me-change-me-change-me-change-me"
 		}, "AUTH_HMAC_SIGNING_KEY uses a known placeholder secret; set a secure 32+ byte key or set AIGW_ALLOW_INSECURE_DEV=true"},
+		{"dev with placeholder database url without allow insecure fails", func(c *Config) {
+			c.Env = "development"
+			c.AllowInsecureDev = false
+			c.Database.Enabled = true
+			c.Database.URL = "postgres://gateway:password@localhost:5432/ai_gateway"
+		}, "DATABASE_URL contains a known placeholder secret; set a secure password or set AIGW_ALLOW_INSECURE_DEV=true"},
+		{"dev with placeholder secrets key without allow insecure fails", func(c *Config) {
+			c.Env = "development"
+			c.AllowInsecureDev = false
+			c.Secrets.Key = "change-me"
+		}, "SECRETS_KEY uses a known placeholder secret; set a secure key or set AIGW_ALLOW_INSECURE_DEV=true"},
 		{"dev with placeholder and allow insecure dev passes", func(c *Config) {
 			c.Env = "development"
 			c.AllowInsecureDev = true
 			c.Auth.DevLoginEnabled = true
 			c.Auth.HMACSigningKey = "change-me-change-me-change-me-change-me"
+			c.Database.Enabled = true
+			c.Database.URL = "postgres://gateway:password@localhost:5432/ai_gateway"
 		}, ""},
 		{"test mode allows placeholder signing key", func(c *Config) {
 			c.Env = "test"

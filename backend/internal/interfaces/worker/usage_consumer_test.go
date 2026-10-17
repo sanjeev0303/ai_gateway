@@ -81,7 +81,6 @@ func (f *recordingEvents) PurgeExpired(context.Context, uuid.UUID, time.Time) (i
 	return 0, nil
 }
 
-
 func (f *recordingEvents) count() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()

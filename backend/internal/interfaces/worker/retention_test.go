@@ -33,7 +33,7 @@ func (m *mockRetentionOrgRepo) GetByID(ctx context.Context, id uuid.UUID) (domai
 
 type mockRetentionConvRepo struct {
 	repositories.ConversationRepository
-	purgedCalls int
+	purgedCalls   int
 	lastOlderThan time.Time
 	deletedCount  int64
 }
@@ -46,7 +46,7 @@ func (m *mockRetentionConvRepo) PurgeExpired(ctx context.Context, orgID uuid.UUI
 
 type mockRetentionUsageRepo struct {
 	repositories.UsageEventRepository
-	purgedCalls int
+	purgedCalls   int
 	lastOlderThan time.Time
 	deletedCount  int64
 }

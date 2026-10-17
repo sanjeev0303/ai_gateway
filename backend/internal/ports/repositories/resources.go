@@ -134,10 +134,10 @@ type BudgetRepository interface {
 
 // BudgetFilter filters budget queries.
 type BudgetFilter struct {
-	Scope      *domain.BudgetScope
-	ScopeID    *uuid.UUID
-	LimitType  *domain.BudgetLimitType
-	Enabled    *bool
-	Limit      int
-	Offset     int
+	Scope     *domain.BudgetScope
+	ScopeID   *uuid.UUID
+	LimitType *domain.BudgetLimitType
+	Enabled   *bool
+	Limit     int
+	Offset    int
 }

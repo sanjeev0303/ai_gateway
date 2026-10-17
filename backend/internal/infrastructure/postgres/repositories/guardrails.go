@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"ai-governance-saas/backend/internal/domain"
 	"ai-governance-saas/backend/internal/infrastructure/postgres"
 	"ai-governance-saas/backend/internal/ports/repositories"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 type GuardrailsRepository struct {

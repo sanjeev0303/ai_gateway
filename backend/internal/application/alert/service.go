@@ -38,7 +38,6 @@ func NewService(deps ServiceDeps) *Service {
 	}
 }
 
-
 func (s *Service) List(ctx context.Context, actor domain.Actor) ([]domain.Alert, error) {
 	if !actor.Can(domain.PermissionAlertsRead) {
 		return nil, repositories.ErrForbidden
@@ -208,7 +207,6 @@ func testMessage(muted bool) string {
 	}
 	return "Rule is active, but no evaluator is wired to this rule type, so nothing was evaluated and no notification was sent."
 }
-
 
 // TestResult is the outcome of evaluating an alert rule's configuration. It
 // deliberately carries NotificationSent and StatusIsMuted rather than a

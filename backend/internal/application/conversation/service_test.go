@@ -48,7 +48,6 @@ func (m *mockMessageRepo) List(ctx context.Context, orgID, conversationID uuid.U
 	return out, nil
 }
 
-
 func TestConversationService_PrivacyModes(t *testing.T) {
 	ctx := context.Background()
 	orgID := uuid.New()
@@ -87,11 +86,11 @@ func TestConversationService_PrivacyModes(t *testing.T) {
 	}
 
 	tests := []struct {
-		name         string
-		privacyMode  domain.PrivacyMode
-		wantSystem   string
-		wantUser     string
-		wantAssist   string
+		name        string
+		privacyMode domain.PrivacyMode
+		wantSystem  string
+		wantUser    string
+		wantAssist  string
 	}{
 		{
 			name:        "METADATA_ONLY redacts all turn content",
@@ -130,7 +129,6 @@ func TestConversationService_PrivacyModes(t *testing.T) {
 					ID:             orgID,
 					PrivacyDefault: tc.privacyMode,
 				},
-
 			}
 			convRepo := &mockConvRepo{
 				conv: domain.Conversation{

@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -154,12 +156,12 @@ func NewGateway(deps GatewayDeps) (*Gateway, error) {
 	authenticator := NewAuthenticator(deps.Hasher, deps.GatewayCredRepo, credCache)
 	tenantResolver := NewTenantResolver(deps.ProviderAccounts, deps.ProviderCredentials, deps.Secrets)
 	policyResolver := NewPolicyResolver(deps.PolicyRepo, deps.RuleRepo)
-	
+
 	// Update budget guard with policy resolver for snapshot sync
 	if bg, ok := budgetGuard.(*BudgetGuardImpl); ok {
 		bg.policyResolver = policyResolver
 	}
-	
+
 	requestInspector := NewRequestInspector()
 	providerRouter := NewProviderRouter("", "") // will use defaults
 	streamProxy := NewStreamProxy(nil, deps.Logger)
@@ -232,6 +234,12 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				CurrentState:   domain.ActivityStateActive,
 			})
 		}
+
+		defer func() {
+			if result.Context != nil && result.Context.BudgetRelease != nil {
+				result.Context.BudgetRelease(0, errors.New("request terminated"))
+			}
+		}()
 
 		observed, err := g.streamProxy.Forward(r.Context(), w, r, result.Context.UpstreamURL, result.Context.UpstreamHeaders)
 		if err != nil {
@@ -454,10 +462,7 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 		}
 	} else {
 		for _, cfg := range applicableRLs {
-			rlKey := cfg.Key
-			if rlKey == "" {
-				rlKey = cfg.Scope
-			}
+			rlKey := g.buildRateLimitScopedKey(cred, cfg)
 			rlResult := g.rateLimiter.Check(ctx, rlKey, cfg.Limit, cfg.Window)
 			if !rlResult.Allowed {
 				return g.rateLimitedResult(rlResult, reqCtx)
@@ -467,8 +472,11 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 	}
 
 	// Stage 7: Budget check across all applicable scopes (spend and token budgets)
+	// Stage 7: Budgets (atomic reservation preventing concurrent overspend)
 	applicableBudgets := policy.applicableBudgets(cred)
 	var finalBudgetResult BudgetResult
+	var releaseFuncs []BudgetReleaseFunc
+
 	if len(applicableBudgets) == 0 {
 		budgetKey := g.buildBudgetKey(cred, upstream)
 		estimatedCost := g.estimateCost(hints)
@@ -476,10 +484,12 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 		if cfg, ok := policy.budgetFor("organization"); ok {
 			budgetCfg, budgetWindow = cfg.Limit, cfg.Window
 		}
-		finalBudgetResult = g.budgetGuard.Check(ctx, budgetKey, budgetCfg, budgetWindow, estimatedCost)
-		if !finalBudgetResult.Allowed {
-			return g.budgetExceededResult(finalBudgetResult, reqCtx)
+		bResult, release := g.budgetGuard.Reserve(ctx, budgetKey, budgetCfg, budgetWindow, estimatedCost, reqID)
+		if !bResult.Allowed {
+			return g.budgetExceededResult(bResult, reqCtx)
 		}
+		finalBudgetResult = bResult
+		releaseFuncs = append(releaseFuncs, release)
 	} else {
 		for _, cfg := range applicableBudgets {
 			budgetKey := cfg.Key
@@ -495,13 +505,25 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 			} else {
 				checkCost = g.estimateCost(hints)
 			}
-			bResult := g.budgetGuard.Check(ctx, budgetKey, cfg.Limit, cfg.Window, checkCost)
+			bResult, release := g.budgetGuard.Reserve(ctx, budgetKey, cfg.Limit, cfg.Window, checkCost, reqID)
 			if !bResult.Allowed {
+				// Rollback already acquired reservations for this request
+				for _, rFn := range releaseFuncs {
+					rFn(0, errors.New("budget_exceeded"))
+				}
 				return g.budgetExceededResult(bResult, reqCtx)
 			}
 			finalBudgetResult = bResult
+			releaseFuncs = append(releaseFuncs, release)
 		}
 	}
+
+	combinedRelease := func(actualCost float64, err error) {
+		for _, rFn := range releaseFuncs {
+			rFn(actualCost, err)
+		}
+	}
+	reqCtx.BudgetRelease = combinedRelease
 
 	// Stage 8: Route to provider
 	upstreamURL, upstreamHeaders, err := g.providerRouter.Route(ctx, upstream, hints)
@@ -557,10 +579,47 @@ func (g *Gateway) extractAPIKey(r *http.Request) string {
 	return ""
 }
 
-// buildRateLimitKey constructs the rate limit key from credential and upstream.
+// buildRateLimitKey constructs the fallback rate limit key from credential and upstream.
 func (g *Gateway) buildRateLimitKey(cred GatewayCredential, upstream ResolvedUpstream) string {
-	// Rate limit by credential ID
-	return "cred:" + cred.ID.String()
+	return fmt.Sprintf("org:%s:cred:%s", cred.OrganizationID, cred.ID)
+}
+
+// buildRateLimitScopedKey constructs a strictly tenant-isolated and actor-bound rate limit key.
+func (g *Gateway) buildRateLimitScopedKey(cred GatewayCredential, cfg RateLimitConfig) string {
+	switch cfg.Scope {
+	case "organization", "org", "":
+		return "org:" + cred.OrganizationID.String()
+	case "user":
+		if cred.SubjectType == "user" {
+			return fmt.Sprintf("org:%s:user:%s", cred.OrganizationID, cred.SubjectID)
+		}
+		return "org:" + cred.OrganizationID.String()
+	case "service_account":
+		if cred.SubjectType == "service_account" {
+			return fmt.Sprintf("org:%s:sa:%s", cred.OrganizationID, cred.SubjectID)
+		}
+		return "org:" + cred.OrganizationID.String()
+	case "team":
+		if cred.TeamID != nil {
+			return fmt.Sprintf("org:%s:team:%s", cred.OrganizationID, cred.TeamID)
+		}
+		return "org:" + cred.OrganizationID.String()
+	case "project":
+		if cred.ProjectID != nil {
+			return fmt.Sprintf("org:%s:proj:%s", cred.OrganizationID, cred.ProjectID)
+		}
+		return "org:" + cred.OrganizationID.String()
+	case "credential", "gateway_credential":
+		return fmt.Sprintf("org:%s:cred:%s", cred.OrganizationID, cred.ID)
+	default:
+		if cfg.Key != "" {
+			if strings.HasPrefix(cfg.Key, "org:") {
+				return cfg.Key
+			}
+			return fmt.Sprintf("org:%s:%s", cred.OrganizationID, cfg.Key)
+		}
+		return "org:" + cred.OrganizationID.String()
+	}
 }
 
 // buildBudgetKey constructs the budget key from credential and upstream.
@@ -644,6 +703,20 @@ func (g *Gateway) writeResult(w http.ResponseWriter, result PipelineResult) {
 	if result.Allowed {
 		g.logger.Error("writeResult called for an allowed result; upstream response was not written")
 		return
+	}
+
+	if result.StatusCode == http.StatusTooManyRequests && result.Context != nil {
+		rl := result.Context.RateLimit
+		if rl.RetryAfter > 0 {
+			w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(rl.RetryAfter.Seconds()))))
+		}
+		if rl.Limit > 0 {
+			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(rl.Limit))
+		}
+		w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(rl.Remaining))
+		if !rl.ResetAt.IsZero() {
+			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(rl.ResetAt.Unix(), 10))
+		}
 	}
 
 	// Error response in provider-native format
@@ -756,13 +829,17 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 				ttft := int32(firstToken.Sub(startUTC).Milliseconds())
 				usage.TimeToFirstTokenMs = &ttft
 			}
+		} else if actualStatusCode >= 400 {
+			usage.InputTokens = 0
+			usage.OutputTokens = 0
+			usage.ProviderMeta = map[string]any{"provider": upstreamProvider, "tokens_reported": false, "estimated": false}
 		} else {
 			// Fallback to estimates, explicitly flagged as estimated
 			usage.InputTokens = result.Context.InspectorHints.EstimatedInputTokens
 			usage.OutputTokens = result.Context.InspectorHints.EstimatedOutputTokens
 			usage.ProviderMeta = map[string]any{"provider": upstreamProvider, "tokens_reported": false, "estimated": true}
 		}
-		
+
 		// Estimate initial cost in micros (e.g. 10 micros per 1k input tokens, 30 micros per 1k output tokens).
 		// Exact cost is backfilled during rollup using the organization's versioned price sheet.
 		costMicros := int64((float64(usage.InputTokens)*10.0 + float64(usage.OutputTokens)*30.0) / 1000.0 * 1000000.0)
@@ -791,26 +868,35 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 			usage.CostStatus = domain.CostStatusFree
 		}
 
-		// Record usage against all applicable budget trackers only for non-failed requests.
-		// Rejected and failed upstream calls (status >= 400) do not accrue provider spend/tokens.
-		if actualStatusCode < 400 {
-			cost := (float64(usage.InputTokens)/1000*0.01) + (float64(usage.OutputTokens)/1000*0.03)
-			appBudgets := result.Context.PolicySnapshot.applicableBudgets(result.Context.Credential)
-			if len(appBudgets) == 0 {
-				budgetKey := g.buildBudgetKey(result.Context.Credential, result.Context.Upstream)
-				if err := g.budgetGuard.RecordUsage(ctx, budgetKey, cost); err != nil {
-					g.logger.Warn("failed to record local budget usage", "error", err, "key", budgetKey)
-				}
+		// Record and finalize budget reservation:
+		// Actual tokens are charged for successful requests (status < 400) or client disconnects (499) with partial tokens.
+		// Failed/rejected requests release their reservation with zero charge.
+		if actualStatusCode < 400 || (actualStatusCode == 499 && (usage.InputTokens > 0 || usage.OutputTokens > 0)) {
+			cost := (float64(usage.InputTokens) / 1000 * 0.01) + (float64(usage.OutputTokens) / 1000 * 0.03)
+			if result.Context != nil && result.Context.BudgetRelease != nil {
+				result.Context.BudgetRelease(cost, nil)
 			} else {
-				for _, cfg := range appBudgets {
-					usageAmt := cost
-					if cfg.LimitType == "tokens" {
-						usageAmt = float64(usage.InputTokens + usage.OutputTokens)
+				appBudgets := result.Context.PolicySnapshot.applicableBudgets(result.Context.Credential)
+				if len(appBudgets) == 0 {
+					budgetKey := g.buildBudgetKey(result.Context.Credential, result.Context.Upstream)
+					if err := g.budgetGuard.RecordUsage(ctx, budgetKey, cost); err != nil {
+						g.logger.Warn("failed to record local budget usage", "error", err, "key", budgetKey)
 					}
-					if err := g.budgetGuard.RecordUsage(ctx, cfg.Key, usageAmt); err != nil {
-						g.logger.Warn("failed to record local budget usage", "error", err, "key", cfg.Key)
+				} else {
+					for _, cfg := range appBudgets {
+						usageAmt := cost
+						if cfg.LimitType == "tokens" {
+							usageAmt = float64(usage.InputTokens + usage.OutputTokens)
+						}
+						if err := g.budgetGuard.RecordUsage(ctx, cfg.Key, usageAmt); err != nil {
+							g.logger.Warn("failed to record local budget usage", "error", err, "key", cfg.Key)
+						}
 					}
 				}
+			}
+		} else {
+			if result.Context != nil && result.Context.BudgetRelease != nil {
+				result.Context.BudgetRelease(0, fmt.Errorf("request failed with status %d", actualStatusCode))
 			}
 		}
 
@@ -1071,4 +1157,3 @@ func (g *Gateway) isModelSupported(ctx context.Context, model string) bool {
 	}
 	return false
 }
-

@@ -254,8 +254,8 @@ func TestConversationHistory_SubjectAccessAndPrivacyModes(t *testing.T) {
 	defer srv.Close()
 
 	orgID := orgTenantA
-	userAlice := userTenantA_Owner  // Admin/Owner
-	userBob := userTenantA_Member   // Regular Member
+	userAlice := userTenantA_Owner // Admin/Owner
+	userBob := userTenantA_Member  // Regular Member
 
 	convAlice := uuid.New()
 	convRepo.detail = domain.ConversationSummary{

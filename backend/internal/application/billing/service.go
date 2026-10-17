@@ -126,4 +126,3 @@ func (s *Service) CancelSubscription(ctx context.Context, actor domain.Actor) (*
 	}
 	return s.GetSubscription(ctx, actor)
 }
-

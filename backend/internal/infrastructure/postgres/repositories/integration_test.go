@@ -860,8 +860,6 @@ func TestPolicyAndRuleRepositories(t *testing.T) {
 		t.Fatalf("Get mismatch: %+v", got)
 	}
 
-
-
 	rule, err := ruleRepo.Create(testCtx, orgID, domain.NewPolicyRule{
 		PolicyID:    policy.ID,
 		RuleType:    domain.RuleTypeRateLimit,

@@ -4,12 +4,12 @@ import (
 	"context"
 	"log/slog"
 
-	"ai-governance-saas/backend/internal/application/usage"
 	"ai-governance-saas/backend/internal/application/securityevent"
+	"ai-governance-saas/backend/internal/application/usage"
 	"ai-governance-saas/backend/internal/domain"
-	"encoding/json"
 	"ai-governance-saas/backend/internal/ports"
 	"ai-governance-saas/backend/internal/ports/repositories"
+	"encoding/json"
 )
 
 // RunUsageConsumer subscribes to the usage event bus and hands every message to

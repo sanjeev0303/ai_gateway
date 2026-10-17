@@ -32,23 +32,23 @@ var client = &http.Client{
 }
 
 type PerfResult struct {
-	TotalRequests    int
-	Successful       int
-	Failed           int
-	Blocked          int
-	Elapsed          time.Duration
-	RPS              float64
-	Latencies        []time.Duration
-	P50              time.Duration
-	P90              time.Duration
-	P95              time.Duration
-	P99              time.Duration
-	Min              time.Duration
-	Max              time.Duration
-	Mean             time.Duration
-	StreamTTFTs      []time.Duration
-	StreamTTFTP50    time.Duration
-	StreamTTFTP95    time.Duration
+	TotalRequests int
+	Successful    int
+	Failed        int
+	Blocked       int
+	Elapsed       time.Duration
+	RPS           float64
+	Latencies     []time.Duration
+	P50           time.Duration
+	P90           time.Duration
+	P95           time.Duration
+	P99           time.Duration
+	Min           time.Duration
+	Max           time.Duration
+	Mean          time.Duration
+	StreamTTFTs   []time.Duration
+	StreamTTFTP50 time.Duration
+	StreamTTFTP95 time.Duration
 }
 
 type SysStats struct {
@@ -228,9 +228,9 @@ func setupPerfTenant() *PerfTenant {
 // -----------------------------------------------------------------------------
 func runMixedWorkload(t *PerfTenant, concurrency, total int) PerfResult {
 	var (
-		latencies   = make([]time.Duration, 0, total)
-		streamTTFTs = make([]time.Duration, 0, total/4)
-		mu          sync.Mutex
+		latencies    = make([]time.Duration, 0, total)
+		streamTTFTs  = make([]time.Duration, 0, total/4)
+		mu           sync.Mutex
 		successCount atomic.Int64
 		failCount    atomic.Int64
 		blockedCount atomic.Int64

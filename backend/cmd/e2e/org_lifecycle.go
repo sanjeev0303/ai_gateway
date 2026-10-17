@@ -106,7 +106,7 @@ func runOrganizationLifecycle() {
 	// Update Organization Settings (retention & privacy)
 	status, patchResp := patch("/v1/organization", map[string]interface{}{
 		"name":                         "Acme AI Systems (Global)",
-		"privacy_default":             "METADATA_ONLY",
+		"privacy_default":              "METADATA_ONLY",
 		"retention_conversations_days": 45,
 	}, ownerCookie, ownerCSRF, 8081)
 	assert(status == http.StatusOK, fmt.Sprintf("Organization settings update succeeds (status %d)", status))

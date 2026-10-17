@@ -66,6 +66,7 @@ type RequestContext struct {
 	PolicySnapshot  PolicySnapshot
 	RateLimit       RateLimitResult
 	BudgetResult    BudgetResult
+	BudgetRelease   BudgetReleaseFunc
 	InspectorHints  InspectorHints
 	StartTime       time.Time
 	UpstreamURL     string
@@ -122,6 +123,7 @@ type RateLimitResult struct {
 	RetryAfter time.Duration
 	Scope      string
 	Key        string
+	Degraded   bool
 }
 
 // BudgetResult captures budget checking decision.
@@ -181,9 +183,15 @@ type RateLimiter interface {
 	Check(ctx context.Context, key string, limit int, window time.Duration) RateLimitResult
 }
 
-// BudgetGuard enforces budget limits.
+// BudgetReleaseFunc finalizes or releases a budget reservation.
+// actualCost is the measured spend (0 for failures or cancellations).
+// err indicates if the request failed or was interrupted.
+type BudgetReleaseFunc func(actualCost float64, err error)
+
+// BudgetGuard enforces budget limits and manages reservation lifecycles.
 type BudgetGuard interface {
 	Check(ctx context.Context, key string, limit float64, window time.Duration, estimatedCost float64) BudgetResult
+	Reserve(ctx context.Context, key string, limit float64, window time.Duration, estimatedCost float64, reqID string) (BudgetResult, BudgetReleaseFunc)
 	RecordUsage(ctx context.Context, key string, cost float64) error
 }
 

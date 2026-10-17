@@ -26,7 +26,6 @@ func registerAlertRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("POST /v1/notifications/read-all", a.requireAuth(a.markAllNotificationsRead))
 }
 
-
 // alertDTO is the wire shape of one configured alert rule.
 type alertDTO struct {
 	ID              string          `json:"id"`
@@ -94,7 +93,7 @@ func (a *api) createAlert(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, r, err)
 		return
 	}
-	
+
 	alertType := req.AlertType
 	switch alertType {
 	case "spend_exceeded", "spend_threshold":
@@ -379,4 +378,3 @@ func (a *api) markAllNotificationsRead(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
-

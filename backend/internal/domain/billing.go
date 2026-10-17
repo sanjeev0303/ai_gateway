@@ -314,4 +314,3 @@ type NewInAppNotification struct {
 	Message      string
 	Severity     string
 }
-

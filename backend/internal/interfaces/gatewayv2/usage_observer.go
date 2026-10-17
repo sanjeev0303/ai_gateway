@@ -123,12 +123,12 @@ func (o *usageObserver) parseSSELine(line []byte) {
 }
 
 // finish flushes the buffered state and reports the observed usage. It returns
-// nil when the upstream sent no usage, so the caller can fall back.
+// nil when the upstream sent no usage and no status code was recorded, so the caller can fall back.
 func (o *usageObserver) finish() *StreamUsage {
 	if !o.sse && !o.dropped && len(o.body) > 0 {
 		o.parseEvent(o.body)
 	}
-	if !o.usage.Reported {
+	if !o.usage.Reported && o.usage.StatusCode == 0 {
 		return nil
 	}
 	usage := o.usage

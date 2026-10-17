@@ -198,7 +198,7 @@ func (s *StreamProxyImpl) Forward(ctx context.Context, w http.ResponseWriter, r 
 	obs.usage.StatusCode = resp.StatusCode
 	usage, err := s.streamResponse(streamCtx, w, &observingReader{src: resp.Body, obs: obs}, obs)
 	if err != nil {
-		if errors.Is(err, context.Canceled) {
+		if errors.Is(err, ErrClientDisconnected) || errors.Is(err, context.Canceled) || errors.Is(streamCtx.Err(), context.Canceled) {
 			return usage, ErrClientDisconnected
 		}
 		if strings.Contains(err.Error(), "broken pipe") || strings.Contains(err.Error(), "connection reset") {

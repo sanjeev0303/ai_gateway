@@ -21,18 +21,18 @@ type BudgetInvalidator interface {
 }
 
 type ServiceDeps struct {
-	Budgets   repositories.BudgetRepository
-	Policies  repositories.PolicyRepository
-	Rules     repositories.PolicyRuleRepository
-	Audits    repositories.AuditLogRepository
+	Budgets     repositories.BudgetRepository
+	Policies    repositories.PolicyRepository
+	Rules       repositories.PolicyRuleRepository
+	Audits      repositories.AuditLogRepository
 	Invalidator BudgetInvalidator
 }
 
 type Service struct {
-	budgets    repositories.BudgetRepository
-	policies   repositories.PolicyRepository
-	rules      repositories.PolicyRuleRepository
-	audits     repositories.AuditLogRepository
+	budgets     repositories.BudgetRepository
+	policies    repositories.PolicyRepository
+	rules       repositories.PolicyRuleRepository
+	audits      repositories.AuditLogRepository
 	invalidator BudgetInvalidator
 }
 
@@ -160,11 +160,11 @@ func (s *Service) syncBudgetToPolicyRules(ctx context.Context, actor domain.Acto
 		scopeKey = "org:" + actor.OrganizationID.String()
 	}
 	conditions := map[string]any{
-		"type":        "budget",
-		"key":         scopeKey,
-		"scope":       budget.Scope,
-		"scope_id":    budget.ScopeID.String(),
-		"limit_type":  budget.LimitType,
+		"type":       "budget",
+		"key":        scopeKey,
+		"scope":      budget.Scope,
+		"scope_id":   budget.ScopeID.String(),
+		"limit_type": budget.LimitType,
 	}
 	parameters := map[string]any{
 		"limit":          budget.LimitAmount,
@@ -196,9 +196,9 @@ func (s *Service) syncBudgetToPolicyRules(ctx context.Context, actor domain.Acto
 	if existingRule != nil {
 		// Update existing rule
 		_, err = s.rules.Update(ctx, actor.OrganizationID, pol.ID, existingRule.ID, domain.UpdatePolicyRule{
-			Conditions:  condBytes,
-			Parameters:  paramBytes,
-			Enabled:     &budget.Enabled,
+			Conditions: condBytes,
+			Parameters: paramBytes,
+			Enabled:    &budget.Enabled,
 		})
 	} else {
 		// Create new rule

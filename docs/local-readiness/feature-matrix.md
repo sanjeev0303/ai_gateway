@@ -31,7 +31,7 @@
 | 16 | **Observe: Conversation Privacy Modes** | `/app/observe/conversations` | `GET /v1/conversations/{id}/messages` | Server-side redaction (4 modes) | None | `conversations_test.go`, `org_conversation_billing_regression_test.go` | **PASS** |
 | 17 | **Govern: Policies & Rule Authoring** | `/app/govern/policies` | `GET /v1/policies`, `POST /v1/policies` | `policies`, `policy_rules` | Redis Invalidation | `policies_test.go`, `governance_security_test.go`, `cmd/e2e` | **PASS** |
 | 18 | **Govern: Model Access Control Matrix** | `/app/govern/model-access` | `GET /v1/model-access`, `PUT /v1/model-access` | `policy_rules` | Redis Invalidation | `model_access_test.go`, `governance_security_test.go` | **PASS** |
-| 19 | **Govern: Token & Spend Budgets** | `/app/govern/budgets` | `GET /v1/budgets`, `POST /v1/budgets` | `budgets`, `policies` | Gateway Budget Guard | `governance_security_test.go`, `model_access_budget.go` | **PASS** |
+| 19 | **Govern: Token & Spend Budgets** | `/app/govern/budgets` | `GET /v1/budgets`, `POST /v1/budgets` | `budgets`, `policies` | Gateway Budget Guard (Atomic Reserve) | `budget_concurrency_recovery_test.go` (8/8 pass), `budget_guard_test.go`, `cmd/perf` | **PASS** |
 | 20 | **Govern: Content Guardrails (PII/Injection)** | `/app/govern/guardrails` | `GET /v1/guardrails`, `POST /v1/guardrails` | `guardrails`, `guardrail_events` | Guardrail Evaluator | `evaluator_test.go`, `service_test.go`, `guardrails_test.go` | **PASS** |
 | 21 | **Platform: Gateway Credentials (API Keys)** | `/app/platform/gateway-credentials` | `GET /v1/gateway-credentials`, `POST /v1/...` | `gateway_credentials` (SHA-256) | Redis Key Cache | `gateway_credentials_test.go`, `org_conversation_billing_regression_test.go` | **PASS** |
 | 22 | **Platform: Provider Accounts & Rotation** | `/app/platform/provider-accounts` | `GET /v1/provider-accounts`, `POST /...` | `provider_accounts`, `provider_credentials` | AES-GCM Secrets | `providers_test.go`, `cmd/e2e` (Journey A) | **PASS** |
@@ -48,7 +48,10 @@
 | 33 | **Gateway-v2: Streaming Proxy (SSE)** | `http://localhost:8084` | `POST /v1/messages` | `llm_requests` (via NATS) | NATS JetStream | `gateway_test.go`, `cmd/e2e` (Acceptance) | **PASS** |
 | 34 | **Gateway-v2: Tenant Base URL Resolution** | `backend/internal/interfaces/gatewayv2` | `ResolveUpstream` | In-memory / Secrets Store | None | `tenant_resolver_test.go` (10/10 passing) | **PASS** |
 | 35 | **Sentinel CLI: Interactive Commands** | `packages/cli` | `aigw auth`, `projects`, `models` | CLI Config (`~/.aigw`) | None | `cmd_test.go` | **PASS** |
-| 36 | **Sentinel CLI: Gemini Completion Parsing** | `packages/cli` | `aigw request --model gemini-...` | CLI Client | None | `client_test.go` (10/10 passing) | **PASS** |
-| 37 | **Sentinel SDK: Client Protocol & Streaming** | `packages/api-client` | `GatewayClient.sendRequest` | In-memory / Stream Parser | None | `gateway.test.ts` (8/8 pass) | **PASS** |
-| 38 | **Live External Upstream Inference** | External Cloud APIs | Upstream Provider Endpoints | External Provider Servers | External Network | Blocked without runtime `GEMINI_API_KEY` | **BLOCKED** |
-| 39 | **Enterprise SSO / SAML Authentication** | OAuth / SAML Redirect | OAuth Identity Provider | External IdP | None | Not implemented in dev profile | **NOT TESTED** |
+| 36 | **Gateway-v2: Distributed Rate Limiting** | `http://localhost:8084` | Stage 6 Policy Enforcement | `policies`, Redis ZSET | Redis Sliding Window / Degraded Fallback | `rate_limit_concurrency_recovery_test.go` (8/8 pass), `rate_limiter_test.go`, `cmd/perf` | **PASS** |
+| 37 | **Sentinel CLI: Gemini Completion Parsing** | `packages/cli` | `aigw request --model gemini-...` | CLI Client | None | `client_test.go` (10/10 passing) | **PASS** |
+| 38 | **Sentinel SDK: Client Protocol & Streaming** | `packages/api-client` | `GatewayClient.sendRequest` | In-memory / Stream Parser | None | `gateway.test.ts` (15/15 pass) | **PASS** |
+| 39 | **Live External Upstream Inference** | External Cloud APIs | Upstream Provider Endpoints | External Provider Servers | External Network | Blocked without runtime `GEMINI_API_KEY` | **BLOCKED** |
+| 40 | **Enterprise SSO / SAML Authentication** | OAuth / SAML Redirect | OAuth Identity Provider | External IdP | None | Not implemented in dev profile | **NOT TESTED** |
+| 41 | **Durable Telemetry & Event Ingestion** | Background Worker | `NATS JetStream` (`aigw.usage.events`) | `llm_requests`, `usage_events`, `usage_daily` | Worker Consumer `aigw-usage-worker` | `durable_event_lifecycle_test.go` (8/8 pass), `event_reliability_test.go` (11/11 pass) | **PASS** |
+

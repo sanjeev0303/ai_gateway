@@ -272,9 +272,9 @@ func parseUsageFilter(r *http.Request, defaultWindow time.Duration) (domain.Usag
 		UserID:           userID,
 		ServiceAccountID: serviceAccountID,
 		TeamID:           teamID,
-		Provider:  parseOptionalString(r, "provider"),
-		Model:     parseOptionalString(r, "model"),
-		Status:    status,
+		Provider:         parseOptionalString(r, "provider"),
+		Model:            parseOptionalString(r, "model"),
+		Status:           status,
 	}, nil
 }
 

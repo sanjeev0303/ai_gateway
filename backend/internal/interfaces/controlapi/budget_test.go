@@ -127,19 +127,19 @@ func TestBudgetCreate(t *testing.T) {
 	var createdBudget domain.Budget
 	st.budgets.create = func(_ context.Context, _ uuid.UUID, in domain.NewBudget) (domain.Budget, error) {
 		createdBudget = domain.Budget{
-			ID:              testBudgetID,
-			OrganizationID:  testOrgID,
-			Name:            in.Name,
-			Description:     in.Description,
-			Scope:           in.Scope,
-			ScopeID:         in.ScopeID,
-			LimitType:       in.LimitType,
-			LimitAmount:     in.LimitAmount,
-			Window:          in.Window,
-			AlertThreshold:  in.AlertThreshold,
-			Enabled:         in.Enabled,
-			CreatedAt:       testNow,
-			UpdatedAt:       testNow,
+			ID:             testBudgetID,
+			OrganizationID: testOrgID,
+			Name:           in.Name,
+			Description:    in.Description,
+			Scope:          in.Scope,
+			ScopeID:        in.ScopeID,
+			LimitType:      in.LimitType,
+			LimitAmount:    in.LimitAmount,
+			Window:         in.Window,
+			AlertThreshold: in.AlertThreshold,
+			Enabled:        in.Enabled,
+			CreatedAt:      testNow,
+			UpdatedAt:      testNow,
 		}
 		return createdBudget, nil
 	}

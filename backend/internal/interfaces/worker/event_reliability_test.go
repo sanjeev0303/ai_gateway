@@ -92,7 +92,6 @@ func (f *flappyEvents) PurgeExpired(context.Context, uuid.UUID, time.Time) (int6
 	return 0, nil
 }
 
-
 // TestEventProcessing_DuplicateDeliveryIsIdempotent verifies that a duplicated event
 // does not return an error or corrupt data.
 func TestEventProcessing_DuplicateDeliveryIsIdempotent(t *testing.T) {

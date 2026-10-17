@@ -182,7 +182,7 @@ func (a *api) createPolicyRule(w http.ResponseWriter, r *http.Request) {
 	}
 	condBytes, _ := json.Marshal(in.Conditions)
 	paramBytes, _ := json.Marshal(in.Parameters)
-	
+
 	rule, err := a.policy.CreateRule(r.Context(), actor, domain.NewPolicyRule{
 		PolicyID:    policyID,
 		RuleType:    in.RuleType,
@@ -229,7 +229,7 @@ func (a *api) updatePolicyRule(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, httpx.RequestIDFrom(r.Context()), errors.New("invalid rule ID"))
 		return
 	}
-	
+
 	var in struct {
 		Description *string         `json:"description"`
 		Conditions  *map[string]any `json:"conditions"`
@@ -239,7 +239,7 @@ func (a *api) updatePolicyRule(w http.ResponseWriter, r *http.Request) {
 	if err := decodeJSON(w, r, &in); err != nil {
 		return
 	}
-	
+
 	update := domain.UpdatePolicyRule{
 		Description: in.Description,
 		Enabled:     in.Enabled,

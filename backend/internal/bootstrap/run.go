@@ -168,8 +168,13 @@ func RunGatewayV2(ctx context.Context) error {
 		}
 
 		var rateLimiter gatewayv2.RateLimiter
+		var budgetGuard gatewayv2.BudgetGuard
 		if redisClient != nil {
 			rateLimiter = gatewayv2.NewRedisRateLimiter(redisClient, log)
+			budgetGuard = gatewayv2.NewBudgetGuardWithRedis(redisClient, log)
+		} else {
+			rateLimiter = gatewayv2.NewRateLimiter()
+			budgetGuard = gatewayv2.NewBudgetGuard()
 		}
 
 		activityTracker := gatewayv2.NewActivityTracker(redisClient, log)
@@ -192,6 +197,7 @@ func RunGatewayV2(ctx context.Context) error {
 			EventBus:            bus.EventBus,
 			Activity:            activityTracker,
 			RateLimiter:         rateLimiter,
+			BudgetGuard:         budgetGuard,
 		})
 		if err != nil {
 			return fmt.Errorf("gateway-v2: create gateway: %w", err)
@@ -396,10 +402,10 @@ func RunControlAPI(ctx context.Context) error {
 		})
 
 		conversationSvc := conversation.NewService(conversation.ServiceDeps{
-			Organizations:  repositories.NewOrganizationRepository(store),
-			Conversations:  repositories.NewConversationRepository(store),
-			Messages:       repositories.NewConversationMessageRepository(store),
-			Log:            log,
+			Organizations: repositories.NewOrganizationRepository(store),
+			Conversations: repositories.NewConversationRepository(store),
+			Messages:      repositories.NewConversationMessageRepository(store),
+			Log:           log,
 		})
 
 		auditSvc := auditlog.NewService(auditlog.ServiceDeps{
@@ -424,7 +430,6 @@ func RunControlAPI(ctx context.Context) error {
 			Audits:    repositories.NewAuditLogRepository(store),
 			Evaluator: alertEval,
 		})
-
 
 		billingSvc := billing.NewService(billing.ServiceDeps{
 			Plans:         repositories.NewPlanRepository(store),

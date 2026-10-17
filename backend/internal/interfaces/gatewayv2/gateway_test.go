@@ -96,6 +96,13 @@ func (s *stubGatewayBudgetGuard) Check(_ context.Context, key string, limit floa
 	s.lastCost = cost
 	return s.result
 }
+func (s *stubGatewayBudgetGuard) Reserve(_ context.Context, key string, limit float64, window time.Duration, cost float64, reqID string) (BudgetResult, BudgetReleaseFunc) {
+	s.lastKey = key
+	s.lastLimit = limit
+	s.lastWindow = window
+	s.lastCost = cost
+	return s.result, func(_ float64, _ error) {}
+}
 func (s *stubGatewayBudgetGuard) RecordUsage(_ context.Context, _ string, _ float64) error {
 	return nil
 }
@@ -542,7 +549,7 @@ func TestExecutePipeline_AllowedPopulatesContext(t *testing.T) {
 	requireTrue(t, ctx.UpstreamURL == "https://api.test/v1/messages", "upstream url mismatch")
 	requireTrue(t, ctx.UpstreamHeaders.Get("x-upstream-key") == "k", "upstream headers mismatch")
 
-	requireTrue(t, stubs.rate.lastKey == "cred:"+cred.ID.String(), "rate key mismatch: %s", stubs.rate.lastKey)
+	requireTrue(t, stubs.rate.lastKey == "org:"+cred.OrganizationID.String()+":cred:"+cred.ID.String(), "rate key mismatch: %s", stubs.rate.lastKey)
 	requireTrue(t, stubs.rate.lastLimit == DefaultGatewayConfig().DefaultRateLimit, "rate limit mismatch")
 	requireTrue(t, stubs.rate.lastWindow == DefaultGatewayConfig().DefaultRateWindow, "rate window mismatch")
 }
@@ -631,7 +638,7 @@ func TestBuildPipelineKeys(t *testing.T) {
 	cred := gatewayCredFixture()
 
 	rateKey := g.buildRateLimitKey(cred, ResolvedUpstream{})
-	requireTrue(t, rateKey == "cred:"+cred.ID.String(), "rate key mismatch: %s", rateKey)
+	requireTrue(t, rateKey == "org:"+cred.OrganizationID.String()+":cred:"+cred.ID.String(), "rate key mismatch: %s", rateKey)
 
 	budgetKey := g.buildBudgetKey(cred, ResolvedUpstream{})
 	requireTrue(t, budgetKey == "service_account:"+cred.SubjectID.String(), "budget key mismatch: %s", budgetKey)

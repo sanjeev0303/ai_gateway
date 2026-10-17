@@ -311,7 +311,7 @@ func (e *Evaluator) evalErrorRate(ctx context.Context, orgID uuid.UUID, config [
 
 func (e *Evaluator) evalProviderFailure(ctx context.Context, orgID uuid.UUID, config []byte) (bool, string, map[string]any) {
 	var cfg struct {
-		Provider             string `json:"provider"`
+		Provider            string `json:"provider"`
 		ConsecutiveFailures int    `json:"consecutive_failures"`
 	}
 	_ = json.Unmarshal(config, &cfg)
@@ -627,14 +627,14 @@ func (e *Evaluator) evalBudgetExhaustion(ctx context.Context, orgID uuid.UUID, c
 			fmt.Sprintf("Budget exhausted: total spend of %s reached or exceeded budget ceiling %s",
 				formatMicros(summary.TotalCostMicros), formatMicros(limit)),
 			map[string]any{
-				"current_spend_micros": summary.TotalCostMicros,
+				"current_spend_micros":  summary.TotalCostMicros,
 				"budget_ceiling_micros": limit,
-				"window":               cfg.Window,
+				"window":                cfg.Window,
 			}
 	}
 
 	return false, "budget not exhausted", map[string]any{
-		"current_spend_micros": summary.TotalCostMicros,
+		"current_spend_micros":  summary.TotalCostMicros,
 		"budget_ceiling_micros": limit,
 	}
 }

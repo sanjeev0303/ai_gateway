@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"ai-governance-saas/backend/internal/domain"
-	"ai-governance-saas/backend/internal/ports/repositories"
 	"ai-governance-saas/backend/internal/platform/httpx"
+	"ai-governance-saas/backend/internal/ports/repositories"
 
 	"github.com/google/uuid"
 )
@@ -54,13 +54,13 @@ type modelAccessPreviewRequest struct {
 }
 
 type modelAccessPreviewResponse struct {
-	Provider          string               `json:"provider"`
-	Model             string               `json:"model"`
-	CurrentDecision   string               `json:"current_decision"`
-	PreviewDecision   string               `json:"preview_decision"`
-	WouldChange       bool                 `json:"would_change"`
-	BlockingRules     []modelAccessEntryDTO `json:"blocking_rules"`
-	AllowingRules     []modelAccessEntryDTO `json:"allowing_rules"`
+	Provider        string                `json:"provider"`
+	Model           string                `json:"model"`
+	CurrentDecision string                `json:"current_decision"`
+	PreviewDecision string                `json:"preview_decision"`
+	WouldChange     bool                  `json:"would_change"`
+	BlockingRules   []modelAccessEntryDTO `json:"blocking_rules"`
+	AllowingRules   []modelAccessEntryDTO `json:"allowing_rules"`
 }
 
 func toBudgetDTO(b domain.Budget) budgetDTO {
@@ -208,9 +208,9 @@ func (a *api) updateModelAccess(w http.ResponseWriter, r *http.Request) {
 			if cond["provider"] == entry.Provider && cond["model"] == entry.Model {
 				// Update existing rule
 				update := domain.UpdatePolicyRule{
-					Enabled:     ptr(true),
-					Conditions:  condBytes,
-					Parameters:  paramBytes,
+					Enabled:    ptr(true),
+					Conditions: condBytes,
+					Parameters: paramBytes,
 				}
 				_, _ = a.policy.UpdateRule(r.Context(), actor, pol.ID, rule.ID, update)
 				found = true
@@ -448,15 +448,15 @@ func (a *api) createBudget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	b, err := a.budget.Create(r.Context(), actor, domain.NewBudget{
-		Name:            in.Name,
-		Description:     in.Description,
-		Scope:           domain.BudgetScope(in.Scope),
-		ScopeID:         scopeID,
-		LimitType:       domain.BudgetLimitType(in.LimitType),
-		LimitAmount:     in.LimitAmount,
-		Window:          domain.BudgetWindow(in.Window),
-		AlertThreshold:  in.AlertThreshold,
-		Enabled:         in.Enabled,
+		Name:           in.Name,
+		Description:    in.Description,
+		Scope:          domain.BudgetScope(in.Scope),
+		ScopeID:        scopeID,
+		LimitType:      domain.BudgetLimitType(in.LimitType),
+		LimitAmount:    in.LimitAmount,
+		Window:         domain.BudgetWindow(in.Window),
+		AlertThreshold: in.AlertThreshold,
+		Enabled:        in.Enabled,
 	})
 	if err != nil {
 		writeServiceError(w, r, err)

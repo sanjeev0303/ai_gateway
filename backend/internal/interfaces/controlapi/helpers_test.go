@@ -139,15 +139,15 @@ func controlCred() domain.APICredential {
 // per-dependency func fields installed per test. Stub functions run inside the
 // HTTP server's goroutine, so they must never call t.Fatalf.
 type controlStubs struct {
-	orgs        *stubOrgs
-	users       *stubUsers
-	members     *stubMembers
-	invitations *stubInvitations
-	projects    *stubProjects
-	teams       *stubTeams
-	teamMembers *stubTeamMembers
-	projMembers *stubProjMembers
-	accounts    *stubAccounts
+	orgs               *stubOrgs
+	users              *stubUsers
+	members            *stubMembers
+	invitations        *stubInvitations
+	projects           *stubProjects
+	teams              *stubTeams
+	teamMembers        *stubTeamMembers
+	projMembers        *stubProjMembers
+	accounts           *stubAccounts
 	credentials        *stubCredentials
 	gatewayCredentials *stubGatewayCredentials
 	audits             *stubAudits
@@ -159,8 +159,8 @@ type controlStubs struct {
 	passwords          *stubPasswords
 	subs               *stubSubscriptions
 
-	budgets  *stubBudgets
-	policy   *stubPolicy
+	budgets *stubBudgets
+	policy  *stubPolicy
 
 	providerAccounts    *stubProviderAccounts
 	providerCredentials *stubProviderCredentials
@@ -169,7 +169,7 @@ type controlStubs struct {
 	providerSecrets     *stubSecrets
 	providerClient      *stubProvider
 
-	policyRepo  *stubPolicyRepo
+	policyRepo     *stubPolicyRepo
 	policyRuleRepo *stubPolicyRuleRepo
 }
 
@@ -308,8 +308,8 @@ func newBudgetServer(t *testing.T, st *controlStubs) *httptest.Server {
 	svc := identity.NewService(st.deps())
 	bSvc := budget.NewService(st.budgetDeps())
 	return buildServer(t, Deps{
-		Identity: svc,
-		Budget:   bSvc,
+		Identity:        svc,
+		Budget:          bSvc,
 		DevLoginEnabled: true,
 	})
 }
@@ -320,8 +320,8 @@ func newPolicyServer(t *testing.T, st *controlStubs) *httptest.Server {
 	svc := identity.NewService(st.deps())
 	pSvc := policy.NewService(st.policyRepo, st.policyRuleRepo, st.audits, stubInvalidator{}, discardLog)
 	return buildServer(t, Deps{
-		Identity: svc,
-		Policy:   pSvc,
+		Identity:        svc,
+		Policy:          pSvc,
 		DevLoginEnabled: true,
 	})
 }
@@ -391,8 +391,6 @@ func newAuthServer(t *testing.T, csrfEnabled, secure bool) (*httptest.Server, *c
 		CSRFEnabled:         csrfEnabled,
 	}), st
 }
-
-
 
 // tokenClaimsFor returns fixture claims for the fixture user acting under the
 // given role; shared by the bearer and session-cookie auth helpers.

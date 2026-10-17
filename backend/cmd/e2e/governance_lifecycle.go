@@ -161,7 +161,7 @@ func runGovernanceLifecycle() {
 	assert(blockPolicyID != "", "Block policy created")
 
 	post(fmt.Sprintf("/v1/policies/%s/rules", blockPolicyID), map[string]interface{}{
-		"rule_type": "blocklist",
+		"rule_type":   "blocklist",
 		"description": "Deny all gpt models",
 		"parameters": map[string]interface{}{
 			"models": []string{"gpt-*", "openai/*"},
@@ -213,7 +213,7 @@ func runGovernanceLifecycle() {
 	assert(maxInputPolicyID != "", "Max input policy created")
 
 	post(fmt.Sprintf("/v1/policies/%s/rules", maxInputPolicyID), map[string]interface{}{
-		"rule_type": "content_filter",
+		"rule_type":   "content_filter",
 		"description": "Limit input to 5 tokens max",
 		"parameters": map[string]interface{}{
 			"max_input_tokens": 5,
@@ -311,7 +311,7 @@ func runGovernanceLifecycle() {
 	assert(rlPolID != "", "Rate limit policy created")
 
 	post(fmt.Sprintf("/v1/policies/%s/rules", rlPolID), map[string]interface{}{
-		"rule_type": "rate_limit",
+		"rule_type":   "rate_limit",
 		"description": "Limit to 2 requests per minute",
 		"parameters": map[string]interface{}{
 			"limit":  2,
@@ -378,7 +378,7 @@ func runGovernanceLifecycle() {
 	assert(budgetPolID != "", "Budget policy created")
 
 	post(fmt.Sprintf("/v1/policies/%s/rules", budgetPolID), map[string]interface{}{
-		"rule_type": "budget",
+		"rule_type":   "budget",
 		"description": "Strict spend cap $0.00010",
 		"parameters": map[string]interface{}{
 			"limit":        0.00010,

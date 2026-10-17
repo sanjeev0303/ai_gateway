@@ -1623,7 +1623,6 @@ type auditLogRepo struct {
 	store *postgres.Store
 }
 
-
 // NewAuditLogRepository returns an AuditLogRepository backed by the store. All
 // operations are tenant-scoped via the orgID context.
 func NewAuditLogRepository(store *postgres.Store) ports.AuditLogRepository {
@@ -1974,7 +1973,6 @@ func toAlertEvent(row db.AlertEvent) domain.AlertEvent {
 		CreatedAt:      row.CreatedAt,
 	}
 }
-
 
 func toAuditLog(row db.AuditLog) domain.AuditLog {
 	return domain.AuditLog{

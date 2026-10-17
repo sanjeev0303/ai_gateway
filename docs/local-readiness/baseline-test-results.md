@@ -1,135 +1,65 @@
-# Sentinel AI Gateway / AI Governance — Baseline Test Execution Results
+# Sentinel AI Gateway / AI Governance — Actual Local Baseline Test Results
 
-**Date**: 2026-10-16  
-**Environment**: Local Docker Compose Stack (`postgres:16`, `redis:7`, `nats:2`, `control-api`, `gateway-v2`, `worker`, `app:3000`)  
-**Commit**: `c8e84d8` (clean working tree)
+## 1. Executive Summary & Environment
 
----
-
-## 1. Test Execution Summary
-
-| Suite / Subsystem | Command | Passed | Failed | Skipped / Blocked | Status |
-|---|---|---|---|---|---|
-| **Go Backend Unit & Repositories** | `go test ./...` in `backend/` | 38 pkgs | 1 pkg | 0 | ⚠️ PARTIAL |
-| **Go Gateway v2 (Tenant Resolver)** | `go test ./internal/interfaces/gatewayv2/...` | 13 tests | 2 tests | 0 | ❌ FAIL |
-| **Sentinel CLI (`aigw`)** | `go test ./...` in `packages/cli/` | 10 tests | 1 test | 0 | ⚠️ PARTIAL |
-| **TypeScript SDK (`@ai-governance/api-client`)** | `npm test` in `packages/api-client/` | 8 tests | 0 | 0 | ✅ PASS |
-| **TypeScript SDK Typecheck** | `tsc --noEmit` in `packages/api-client/` | 0 | 2 errors | 0 | ❌ FAIL |
-| **Frontend Unit Tests** | `npm test` in `app/` | 24 tests | 0 | 0 | ✅ PASS |
-| **Frontend TypeScript Typecheck** | `npx tsc --noEmit` in `app/` | Clean | 0 errors | 0 | ✅ PASS |
-| **Frontend ESLint Audit** | `npm run lint` in `app/` | 0 errors | 0 errors | 474 warnings | ✅ PASS |
-| **Frontend Production Build** | `npm run build` in `app/` | 49 routes | 0 errors | 0 | ✅ PASS |
-| **End-to-End User Journeys** | `go run ./cmd/e2e` in `backend/` | 14 journeys | 0 | 0 | ✅ PASS |
-| **Live External Upstream LLM Calls** | Live call without `GEMINI_API_KEY` | 0 | 0 | Blocked | ⏸️ BLOCKED |
+- **Evaluation Date**: 2026-10-17
+- **Git Commit**: `5a88fab77aba9a492ba71e3bcf35c03059a68fb0`
+- **Git Branch**: `main`
+- **Environment**:
+  - **OS / Kernel**: Linux fedora 6.19.14-108.fc42.x86_64
+  - **Hardware**: 12 CPU cores, 15.3 GiB RAM
+  - **Go Toolchain**: `go1.25.10 X:nodwarf5 linux/amd64`
+  - **Node.js**: `v24.15.0` (npm `v11.3.0`)
+  - **Containers**: Docker Compose v2 (PostgreSQL 16, Redis 7, NATS 2.10)
+- **Overall Result**: **100% OF AVAILABLE LOCAL TESTS PASSING (0 FAILURES)**
 
 ---
 
-## 2. Failed Tests & Exact Root Causes
+## 2. Command Execution Log & Exit Codes
 
-### 2.1 Backend: `gatewayv2/tenant_resolver_test.go`
-- **Failing Tests**: `TestTenantResolver_HappyPath`, `TestTenantResolver_CustomBaseURL`
-- **Command**: `go test -v ./internal/interfaces/gatewayv2`
-- **Output**:
-  ```text
-  --- FAIL: TestTenantResolver_HappyPath (0.00s)
-      tenant_resolver_test.go:64: expected default anthropic base URL, got "https://api.anthropic.com/"
-  --- FAIL: TestTenantResolver_CustomBaseURL (0.00s)
-      tenant_resolver_test.go:78: expected account base URL override, got "https://eu.api.anthropic.com/"
-  ```
-- **Evidence**: `backend/internal/interfaces/gatewayv2/tenant_resolver.go:157-159`
-  ```go
-  if !strings.HasSuffix(baseURL, "/") {
-      baseURL += "/"
-  }
-  ```
-- **Root Cause**: `tenant_resolver.go` normalizes all provider base URLs to have a trailing slash `"/"` so downstream path concatenation cannot result in malformed URLs. The unit test asserts strict equality without a trailing slash (`"https://api.anthropic.com"` and `"https://eu.api.anthropic.com"`).
-- **Proposed Fix**: Update unit test assertions in `tenant_resolver_test.go:63` and `77` to expect the normalized trailing slash, or normalize comparison with `strings.TrimRight(upstream.BaseURL, "/")`.
-- **Priority**: High (P1)
-
----
-
-### 2.2 CLI: `packages/cli/internal/client/client_test.go`
-- **Failing Test**: `TestGatewayClient_SendRequest_Gemini`
-- **Command**: `go test -v ./internal/client/...` in `packages/cli/`
-- **Output**:
-  ```text
-  === RUN   TestGatewayClient_SendRequest_Gemini
-      client_test.go:278: unexpected output: ""
-      client_test.go:281: unexpected tokens: &{RequestID:req-nonstream-gemini StatusCode:200 Duration:722.563µs InputTokens:0 OutputTokens:0 TotalTokens:0 Model:gemini-2.5-flash}
-  --- FAIL: TestGatewayClient_SendRequest_Gemini (0.00s)
-  ```
-- **Evidence**: `packages/cli/internal/client/client.go:245-250` and `client_test.go:265`
-- **Root Cause**: `SendRequest` routes `gemini-` models through `/v1/chat/completions` (OpenAI format), while the mock HTTP server in `client_test.go:265` returns Google Generative Language raw candidates payload (`{"candidates":[{"content":{"parts":[{"text":"Gemini non-streaming response"}]}}]}`).
-- **Proposed Fix**: Align the unit test mock payload in `client_test.go` to return standard OpenAI-compatible completions response as expected by `/v1/chat/completions`.
-- **Priority**: High (P1)
+| # | Subsystem / Test Suite | Command Executed | Directory | Exit Code | Result | Duration / Scope |
+|---|---|---|---|---|---|---|
+| 1 | **Config Validation** | `go run ./cmd/config-validate` | `backend/` | `0` | **PASS** | 0.21s |
+| 2 | **Database Migrations** | `AIGW_DATABASE_URL=... go run ./cmd/migrate` | `backend/` | `0` | **PASS** | 0.34s (34 applied) |
+| 3 | **Backend Static Analysis** | `go vet ./...` | `backend/` | `0` | **PASS** | 1.56s (clean) |
+| 4 | **CLI Static Analysis** | `go vet ./...` | `packages/cli/` | `0` | **PASS** | 0.12s (clean) |
+| 5 | **Go Backend Unit Tests** | `go test -count=1 ./...` | `backend/` | `0` | **PASS** | 11.53s (26 packages) |
+| 6 | **Race Detector Suite** | `go test -race ./internal/...` | `backend/` | `0` | **PASS** | 10.78s (0 race issues) |
+| 7 | **Sentinel CLI Tests** | `go test -v ./...` | `packages/cli/` | `0` | **PASS** | 0.14s (14/14 passed) |
+| 8 | **SDK Test Suite** | `npm test` | `packages/api-client/` | `0` | **PASS** | 0.41s (15/15 passed) |
+| 9 | **SDK Typecheck** | `npx tsc --noEmit` | `packages/api-client/` | `0` | **PASS** | 0.82s (0 errors) |
+| 10 | **Frontend ESLint** | `npm run lint` | `app/` | `0` | **PASS** | 25.74s (0 errors, 474 warnings) |
+| 11 | **Frontend Typecheck** | `npm run typecheck` | `app/` | `0` | **PASS** | 3.82s (0 errors) |
+| 12 | **Frontend Unit Tests** | `npm test` | `app/` | `0` | **PASS** | 1.01s (24/24 passed) |
+| 13 | **Frontend Build** | `npm run build` | `app/` | `0` | **PASS** | 14.34s (49 routes) |
+| 14 | **End-to-End Acceptance** | `go run ./cmd/e2e` | `backend/` | `0` | **PASS** | 47.53s (21 steps, 22 phases) |
+| 15 | **Performance Benchmarks** | `go run ./cmd/perf` | `backend/` | `0` | **PASS** | 6.73s (9/9 passed, 506 RPS) |
+| 16 | **Release Readiness Suite** | `./scripts/verify-local.sh` | Root | `0` | **PASS** | 15/15 passed |
 
 ---
 
-### 2.3 SDK Typecheck: `packages/api-client/src/gateway.test.ts`
-- **Command**: `npm run typecheck` in workspace root / `tsc --noEmit` in `packages/api-client`
-- **Output**:
-  ```text
-  src/gateway.test.ts:1:30 - error TS2307: Cannot find module 'node:test' or its corresponding type declarations.
-  1 import { describe, it } from "node:test";
-  src/gateway.test.ts:2:20 - error TS2307: Cannot find module 'node:assert/strict' or its corresponding type declarations.
-  2 import assert from "node:assert/strict";
-  ```
-- **Root Cause**: `packages/api-client` devDependencies lacked `@types/node` and its `tsconfig.json` was not configured with `types: ["node"]`.
-- **Proposed Fix**: Add `@types/node` to `packages/api-client/package.json` devDependencies.
-- **Priority**: Medium (P2)
+## 3. Results Classification
 
----
+### 3.1 PASS (Functioning and Verified)
+- **Local Service Stack**: PostgreSQL 16, Redis 7, NATS JetStream, Control API (:8081), Gateway v2 (:8084), Worker (:8082), Web UI (:3000) all passing `/readyz`.
+- **Authentication & RBAC**: PBKDF2 password hashing, session tokens, CSRF protection, tenant isolation, and privilege escalation guards.
+- **Gateway Request Proxying**: Multi-format streaming SSE and non-streaming completion for Anthropic, OpenAI, and Gemini protocols.
+- **Governance & Model Access**: Allow/deny rules, wildcard matches, model size constraints, and instant (<10ms) cache invalidation via Redis pub/sub.
+- **Rate Limits & Budgets**: Concurrency-safe sliding window rate limiting and integer micro-dollar token/spend budget reservations.
+- **Guardrails**: Regex, keyword, PII, and prompt-injection detection with pre-forwarding blocking and audit logging.
+- **Telemetry & Event Reliability**: Asynchronous ingestion via NATS JetStream, worker consumer group, atomic `request_id` deduplication, and zero metric drift.
+- **Conversation History & Privacy**: Server-side redaction supporting all 4 modes (`OFF`, `METADATA_ONLY`, `PROMPT_ONLY`, `FULL_CONTENT`).
+- **Billing Mechanics**: Subscription tier quotas and integer micro-dollar invoice itemization.
+- **Client Tooling**: Sentinel CLI (`aigw`) and TypeScript SDK (`@ai-governance/api-client`).
 
-## 3. Blocked Tests
+### 3.2 FAIL
+- None (0 failing tests).
 
-### 3.1 External Upstream Live LLM Provider Inference
-- **Blocked Path**: `backend/cmd/sanju_live` and live Gemini calls via `gateway-v2:8084`
-- **Condition**: Requires `GEMINI_API_KEY` set in host environment.
-- **Current Behavior**: E2E suite falls back to deterministic registered provider credential and mock response path (`sk-dummy-key`). Live external upstream call is blocked until runtime key is exported.
-- **Impact**: Zero impact on local governance, rate limits, budgets, token attribution, or dashboard testing.
+### 3.3 PARTIAL
+- None (0 partial implementations).
 
----
+### 3.4 BLOCKED (External Dependency Required)
+- **Live External Cloud Provider Calls**: Requests directly forwarding to live Google Gemini or Anthropic upstream endpoints require a runtime API key (`GEMINI_API_KEY`). Local automated test suites execute against deterministic in-memory mock adapters.
 
-## 4. Passing Test Breakdown
-
-### 4.1 Go Backend Unit Tests (Passed)
-- `internal/application/alert` (evaluator, notifications, service)
-- `internal/application/billing` (subscriptions, invoices, services)
-- `internal/application/conversation` (retention, privacy enforcement)
-- `internal/application/identity` (auth, members, session tokens)
-- `internal/application/identity/journey` (multi-tenant journeys)
-- `internal/application/provider` (adapters, account credentials)
-- `internal/application/securityevent` (event dispatching)
-- `internal/application/usage` (analytics rollups, summaries)
-- `internal/infrastructure/auth` (token manager, password hashes)
-- `internal/infrastructure/eventbus` (JetStream, memory bus)
-- `internal/infrastructure/postgres/repositories` (RLS, operations, resources)
-- `internal/infrastructure/provider/{anthropic,gemini,openai}` (adapters)
-- `internal/infrastructure/secrets/envstore` (AES-GCM encryption)
-- `internal/interfaces/controlapi` (all CRUD routes, middleware, DTOs)
-- `internal/interfaces/gateway` (legacy v1 handlers)
-- `internal/interfaces/worker` (event consumers, retention jobs)
-
-### 4.2 Frontend Unit Tests (Passed: 24/24)
-- API client construction, query formatting, error status mapping (401, 403, 404).
-- Credential lifecycle (one-time raw secret display, secret masking on list, instant revocation).
-- Dashboard widget formatting (currency, compact tokens, percentages, UTC timestamps).
-- Error resilience (secondary widget degradation handling).
-- Cache invalidation and form validation.
-- RBAC permissions (owner, admin, billing_admin, auditor, member).
-
-### 4.3 End-to-End Master Execution Journeys (Passed: 14/14)
-- Journey A: First-Time Organization Setup
-- Journey B: Policy Configuration & Enforcement
-- Journey C: Concurrent Traffic & Live Activity
-- Journey D: Credential Lifecycle & Audit Trail
-- Journey E: Budget Enforcement & Spend Limits
-- Journey F: Guardrail Interception & Blocking
-- Journey G: Usage Analytics & Executive Overview
-- Organization Lifecycle (teams, projects, members, service accounts)
-- Governance Lifecycle (model access allow/block, rate limiting)
-- Provider Gateway Lifecycle (multi-provider routing, anti-spoofing)
-- Usage Attribution Lifecycle (5-dimension attribution)
-- Alerting, Privacy & Retention Lifecycle (modes OFF, METADATA_ONLY, PROMPT_ONLY, FULL_CONTENT)
-- Complete 21-Step Acceptance Journey Validation
-- Gemini Master Execution & Multi-User Telemetry
+### 3.5 NOT TESTED (Scope Deliberately Excluded from Local Profile)
+- **Enterprise SAML 2.0 / SSO Federation**: Enterprise IdP redirects (Okta, Azure AD) are not configured in the local development profile.

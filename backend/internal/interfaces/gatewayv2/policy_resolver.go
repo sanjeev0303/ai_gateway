@@ -154,7 +154,7 @@ func (p *PolicyResolverImpl) buildSnapshot(ctx context.Context, orgID uuid.UUID)
 			})
 
 			// Extract rate limit and budget configs from rule
-			p.extractConfigs(conditions, parameters, &rateLimits, &budgets, rule.RuleType, scope, scopeID)
+			p.extractConfigs(orgID, conditions, parameters, &rateLimits, &budgets, rule.RuleType, scope, scopeID)
 		}
 	}
 
@@ -170,11 +170,16 @@ func (p *PolicyResolverImpl) buildSnapshot(ctx context.Context, orgID uuid.UUID)
 
 // extractConfigs extracts rate limit and budget configs from a rule.
 func (p *PolicyResolverImpl) extractConfigs(
+	orgID uuid.UUID,
 	conditions, parameters map[string]any,
 	rateLimits *map[string]RateLimitConfig,
 	budgets *map[string]BudgetConfig,
 	ruleType, scope, scopeID string,
 ) {
+	if (scope == "organization" || scope == "org" || scope == "") && scopeID == "" {
+		scopeID = orgID.String()
+	}
+
 	key := toString(conditions["key"])
 	if key == "" {
 		if scopeID != "" {

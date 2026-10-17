@@ -78,8 +78,8 @@ func (m *mockLlmRequestRepo) PurgeExpired(context.Context, uuid.UUID, time.Time)
 
 type mockRollupRepo struct {
 	fakeRollups
-	summary         domain.UsageSummary
-	byUser          []domain.UsageByUser
+	summary          domain.UsageSummary
+	byUser           []domain.UsageByUser
 	byServiceAccount []domain.UsageByServiceAccount
 }
 
@@ -332,4 +332,3 @@ func TestUsageAnalytics_VersionedPricingEffectiveFrom(t *testing.T) {
 		t.Fatalf("expected no pricing version before earliest effective date")
 	}
 }
-

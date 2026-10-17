@@ -273,4 +273,3 @@ func (a *api) createConversationMessage(w http.ResponseWriter, r *http.Request) 
 		"created_at":      msg.CreatedAt.Format(time.RFC3339),
 	})
 }
-

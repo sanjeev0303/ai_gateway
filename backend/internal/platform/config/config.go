@@ -236,7 +236,9 @@ func (c Config) Validate() error {
 		if !c.Auth.CSRFEnabled {
 			add(fmt.Errorf("AUTH_CSRF_ENABLED must be true in %s environment", c.Env))
 		}
-		if isPlaceholderSecret(c.Auth.HMACSigningKey) {
+		if c.Auth.HMACSigningKey == "" {
+			add(fmt.Errorf("AUTH_HMAC_SIGNING_KEY is required in %s environment", c.Env))
+		} else if isPlaceholderSecret(c.Auth.HMACSigningKey) {
 			add(fmt.Errorf("AUTH_HMAC_SIGNING_KEY uses a known placeholder secret, prohibited in %s environment", c.Env))
 		}
 		for i, k := range c.Auth.HMACPreviousKeys {
@@ -244,11 +246,20 @@ func (c Config) Validate() error {
 				add(fmt.Errorf("AUTH_HMAC_PREVIOUS_KEYS entry %d uses a known placeholder secret, prohibited in %s environment", i, c.Env))
 			}
 		}
-		if isPlaceholderSecret(c.Secrets.Key) {
+		if c.Secrets.Provider == "env" && c.Secrets.Key == "" {
+			add(fmt.Errorf("SECRETS_KEY is required in %s environment when SECRETS_PROVIDER=env", c.Env))
+		} else if isPlaceholderSecret(c.Secrets.Key) {
 			add(fmt.Errorf("SECRETS_KEY uses a known placeholder secret, prohibited in %s environment", c.Env))
 		}
-		if isPlaceholderSecret(c.Redis.Password) {
-			add(fmt.Errorf("REDIS_PASSWORD uses a known placeholder secret, prohibited in %s environment", c.Env))
+		if c.Redis.Enabled {
+			if c.Redis.Password == "" {
+				add(fmt.Errorf("REDIS_PASSWORD is required in %s environment when REDIS_ENABLED=true", c.Env))
+			} else if isPlaceholderSecret(c.Redis.Password) {
+				add(fmt.Errorf("REDIS_PASSWORD uses a known placeholder secret, prohibited in %s environment", c.Env))
+			}
+		}
+		if c.Database.Enabled && isPlaceholderSecret(c.Database.URL) {
+			add(fmt.Errorf("DATABASE_URL contains a known placeholder secret, prohibited in %s environment", c.Env))
 		}
 	} else if c.Env == "development" {
 		if c.Auth.DevLoginEnabled && !c.AllowInsecureDev {
@@ -262,6 +273,9 @@ func (c Config) Validate() error {
 		}
 		if isPlaceholderSecret(c.Secrets.Key) && !c.AllowInsecureDev {
 			add(errors.New("SECRETS_KEY uses a known placeholder secret; set a secure key or set AIGW_ALLOW_INSECURE_DEV=true for local development"))
+		}
+		if c.Database.Enabled && isPlaceholderSecret(c.Database.URL) && !c.AllowInsecureDev {
+			add(errors.New("DATABASE_URL contains a known placeholder secret; set a secure password or set AIGW_ALLOW_INSECURE_DEV=true for local development"))
 		}
 		for i, k := range c.Auth.HMACPreviousKeys {
 			if isPlaceholderSecret(k) && !c.AllowInsecureDev {

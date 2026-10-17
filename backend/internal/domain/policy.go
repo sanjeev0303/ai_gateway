@@ -111,11 +111,11 @@ func (p FallbackPolicy) Validate() error {
 type BudgetScope string
 
 const (
-	BudgetScopeOrganization    BudgetScope = "organization"
-	BudgetScopeTeam            BudgetScope = "team"
-	BudgetScopeProject         BudgetScope = "project"
+	BudgetScopeOrganization      BudgetScope = "organization"
+	BudgetScopeTeam              BudgetScope = "team"
+	BudgetScopeProject           BudgetScope = "project"
 	BudgetScopeGatewayCredential BudgetScope = "gateway_credential"
-	BudgetScopeServiceAccount  BudgetScope = "service_account"
+	BudgetScopeServiceAccount    BudgetScope = "service_account"
 )
 
 // BudgetLimitType represents the type of limit a budget enforces.
@@ -139,16 +139,16 @@ const (
 
 // NewBudget carries the caller-supplied fields for creating a budget.
 type NewBudget struct {
-	OrganizationID  uuid.UUID
-	Name            string
-	Description     string
-	Scope           BudgetScope
-	ScopeID         uuid.UUID // team_id, project_id, credential_id, or service_account_id
-	LimitType       BudgetLimitType
-	LimitAmount     float64
-	Window          BudgetWindow
-	AlertThreshold  float64 // percentage (0.0-1.0) at which to alert
-	Enabled         bool
+	OrganizationID uuid.UUID
+	Name           string
+	Description    string
+	Scope          BudgetScope
+	ScopeID        uuid.UUID // team_id, project_id, credential_id, or service_account_id
+	LimitType      BudgetLimitType
+	LimitAmount    float64
+	Window         BudgetWindow
+	AlertThreshold float64 // percentage (0.0-1.0) at which to alert
+	Enabled        bool
 }
 
 // UpdateBudget carries the caller-supplied fields for updating a budget.
@@ -162,19 +162,19 @@ type UpdateBudget struct {
 
 // Budget represents a spend/token/request cap enforced on the gateway.
 type Budget struct {
-	ID              uuid.UUID
-	OrganizationID  uuid.UUID
-	Name            string
-	Description     string
-	Scope           BudgetScope
-	ScopeID         uuid.UUID
-	LimitType       BudgetLimitType
-	LimitAmount     float64
-	Window          BudgetWindow
-	AlertThreshold  float64
-	Enabled         bool
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	Name           string
+	Description    string
+	Scope          BudgetScope
+	ScopeID        uuid.UUID
+	LimitType      BudgetLimitType
+	LimitAmount    float64
+	Window         BudgetWindow
+	AlertThreshold float64
+	Enabled        bool
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 	// Computed fields (not stored)
 	CurrentSpend    float64
 	CurrentTokens   int64
@@ -187,7 +187,7 @@ type Budget struct {
 type ModelAccessEntry struct {
 	Provider  string
 	Model     string
-	Allowed   bool // true = allow, false = block
+	Allowed   bool   // true = allow, false = block
 	Source    string // "allowlist" or "blocklist"
 	PolicyID  uuid.UUID
 	RuleID    uuid.UUID
@@ -204,11 +204,11 @@ type ModelAccessPreviewRequest struct {
 
 // ModelAccessPreviewResponse represents the result of a model access preview.
 type ModelAccessPreviewResponse struct {
-	Provider          string
-	Model             string
-	CurrentDecision   string // "allow" or "block"
-	PreviewDecision   string // "allow" or "block"
-	WouldChange       bool
-	BlockingRules     []ModelAccessEntry
-	AllowingRules     []ModelAccessEntry
+	Provider        string
+	Model           string
+	CurrentDecision string // "allow" or "block"
+	PreviewDecision string // "allow" or "block"
+	WouldChange     bool
+	BlockingRules   []ModelAccessEntry
+	AllowingRules   []ModelAccessEntry
 }

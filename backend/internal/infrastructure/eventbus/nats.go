@@ -15,16 +15,16 @@ import (
 )
 
 const (
-	natsStreamName         = "AIGW_USAGE"
-	natsSubject            = "aigw.usage.events"
-	natsDeadLetterSubject  = "aigw.usage.deadletter"
-	natsDurable            = "aigw-usage-worker"
-	natsAckWait            = 30 * time.Second
-	natsMaxDeliver         = 10
-	natsPublishWait        = 5 * time.Second
-	natsMaxPending         = 10000
-	natsRetryBase          = time.Second
-	natsMaxRetryDelay      = 30 * time.Second
+	natsStreamName        = "AIGW_USAGE"
+	natsSubject           = "aigw.usage.events"
+	natsDeadLetterSubject = "aigw.usage.deadletter"
+	natsDurable           = "aigw-usage-worker"
+	natsAckWait           = 30 * time.Second
+	natsMaxDeliver        = 10
+	natsPublishWait       = 5 * time.Second
+	natsMaxPending        = 10000
+	natsRetryBase         = time.Second
+	natsMaxRetryDelay     = 30 * time.Second
 )
 
 // NATS is a distributed EventBus backed by a JetStream stream. Unlike InMemory

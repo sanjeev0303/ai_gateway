@@ -19,9 +19,9 @@ import (
 // usageFlushTimeout bounds one batch of ledger writes so a stuck database
 // cannot pin the worker goroutine indefinitely.
 const (
-	usageFlushTimeout  = 5 * time.Second
-	maxRetrySpoolSize  = 5000
-	maxSpoolAttempts   = 5
+	usageFlushTimeout = 5 * time.Second
+	maxRetrySpoolSize = 5000
+	maxSpoolAttempts  = 5
 )
 
 var errMissingRequestID = errors.New("gateway: usage record has no request id")
@@ -409,7 +409,7 @@ func subjectServiceAccountID(record UsageRecord) *uuid.UUID {
 func (e *TelemetryEmitterImpl) flushErrors(batch []ErrorRecord) {
 	for _, record := range batch {
 		e.logger.Warn("telemetry: error", "org_id", record.OrganizationID, "error_type", record.ErrorType, "status", record.StatusCode)
-		
+
 		if record.ErrorType != "authentication_error" && record.ErrorType != "" {
 			// Convert to security event message
 			msg := ports.SecurityEventMessage{
@@ -419,8 +419,8 @@ func (e *TelemetryEmitterImpl) flushErrors(batch []ErrorRecord) {
 				Title:          "Gateway Request Rejected",
 				Source:         "gateway",
 				Details: map[string]any{
-					"error_type": record.ErrorType,
-					"status_code": record.StatusCode,
+					"error_type":     record.ErrorType,
+					"status_code":    record.StatusCode,
 					"upstream_error": record.UpstreamError,
 				},
 			}

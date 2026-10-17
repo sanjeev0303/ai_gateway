@@ -670,11 +670,11 @@ var (
 
 type stubPolicyRepo struct {
 	repositories.PolicyRepository
-	create   func(context.Context, uuid.UUID, domain.NewPolicy) (domain.Policy, error)
-	get      func(context.Context, uuid.UUID, uuid.UUID) (domain.Policy, error)
-	list     func(context.Context, uuid.UUID) ([]domain.Policy, error)
-	update   func(context.Context, uuid.UUID, uuid.UUID, domain.UpdatePolicy) (domain.Policy, error)
-	delete   func(context.Context, uuid.UUID, uuid.UUID) error
+	create func(context.Context, uuid.UUID, domain.NewPolicy) (domain.Policy, error)
+	get    func(context.Context, uuid.UUID, uuid.UUID) (domain.Policy, error)
+	list   func(context.Context, uuid.UUID) ([]domain.Policy, error)
+	update func(context.Context, uuid.UUID, uuid.UUID, domain.UpdatePolicy) (domain.Policy, error)
+	delete func(context.Context, uuid.UUID, uuid.UUID) error
 }
 
 func (s *stubPolicyRepo) Create(ctx context.Context, orgID uuid.UUID, in domain.NewPolicy) (domain.Policy, error) {
@@ -714,11 +714,11 @@ func (s *stubPolicyRepo) Delete(ctx context.Context, orgID, id uuid.UUID) error 
 
 type stubPolicyRuleRepo struct {
 	repositories.PolicyRuleRepository
-	create   func(context.Context, uuid.UUID, domain.NewPolicyRule) (domain.PolicyRule, error)
-	get      func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (domain.PolicyRule, error)
-	list     func(context.Context, uuid.UUID, uuid.UUID) ([]domain.PolicyRule, error)
-	update   func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, domain.UpdatePolicyRule) (domain.PolicyRule, error)
-	delete   func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error
+	create func(context.Context, uuid.UUID, domain.NewPolicyRule) (domain.PolicyRule, error)
+	get    func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (domain.PolicyRule, error)
+	list   func(context.Context, uuid.UUID, uuid.UUID) ([]domain.PolicyRule, error)
+	update func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, domain.UpdatePolicyRule) (domain.PolicyRule, error)
+	delete func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error
 }
 
 func (s *stubPolicyRuleRepo) Create(ctx context.Context, orgID uuid.UUID, in domain.NewPolicyRule) (domain.PolicyRule, error) {
@@ -967,19 +967,19 @@ func (s *stubBudgets) Delete(ctx context.Context, orgID, id uuid.UUID) error {
 }
 
 type stubPolicy struct {
-	createPolicy   func(context.Context, uuid.UUID, domain.NewPolicy) (domain.Policy, error)
-	getPolicy      func(context.Context, uuid.UUID, uuid.UUID) (domain.Policy, error)
-	listPolicies   func(context.Context, uuid.UUID) ([]domain.Policy, error)
-	updatePolicy   func(context.Context, uuid.UUID, uuid.UUID, domain.UpdatePolicy) (domain.Policy, error)
-	deletePolicy   func(context.Context, uuid.UUID, uuid.UUID) error
-	CreateStub     func(context.Context, uuid.UUID, domain.NewPolicy) (domain.Policy, error)
-	createRule     func(context.Context, uuid.UUID, domain.NewPolicyRule) (domain.PolicyRule, error)
-	getRule        func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (domain.PolicyRule, error)
-	listRules      func(context.Context, uuid.UUID, uuid.UUID) ([]domain.PolicyRule, error)
-	updateRule     func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, domain.UpdatePolicyRule) (domain.PolicyRule, error)
-	deleteRule     func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error
-	invalidator    func(uuid.UUID)
-	auditFn        func(context.Context, uuid.UUID, domain.NewAuditLog) error
+	createPolicy func(context.Context, uuid.UUID, domain.NewPolicy) (domain.Policy, error)
+	getPolicy    func(context.Context, uuid.UUID, uuid.UUID) (domain.Policy, error)
+	listPolicies func(context.Context, uuid.UUID) ([]domain.Policy, error)
+	updatePolicy func(context.Context, uuid.UUID, uuid.UUID, domain.UpdatePolicy) (domain.Policy, error)
+	deletePolicy func(context.Context, uuid.UUID, uuid.UUID) error
+	CreateStub   func(context.Context, uuid.UUID, domain.NewPolicy) (domain.Policy, error)
+	createRule   func(context.Context, uuid.UUID, domain.NewPolicyRule) (domain.PolicyRule, error)
+	getRule      func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (domain.PolicyRule, error)
+	listRules    func(context.Context, uuid.UUID, uuid.UUID) ([]domain.PolicyRule, error)
+	updateRule   func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, domain.UpdatePolicyRule) (domain.PolicyRule, error)
+	deleteRule   func(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error
+	invalidator  func(uuid.UUID)
+	auditFn      func(context.Context, uuid.UUID, domain.NewAuditLog) error
 }
 
 func (s *stubPolicy) Create(ctx context.Context, orgID uuid.UUID, in domain.NewPolicy) (domain.Policy, error) {

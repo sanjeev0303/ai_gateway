@@ -239,7 +239,7 @@ func runGeminiMasterExecution() {
 	}`)))
 	spoofReq.Header.Set("Authorization", "Bearer "+user1Key)
 	spoofReq.Header.Set("Content-Type", "application/json")
-	spoofReq.Header.Set("X-User-ID", user2ID)               // Forged User ID
+	spoofReq.Header.Set("X-User-ID", user2ID)                 // Forged User ID
 	spoofReq.Header.Set("X-Organization-ID", "forged-org-id") // Forged Org ID
 	spoofRes, err := client.Do(spoofReq)
 	assert(err == nil, "Gateway request completed")

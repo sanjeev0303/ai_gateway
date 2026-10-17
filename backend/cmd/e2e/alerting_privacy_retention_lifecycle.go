@@ -204,7 +204,7 @@ func runAlertingPrivacyRetentionLifecycle() {
 		// If worker is on standard cycle, trigger a synthetic test alert to obtain an event
 		testResp, _ := post(fmt.Sprintf("/v1/alerts/%s/test", createdAlerts["error_rate"]), nil, ownerCookie, ownerCSRF, 8081)
 		assert(strings.Contains(testResp, createdAlerts["error_rate"]), "Test alert executed")
-		
+
 		// Query events again
 		_, eventsBody = getStatus("/v1/alert-events", ownerCookie, 8081)
 		_ = json.Unmarshal([]byte(eventsBody), &eventsList)
