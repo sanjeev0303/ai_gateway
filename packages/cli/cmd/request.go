@@ -94,7 +94,11 @@ Validates credentials, rates, and budgets, preserving streaming and inspecting r
 			}
 			fmt.Printf("Latency:    %v\n", meta.Duration.Round(time.Millisecond))
 			if meta.TotalTokens > 0 {
-				fmt.Printf("Tokens:     %d input / %d output (%d total)\n", meta.InputTokens, meta.OutputTokens, meta.TotalTokens)
+				sourceTag := ""
+				if meta.UsageSource != "" {
+					sourceTag = fmt.Sprintf(" [%s]", meta.UsageSource)
+				}
+				fmt.Printf("Tokens:     %d input / %d output (%d total)%s\n", meta.InputTokens, meta.OutputTokens, meta.TotalTokens, sourceTag)
 			}
 			fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 		}

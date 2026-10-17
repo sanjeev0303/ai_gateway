@@ -15,6 +15,7 @@
     "@ai-governance/contracts": "*"
   },
   "devDependencies": {
+    "@types/node": "^20",
     "typescript": "^5.7.3"
   }
 }

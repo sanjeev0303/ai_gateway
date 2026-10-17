@@ -187,7 +187,13 @@ func NewGateway(deps GatewayDeps) (*Gateway, error) {
 // ServeHTTP is the main entry point for the gateway.
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	reqID := uuid.New().String()
+	reqID := strings.TrimSpace(r.Header.Get("x-request-id"))
+	if reqID == "" {
+		reqID = strings.TrimSpace(r.Header.Get("x-correlation-id"))
+	}
+	if reqID == "" {
+		reqID = uuid.New().String()
+	}
 
 	// Add request ID to response headers
 	w.Header().Set("x-request-id", reqID)
@@ -232,8 +238,28 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			g.logger.Error("stream proxy forward failed", "error", err)
 			if errors.Is(err, ErrUpstreamTimeout) {
 				g.writeError(w, http.StatusGatewayTimeout, "upstream_timeout", "upstream provider timed out")
+				if observed == nil {
+					observed = &StreamUsage{}
+				}
+				observed.StatusCode = http.StatusGatewayTimeout
 			} else if errors.Is(err, ErrUpstreamError) {
 				g.writeError(w, http.StatusBadGateway, "upstream_error", "failed to connect to upstream provider")
+				if observed == nil {
+					observed = &StreamUsage{}
+				}
+				observed.StatusCode = http.StatusBadGateway
+			} else if errors.Is(err, ErrClientDisconnected) {
+				if observed == nil {
+					observed = &StreamUsage{}
+				}
+				observed.StatusCode = 499
+			} else if errors.Is(err, ErrStreamTruncated) {
+				if observed == nil {
+					observed = &StreamUsage{}
+				}
+				if observed.StatusCode == 0 || observed.StatusCode == 200 {
+					observed.StatusCode = http.StatusBadGateway
+				}
 			}
 		}
 		g.emitTelemetry(r.Context(), reqID, result, start, observed)
@@ -750,30 +776,40 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 		if observed != nil && observed.ReasoningTokens > 0 {
 			usage.ReasoningTokens = observed.ReasoningTokens
 		}
-		if costMicros > 0 {
-			usage.CostStatus = domain.CostStatusCalculated
+		if actualStatusCode >= 400 {
+			usage.CostStatus = domain.CostStatusUnavailable
+			usage.CostMicros = 0
+		} else if costMicros > 0 {
+			if observed != nil && (observed.InputTokens > 0 || observed.OutputTokens > 0) {
+				usage.CostStatus = domain.CostStatusCalculated
+			} else {
+				usage.CostStatus = domain.CostStatusEstimated
+			}
 		} else if usage.InputTokens > 0 || usage.OutputTokens > 0 {
 			usage.CostStatus = domain.CostStatusUnavailable
 		} else {
 			usage.CostStatus = domain.CostStatusFree
 		}
 
-		// Record usage against all applicable budget trackers
-		cost := (float64(usage.InputTokens)/1000*0.01) + (float64(usage.OutputTokens)/1000*0.03)
-		appBudgets := result.Context.PolicySnapshot.applicableBudgets(result.Context.Credential)
-		if len(appBudgets) == 0 {
-			budgetKey := g.buildBudgetKey(result.Context.Credential, result.Context.Upstream)
-			if err := g.budgetGuard.RecordUsage(ctx, budgetKey, cost); err != nil {
-				g.logger.Warn("failed to record local budget usage", "error", err, "key", budgetKey)
-			}
-		} else {
-			for _, cfg := range appBudgets {
-				usageAmt := cost
-				if cfg.LimitType == "tokens" {
-					usageAmt = float64(usage.InputTokens + usage.OutputTokens)
+		// Record usage against all applicable budget trackers only for non-failed requests.
+		// Rejected and failed upstream calls (status >= 400) do not accrue provider spend/tokens.
+		if actualStatusCode < 400 {
+			cost := (float64(usage.InputTokens)/1000*0.01) + (float64(usage.OutputTokens)/1000*0.03)
+			appBudgets := result.Context.PolicySnapshot.applicableBudgets(result.Context.Credential)
+			if len(appBudgets) == 0 {
+				budgetKey := g.buildBudgetKey(result.Context.Credential, result.Context.Upstream)
+				if err := g.budgetGuard.RecordUsage(ctx, budgetKey, cost); err != nil {
+					g.logger.Warn("failed to record local budget usage", "error", err, "key", budgetKey)
 				}
-				if err := g.budgetGuard.RecordUsage(ctx, cfg.Key, usageAmt); err != nil {
-					g.logger.Warn("failed to record local budget usage", "error", err, "key", cfg.Key)
+			} else {
+				for _, cfg := range appBudgets {
+					usageAmt := cost
+					if cfg.LimitType == "tokens" {
+						usageAmt = float64(usage.InputTokens + usage.OutputTokens)
+					}
+					if err := g.budgetGuard.RecordUsage(ctx, cfg.Key, usageAmt); err != nil {
+						g.logger.Warn("failed to record local budget usage", "error", err, "key", cfg.Key)
+					}
 				}
 			}
 		}

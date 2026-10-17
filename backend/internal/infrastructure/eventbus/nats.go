@@ -71,6 +71,17 @@ func NewNATS(ctx context.Context, url string, log *slog.Logger) (*NATS, error) {
 	return &NATS{conn: conn, js: js, stream: stream, log: log}, nil
 }
 
+// Ping verifies that the connection to NATS is alive and connected.
+func (b *NATS) Ping(ctx context.Context) error {
+	if b == nil || b.conn == nil || b.conn.IsClosed() {
+		return errors.New("nats: connection closed")
+	}
+	if b.conn.Status() != nats.CONNECTED {
+		return fmt.Errorf("nats: status %v", b.conn.Status())
+	}
+	return nil
+}
+
 // Publish sends the message and waits for JetStream to confirm it was persisted,
 // bounded by natsPublishWait. The wait is safe on the data plane because the
 // emitter publishes from its flush goroutine, never from the request path.

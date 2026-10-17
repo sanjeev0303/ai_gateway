@@ -78,29 +78,44 @@ run_check() {
     REPORT_DURATIONS+=("${duration_sec}")
 }
 
+GIT_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")"
+
 echo "=========================================================================="
 echo "    SENTINEL AI GATEWAY: LOCAL RELEASE-READINESS VERIFICATION SUITE       "
 echo "=========================================================================="
-echo "Monorepo Root: $REPO_ROOT"
-echo "Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+echo "Monorepo Root:    $REPO_ROOT"
+echo "Git Checkout:     commit ${GIT_COMMIT} (${GIT_BRANCH})"
+echo "Execution Time:   $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+echo "Target Endpoints:"
+echo "  - Control API:  http://localhost:8081 (/readyz, /v1/...)"
+echo "  - Gateway v2:   http://localhost:8084 (/readyz, /v1/chat/completions, /v1/messages)"
+echo "  - Worker:       http://localhost:8082 (/readyz)"
+echo "  - Web UI:       http://localhost:3000"
+echo "  - PostgreSQL:   localhost:5432 (database: ai_gateway)"
+echo "  - Redis:        localhost:6379"
+echo "  - NATS:         localhost:4222 (monitoring: http://localhost:8222/healthz)"
+echo "=========================================================================="
 
-# 1. Validate local configuration
+# 1. Validate local configuration (strictly non-destructive)
 check_config() {
+    # Never overwrite existing .env files
     if [[ ! -f "backend/.env" ]]; then
-        cat << 'EOF' > backend/.env
-AIGW_DATABASE_URL=postgres://gateway:gateway@localhost:5432/ai_gateway?sslmode=disable
-AIGW_REDIS_ADDR=localhost:6379
-AIGW_REDIS_PASSWORD=change-me
-AIGW_AUTH_HMAC_SIGNING_KEY=change-me-change-me-change-me-change-me
-EOF
+        if [[ -f "backend/.env.example" ]]; then
+            cp "backend/.env.example" "backend/.env"
+            echo "Initialized backend/.env from template (no existing file was modified)."
+        fi
     fi
     if [[ ! -f "deploy/compose/.env" ]]; then
         if [[ -f "deploy/compose/.env.example" ]]; then
             cp "deploy/compose/.env.example" "deploy/compose/.env"
+            echo "Initialized deploy/compose/.env from template (no existing file was modified)."
         fi
     fi
     export AIGW_DATABASE_URL="${AIGW_DATABASE_URL:-postgres://gateway:gateway@localhost:5432/ai_gateway?sslmode=disable}"
-    return 0
+    
+    # Run Go config validation binary
+    (cd backend && go run ./cmd/config-validate)
 }
 run_check "1/15" "Local Configuration Validation" "check_config"
 
@@ -123,22 +138,66 @@ run_check "2/15" "Local Tooling Dependencies" "check_deps"
 # 3. Run database migrations
 run_check "3/15" "Database Schema Migrations" "(cd backend && export AIGW_DATABASE_URL=\"${AIGW_DATABASE_URL:-postgres://gateway:gateway@localhost:5432/ai_gateway?sslmode=disable}\" && go run ./cmd/migrate)"
 
-# 4. Verify database readiness
-check_db_readiness() {
+# 4. Verify functional service readiness (/readyz and query checks)
+check_service_readiness() {
+    # Check PostgreSQL
     if docker ps --format '{{.Names}}' | grep -q 'ai-gateway-postgres-1'; then
-        docker exec ai-gateway-postgres-1 pg_isready -U gateway -d ai_gateway
+        docker exec ai-gateway-postgres-1 pg_isready -U gateway -d ai_gateway >/dev/null 2>&1 || {
+            echo "PostgreSQL pg_isready check failed." >&2
+            return 1
+        }
+        docker exec ai-gateway-postgres-1 psql -U gateway -d ai_gateway -c "SELECT 1;" >/dev/null 2>&1 || {
+            echo "PostgreSQL functional query SELECT 1 failed." >&2
+            return 1
+        }
     else
         echo "PostgreSQL container ai-gateway-postgres-1 is not running." >&2
         return 1
     fi
+
+    # Check Redis
+    if docker ps --format '{{.Names}}' | grep -q 'ai-gateway-redis-1'; then
+        docker exec ai-gateway-redis-1 redis-cli -a change-me ping >/dev/null 2>&1 || {
+            echo "Redis ping check failed." >&2
+            return 1
+        }
+    fi
+
+    # Check NATS JetStream
+    if docker ps --format '{{.Names}}' | grep -q 'ai-gateway-nats-1'; then
+        curl -s -f http://localhost:8222/healthz >/dev/null 2>&1 || {
+            echo "NATS health check failed." >&2
+            return 1
+        }
+    fi
+
+    # Check Control API /readyz (functional check of DB, Redis, Eventbus)
+    curl -s -f http://localhost:8081/readyz >/dev/null 2>&1 || {
+        echo "Control API /readyz functional check failed." >&2
+        return 1
+    }
+
+    # Check Gateway v2 /readyz
+    curl -s -f http://localhost:8084/readyz >/dev/null 2>&1 || {
+        echo "Gateway v2 /readyz functional check failed." >&2
+        return 1
+    }
+
+    # Check Worker /readyz
+    curl -s -f http://localhost:8082/readyz >/dev/null 2>&1 || {
+        echo "Worker /readyz functional check failed." >&2
+        return 1
+    }
+
+    return 0
 }
-run_check "4/15" "Database Runtime Readiness" "check_db_readiness"
+run_check "4/15" "Full-Stack Functional Readiness" "check_service_readiness"
 
 # 5. Run backend formatting and static analysis
 run_check "5/15" "Backend Static Analysis (go vet)" "(cd backend && go vet ./...)"
 
-# 6. Run Go unit tests
-run_check "6/15" "Go Unit Test Suite" "(cd backend && go test -count=1 ./...)"
+# 6. Run Go unit tests across backend and CLI packages
+run_check "6/15" "Go Unit Test Suite (Backend & CLI)" "(cd backend && go test -count=1 ./...) && (cd packages/cli && go test -count=1 ./...)"
 
 # 7. Run backend integration tests
 run_check "7/15" "Repository Integration Tests" "(cd backend && go test -count=1 ./internal/infrastructure/postgres/repositories/...)"
@@ -150,7 +209,7 @@ run_check "8/15" "Race Detector Suite" "(cd backend && go test -race -count=1 ./
 run_check "9/15" "Frontend Linter (eslint)" "(cd app && npm run lint)"
 
 # 10. Run frontend type checking
-run_check "10/15" "Frontend Type Checking (tsc)" "(cd app && npx tsc --noEmit)"
+run_check "10/15" "Frontend Type Checking (tsc)" "(cd app && npm run typecheck)"
 
 # 11. Run frontend unit tests
 run_check "11/15" "Frontend Unit Tests (tsx --test)" "(cd app && npm test)"
@@ -162,7 +221,7 @@ run_check "12/15" "Frontend Production Build (next)" "(cd app && npm run build)"
 run_check "13/15" "Monorepo API Contracts Check" "(npm run typecheck --workspace=@ai-governance/contracts && npm run typecheck --workspace=@ai-governance/api-client)"
 
 # 14. Run browser end-to-end user journeys
-run_check "14/15" "E2E User Journeys (A through G)" "(cd backend && go run ./cmd/e2e/main.go)"
+run_check "14/15" "E2E User Journeys (A through G)" "(cd backend && go run ./cmd/e2e)"
 
 # 15. Run local performance and resilience validation
 run_check "15/15" "Performance & Resilience Suite" "(cd backend && go run ./cmd/perf/main.go)"

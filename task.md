@@ -2,7 +2,89 @@
 
 Updated after each completed prompt.
 
-## ACTIVE TASK: Git Push & Enforce Git Add/Push Policy by Command
+## ACTIVE TASK: Git Commit and Push to GitHub on Explicit User Command
+- [ ] Step 1: Stage verified modifications and untracked readiness files (`git add -A`)
+- [ ] Step 2: Commit changes with descriptive message
+- [ ] Step 3: Push to remote repository (`git push origin main`)
+- [ ] Step 4: Verify clean git status and remote synchronization
+
+## PREVIOUS TASK: Prompt 8 — Final Sentinel Cleanup, Consistency, and Local Release Gate
+- [x] Step 1: Inventory & Audit: analyze untracked files, scratch files, dead code candidates, duplicate test helpers, doc contradictions, and secret exposure risks.
+- [x] Step 2: Safe Dead Code & Fixture Pruning: remove verified obsolete/unused files with proof of unreachability, preserving migrations, SDK/CLI interfaces, scripts, adapters, and tooling.
+- [x] Step 3: Consistency & Secret Redaction Hardening: resolve contradictions across docs, env examples, API contracts, and ensure startup/config errors never leak secrets.
+- [x] Step 4: Test Independence & Provider Transparency: ensure tests do not rely on hidden env vars or accidental state, and explicitly identify mock vs fixture vs live providers.
+- [x] Step 5: Final Release Gate & Verification: execute full release-readiness verification (`./scripts/verify-local.sh`, `go run ./cmd/e2e`, `go run ./cmd/perf`).
+- [x] Step 6: Deliverables: produce `docs/local-readiness/final-cleanup-report.md`, update `docs/local-readiness/feature-matrix.md`, and update `task.md`.
+
+## PREVIOUS TASK: Prompt 7 — Sentinel Full Local End-to-End and Recovery Verification
+- [x] Scenario 1: Fresh Local Setup & Topology Verification: validate clean local environment setup, services (Postgres, Redis, NATS, Control API, Gateway v2, Worker, Frontend), migrations, and readiness probes.
+- [x] Scenario 2: Three-User Request Flow & Governance Matrix: test 3 users with individual gateway credentials in one organization, SDK & CLI, streaming vs non-streaming, invalid models, revoked credentials, policy denials, guardrails, rate limits, and attribution.
+- [x] Scenario 3: Dashboard & API Cross-Verification: verify UI and API data consistency with persisted records across traffic charts, activity, usage, models, tokens, cost, conversations, guardrails, alerts, and audit logs.
+- [x] Scenario 4: Failure & Recovery Testing: test provider failures, service restarts (gateway, worker, event bus), database and Redis unavailability, timeouts, stream interruption, fail-closed/fail-open behavior, and zero usage duplication/loss.
+- [x] Scenario 5: Full Regression & Quality Checks: execute all test suites (Go unit/integration/race/vet, TypeScript lint/tsc/test/build, SDK/CLI tests, migrations, API contracts, E2E journeys).
+- [x] Step 6: Final Deliverables: create `docs/local-readiness/final-test-report.md`, `docs/local-readiness/remaining-gaps.md`, update `docs/local-readiness/local-runbook.md`, update `docs/local-readiness/feature-matrix.md`, and update `task.md`.
+
+## PREVIOUS TASK: Prompt 6 — Complete Organization Workflows, Conversation History, and Local Billing
+- [x] Step 1: Organization Lifecycle & Hierarchy: audit & test org creation, invitation lifecycle (creation, validation, acceptance, expiration, revocation, duplicate checks), membership management, role changes, team & project membership persistence, and privilege escalation prevention.
+- [x] Step 2: Gateway Credentials Management: audit individual user gateway credentials creation, display, rotation, revocation, scoping, and authorization checks.
+- [x] Step 3: Conversation History & Privacy Redaction: trace user/org request attribution, persistence, retrieval (`GET /v1/conversations`, `/{id}/messages`), pagination, filters, ownership enforcement, 4 privacy redaction modes, retention policy, and leak prevention.
+- [x] Step 4: Usage & Local Billing Mechanics: audit request/user/org cost aggregation, verify historical stability, test subscription and invoice endpoints using real DB data vs labeled demo fixtures, document usage-only reporting scope, verify rounding, currencies, date boundaries, and reconciliation.
+- [x] Step 5: Frontend Interface Resilience: verify loading, empty, error, and populated states across organization, conversation, and billing pages; fix broken routes/links/contracts; ensure isolated widget failure handling.
+- [x] Step 6: Test Suite, Documentation & Matrix: write regression tests for org workflows, conversations, and billing; update `docs/local-readiness/feature-matrix.md`; create `docs/local-readiness/organization-conversation-billing.md`; run `./scripts/verify-local.sh`; update `task.md`.
+
+## PREVIOUS TASK: Prompt 5 — Complete Sentinel Governance and Security Enforcement
+- [x] Step 1: Policies & Model Access: audit and test policy CRUD (create, read, update, enable, disable, delete), allow/deny rule precedence, conflict resolution, unsupported models, pre-request server enforcement, cache invalidation timebounds, and gateway restart recovery.
+- [x] Step 2: Budgets & Rate Limits: audit organization & user limits, threshold edge cases (below, at, above), concurrency race defense, zero provider usage/cost accrual on rejection, reset windows, and remaining budget calculation.
+- [x] Step 3: Guardrails Pipeline & Content Redaction: audit regex, keyword, PII, and length guardrails; enforce pre-forwarding execution; record blocked requests without upstream forwarding; verify sensitive data redaction in logs and audit trails.
+- [x] Step 4: Alerts Engine & Trigger Lifecycle: audit all alert condition evaluators, test threshold crossing, no-trigger conditions, repeat suppressions, auto-recovery/resolution, trigger history persistence, and API/dashboard visibility.
+- [x] Step 5: Audit Logs & Security Events: audit security-relevant event emission (auth failures, credential mutations, policy/guardrail updates, role changes), tamper resistance, org isolation, RBAC read gating, and secret/prompt redaction.
+- [x] Step 6: Test Suite, Feature Matrix & Documentation: expand automated regression tests across all governance domains, update `docs/local-readiness/feature-matrix.md`, create `docs/local-readiness/governance-and-security-verification.md`, run `./scripts/verify-local.sh`, and update `task.md`.
+
+## PREVIOUS TASK: Prompt 4 — Make Usage Metering, Event Processing, and Analytics Reliable
+- [x] Step 1: Event Bus & Worker Pipeline Audit: inspect NATS JetStream / Memory broker, stream definitions, subject bindings, consumer group config, ack/nack behavior, and redelivery semantics.
+- [x] Step 2: Idempotency & Deduplication in Worker Persistence: ensure replayed or duplicate events on `request_id` are idempotent and cannot double-count usage metrics or billing aggregates.
+- [x] Step 3: Usage Metering, Cost Calculation & Historical Explainability: verify model pricing lookup, token estimation vs exact provider-reported tags, streaming/interrupted request handling, and cost snapshot storage.
+- [x] Step 4: Analytics Aggregation, Timezones & Redis Cache Safety: audit `/v1/usage/*` and `/v1/analytics/*`, date boundaries, UTC/local timezone handling, pagination, empty states, and tenant-scoped Redis caching with proper TTL and invalidation.
+- [x] Step 5: Comprehensive Event Reliability Test Suite: test duplicate delivery, worker crashes/restarts, event bus backlog recovery, database outage handling, missing token metadata, streaming interruption, failed provider calls, 3-user reconciliation, and cache invalidation.
+- [x] Step 6: Documentation & Verification: create `docs/local-readiness/usage-and-event-reliability.md`, run `./scripts/verify-local.sh`, and update `task.md`.
+
+## PREVIOUS TASK: Prompt 3 — Complete Sentinel Gateway Request Lifecycle and Client Integrations
+- [x] Phase A: Request Lifecycle Audit & Gap Closure: trace full lifecycle (client -> gateway credential -> auth -> org/user resolution -> model access -> guardrails -> budget/rate limit -> provider adapter -> response -> telemetry recording -> DB persistence -> dashboard analytics).
+- [x] Phase B: Multi-Provider Integration Hardening: verify Anthropic, OpenAI, and Gemini formats, error mapping (timeouts, 401, 429, 500), streaming/SSE flush, client disconnects, and token capture/estimation.
+- [x] Phase C: Sentinel SDK and CLI Audit & Hardening: audit public APIs, user gateway key auth, streaming, retries/idempotency, timeouts, and error handling.
+- [x] Phase D: Multi-User Local Fixture & End-to-End Attribution: test 3 independent users with individual gateway credentials in one organization, attributing requests accurately; execute deterministic mock tests and live smoke test.
+- [x] Phase E: Deliverables & Local Readiness Documentation: create `docs/local-readiness/gateway-sdk-cli-verification.md` with client/provider/scenario test matrix and usage instructions.
+- [x] Phase F: Verification: run test suites and `scripts/verify-local.sh`, then update `task.md`.
+
+## PREVIOUS TASK: Prompt 2 — Complete Local Authentication and Tenant Isolation
+- [x] Step 1: Audit Authentication & Session Lifecycle: audit password hashing (PBKDF2-HMAC-SHA256, 600k iterations, decoy timing defense), login/logout, session expiry, revoked sessions, cookie security flags (`HttpOnly`, `SameSite=Lax/Strict`), and CSRF double-submit protection.
+- [x] Step 2: Audit Tenant Isolation & IDOR Protection: inspect all control-plane and data-plane routes ensuring cross-tenant queries and manipulated IDs are strictly blocked via PostgreSQL FORCE RLS and application actor contexts.
+- [x] Step 3: Audit RBAC & Gateway Credential Scoping: verify role-based access for administrative vs member operations (`RoleOwner`, `RoleAdmin`, `RoleMember`), key scoping (`gateway`, `control`, `all`), rotation, and real-time revocation behavior.
+- [x] Step 4: Implement Identified Gaps: patched policy and guardrails service mutations to enforce administrative role authorization checks (`isPolicyManager`, `isGuardrailManager`).
+- [x] Step 5: Regression & Multi-Tenant Test Suite: updated `backend/internal/interfaces/controlapi/multi_tenancy_security_test.go` and `backend/internal/interfaces/gatewayv2/gateway_lifecycle_test.go` with 2 independent organizations, 3 users, multiple roles, manipulated IDs across all 9 resource families, subject-level privacy, and gateway key revocation.
+- [x] Step 6: Documentation: produced `docs/local-readiness/authentication-and-isolation.md` documenting test evidence, security architecture, and limitations.
+- [x] Step 7: Verify & Update Task Tracker: ran `scripts/verify-local.sh` (15/15 checks passed) and updated `task.md`.
+
+## PREVIOUS TASK: Prompt 1 — Secure and Reproducible Local Development Environment
+- [x] Step 1: Config & Environment Validation: enhance `backend/internal/platform/config/config.go` with strict startup validation, placeholder secret detection, dev-convenience controls, and safe redaction.
+- [x] Step 2: Automated Tests for Config Validation: update `backend/internal/platform/config/config_test.go` to test missing variables, placeholder rejection, dev-mode flags, and secret redaction.
+- [x] Step 3: Environment Examples: audit and sanitize `deploy/compose/.env.example` and `backend/.env.example` with clear placeholder conventions and security guidance.
+- [x] Step 4: Docker Compose & Startup Ordering: update `deploy/compose/docker-compose.yml` to ensure healthchecks use functional readiness (`/readyz`) and dependencies include postgres, redis, and nats JetStream.
+- [x] Step 5: Safe Local Service Lifecycle Script: create `scripts/dev-ctl.sh` and update `Makefile` with safe start, stop, status, and confirmed reset commands.
+- [x] Step 6: Fix Verification Script & Baseline Defects: update `scripts/verify-local.sh` to never overwrite existing `.env`, display checkout commit and endpoints, and resolve baseline test issues in `tenant_resolver_test.go`, `client_test.go`, and node types.
+- [x] Step 7: Local Readiness Documentation: create `docs/local-readiness/environment-verification.md` and update `docs/local-readiness/local-setup.md`.
+- [x] Step 8: Execution & Verification: run test suites, verify local services and lifecycle commands, record results, and update `task.md`.
+
+## PREVIOUS TASK: Prompt 0 — Sentinel Local-Stage Audit and Baseline
+- [x] Step 1: Inspect repository structure, git status, compose configuration, migrations, entry points
+- [x] Step 2: Verify running processes/containers, ports, and alignment with checkout
+- [x] Step 3: Execute test suites across Go, TypeScript/Next.js, SDK, CLI, and integration tests; record results
+- [x] Step 4: Trace full request and telemetry lifecycle across auth, gateway, worker, DB, and dashboard
+- [x] Step 5: Audit and classify features (PASS, FAIL, PARTIAL, BLOCKED, NOT TESTED)
+- [x] Step 6: Produce deliverables (`current-state.md`, `feature-matrix.md`, `risk-register.md`, `baseline-test-results.md`)
+- [x] Step 7: Update `task.md`
+
+## PREVIOUS TASK: Git Push & Enforce Git Add/Push Policy by Command
 - [x] Step 1: Stage verified codebase modifications (`git add -A`)
 - [x] Step 2: Commit changes with descriptive message
 - [x] Step 3: Push changes to remote GitHub repository (`git push origin main`)

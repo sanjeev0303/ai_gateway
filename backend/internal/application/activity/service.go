@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -32,7 +33,7 @@ func NewService(client *redis.Client, logger *slog.Logger) *Service {
 // ActiveRequests returns the currently active requests for an organization.
 func (s *Service) ActiveRequests(ctx context.Context, orgID uuid.UUID) ([]domain.ActivityEvent, error) {
 	if s.client == nil {
-		return nil, nil // No Redis
+		return []domain.ActivityEvent{}, nil // No Redis
 	}
 
 	key := fmt.Sprintf("gateway:activity:active:%s", orgID.String())
@@ -41,10 +42,16 @@ func (s *Service) ActiveRequests(ctx context.Context, orgID uuid.UUID) ([]domain
 		return nil, err
 	}
 
-	var events []domain.ActivityEvent
-	for _, val := range data {
+	now := time.Now()
+	events := make([]domain.ActivityEvent, 0, len(data))
+	for reqID, val := range data {
 		var ev domain.ActivityEvent
 		if err := json.Unmarshal([]byte(val), &ev); err == nil {
+			if now.Sub(ev.StartedAt) > 10*time.Minute {
+				// Prune orphaned entry from crashed process
+				_ = s.client.HDel(ctx, key, reqID).Err()
+				continue
+			}
 			events = append(events, ev)
 		}
 	}

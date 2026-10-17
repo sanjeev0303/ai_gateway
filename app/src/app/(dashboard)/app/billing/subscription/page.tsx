@@ -143,7 +143,7 @@ export default async function SubscriptionPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Organization Entitlements</CardTitle>
+                <CardTitle>Organization Entitlements & Billing Scope</CardTitle>
                 <CardDescription>
                   Local billing state and governance capabilities granted by {subscription.plan_name}.
                 </CardDescription>
@@ -152,9 +152,11 @@ export default async function SubscriptionPage() {
                 <p>
                   This plan and cycle govern policy enforcement limits, guardrail rules, and retention thresholds across all gateway routes.
                 </p>
+                <p className="rounded-md border bg-muted/40 p-3 text-xs">
+                  <strong>Usage Reporting Scope:</strong> Local billing operates as an internal usage accounting and quota tier system. No external payment processor or financial transactions are integrated.
+                </p>
                 <p>
-                  Recorded consumption for the current cycle is priced by the worker and
-                  shown under Billing → Usage.
+                  Recorded consumption for the current cycle is priced by the worker and shown under Billing → Usage.
                 </p>
               </CardContent>
             </Card>

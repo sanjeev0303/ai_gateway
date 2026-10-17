@@ -27,6 +27,8 @@ x-backend-image: &backend-image
 
 # Shared AIGW_* environment; every backend service merges it first.
 x-backend-env: &backend-env
+  AIGW_ENV: ${AIGW_ENV:-development}
+  AIGW_ALLOW_INSECURE_DEV: ${AIGW_ALLOW_INSECURE_DEV:-true}
   AIGW_SERVER_READ_HEADER_TIMEOUT: 10s
   AIGW_SERVER_SHUTDOWN_TIMEOUT: 10s
   AIGW_SERVER_REQUEST_TIMEOUT: 0s # streaming data plane; no per-request deadline
@@ -185,8 +187,10 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      nats:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/livez"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/readyz"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -208,8 +212,10 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      nats:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/livez"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/readyz"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -229,10 +235,14 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
       nats:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/livez"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/readyz"]
       interval: 10s
       timeout: 5s
       retries: 5

@@ -195,7 +195,7 @@ func TestSink_PublishesRequestAndTokenUsage(t *testing.T) {
 
 	req := msg.Request
 	requireTrue(t, req.ProviderKind == "anthropic", "provider kind mismatch: %s", req.ProviderKind)
-	requireTrue(t, req.Status == "success", "status mismatch: %s", req.Status)
+	requireTrue(t, req.Status == "succeeded", "status mismatch: %s", req.Status)
 	requireTrue(t, req.PromptTokens == 1200 && req.CompletionTokens == 450, "token mapping mismatch")
 	requireTrue(t, req.TotalTokens == 1650, "total token mismatch: %d", req.TotalTokens)
 	requireTrue(t, req.CachedInputTokens == 300, "cached token mismatch")
@@ -218,7 +218,7 @@ func TestSink_MarksErrorStatus(t *testing.T) {
 		RequestID: "req-1", OrganizationID: uuid.New(),
 		InputTokens: 10, OutputTokens: 0, StatusCode: 500,
 	})
-	requireTrue(t, bus.last().Request.Status == "error", "5xx must record error status")
+	requireTrue(t, bus.last().Request.Status == "failed", "5xx must record failed status")
 	requireTrue(t, bus.count() == 1, "usage must still be billed on upstream error")
 }
 

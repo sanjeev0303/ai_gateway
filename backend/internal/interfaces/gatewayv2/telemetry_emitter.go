@@ -295,12 +295,30 @@ func (e *TelemetryEmitterImpl) writeUsage(ctx context.Context, record UsageRecor
 			providerKind = name
 		}
 	}
-	status := "success"
-	if record.StatusCode >= 400 {
-		status = "error"
+	status := "succeeded"
+	if record.StatusCode == 499 {
+		status = "cancelled"
+	} else if record.StatusCode >= 400 {
+		status = "failed"
 	}
 	source := "estimated"
-	if providerKind != "unknown" {
+	if record.ProviderMeta != nil {
+		if reported, ok := record.ProviderMeta["tokens_reported"].(bool); ok {
+			if reported {
+				source = "provider_reported"
+			} else {
+				source = "estimated"
+			}
+		} else if isEst, ok := record.ProviderMeta["estimated"].(bool); ok {
+			if isEst {
+				source = "estimated"
+			} else {
+				source = "provider_reported"
+			}
+		} else if providerKind != "unknown" && (record.InputTokens > 0 || record.OutputTokens > 0) {
+			source = "provider_reported"
+		}
+	} else if providerKind != "unknown" && (record.InputTokens > 0 || record.OutputTokens > 0) {
 		source = "provider_reported"
 	}
 

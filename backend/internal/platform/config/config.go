@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
@@ -25,17 +26,19 @@ const EnvPrefix = "AIGW_"
 
 // Config is the root configuration; each section maps to one AIGW_* group.
 type Config struct {
-	Server        ServerConfig        `envPrefix:"SERVER_"`
-	Database      DatabaseConfig      `envPrefix:"DATABASE_"`
-	Redis         RedisConfig         `envPrefix:"REDIS_"`
-	Eventbus      EventbusConfig      `envPrefix:"EVENTBUS_"`
-	Provider      ProviderConfig      `envPrefix:"PROVIDER_"`
-	Secrets       SecretsConfig       `envPrefix:"SECRETS_"`
-	Auth          AuthConfig          `envPrefix:"AUTH_"`
-	Billing       BillingConfig       `envPrefix:"BILLING_"`
-	Observability ObservabilityConfig `envPrefix:"OBSERVABILITY_"`
-	Security      SecurityConfig      `envPrefix:"SECURITY_"`
-	Conversation  ConversationConfig  `envPrefix:"CONVERSATION_"`
+	Env              string              `env:"ENV" envDefault:"development"` // development | staging | production | test
+	AllowInsecureDev bool                `env:"ALLOW_INSECURE_DEV" envDefault:"false"`
+	Server           ServerConfig        `envPrefix:"SERVER_"`
+	Database         DatabaseConfig      `envPrefix:"DATABASE_"`
+	Redis            RedisConfig         `envPrefix:"REDIS_"`
+	Eventbus         EventbusConfig      `envPrefix:"EVENTBUS_"`
+	Provider         ProviderConfig      `envPrefix:"PROVIDER_"`
+	Secrets          SecretsConfig       `envPrefix:"SECRETS_"`
+	Auth             AuthConfig          `envPrefix:"AUTH_"`
+	Billing          BillingConfig       `envPrefix:"BILLING_"`
+	Observability    ObservabilityConfig `envPrefix:"OBSERVABILITY_"`
+	Security         SecurityConfig      `envPrefix:"SECURITY_"`
+	Conversation     ConversationConfig  `envPrefix:"CONVERSATION_"`
 }
 
 // ConversationConfig controls how much transcript content the API may return.
@@ -50,7 +53,7 @@ type ConversationConfig struct {
 func Load() (*Config, error) {
 	// Optional dev convenience: backend/.env is loaded when present; a
 	// missing file is ignored so production runs purely on real env vars.
-	_ = godotenv.Load()
+	_ = godotenv.Load("backend/.env", ".env")
 
 	cfg := &Config{}
 	if err := env.ParseWithOptions(cfg, env.Options{Prefix: EnvPrefix}); err != nil {
@@ -178,16 +181,94 @@ type SecurityConfig struct {
 }
 
 var (
+	validEnvs            = []string{"development", "staging", "production", "test"}
 	validEventbusKinds   = []string{"inmemory", "nats", "postgres", "kafka"}
 	validSecretsProvider = []string{"env", "vault", "aws"}
 	validLogLevels       = []string{"debug", "info", "warn", "error"}
 	validLogFormats      = []string{"json", "text"}
+
+	knownPlaceholderPatterns = []string{
+		"change-me",
+		"changeme",
+		"replace-me",
+		"replaceme",
+		"your-secret-here",
+		"your-signing-key-here",
+		"password",
+		"secret",
+		"placeholder",
+	}
 )
+
+func isPlaceholderSecret(s string) bool {
+	norm := strings.ToLower(strings.TrimSpace(s))
+	if norm == "" {
+		return false
+	}
+	for _, p := range knownPlaceholderPatterns {
+		if norm == p || strings.Contains(norm, p) {
+			return true
+		}
+	}
+	return false
+}
 
 // Validate returns a single joined error describing every invalid setting.
 func (c Config) Validate() error {
 	var errs []error
 	add := func(err error) { errs = append(errs, err) }
+
+	if !slices.Contains(validEnvs, c.Env) {
+		add(fmt.Errorf("ENV %q is invalid: must be one of development|staging|production|test", c.Env))
+	}
+
+	isProdLike := c.Env == "production" || c.Env == "staging"
+	if isProdLike {
+		if c.AllowInsecureDev {
+			add(fmt.Errorf("ALLOW_INSECURE_DEV cannot be enabled in %s environment", c.Env))
+		}
+		if c.Auth.DevLoginEnabled {
+			add(fmt.Errorf("AUTH_DEV_LOGIN_ENABLED cannot be enabled in %s environment", c.Env))
+		}
+		if !c.Auth.SessionCookieSecure {
+			add(fmt.Errorf("AUTH_SESSION_COOKIE_SECURE must be true in %s environment", c.Env))
+		}
+		if !c.Auth.CSRFEnabled {
+			add(fmt.Errorf("AUTH_CSRF_ENABLED must be true in %s environment", c.Env))
+		}
+		if isPlaceholderSecret(c.Auth.HMACSigningKey) {
+			add(fmt.Errorf("AUTH_HMAC_SIGNING_KEY uses a known placeholder secret, prohibited in %s environment", c.Env))
+		}
+		for i, k := range c.Auth.HMACPreviousKeys {
+			if isPlaceholderSecret(k) {
+				add(fmt.Errorf("AUTH_HMAC_PREVIOUS_KEYS entry %d uses a known placeholder secret, prohibited in %s environment", i, c.Env))
+			}
+		}
+		if isPlaceholderSecret(c.Secrets.Key) {
+			add(fmt.Errorf("SECRETS_KEY uses a known placeholder secret, prohibited in %s environment", c.Env))
+		}
+		if isPlaceholderSecret(c.Redis.Password) {
+			add(fmt.Errorf("REDIS_PASSWORD uses a known placeholder secret, prohibited in %s environment", c.Env))
+		}
+	} else if c.Env == "development" {
+		if c.Auth.DevLoginEnabled && !c.AllowInsecureDev {
+			add(errors.New("AUTH_DEV_LOGIN_ENABLED=true is a development convenience; set AIGW_ALLOW_INSECURE_DEV=true to confirm this choice"))
+		}
+		if isPlaceholderSecret(c.Auth.HMACSigningKey) && !c.AllowInsecureDev {
+			add(errors.New("AUTH_HMAC_SIGNING_KEY uses a known placeholder secret; set a secure 32+ byte key or set AIGW_ALLOW_INSECURE_DEV=true for local development"))
+		}
+		if c.Redis.Enabled && isPlaceholderSecret(c.Redis.Password) && !c.AllowInsecureDev {
+			add(errors.New("REDIS_PASSWORD uses a known placeholder secret; set a secure password or set AIGW_ALLOW_INSECURE_DEV=true for local development"))
+		}
+		if isPlaceholderSecret(c.Secrets.Key) && !c.AllowInsecureDev {
+			add(errors.New("SECRETS_KEY uses a known placeholder secret; set a secure key or set AIGW_ALLOW_INSECURE_DEV=true for local development"))
+		}
+		for i, k := range c.Auth.HMACPreviousKeys {
+			if isPlaceholderSecret(k) && !c.AllowInsecureDev {
+				add(fmt.Errorf("AUTH_HMAC_PREVIOUS_KEYS entry %d uses a known placeholder secret; set a secure key or set AIGW_ALLOW_INSECURE_DEV=true for local development", i))
+			}
+		}
+	}
 
 	if c.Server.Addr == "" {
 		add(errors.New("SERVER_ADDR must not be empty"))
@@ -285,8 +366,14 @@ func (c Config) Redacted() Config {
 	c.Redis.Password = redactIfSet(c.Redis.Password)
 	c.Auth.HMACSigningKey = redactIfSet(c.Auth.HMACSigningKey)
 	if len(c.Auth.HMACPreviousKeys) > 0 {
-		c.Auth.HMACPreviousKeys = []string{"<redacted>"}
+		redactedKeys := make([]string, len(c.Auth.HMACPreviousKeys))
+		for i := range c.Auth.HMACPreviousKeys {
+			redactedKeys[i] = "<redacted>"
+		}
+		c.Auth.HMACPreviousKeys = redactedKeys
 	}
+	c.Secrets.Key = redactIfSet(c.Secrets.Key)
+	c.Secrets.Token = redactIfSet(c.Secrets.Token)
 	return c
 }
 

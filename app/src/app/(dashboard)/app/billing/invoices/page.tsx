@@ -107,6 +107,9 @@ export default async function InvoicesPage() {
               Each invoice is recorded per billing cycle with itemised line rows.
               Consumption figures are priced by the async worker from the active price sheet at inference time.
             </p>
+            <p className="rounded-md border bg-muted/40 p-3 text-xs">
+              <strong>Usage Accounting Scope:</strong> Invoices represent internal cost accounting and usage attribution for governance purposes. No external payment processor or financial settlement transactions are executed.
+            </p>
           </CardContent>
         </Card>
 

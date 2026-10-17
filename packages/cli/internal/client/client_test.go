@@ -280,4 +280,92 @@ func TestGatewayClient_SendRequest_Gemini(t *testing.T) {
 	if meta.TotalTokens != 25 || meta.InputTokens != 15 || meta.OutputTokens != 10 {
 		t.Errorf("unexpected tokens: %+v", meta)
 	}
+	if meta.IsEstimated {
+		t.Errorf("expected reported tokens, got estimated")
+	}
+	if meta.UsageSource != "reported" {
+		t.Errorf("expected usageSource 'reported', got %q", meta.UsageSource)
+	}
+}
+
+func TestGatewayClient_ErrorHandling_GeminiAndOpenAI(t *testing.T) {
+	// Gemini error format
+	geminiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = fmt.Fprintln(w, `{"error":{"code":400,"message":"API key not valid","status":"INVALID_ARGUMENT"}}`)
+	}))
+	defer geminiServer.Close()
+
+	c1 := client.New(geminiServer.URL, "bad-key", "")
+	_, _, err1 := c1.SendRequest(context.Background(), client.RequestPayload{Model: "gemini-2.5-flash", Prompt: "test"})
+	if err1 == nil {
+		t.Fatal("expected gemini error, got nil")
+	}
+	if expected := "[HTTP 400 INVALID_ARGUMENT] API key not valid"; err1.Error() != expected {
+		t.Errorf("expected error %q, got %q", expected, err1.Error())
+	}
+
+	// OpenAI error format
+	openAIServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = fmt.Fprintln(w, `{"error":{"message":"Rate limit exceeded","type":"rate_limit_exceeded","code":"rate_limit"}}`)
+	}))
+	defer openAIServer.Close()
+
+	c2 := client.New(openAIServer.URL, "valid-key", "")
+	_, _, err2 := c2.SendRequest(context.Background(), client.RequestPayload{Model: "gpt-4o", Prompt: "test"})
+	if err2 == nil {
+		t.Fatal("expected openai error, got nil")
+	}
+	if expected := "[HTTP 429 rate_limit_exceeded] Rate limit exceeded"; err2.Error() != expected {
+		t.Errorf("expected error %q, got %q", expected, err2.Error())
+	}
+}
+
+func TestGatewayClient_UsageHonesty_EstimatedVsReported(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Response with NO token usage provided
+		_, _ = fmt.Fprintln(w, `{"choices":[{"message":{"content":"No usage in response"}}]}`)
+	}))
+	defer server.Close()
+
+	c := client.New(server.URL, "test-key", "")
+	_, meta, err := c.SendRequest(context.Background(), client.RequestPayload{Model: "gpt-4o", Prompt: "test"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !meta.IsEstimated {
+		t.Errorf("expected IsEstimated=true when provider returns no usage, got false")
+	}
+	if meta.UsageSource != "none" && meta.UsageSource != "estimated" {
+		t.Errorf("unexpected usageSource: %q", meta.UsageSource)
+	}
+}
+
+func TestGatewayClient_ListModels_RetryOn503(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount < 2 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = fmt.Fprintln(w, `{"error":{"type":"upstream_unavailable","message":"upstream provider temporarily overloaded"}}`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintln(w, `{"data":[{"id":"gemini-2.5-flash","object":"model","provider":"gemini"}]}`)
+	}))
+	defer server.Close()
+
+	c := client.New(server.URL, "test-key", "")
+	models, err := c.ListModels(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error after retry: %v", err)
+	}
+	if len(models) != 1 {
+		t.Fatalf("expected 1 model, got %d", len(models))
+	}
+	if callCount != 2 {
+		t.Errorf("expected 2 calls, got %d", callCount)
+	}
 }

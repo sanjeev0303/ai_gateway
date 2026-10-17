@@ -152,6 +152,12 @@ func (s *Service) Authenticate(ctx context.Context, email, password string) (Ses
 	if len(orgs) == 0 {
 		return Session{}, ErrUnauthorized
 	}
+	s.audit(ctx, domain.Actor{
+		OrganizationID: orgs[0].Organization.ID,
+		UserID:         credential.User.ID,
+		Kind:           domain.ActorKindUser,
+		Role:           orgs[0].Role,
+	}, "auth.login_success", "user", &credential.User.ID, nil, nil)
 	return s.issueSession(ctx, credential.User, orgs[0].Organization.ID, orgs[0].Role)
 }
 

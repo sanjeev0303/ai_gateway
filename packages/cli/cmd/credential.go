@@ -1,12 +1,64 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
 )
+
+type gatewayCredResponse struct {
+	ID             string   `json:"id"`
+	OrganizationID string   `json:"organization_id"`
+	Name           string   `json:"name"`
+	KeyPrefix      string   `json:"key_prefix"`
+	SubjectType    string   `json:"subject_type"`
+	SubjectID      string   `json:"subject_id"`
+	TeamID         *string  `json:"team_id,omitempty"`
+	ProjectID      *string  `json:"project_id,omitempty"`
+	Scopes         []string `json:"scopes"`
+	Status         string   `json:"status"`
+	CreatedAt      string   `json:"created_at"`
+	ExpiresAt      *string  `json:"expires_at,omitempty"`
+}
+
+func doControlRequest(cfg Config, method, path string, body any) (*http.Response, error) {
+	if cfg.ControlURL == "" {
+		return nil, fmt.Errorf("control-plane URL not configured (set AIGW_CONTROL_URL or configure ~/.aigw/config.yaml)")
+	}
+	url := cfg.ControlURL + path
+	var reader io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("marshal request: %w", err)
+		}
+		reader = bytes.NewReader(b)
+	}
+
+	req, err := http.NewRequest(method, url, reader)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if cfg.Credential != "" {
+		req.Header.Set("Authorization", "Bearer "+cfg.Credential)
+		req.Header.Set("x-api-key", cfg.Credential)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("send request to control-plane (%s): %w", url, err)
+	}
+	return resp, nil
+}
 
 var credentialCmd = &cobra.Command{
 	Use:   "credential",
@@ -35,34 +87,56 @@ The raw credential is displayed only once - save it immediately.`,
 			return fmt.Errorf("--subject-type is required (user or service_account)")
 		}
 		if subjectID == "" {
-			return fmt.Errorf("--subject-id is required")
+			return fmt.Errorf("--subject-id is required (UUID)")
 		}
 		if len(scopes) == 0 {
 			scopes = []string{"gateway"}
 		}
 
-		fmt.Printf("Creating credential '%s'...\n", name)
-		fmt.Printf("Subject: %s (%s)\n", subjectType, subjectID)
-		fmt.Printf("Scopes: %v\n", scopes)
-		if expiresIn != "" {
-			fmt.Printf("Expires in: %s\n", expiresIn)
+		payload := map[string]any{
+			"name":         name,
+			"subject_type": subjectType,
+			"subject_id":   subjectID,
+			"scopes":       scopes,
 		}
 		if teamID != "" {
-			fmt.Printf("Team: %s\n", teamID)
+			payload["team_id"] = teamID
 		}
 		if projectID != "" {
-			fmt.Printf("Project: %s\n", projectID)
+			payload["project_id"] = projectID
+		}
+		if expiresIn != "" {
+			payload["expires_in"] = expiresIn
 		}
 
-		// Simulate API call
-		rawKey := "aigw_abc123def456ghi789"
+		cfg := LoadConfig()
+		resp, err := doControlRequest(cfg, http.MethodPost, "/v1/gateway-credentials", payload)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 400 {
+			data, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("create credential failed (HTTP %d): %s", resp.StatusCode, string(data))
+		}
+
+		var cred gatewayCredResponse
+		if err := json.NewDecoder(resp.Body).Decode(&cred); err != nil {
+			return fmt.Errorf("decode response: %w", err)
+		}
+
+		rawKey := cred.KeyPrefix // On create, key_prefix holds the issued raw token
 		fmt.Println("\n✅ Credential created successfully!")
-		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-		fmt.Printf("Credential ID: cred_abc123def456\n")
-		fmt.Printf("Raw Key: %s\n", rawKey)
-		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Printf("Credential ID: %s\n", cred.ID)
+		fmt.Printf("Name:          %s\n", cred.Name)
+		fmt.Printf("Subject:       %s (%s)\n", cred.SubjectType, cred.SubjectID)
+		fmt.Printf("Scopes:        %v\n", cred.Scopes)
+		fmt.Printf("Raw Key:       %s\n", rawKey)
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 		fmt.Println("⚠️  Save this key now - it will not be shown again!")
-		fmt.Println("Configure with: aigw config install --credential " + rawKey)
+		fmt.Println("Configure locally: aigw auth login --credential " + rawKey)
 		return nil
 	},
 }
@@ -71,11 +145,35 @@ var credentialListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all gateway credentials",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Simulate API response
+		cfg := LoadConfig()
+		resp, err := doControlRequest(cfg, http.MethodGet, "/v1/gateway-credentials", nil)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 400 {
+			data, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("list credentials failed (HTTP %d): %s", resp.StatusCode, string(data))
+		}
+
+		var res struct {
+			Items []gatewayCredResponse `json:"items"`
+		}
+		respBytes, _ := io.ReadAll(resp.Body)
+		if err := json.Unmarshal(respBytes, &res); err != nil || len(res.Items) == 0 {
+			var directItems []gatewayCredResponse
+			if err := json.Unmarshal(respBytes, &directItems); err == nil {
+				res.Items = directItems
+			}
+		}
+
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tNAME\tSUBJECT TYPE\tSUBJECT ID\tSCOPES\tSTATUS\tCREATED")
-		fmt.Fprintln(w, "cred_abc123\tdev-key\tuser\tusr_123\t[gateway]\tactive\t2024-01-15")
-		fmt.Fprintln(w, "cred_def456\tci-bot\tservice_account\tsa_789\t[gateway,control]\tactive\t2024-01-10")
+		fmt.Fprintln(w, "ID\tNAME\tSUBJECT TYPE\tSUBJECT ID\tSCOPES\tSTATUS\tKEY PREFIX\tCREATED")
+		for _, c := range res.Items {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%v\t%s\t%s\t%s\n",
+				c.ID, c.Name, c.SubjectType, c.SubjectID, c.Scopes, c.Status, c.KeyPrefix, c.CreatedAt)
+		}
 		w.Flush()
 		return nil
 	},
@@ -87,14 +185,31 @@ var credentialGetCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
-		fmt.Printf("Credential: %s\n", id)
-		fmt.Println("Name: dev-key")
-		fmt.Println("Subject Type: user")
-		fmt.Println("Subject ID: usr_123")
-		fmt.Println("Scopes: [gateway]")
-		fmt.Println("Status: active")
-		fmt.Println("Created: 2024-01-15T10:30:00Z")
-		fmt.Println("Expires: never")
+		cfg := LoadConfig()
+		resp, err := doControlRequest(cfg, http.MethodGet, "/v1/gateway-credentials/"+id, nil)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 400 {
+			data, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("get credential failed (HTTP %d): %s", resp.StatusCode, string(data))
+		}
+
+		var cred gatewayCredResponse
+		if err := json.NewDecoder(resp.Body).Decode(&cred); err != nil {
+			return fmt.Errorf("decode response: %w", err)
+		}
+
+		fmt.Printf("Credential ID: %s\n", cred.ID)
+		fmt.Printf("Name:          %s\n", cred.Name)
+		fmt.Printf("Subject Type:  %s\n", cred.SubjectType)
+		fmt.Printf("Subject ID:    %s\n", cred.SubjectID)
+		fmt.Printf("Key Prefix:    %s\n", cred.KeyPrefix)
+		fmt.Printf("Scopes:        %v\n", cred.Scopes)
+		fmt.Printf("Status:        %s\n", cred.Status)
+		fmt.Printf("Created:       %s\n", cred.CreatedAt)
 		return nil
 	},
 }
@@ -108,20 +223,40 @@ var credentialRotateCmd = &cobra.Command{
 		name, _ := cmd.Flags().GetString("name")
 		scopes, _ := cmd.Flags().GetStringSlice("scopes")
 
-		fmt.Printf("Rotating credential %s...\n", id)
+		payload := map[string]any{}
 		if name != "" {
-			fmt.Printf("New name: %s\n", name)
+			payload["name"] = name
 		}
 		if len(scopes) > 0 {
-			fmt.Printf("New scopes: %v\n", scopes)
+			payload["scopes"] = scopes
 		}
 
-		rawKey := "aigw_newrotatedkey123"
+		cfg := LoadConfig()
+		resp, err := doControlRequest(cfg, http.MethodPost, "/v1/gateway-credentials/"+id+"/rotate", payload)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 400 {
+			data, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("rotate credential failed (HTTP %d): %s", resp.StatusCode, string(data))
+		}
+
+		var cred gatewayCredResponse
+		if err := json.NewDecoder(resp.Body).Decode(&cred); err != nil {
+			return fmt.Errorf("decode response: %w", err)
+		}
+
+		rawKey := cred.KeyPrefix // On rotate, key_prefix holds the newly issued raw token
 		fmt.Println("\n✅ Credential rotated successfully!")
-		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-		fmt.Printf("New Raw Key: %s\n", rawKey)
-		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-		fmt.Println("⚠️  Save this key now - the old key is now revoked!")
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Printf("Credential ID: %s\n", cred.ID)
+		fmt.Printf("New Raw Key:   %s\n", rawKey)
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Println("⚠️  Save this key now - the previous key has been immediately revoked!")
+
+		// If current configured key was rotated, offer or update configuration
 		return nil
 	},
 }
@@ -142,8 +277,20 @@ var credentialRevokeCmd = &cobra.Command{
 				return nil
 			}
 		}
-		fmt.Printf("Revoking credential %s...\n", id)
-		fmt.Println("✅ Credential revoked successfully")
+
+		cfg := LoadConfig()
+		resp, err := doControlRequest(cfg, http.MethodDelete, "/v1/gateway-credentials/"+id, nil)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNoContent {
+			data, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("revoke credential failed (HTTP %d): %s", resp.StatusCode, string(data))
+		}
+
+		fmt.Printf("✅ Credential %s revoked successfully.\n", id)
 		return nil
 	},
 }
@@ -154,8 +301,19 @@ var credentialExpireCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
-		fmt.Printf("Expiring credential %s...\n", id)
-		fmt.Println("✅ Credential marked as expired")
+		cfg := LoadConfig()
+		resp, err := doControlRequest(cfg, http.MethodPost, "/v1/gateway-credentials/"+id+"/expire", nil)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNoContent {
+			data, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("expire credential failed (HTTP %d): %s", resp.StatusCode, string(data))
+		}
+
+		fmt.Printf("✅ Credential %s marked as expired.\n", id)
 		return nil
 	},
 }
@@ -166,8 +324,19 @@ var credentialRestoreCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
-		fmt.Printf("Restoring credential %s...\n", id)
-		fmt.Println("✅ Credential restored to active status")
+		cfg := LoadConfig()
+		resp, err := doControlRequest(cfg, http.MethodPost, "/v1/gateway-credentials/"+id+"/restore", nil)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNoContent {
+			data, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("restore credential failed (HTTP %d): %s", resp.StatusCode, string(data))
+		}
+
+		fmt.Printf("✅ Credential %s restored to active status.\n", id)
 		return nil
 	},
 }
@@ -188,9 +357,6 @@ func init() {
 	credentialCreateCmd.Flags().String("expires-in", "", "Expiry duration (e.g., 30d, 1h)")
 	credentialCreateCmd.Flags().String("team-id", "", "Optional team ID")
 	credentialCreateCmd.Flags().String("project-id", "", "Optional project ID")
-	credentialCreateCmd.MarkFlagRequired("name")
-	credentialCreateCmd.MarkFlagRequired("subject-type")
-	credentialCreateCmd.MarkFlagRequired("subject-id")
 
 	credentialRotateCmd.Flags().String("name", "", "Optional new name")
 	credentialRotateCmd.Flags().StringSlice("scopes", nil, "Optional new scopes")

@@ -27,6 +27,13 @@ const nextConfig: NextConfig = {
       { source: "/api/gateway/:path*", destination: `${gatewayUrl}/:path*` },
     ];
   },
+  async redirects() {
+    return [
+      { source: "/app/billing", destination: "/app/billing/usage", permanent: false },
+      { source: "/app/organization", destination: "/app/organization/members", permanent: false },
+      { source: "/app/observe", destination: "/app/observe/live-activity", permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -42,6 +42,7 @@ ORDER BY created_at;
 -- name: BackfillLLMRequestCost :exec
 WITH resolvable AS (
     SELECT r.id,
+           p.version AS pricing_version,
            r.prompt_tokens::bigint * p.input_unit_price_micros
          + r.completion_tokens::bigint * p.output_unit_price_micros AS cost
     FROM llm_requests r
@@ -49,7 +50,7 @@ WITH resolvable AS (
       ON pm.organization_id = r.organization_id
      AND pm.model_slug = r.model
     CROSS JOIN LATERAL (
-        SELECT v.input_unit_price_micros, v.output_unit_price_micros
+        SELECT v.version, v.input_unit_price_micros, v.output_unit_price_micros
         FROM pricing_versions v
         WHERE v.pricing_model_id = pm.id
           AND v.organization_id = r.organization_id
@@ -62,10 +63,12 @@ WITH resolvable AS (
       AND r.created_at < sqlc.arg(to_ts)
 )
 UPDATE llm_requests r
-SET cost_micros = resolvable.cost
+SET cost_micros = resolvable.cost,
+    pricing_version = resolvable.pricing_version,
+    cost_status = 'calculated'
 FROM resolvable
 WHERE r.id = resolvable.id
-  AND r.cost_micros IS DISTINCT FROM resolvable.cost;
+  AND (r.cost_micros IS DISTINCT FROM resolvable.cost OR r.cost_status IS DISTINCT FROM 'calculated');
 
 -- name: DeleteUsageHourlyInWindow :exec
 DELETE FROM usage_hourly

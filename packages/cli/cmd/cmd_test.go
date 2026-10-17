@@ -214,3 +214,86 @@ func TestAuthAndModelsWithMockServer(t *testing.T) {
 		t.Errorf("unexpected logout output: %s", out)
 	}
 }
+
+func TestCredentialCommands_WithMockControlPlane(t *testing.T) {
+	setupTestHome(t)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/gateway-credentials":
+			_, _ = fmt.Fprintln(w, `{"items":[{"id":"cred-1","name":"dev-key","subject_type":"user","subject_id":"usr-1","scopes":["gateway"],"status":"active","key_prefix":"aigw_test...","created_at":"2026-10-10"}]}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/gateway-credentials":
+			w.WriteHeader(http.StatusCreated)
+			_, _ = fmt.Fprintln(w, `{"id":"cred-new","name":"ci-key","subject_type":"service_account","subject_id":"sa-1","scopes":["gateway"],"status":"active","key_prefix":"aigw_live_secret_issued_once"}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/gateway-credentials/cred-1":
+			_, _ = fmt.Fprintln(w, `{"id":"cred-1","name":"dev-key","subject_type":"user","subject_id":"usr-1","scopes":["gateway"],"status":"active","key_prefix":"aigw_test..."}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/gateway-credentials/cred-1/rotate":
+			_, _ = fmt.Fprintln(w, `{"id":"cred-1","key_prefix":"aigw_newly_rotated_secret"}`)
+		case r.Method == http.MethodDelete && r.URL.Path == "/v1/gateway-credentials/cred-1":
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	// Configure CLI to point to mock control plane
+	_, err := executeCommand("config", "install",
+		"--gateway-url", server.URL,
+		"--control-url", server.URL,
+		"--credential", "aigw_admin_key",
+	)
+	if err != nil {
+		t.Fatalf("config install failed: %v", err)
+	}
+
+	// 1. Test credential list
+	out, err := executeCommand("credential", "list")
+	if err != nil {
+		t.Fatalf("credential list failed: %v, out: %s", err, out)
+	}
+	if !strings.Contains(out, "cred-1") || !strings.Contains(out, "dev-key") {
+		t.Errorf("expected cred-1 in list, got: %s", out)
+	}
+
+	// 2. Test credential create
+	out, err = executeCommand("credential", "create",
+		"--name", "ci-key",
+		"--subject-type", "service_account",
+		"--subject-id", "00000000-0000-0000-0000-000000000001",
+	)
+	if err != nil {
+		t.Fatalf("credential create failed: %v, out: %s", err, out)
+	}
+	if !strings.Contains(out, "aigw_live_secret_issued_once") || !strings.Contains(out, "cred-new") {
+		t.Errorf("expected raw key in create output, got: %s", out)
+	}
+
+	// 3. Test credential get
+	out, err = executeCommand("credential", "get", "cred-1")
+	if err != nil {
+		t.Fatalf("credential get failed: %v, out: %s", err, out)
+	}
+	if !strings.Contains(out, "Credential ID: cred-1") || !strings.Contains(out, "dev-key") {
+		t.Errorf("expected cred-1 details, got: %s", out)
+	}
+
+	// 4. Test credential rotate
+	out, err = executeCommand("credential", "rotate", "cred-1")
+	if err != nil {
+		t.Fatalf("credential rotate failed: %v, out: %s", err, out)
+	}
+	if !strings.Contains(out, "aigw_newly_rotated_secret") {
+		t.Errorf("expected rotated secret in output, got: %s", out)
+	}
+
+	// 5. Test credential revoke
+	out, err = executeCommand("credential", "revoke", "cred-1", "--force")
+	if err != nil {
+		t.Fatalf("credential revoke failed: %v, out: %s", err, out)
+	}
+	if !strings.Contains(out, "revoked successfully") {
+		t.Errorf("expected revoked message, got: %s", out)
+	}
+}

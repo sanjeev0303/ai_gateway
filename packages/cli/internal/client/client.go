@@ -18,6 +18,7 @@ type GatewayClient struct {
 	APIKey     string
 	ProjectID  string
 	HTTPClient *http.Client
+	MaxRetries int
 }
 
 // Model represents a permitted model returned by the gateway.
@@ -37,6 +38,8 @@ type RequestMetadata struct {
 	OutputTokens int
 	TotalTokens  int
 	Model        string
+	IsEstimated  bool
+	UsageSource  string
 }
 
 // RequestPayload specifies the parameters for an LLM prompt.
@@ -56,41 +59,65 @@ func New(gatewayURL, apiKey, projectID string) *GatewayClient {
 		APIKey:     apiKey,
 		ProjectID:  projectID,
 		HTTPClient: &http.Client{Timeout: 0}, // streaming requests need no overall timeout
+		MaxRetries: 2,
 	}
 }
 
-// ListModels fetches the permitted models from the gateway.
+// ListModels fetches the permitted models from the gateway with safe retry for transient errors.
 func (c *GatewayClient) ListModels(ctx context.Context) ([]Model, error) {
 	url := c.GatewayURL + "/v1/models"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+
+	var lastErr error
+	for attempt := 0; attempt <= c.MaxRetries; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(time.Duration(attempt*100) * time.Millisecond):
+			}
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("create request: %w", err)
+		}
+
+		c.setHeaders(req)
+
+		resp, err := c.HTTPClient.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("send request: %w", err)
+			continue
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable {
+			lastErr = parseHTTPError(resp)
+			resp.Body.Close()
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			defer resp.Body.Close()
+			return nil, parseHTTPError(resp)
+		}
+
+		var data struct {
+			Data  []Model `json:"data"`
+			Items []Model `json:"items"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+			resp.Body.Close()
+			return nil, fmt.Errorf("decode response: %w", err)
+		}
+		resp.Body.Close()
+
+		if len(data.Data) > 0 {
+			return data.Data, nil
+		}
+		return data.Items, nil
 	}
 
-	c.setHeaders(req)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, parseHTTPError(resp)
-	}
-
-	var data struct {
-		Data  []Model `json:"data"`
-		Items []Model `json:"items"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-
-	if len(data.Data) > 0 {
-		return data.Data, nil
-	}
-	return data.Items, nil
+	return nil, lastErr
 }
 
 // StreamRequest sends a streaming prompt to the gateway and invokes onChunk for each text delta.
@@ -133,6 +160,7 @@ func (c *GatewayClient) StreamRequest(ctx context.Context, payload RequestPayloa
 		Model:      payload.Model,
 	}
 
+	tokensReported := false
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -167,12 +195,15 @@ func (c *GatewayClient) StreamRequest(ctx context.Context, payload RequestPayloa
 				}
 			}
 			if geminiEvt.UsageMetadata.PromptTokenCount > 0 {
+				tokensReported = true
 				meta.InputTokens = geminiEvt.UsageMetadata.PromptTokenCount
 			}
 			if geminiEvt.UsageMetadata.CandidatesTokenCount > 0 {
+				tokensReported = true
 				meta.OutputTokens = geminiEvt.UsageMetadata.CandidatesTokenCount
 			}
 			if geminiEvt.UsageMetadata.TotalTokenCount > 0 {
+				tokensReported = true
 				meta.TotalTokens = geminiEvt.UsageMetadata.TotalTokenCount
 			}
 			continue
@@ -196,6 +227,7 @@ func (c *GatewayClient) StreamRequest(ctx context.Context, payload RequestPayloa
 					onChunk(chunk.Choices[0].Delta.Content)
 				}
 				if chunk.Usage != nil {
+					tokensReported = true
 					meta.InputTokens = chunk.Usage.PromptTokens
 					meta.OutputTokens = chunk.Usage.CompletionTokens
 					meta.TotalTokens = chunk.Usage.TotalTokens
@@ -223,9 +255,11 @@ func (c *GatewayClient) StreamRequest(ctx context.Context, payload RequestPayloa
 					onChunk(evt.Delta.Text)
 				}
 				if evt.Type == "message_start" && evt.Message.Usage.InputTokens > 0 {
+					tokensReported = true
 					meta.InputTokens = evt.Message.Usage.InputTokens
 				}
 				if evt.Type == "message_delta" && evt.Usage.OutputTokens > 0 {
+					tokensReported = true
 					meta.OutputTokens = evt.Usage.OutputTokens
 				}
 			}
@@ -236,7 +270,19 @@ func (c *GatewayClient) StreamRequest(ctx context.Context, payload RequestPayloa
 	if meta.TotalTokens == 0 {
 		meta.TotalTokens = meta.InputTokens + meta.OutputTokens
 	}
-	return meta, scanner.Err()
+	meta.IsEstimated = !tokensReported
+	if tokensReported {
+		meta.UsageSource = "reported"
+	} else if meta.TotalTokens > 0 {
+		meta.UsageSource = "estimated"
+	} else {
+		meta.UsageSource = "none"
+	}
+
+	if err := scanner.Err(); err != nil {
+		return meta, fmt.Errorf("stream interrupted: %w", err)
+	}
+	return meta, nil
 }
 
 // SendRequest sends a non-streaming prompt to the gateway.
@@ -284,6 +330,7 @@ func (c *GatewayClient) SendRequest(ctx context.Context, payload RequestPayload)
 		return "", nil, fmt.Errorf("read response body: %w", err)
 	}
 
+	tokensReported := false
 	var outputText string
 	if isOpenAI {
 		var chatResp struct {
@@ -298,13 +345,40 @@ func (c *GatewayClient) SendRequest(ctx context.Context, payload RequestPayload)
 				TotalTokens      int `json:"total_tokens"`
 			} `json:"usage"`
 		}
-		if err := json.Unmarshal(respBody, &chatResp); err == nil {
-			if len(chatResp.Choices) > 0 {
-				outputText = chatResp.Choices[0].Message.Content
+		if err := json.Unmarshal(respBody, &chatResp); err == nil && len(chatResp.Choices) > 0 {
+			outputText = chatResp.Choices[0].Message.Content
+			if chatResp.Usage.TotalTokens > 0 || chatResp.Usage.PromptTokens > 0 {
+				tokensReported = true
+				meta.InputTokens = chatResp.Usage.PromptTokens
+				meta.OutputTokens = chatResp.Usage.CompletionTokens
+				meta.TotalTokens = chatResp.Usage.TotalTokens
 			}
-			meta.InputTokens = chatResp.Usage.PromptTokens
-			meta.OutputTokens = chatResp.Usage.CompletionTokens
-			meta.TotalTokens = chatResp.Usage.TotalTokens
+		} else {
+			var geminiResp struct {
+				Candidates []struct {
+					Content struct {
+						Parts []struct {
+							Text string `json:"text"`
+						} `json:"parts"`
+					} `json:"content"`
+				} `json:"candidates"`
+				UsageMetadata struct {
+					PromptTokenCount     int `json:"promptTokenCount"`
+					CandidatesTokenCount int `json:"candidatesTokenCount"`
+					TotalTokenCount      int `json:"totalTokenCount"`
+				} `json:"usageMetadata"`
+			}
+			if err := json.Unmarshal(respBody, &geminiResp); err == nil && len(geminiResp.Candidates) > 0 {
+				for _, part := range geminiResp.Candidates[0].Content.Parts {
+					outputText += part.Text
+				}
+				if geminiResp.UsageMetadata.TotalTokenCount > 0 || geminiResp.UsageMetadata.PromptTokenCount > 0 {
+					tokensReported = true
+					meta.InputTokens = geminiResp.UsageMetadata.PromptTokenCount
+					meta.OutputTokens = geminiResp.UsageMetadata.CandidatesTokenCount
+					meta.TotalTokens = geminiResp.UsageMetadata.TotalTokenCount
+				}
+			}
 		}
 	} else {
 		var geminiResp struct {
@@ -325,11 +399,20 @@ func (c *GatewayClient) SendRequest(ctx context.Context, payload RequestPayload)
 			for _, part := range geminiResp.Candidates[0].Content.Parts {
 				outputText += part.Text
 			}
-			meta.InputTokens = geminiResp.UsageMetadata.PromptTokenCount
-			meta.OutputTokens = geminiResp.UsageMetadata.CandidatesTokenCount
-			meta.TotalTokens = geminiResp.UsageMetadata.TotalTokenCount
+			if geminiResp.UsageMetadata.TotalTokenCount > 0 || geminiResp.UsageMetadata.PromptTokenCount > 0 {
+				tokensReported = true
+				meta.InputTokens = geminiResp.UsageMetadata.PromptTokenCount
+				meta.OutputTokens = geminiResp.UsageMetadata.CandidatesTokenCount
+				meta.TotalTokens = geminiResp.UsageMetadata.TotalTokenCount
+			}
 			if meta.TotalTokens == 0 {
 				meta.TotalTokens = meta.InputTokens + meta.OutputTokens
+			}
+			meta.IsEstimated = !tokensReported
+			if tokensReported {
+				meta.UsageSource = "reported"
+			} else {
+				meta.UsageSource = "estimated"
 			}
 			return outputText, meta, nil
 		}
@@ -350,10 +433,25 @@ func (c *GatewayClient) SendRequest(ctx context.Context, payload RequestPayload)
 					outputText += part.Text
 				}
 			}
-			meta.InputTokens = anthropicResp.Usage.InputTokens
-			meta.OutputTokens = anthropicResp.Usage.OutputTokens
-			meta.TotalTokens = meta.InputTokens + meta.OutputTokens
+			if anthropicResp.Usage.InputTokens > 0 || anthropicResp.Usage.OutputTokens > 0 {
+				tokensReported = true
+				meta.InputTokens = anthropicResp.Usage.InputTokens
+				meta.OutputTokens = anthropicResp.Usage.OutputTokens
+				meta.TotalTokens = meta.InputTokens + meta.OutputTokens
+			}
 		}
+	}
+
+	if meta.TotalTokens == 0 {
+		meta.TotalTokens = meta.InputTokens + meta.OutputTokens
+	}
+	meta.IsEstimated = !tokensReported
+	if tokensReported {
+		meta.UsageSource = "reported"
+	} else if meta.TotalTokens > 0 {
+		meta.UsageSource = "estimated"
+	} else {
+		meta.UsageSource = "none"
 	}
 
 	return outputText, meta, nil
@@ -393,15 +491,27 @@ func (c *GatewayClient) buildRequestBody(payload RequestPayload, stream, isOpenA
 
 func parseHTTPError(resp *http.Response) error {
 	data, _ := io.ReadAll(resp.Body)
-	var errResp struct {
+	var errEnvelope struct {
 		Type  string `json:"type"`
 		Error struct {
 			Type    string `json:"type"`
+			Code    any    `json:"code"`
+			Status  string `json:"status"`
 			Message string `json:"message"`
 		} `json:"error"`
 	}
-	if err := json.Unmarshal(data, &errResp); err == nil && errResp.Error.Message != "" {
-		return fmt.Errorf("[HTTP %d %s] %s", resp.StatusCode, errResp.Error.Type, errResp.Error.Message)
+	if err := json.Unmarshal(data, &errEnvelope); err == nil && errEnvelope.Error.Message != "" {
+		errType := errEnvelope.Error.Type
+		if errType == "" {
+			errType = errEnvelope.Error.Status
+		}
+		if errType == "" && errEnvelope.Type != "" && errEnvelope.Type != "error" {
+			errType = errEnvelope.Type
+		}
+		if errType != "" {
+			return fmt.Errorf("[HTTP %d %s] %s", resp.StatusCode, errType, errEnvelope.Error.Message)
+		}
+		return fmt.Errorf("[HTTP %d] %s", resp.StatusCode, errEnvelope.Error.Message)
 	}
-	return fmt.Errorf("[HTTP %d] %s", resp.StatusCode, string(data))
+	return fmt.Errorf("[HTTP %d] %s", resp.StatusCode, strings.TrimSpace(string(data)))
 }

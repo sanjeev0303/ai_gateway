@@ -1,4 +1,17 @@
-.PHONY: build test vet lint tidy format generate db-migrate db-seed dev-up dev-down dev-seed dev-logs dev-gateway dev-gateway-v1 dev-control-api dev-worker check-boundaries verify check
+.PHONY: build test vet lint tidy format generate db-migrate db-seed dev-up dev-down dev-seed dev-logs dev-start dev-stop dev-status dev-reset dev-gateway dev-gateway-v1 dev-control-api dev-worker check-boundaries verify check
+
+# --- Local Service Lifecycle Management (safe, non-destructive defaults) ---
+dev-start:
+	bash scripts/dev-ctl.sh start
+
+dev-stop:
+	bash scripts/dev-ctl.sh stop
+
+dev-status:
+	bash scripts/dev-ctl.sh status
+
+dev-reset:
+	bash scripts/dev-ctl.sh reset
 
 # --- Local Release-Readiness Verification Entry Point ---
 verify:
@@ -43,22 +56,22 @@ db-seed:
 # --- Full stack (Postgres + Redis + NATS + backend processes + web), via docker compose ---
 # Reads deploy/compose/.env for credentials (see deploy/compose/.env.example).
 dev-up:
-	docker compose -f deploy/compose/docker-compose.yml up -d --build
+	bash scripts/dev-ctl.sh start
 
 dev-down:
-	docker compose -f deploy/compose/docker-compose.yml down
+	bash scripts/dev-ctl.sh down
 
 # One-shot seed (behind the "seed" profile so plain `dev-up` skips it).
 dev-seed:
 	docker compose -f deploy/compose/docker-compose.yml --profile seed up seed
 
 dev-logs:
-	docker compose -f deploy/compose/docker-compose.yml logs -f
+	bash scripts/dev-ctl.sh logs
 
 # --- Run each process with its own listen port ---
 # gateway-v2 is the canonical data plane (ADR-5); dev-gateway starts it.
 dev-gateway:
-	cd backend && AIGW_SERVER_ADDR=:8080 go run ./cmd/gateway-v2
+	cd backend && AIGW_SERVER_ADDR=:8084 go run ./cmd/gateway-v2
 
 # Deprecated: v1 data plane, frozen and not deployed (ADR-5). Kept for one
 # release as a rollback path; remove once no deployment references it.

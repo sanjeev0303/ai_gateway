@@ -242,6 +242,9 @@ func parseUsageFilter(r *http.Request, defaultWindow time.Duration) (domain.Usag
 	if err != nil {
 		return domain.UsageFilter{}, err
 	}
+	if from.After(to) {
+		return domain.UsageFilter{}, invalidQuery("'from' timestamp must not be after 'to' timestamp")
+	}
 	projectID, err := parseOptionalUUIDParam(r, "project_id")
 	if err != nil {
 		return domain.UsageFilter{}, err

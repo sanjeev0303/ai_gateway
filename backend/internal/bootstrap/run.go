@@ -148,6 +148,9 @@ func RunGatewayV2(ctx context.Context) error {
 				return fmt.Errorf("gateway-v2: %w", err)
 			}
 			defer bus.Close()
+			if bus.ping != nil {
+				reg.Register("eventbus", bus.Ping)
+			}
 		} else {
 			log.Warn("eventbus disabled: usage events will not be recorded")
 		}
@@ -306,6 +309,9 @@ func RunControlAPI(ctx context.Context) error {
 				return fmt.Errorf("control-api: eventbus: %w", err)
 			}
 			defer bus.Close()
+			if bus.ping != nil {
+				reg.Register("eventbus", bus.Ping)
+			}
 		}
 
 		var redisClient *redis.Client
@@ -427,7 +433,10 @@ func RunControlAPI(ctx context.Context) error {
 			Rollups:       repositories.NewUsageRollupRepository(store),
 		})
 
-		guardrailsSvc := guardrails.NewService(repositories.NewGuardrailsRepository(store))
+		guardrailsSvc := guardrails.NewService(
+			repositories.NewGuardrailsRepository(store),
+			repositories.NewAuditLogRepository(store),
+		)
 		guardrailsEval := guardrails.NewEvaluator()
 
 		policySvc := policy.NewService(
@@ -589,6 +598,9 @@ func RunWorker(ctx context.Context) error {
 				return fmt.Errorf("worker: %w", err)
 			}
 			defer bus.Close()
+			if bus.ping != nil {
+				reg.Register("eventbus", bus.Ping)
+			}
 			if !bus.inProcess {
 				secSvc := securityevent.NewService(securityevent.ServiceDeps{Events: repositories.NewSecurityEventRepository(store)})
 				jobs.Add(1)

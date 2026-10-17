@@ -60,7 +60,7 @@ func TestTenantResolver_HappyPath(t *testing.T) {
 	if upstream.UpstreamKey != testUpstreamKey {
 		t.Fatalf("expected secret value as upstream key, got %q", upstream.UpstreamKey)
 	}
-	if upstream.BaseURL != "https://api.anthropic.com" {
+	if upstream.BaseURL != "https://api.anthropic.com/" {
 		t.Fatalf("expected default anthropic base URL, got %q", upstream.BaseURL)
 	}
 }
@@ -74,7 +74,7 @@ func TestTenantResolver_CustomBaseURL(t *testing.T) {
 	upstream, err := resolver.ResolveUpstream(context.Background(), mustUUIDs[0])
 	requireNoErr(t, err)
 
-	if upstream.BaseURL != "https://eu.api.anthropic.com" {
+	if upstream.BaseURL != "https://eu.api.anthropic.com/" {
 		t.Fatalf("expected account base URL override, got %q", upstream.BaseURL)
 	}
 }

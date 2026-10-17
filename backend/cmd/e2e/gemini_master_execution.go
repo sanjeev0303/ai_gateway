@@ -360,9 +360,9 @@ func runGeminiMasterExecution() {
 	npmTestCmd := exec.Command("npm", "test")
 	npmTestCmd.Dir = "/home/sanju/ai-project/ai_gateway/packages/api-client"
 	npmOut, err := npmTestCmd.CombinedOutput()
-	assert(err == nil && strings.Contains(string(npmOut), "pass 8"),
-		fmt.Sprintf("SDK test suite passed 8/8 tests: %s", string(npmOut)))
-	fmt.Println("  [PASS] 14. TypeScript SDK test suite passed 8/8 automated tests (auth failure, timeouts, rate limits, Gemini SSE)")
+	assert(err == nil && strings.Contains(string(npmOut), "fail 0"),
+		fmt.Sprintf("SDK test suite passed all tests: %s", string(npmOut)))
+	fmt.Println("  [PASS] 14. TypeScript SDK test suite passed automated tests (auth failure, timeouts, rate limits, Gemini SSE, retries, cancellation)")
 
 	// Dispatch SDK protocol requests for each of the three users
 	for idx, u := range []struct {

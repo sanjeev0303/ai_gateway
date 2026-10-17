@@ -146,6 +146,59 @@ func TestValidate(t *testing.T) {
 		{"empty privacy default fails", func(c *Config) {
 			c.Conversation.PrivacyDefault = ""
 		}, "CONVERSATION_PRIVACY_DEFAULT"},
+		{"invalid env fails", func(c *Config) { c.Env = "invalid_env" }, "ENV \"invalid_env\" is invalid"},
+		{"production with allow insecure dev fails", func(c *Config) {
+			c.Env = "production"
+			c.AllowInsecureDev = true
+		}, "ALLOW_INSECURE_DEV cannot be enabled in production"},
+		{"production with dev login fails", func(c *Config) {
+			c.Env = "production"
+			c.Auth.DevLoginEnabled = true
+			c.Auth.HMACSigningKey = strings.Repeat("x", 32)
+		}, "AUTH_DEV_LOGIN_ENABLED cannot be enabled in production"},
+		{"production with insecure cookie fails", func(c *Config) {
+			c.Env = "production"
+			c.Auth.SessionCookieSecure = false
+		}, "AUTH_SESSION_COOKIE_SECURE must be true in production"},
+		{"production with disabled csrf fails", func(c *Config) {
+			c.Env = "production"
+			c.Auth.SessionCookieSecure = true
+			c.Auth.CSRFEnabled = false
+		}, "AUTH_CSRF_ENABLED must be true in production"},
+		{"production with placeholder hmac fails", func(c *Config) {
+			c.Env = "production"
+			c.Auth.SessionCookieSecure = true
+			c.Auth.CSRFEnabled = true
+			c.Auth.HMACSigningKey = "change-me-change-me-change-me-change-me"
+		}, "AUTH_HMAC_SIGNING_KEY uses a known placeholder secret, prohibited in production"},
+		{"production valid config passes", func(c *Config) {
+			c.Env = "production"
+			c.Auth.SessionCookieSecure = true
+			c.Auth.CSRFEnabled = true
+			c.Auth.HMACSigningKey = "0123456789abcdef0123456789abcdef"
+		}, ""},
+		{"dev with dev login without allow insecure fails", func(c *Config) {
+			c.Env = "development"
+			c.AllowInsecureDev = false
+			c.Auth.DevLoginEnabled = true
+			c.Auth.HMACSigningKey = "0123456789abcdef0123456789abcdef"
+		}, "AUTH_DEV_LOGIN_ENABLED=true is a development convenience; set AIGW_ALLOW_INSECURE_DEV=true"},
+		{"dev with placeholder hmac key without allow insecure fails", func(c *Config) {
+			c.Env = "development"
+			c.AllowInsecureDev = false
+			c.Auth.HMACSigningKey = "change-me-change-me-change-me-change-me"
+		}, "AUTH_HMAC_SIGNING_KEY uses a known placeholder secret; set a secure 32+ byte key or set AIGW_ALLOW_INSECURE_DEV=true"},
+		{"dev with placeholder and allow insecure dev passes", func(c *Config) {
+			c.Env = "development"
+			c.AllowInsecureDev = true
+			c.Auth.DevLoginEnabled = true
+			c.Auth.HMACSigningKey = "change-me-change-me-change-me-change-me"
+		}, ""},
+		{"test mode allows placeholder signing key", func(c *Config) {
+			c.Env = "test"
+			c.AllowInsecureDev = false
+			c.Auth.HMACSigningKey = "change-me-change-me-change-me-change-me"
+		}, ""},
 	}
 
 	for _, tt := range tests {
@@ -174,17 +227,26 @@ func TestRedacted(t *testing.T) {
 	c.Database.URL = "postgres://user:secret@host/db"
 	c.Redis.Password = "hunter2"
 	c.Auth.HMACSigningKey = "key"
+	c.Auth.HMACPreviousKeys = []string{"oldkey1", "oldkey2"}
+	c.Secrets.Key = "0123456789abcdef0123456789abcdef"
+	c.Secrets.Token = "vault-token-xyz"
 
 	got := c.Redacted()
 	if got.Database.URL != "<redacted>" || got.Redis.Password != "<redacted>" || got.Auth.HMACSigningKey != "<redacted>" {
 		t.Errorf("Redacted() did not mask secrets: %+v", got)
+	}
+	if got.Secrets.Key != "<redacted>" || got.Secrets.Token != "<redacted>" {
+		t.Errorf("Redacted() did not mask Secrets config: %+v", got)
+	}
+	if len(got.Auth.HMACPreviousKeys) != 2 || got.Auth.HMACPreviousKeys[0] != "<redacted>" || got.Auth.HMACPreviousKeys[1] != "<redacted>" {
+		t.Errorf("Redacted() did not mask HMACPreviousKeys: %+v", got.Auth.HMACPreviousKeys)
 	}
 	if c.Database.URL == "<redacted>" {
 		t.Error("Redacted() mutated the receiver")
 	}
 
 	empty := (Config{}).Redacted()
-	if empty.Database.URL != "" || empty.Auth.HMACSigningKey != "" {
+	if empty.Database.URL != "" || empty.Auth.HMACSigningKey != "" || empty.Secrets.Key != "" || empty.Secrets.Token != "" {
 		t.Errorf("Redacted() on empty config should keep empty strings, got %+v", empty)
 	}
 }

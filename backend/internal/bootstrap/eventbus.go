@@ -22,6 +22,7 @@ type usageBus struct {
 	ports.EventBus
 	inProcess bool
 	closer    io.Closer
+	ping      func(context.Context) error
 }
 
 func (b usageBus) Close() error {
@@ -29,6 +30,13 @@ func (b usageBus) Close() error {
 		return nil
 	}
 	return b.closer.Close()
+}
+
+func (b usageBus) Ping(ctx context.Context) error {
+	if b.ping != nil {
+		return b.ping(ctx)
+	}
+	return nil
 }
 
 func newUsageBus(ctx context.Context, cfg *config.EventbusConfig, log *slog.Logger) (usageBus, error) {
@@ -40,7 +48,12 @@ func newUsageBus(ctx context.Context, cfg *config.EventbusConfig, log *slog.Logg
 		if err != nil {
 			return usageBus{}, err
 		}
-		return usageBus{EventBus: bus, inProcess: false, closer: bus}, nil
+		return usageBus{
+			EventBus:  bus,
+			inProcess: false,
+			closer:    bus,
+			ping:      bus.Ping,
+		}, nil
 	default:
 		return usageBus{}, fmt.Errorf("eventbus kind %q is not available in this build", cfg.Kind)
 	}

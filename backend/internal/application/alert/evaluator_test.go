@@ -310,3 +310,63 @@ func TestAlertEvaluator_AllConditions(t *testing.T) {
 		})
 	}
 }
+
+func TestAlertEvaluator_AutoRecoveryAndResolution(t *testing.T) {
+	ctx := context.Background()
+	orgID := uuid.New()
+
+	alertRepo := newMockAlertRepo()
+	notifier := &mockNotifier{}
+	rollups := &mockRollups{}
+	healthRepo := &mockHealthRepo{states: make(map[string]domain.ProviderHealthState)}
+	securityRepo := &mockSecurityEvents{}
+	requestsRepo := &mockLlmRequests{}
+
+	eval := alert.NewEvaluator(alert.EvaluatorDeps{
+		Alerts:         alertRepo,
+		Notifier:       notifier,
+		UsageRollups:   rollups,
+		ProviderHealth: healthRepo,
+		SecurityEvents: securityRepo,
+		LlmRequests:    requestsRepo,
+	})
+
+	cfgBytes, _ := json.Marshal(map[string]any{"threshold_micros": int64(100_000_000), "window": "daily"})
+	a := domain.Alert{
+		ID:             uuid.New(),
+		OrganizationID: orgID,
+		AlertType:      "spend_limit",
+		Name:           "Daily Spend Cap",
+		Severity:       "critical",
+		Configuration:  cfgBytes,
+		Status:         domain.AlertStatusActive,
+	}
+	alertRepo.alerts[a.ID] = a
+
+	// Step 1: Trigger condition (spend = $150 > $100 threshold)
+	rollups.summary = domain.UsageSummary{TotalCostMicros: 150_000_000, Requests: 100}
+	eval.EvaluateAll(ctx, []uuid.UUID{orgID})
+
+	if len(alertRepo.events) != 1 || alertRepo.events[0].Status != "triggered" {
+		t.Fatalf("expected triggered event, got %+v", alertRepo.events)
+	}
+
+	// Step 2: Spend condition returns to normal (spend = $50 <= $100 threshold)
+	rollups.summary = domain.UsageSummary{TotalCostMicros: 50_000_000, Requests: 30}
+	eval.EvaluateAll(ctx, []uuid.UUID{orgID})
+
+	// Must transition to resolved and append resolution event
+	if len(alertRepo.events) != 2 {
+		t.Fatalf("expected 2 total events (triggered + resolved), got %d", len(alertRepo.events))
+	}
+	resolvedEvent := alertRepo.events[1]
+	if resolvedEvent.Status != "resolved" {
+		t.Errorf("expected resolved event status, got %s", resolvedEvent.Status)
+	}
+	if resolvedEvent.ResolvedAt == nil {
+		t.Errorf("expected non-nil ResolvedAt timestamp on resolution event")
+	}
+	if alertRepo.alerts[a.ID].Status != domain.AlertStatusResolved {
+		t.Errorf("expected alert status resolved, got %s", alertRepo.alerts[a.ID].Status)
+	}
+}

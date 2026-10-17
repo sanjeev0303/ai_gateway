@@ -682,6 +682,7 @@ func (r *usageRollupRepo) GetByProject(ctx context.Context, orgID uuid.UUID, fil
 		if err != nil {
 			return err
 		}
+		results = make([]domain.UsageByProject, 0, len(rows))
 		for _, row := range rows {
 			var projectID uuid.UUID
 			if row.ProjectID != nil {
@@ -718,6 +719,7 @@ func (r *usageRollupRepo) GetByModel(ctx context.Context, orgID uuid.UUID, from,
 		if err != nil {
 			return err
 		}
+		results = make([]domain.UsageByModel, 0, len(rows))
 		for _, row := range rows {
 			results = append(results, domain.UsageByModel{
 				Model:       row.Model,
@@ -742,6 +744,7 @@ func (r *usageRollupRepo) GetByProvider(ctx context.Context, orgID uuid.UUID, fr
 		if err != nil {
 			return err
 		}
+		results = make([]domain.UsageByProvider, 0, len(rows))
 		for _, row := range rows {
 			results = append(results, domain.UsageByProvider{
 				Provider:    row.Provider,
@@ -771,6 +774,7 @@ func (r *usageRollupRepo) GetByUser(ctx context.Context, orgID uuid.UUID, filter
 		if err != nil {
 			return err
 		}
+		results = make([]domain.UsageByUser, 0, len(rows))
 		for _, row := range rows {
 			var uid uuid.UUID
 			if row.UserID != nil {
@@ -813,6 +817,7 @@ func (r *usageRollupRepo) GetByTeam(ctx context.Context, orgID uuid.UUID, filter
 		if err != nil {
 			return err
 		}
+		results = make([]domain.UsageByTeam, 0, len(rows))
 		for _, row := range rows {
 			results = append(results, domain.UsageByTeam{
 				TeamID: *row.TeamID,
@@ -887,6 +892,7 @@ func (r *usageRollupRepo) GetLatencyByProviderModel(ctx context.Context, orgID u
 		if err != nil {
 			return err
 		}
+		results = make([]domain.UsageLatency, 0, len(rows))
 		for _, row := range rows {
 			avgTTFT, p50TTFT, p95TTFT, p99TTFT := latencyMetrics(row.TtftSamples, row.AvgTtftMs, row.P50TtftMs, row.P95TtftMs, row.P99TtftMs)
 			avgTotal, p50Total, p95Total, p99Total := latencyMetrics(row.TotalSamples, row.AvgTotalMs, row.P50TotalMs, row.P95TotalMs, row.P99TotalMs)
@@ -2002,6 +2008,7 @@ func (r *usageRollupRepo) GetByServiceAccount(ctx context.Context, orgID uuid.UU
 		if err != nil {
 			return err
 		}
+		results = make([]domain.UsageByServiceAccount, 0, len(rows))
 		for _, row := range rows {
 			var saID uuid.UUID
 			if row.ServiceAccountID != nil {

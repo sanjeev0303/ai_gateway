@@ -24,7 +24,15 @@ type budgetTracker struct {
 	spent       float64
 	windowStart time.Time
 	alertAt     float64
+	guard       *BudgetGuardImpl
 	mu          sync.Mutex
+}
+
+func (t *budgetTracker) now() time.Time {
+	if t.guard != nil && t.guard.clock != nil {
+		return t.guard.clock()
+	}
+	return time.Now()
 }
 
 // NewBudgetGuard creates a new budget guard.
@@ -139,6 +147,7 @@ func (b *BudgetGuardImpl) getOrCreateTracker(key string, limit float64, window t
 		spent:       0,
 		windowStart: b.clock(),
 		alertAt:     alertAt,
+		guard:       b,
 	}
 	b.budgets[key] = tracker
 	return tracker
@@ -149,7 +158,7 @@ func (t *budgetTracker) check(estimatedCost float64) BudgetResult {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	now := time.Now()
+	now := t.now()
 	// Reset window if expired
 	if now.Sub(t.windowStart) > t.window {
 		t.spent = 0
@@ -175,7 +184,7 @@ func (t *budgetTracker) reserve(estimatedCost float64) (BudgetResult, func(actua
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	now := time.Now()
+	now := t.now()
 	// Reset window if expired
 	if now.Sub(t.windowStart) > t.window {
 		t.spent = 0
@@ -232,7 +241,7 @@ func (b *BudgetGuardImpl) RecordUsage(ctx context.Context, key string, cost floa
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 
-	now := time.Now()
+	now := tracker.now()
 	if now.Sub(tracker.windowStart) > tracker.window {
 		tracker.spent = 0
 		tracker.windowStart = now
@@ -294,6 +303,7 @@ func (b *BudgetGuardImpl) SyncFromSnapshot(snapshot PolicySnapshot) {
 				spent:       0,
 				windowStart: b.clock(),
 				alertAt:     config.AlertAt,
+				guard:       b,
 			}
 		}
 	}

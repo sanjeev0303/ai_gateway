@@ -1,88 +1,124 @@
 # Sentinel AI Gateway / AI Governance — Current State Architecture & Runtime Audit
 
-## 1. System Overview
+**Date**: 2026-10-16  
+**Environment**: Local Multi-Service Development Stack  
+**Active Git Branch**: `main` (commit `c8e84d8`)
 
-Sentinel AI Gateway is a production-grade AI governance and proxy gateway platform built as a hybrid architecture:
-- **Frontend**: Next.js 16 (App Router, React 19, TypeScript, Vanilla CSS design tokens with modern UI shell) listening on `http://localhost:3000`.
-- **Control Plane API**: Go HTTP service (`ai-governance-saas/backend/cmd/control-api`) listening on `http://localhost:8081`. Manages identity, organizations, teams, projects, credentials, provider accounts, policies, guardrails, alerts, security events, audit logs, and billing.
-- **Data Plane (Gateway-v2)**: Low-latency streaming proxy (`ai-governance-saas/backend/cmd/gateway-v2`) listening on `http://localhost:8084`. Handles key authentication, tenant isolation, upstream provider routing (Anthropic, OpenAI, Gemini), real-time policy evaluation, rate limiting, token budget checks, and asynchronous telemetry emission.
-- **Background Worker**: Go daemon (`ai-governance-saas/backend/cmd/worker`) listening on `http://localhost:8082`. Subscribes to telemetry events from NATS JetStream / in-process event bus, records raw requests to `llm_requests` and `usage_events`, computes hourly/daily usage rollups (`usage_hourly`, `usage_daily`), enforces retention, and evaluates watchdog alerts.
-- **Persistence & Storage**: PostgreSQL 16 (with Goose migrations 00001 through 00032) and Redis 7 (rate limiting, real-time activity tracker, credential caching, pub/sub invalidation).
+---
+
+## 1. System Overview & Entry Points
+
+Sentinel AI Gateway is an enterprise AI governance proxy and observability platform built on a hybrid architecture:
+
+| Component | Repository Path & Entry Point | Runtime / Language | Port | Role & Responsibility |
+|---|---|---|---|---|
+| **Frontend Dashboard** | `app/src/app` (`app/Dockerfile`) | Next.js 16.3.7, React 19.2.8, TypeScript 5 | `3000` | Administrative control center, observability charts, governance authoring, audit logs, and settings. |
+| **Control Plane API** | `backend/cmd/control-api/main.go` | Go 1.25, Chi/HTTP router | `8081` (maps to internal `:8080`) | Multi-tenant REST API managing identity, teams, projects, credentials, providers, policies, budgets, guardrails, alerts, and billing. |
+| **Data Plane (Gateway-v2)** | `backend/cmd/gateway-v2/main.go` | Go 1.25, low-latency streaming proxy | `8084` (maps to internal `:8080`) | High-throughput streaming proxy, key hashing, Redis Lua rate limiting, policy snapshot enforcement, guardrail inspection, provider routing, telemetry emission. |
+| **Background Worker** | `backend/cmd/worker/main.go` | Go 1.25, async daemon | `8082` (maps to internal `:8080`) | NATS JetStream consumer, `llm_requests` insertion, 5-minute rollups (`usage_hourly`, `usage_daily`), retention enforcement, watchdog alert evaluation. |
+| **Database Migrations** | `backend/cmd/migrate/main.go` | Go 1.25, Goose | One-shot (`deploy/compose`) | Applies 34 database migrations sequentially against PostgreSQL. |
+| **Sentinel CLI (`aigw`)** | `packages/cli/cmd/root.go` | Go 1.25, Cobra CLI | Client binary | Developer command-line interface for auth, project selection, permitted model discovery, streaming/non-streaming inference. |
+| **Sentinel SDK** | `packages/api-client/src/index.ts` | TypeScript, Node.js fetch | Client library | Programmatic client library for browser dashboard and Node.js applications. |
 
 ---
 
 ## 2. Infrastructure & Topology
 
-| Service | Container / Process | Port | Health Probes | Storage / Dependencies |
-|---|---|---|---|---|
-| PostgreSQL | `ai-gateway-postgres-1` | 5432 | `pg_isready -U gateway` | Docker volume `pgdata`, 32 migrations applied |
-| Redis | `ai-gateway-redis-1` | 6379 | `redis-cli ping` | In-memory with optional persistence, pub/sub channels |
-| NATS JetStream | `ai-gateway-nats-1` | 4222 / 8222 | `wget /healthz` | File-backed durable JetStream stream `AIGW_USAGE` |
-| Control API | `ai-gateway-control-api-1` | 8081 | `GET /livez`, `GET /readyz` | PostgreSQL pool, Redis client, Secrets store |
-| Gateway-v2 | `ai-gateway-gateway-v2-1` | 8084 | `GET /livez`, `GET /readyz` | PostgreSQL pool, Redis client, Event Bus, Upstream Providers |
-| Worker | `ai-gateway-worker-1` | 8082 | `GET /livez`, `GET /readyz` | PostgreSQL pool, Event Bus, Scheduled Cron |
-| Frontend | `ai-gateway-app-1` | 3000 | `GET /api/health` | Node.js Next.js standalone server, proxies to :8081 |
+All services are containerized via `deploy/compose/docker-compose.yml` and verified running locally:
+
+| Service | Container Name | Host Port | Internal Port | Health Probe | Status | Verified Alignment |
+|---|---|---|---|---|---|---|
+| **PostgreSQL** | `ai-gateway-postgres-1` | `5432` | `5432` | `pg_isready -U gateway` | Up (healthy) | Goose migrations 00001-00034 applied. |
+| **Redis** | `ai-gateway-redis-1` | `6379` | `6379` | `redis-cli -a change-me ping` | Up (healthy) | Cache, rate limiter, pub/sub invalidation active. |
+| **NATS JetStream** | `ai-gateway-nats-1` | `4222`, `8222` | `4222`, `8222` | `wget http://localhost:8222/healthz` | Up (healthy) | Persistent stream `AIGW_USAGE` configured. |
+| **Control API** | `ai-gateway-control-api-1` | `8081` | `8080` | `GET http://localhost:8080/livez` | Up (healthy) | Built from current `backend/` commit. |
+| **Gateway-v2** | `ai-gateway-gateway-v2-1` | `8084` | `8080` | `GET http://localhost:8080/livez` | Up (healthy) | Built from current `backend/` commit. |
+| **Worker** | `ai-gateway-worker-1` | `8082` | `8080` | `GET http://localhost:8080/livez` | Up (healthy) | Built from current `backend/` commit. |
+| **Frontend Web** | `ai-gateway-app-1` | `3000` | `3000` | HTTP 200 on `/app/overview` | Up (healthy) | Built from current `app/` commit. |
 
 ---
 
-## 3. Request Lifecycle & Pipelines
+## 3. End-to-End Request & Telemetry Lifecycle
 
-### 3.1 Control Plane Request Flow
-1. **Client / Browser**: Next.js Server Components call `fetchApi()` or Client Components call direct `:8081`.
-2. **Auth Layer**: Cookie `session=<jwt>` parsed with HMAC token manager. CSRF double-submit token validated for state-mutating requests (`POST`, `PATCH`, `DELETE`).
-3. **Actor Context**: Organization ID, User ID, and Role extracted and injected into `context.Context`.
-4. **Tenant Isolation**: Handlers never trust client-provided `organization_id`; queries enforce `WHERE organization_id = $1`.
-5. **Audit Logging**: Successful mutations emit audit log entries to `audit_logs` table via transaction hooks.
-
-### 3.2 Gateway-v2 Data Plane Flow
-1. **Client Request**: `POST /v1/messages` with `x-api-key: aigw_...` or `Authorization: Bearer aigw_...`.
-2. **Authentication**: `AuthenticatorImpl` hashes the raw key with SHA-256, queries Redis cache (L1), falls back to `gateway_credentials` table (L2).
-3. **Tenant & Upstream Resolution**: Resolves organization's active provider accounts and decrypted secrets.
-4. **Policy Snapshot**: Cached in-memory policy rules evaluate model access, prompt guardrails, and tenant boundaries without database round-trips.
-5. **Guardrail Check**: In-memory inspection evaluates PII and prompt injection rules against the input payload.
-6. **Rate Limiting & Budgets**: Redis token bucket checks credential rate limits and budget caps.
-7. **Stream Proxy**: HTTP request forwarded to upstream provider; response SSE chunks streamed directly back to client with `x-request-id`. For deterministic testing, built-in offline mock handles `sk-dummy-key`.
-8. **Telemetry Emission**: Async worker channel publishes `UsageRecord` to NATS JetStream event bus.
-
-### 3.3 Worker Telemetry & Rollup Pipeline
-1. `UsageConsumer` receives `UsageEventMessage` from JetStream subject `aigw.usage.events`.
-2. Writes to `llm_requests` (detailed request ledger) and `usage_events` (token counts).
-3. Scheduled worker executes `RecomputeAll` every 5 minutes to aggregate usage into `usage_hourly` and `usage_daily`.
-4. Alerts engine queries `usage_hourly` against active alert rules and fires notifications.
-5. Retention job purges raw requests and message bodies based on organization-level retention policies.
+```
+[Browser / CLI / SDK]
+        │
+        ▼ (POST /v1/messages or /v1/chat/completions)
+[Gateway-v2 :8084]
+        │
+        ├── 1. Auth: Authenticator hashes API key -> Redis L1 cache -> DB L2 fallback
+        ├── 2. Tenant Context: Bind OrgID, UserID, TeamID, ProjectID from credential actor
+        ├── 3. Policy Snapshot: Evaluate model allowlist/denylist & max token constraints
+        ├── 4. Guardrails: Inspect payload for PII and prompt injection patterns
+        ├── 5. Rate Limits & Budgets: Redis Lua sliding window & spend budget checks
+        ├── 6. Provider Upstream: Stream request to Anthropic, OpenAI, or Gemini (or offline mock)
+        │       └── SSE chunks flushed continuously to client
+        └── 7. Telemetry Sink: Non-blocking emit of UsageRecord to NATS JetStream
+                │
+                ▼ (Subject: aigw.usage.events)
+        [Worker :8082]
+                │
+                ├── 1. Consume UsageEventMessage
+                ├── 2. Insert into llm_requests & usage_events (idempotent, conflict-safe)
+                ├── 3. Hourly/Daily Rollup Job: Aggregate into usage_hourly & usage_daily
+                ├── 4. Alert Evaluator: Trigger threshold warnings & incident events
+                └── 5. Retention Job: Purge aged prompts based on org privacy setting
+                        │
+                        ▼ (PostgreSQL Tables)
+        [Control API :8081] <── [Next.js Web Dashboard :3000]
+                │
+                └── Serves Overview KPI metrics, timeseries, heatmaps, and detail views
+```
 
 ---
 
 ## 4. Database Schema & Migration Status
 
-All 32 Goose migrations have been verified and applied against PostgreSQL:
-- `00001_identity.sql`: Organizations, users, memberships, invitations.
-- `00002_projects_teams.sql`: Projects, teams, and team memberships.
-- `00003_service_accounts.sql`: Machine service accounts.
-- `00004_api_credentials.sql`: API credentials and key hashing.
-- `00005_audit_logs.sql`: Structured immutable audit log entries.
-- `00006_providers.sql`: Provider accounts, credentials, and model registry.
-- `00007_usage.sql`: Raw `llm_requests`, `usage_events`, `usage_hourly`, `usage_daily`.
-- `00008_policies.sql`: Policies and declarative rules engine.
-- `00009_billing.sql`: Plans, subscriptions, and invoices.
-- `00010_conversations.sql`: Multi-turn chat sessions and message logs.
-- `00011_alerts.sql`: Organization watchdog and alert rules.
-- `00012_rls.sql`: PostgreSQL Row-Level Security policies.
-- `00013_gateway_credentials.sql`: High-performance gateway credential records.
-- `00014_guardrails.sql`: Guardrails table with detector configurations.
-- `00015` through `00030`: Telemetry enhancements, latency tracking (TTFT, total latency), service account attribution, and privacy controls.
-- `00031_usage_reconciliation_indexes.sql`: Composite performance indexes for usage rollups and reconciliation.
-- `00032_alerts_enhancement_and_history.sql`: Alert execution logs and notification history tables.
+A total of **34 sequential Goose migrations** are present in `backend/internal/infrastructure/postgres/migrations/` and verified applied in PostgreSQL:
+
+- `00001` - `00005`: Identity, projects, teams, API credentials, audit logs.
+- `00006` - `00010`: Provider accounts, usage tables, policies, billing, conversations.
+- `00011` - `00015`: Alerts, RLS policies, membership lookup, credential resolver, identity m3.
+- `00016` - `00020`: Provider credential fingerprints, models, gateway credentials, provider health, model metadata.
+- `00021` - `00025`: Gateway credentials RLS, auth credentials, request telemetry, conversation privacy, security events.
+- `00026` - `00030`: Invoices, service account attribution, guardrails, budgets, telemetry & privacy.
+- `00031` - `00032`: Usage reconciliation composite indexes, alerts enhancement & history.
+- `00033_usage_dimensions_and_audit.sql`: Team and project attribution columns on `llm_requests`.
+- `00034_alerting_and_retention.sql`: Alert events status tracking and retention rule definitions.
 
 ---
 
-## 5. Audit Conclusions & Resolved Defect Status
+## 5. Contradictions Between Documentation & Implementation
 
-1. **Backend Core Services**: Identity, Providers, Usage, Activity, Conversations, AuditLogs, Alerts, SecurityEvents, Billing, Policy, Budget, and Guardrails are all implemented and verified.
-2. **Gateway-v2 Data Plane**: Authenticates gateway tokens, enforces tenant isolation, checks policies and guardrails, proxies streams, and emits async usage records.
-3. **Previously Identified Gaps — All Resolved**:
-   - `guardrails.go`: UUID empty string syntax error when creating guardrails without pre-assigned ID — **FIXED** (UUID generated automatically).
-   - `alerts.go`: Check constraint mismatch on `alert_type` (`spend_exceeded` vs `spend_limit`) — **FIXED** (Normalized enum and updated migrations).
-   - `telemetry_emitter.go`: Status string mismatch (`'success'`/`'error'` vs `'succeeded'`/`'failed'`) breaking `llm_requests` insertion — **FIXED** (Aligned enum values).
-   - Offline Provider Mocking: Upstream requests with `sk-dummy-key` previously returned 401 from external Anthropic API — **FIXED** (Added deterministic in-memory mock provider handling for streaming and non-streaming in `stream_proxy.go`).
-   - Loopback SSE chunk coalescing in stream proxy unit tests — **FIXED** (Added flush pause to guarantee distinct socket reads).
+1. **Migration Count Mismatch**: Previous readiness documents stated 32 migrations; actual repository contains 34 applied migrations.
+2. **Mock vs Real Backend Status**: Previous reports claimed conversations and budgets were "pending" or "mock-only". In reality, the Control API and backend repositories are fully implemented, and the frontend connects to live endpoints.
+3. **Workspace Script Mismatch**: Root `package.json` ran `npm run typecheck --workspaces`, but `app/package.json` lacked a `typecheck` script, causing workspace-level type checking to fail even though `npx tsc --noEmit` in `app/` is clean.
+4. **URL Trailing Slash Mismatch**: `tenant_resolver.go` normalizes all provider base URLs to have a trailing slash `"/"`, but `tenant_resolver_test.go` asserted equality without a trailing slash.
+5. **CLI Test Payload Mismatch**: `SendRequest` in `packages/cli/internal/client/client.go` routes `gemini-` models through `/v1/chat/completions` (OpenAI format), but `client_test.go` mocked raw Gemini Google API JSON.
+
+---
+
+## 6. Unsafe Development Defaults Identified
+
+1. **Hardcoded Secrets in Compose**:
+   - `AIGW_REDIS_PASSWORD: change-me`
+   - `AIGW_AUTH_HMAC_SIGNING_KEY: change-me-change-me-change-me-change-me`
+2. **Permissive Cookie Settings**:
+   - `AIGW_AUTH_SESSION_COOKIE_SECURE: "false"` (HTTP allowed in dev)
+   - `AIGW_AUTH_CSRF_ENABLED: "false"`
+3. **Dev Login Enabled**:
+   - `AIGW_AUTH_DEV_LOGIN_ENABLED: "true"` (bypasses production OAuth/SAML)
+4. **Missing Rate Limit on Public Auth**:
+   - `POST /v1/auth/signin` and `POST /v1/auth/signup` do not enforce Redis sliding-window brute-force limits.
+
+---
+
+## 7. Prioritized Implementation Plan
+
+| Priority | Component | Item | Proposed Action | Verification Method |
+|---|---|---|---|---|
+| **P1** | Backend Gateway | Trailing slash in `tenant_resolver_test.go` | Normalize test assertions to match canonical trailing-slash URLs. | `go test ./internal/interfaces/gatewayv2/...` |
+| **P1** | Sentinel CLI | Mock response format in `client_test.go` | Update Gemini mock response in CLI client test to match `/v1/chat/completions` contract. | `go test ./...` in `packages/cli/` |
+| **P2** | SDK (`packages/api-client`) | Missing `@types/node` in `api-client` | Add `@types/node` to `packages/api-client/package.json` and update `tsconfig.json`. | `npm run typecheck` across monorepo |
+| **P2** | Monorepo Scripts | Missing `typecheck` in `app/package.json` | Add `"typecheck": "tsc --noEmit"` to `app/package.json`. | `npm run typecheck` in workspace root |
+| **P3** | Security Hardening | Development defaults documentation | Document production environment overrides for cookie security, CSRF, and secret rotation. | `docs/local-readiness/runbook.md` |
