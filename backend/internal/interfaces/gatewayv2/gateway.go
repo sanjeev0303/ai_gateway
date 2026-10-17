@@ -840,11 +840,12 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 			usage.ProviderMeta = map[string]any{"provider": upstreamProvider, "tokens_reported": false, "estimated": true}
 		}
 
-		// Estimate initial cost in micros (e.g. 10 micros per 1k input tokens, 30 micros per 1k output tokens).
+		// Consistent initial cost calculation in micro-dollars ($0.01/1k input = 10 micros/token, $0.03/1k output = 30 micros/token).
 		// Exact cost is backfilled during rollup using the organization's versioned price sheet.
-		costMicros := int64((float64(usage.InputTokens)*10.0 + float64(usage.OutputTokens)*30.0) / 1000.0 * 1000000.0)
+		cost := (float64(usage.InputTokens) / 1000.0 * 0.01) + (float64(usage.OutputTokens) / 1000.0 * 0.03)
+		costMicros := int64(math.Round(cost * 1000000.0))
 		if costMicros <= 0 && (usage.InputTokens > 0 || usage.OutputTokens > 0) {
-			costMicros = int64(usage.InputTokens*2 + usage.OutputTokens*10)
+			costMicros = int64(usage.InputTokens*10 + usage.OutputTokens*30)
 		}
 		usage.CostMicros = costMicros
 
@@ -872,7 +873,6 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 		// Actual tokens are charged for successful requests (status < 400) or client disconnects (499) with partial tokens.
 		// Failed/rejected requests release their reservation with zero charge.
 		if actualStatusCode < 400 || (actualStatusCode == 499 && (usage.InputTokens > 0 || usage.OutputTokens > 0)) {
-			cost := (float64(usage.InputTokens) / 1000 * 0.01) + (float64(usage.OutputTokens) / 1000 * 0.03)
 			if result.Context != nil && result.Context.BudgetRelease != nil {
 				result.Context.BudgetRelease(cost, nil)
 			} else {

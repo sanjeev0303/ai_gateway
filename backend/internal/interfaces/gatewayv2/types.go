@@ -135,6 +135,7 @@ type BudgetResult struct {
 	AlertAt   float64
 	Scope     string
 	Key       string
+	Degraded  bool
 }
 
 // InspectorHints carries request inspection results for routing.

@@ -2,10 +2,40 @@
 
 Updated after each completed prompt.
 
-## CURRENT TASK: Git Commit and Push
-- [ ] Step 1: Stage modified and untracked repository changes.
-- [ ] Step 2: Commit staged changes with descriptive message.
-- [ ] Step 3: Push commits to remote origin main branch.
+## COMPLETED TASK: Push Changes to GitHub on Explicit User Command
+- [x] Step 1: Stage verified modifications and untracked readiness files (`git add -A`).
+- [x] Step 2: Commit changes with descriptive message.
+- [x] Step 3: Push changes to remote repository (`git push origin main`).
+- [x] Step 4: Verify clean git status and remote synchronization.
+
+## COMPLETED TASK: Phase F, G, H, & Final Deliverables
+- [x] Phase F: Verify event reliability, duplicate delivery deduplication, worker & broker restart/backlog recovery, DB/Redis failure handling, and usage reconciliation.
+- [x] Phase G: Test live Gemini integration separately (check for valid user-supplied `GEMINI_API_KEY`; execute live inference if present, or mark BLOCKED with precise reason; never expose key).
+- [x] Phase H: Run full final regression suite (Go vet/tests/race, Frontend lint/tsc/test/build, SDK/CLI tests, migrations, isolation, E2E journeys, verify-local).
+- [x] Final Deliverables: Produce/update `docs/local-readiness/critical-defects.md`, `final-test-report.md`, `remaining-gaps.md`, and `local-runbook.md`, assign evidence-based status (`READY WITH DOCUMENTED LIMITATIONS`), and update `task.md`.
+
+## COMPLETED TASK: Phase C, D, & E — Rate-Limiting, Configuration Safety, and Request-to-Dashboard Lifecycle
+- [x] Phase C: Inspect `redis_rate_limiter.go` & bootstrap wiring; verify atomic concurrency, auth identity scoping, Redis outage policy, revoked credential enforcement, and live Redis regression tests.
+- [x] Phase D: Inspect compose, env templates, auth config, CSRF, sessions, migrations, readiness, and scripts (`dev-ctl.sh`, `verify-local.sh`); ensure zero secret leakage and safe opt-in local dev.
+- [x] Phase E: Verify end-to-end request lifecycle across providers, 3-user scenario (SDK & CLI, streaming/non-streaming, governance/denial, revocation), usage persistence, analytics, and dashboard metrics.
+- [x] Verification: Execute regression suites (`go test ./...`, `./scripts/verify-local.sh`, `cmd/e2e`), update documentation deliverables, and update `task.md`.
+
+## COMPLETED TASK: Phase B — Correct Redis-Backed Budget Accounting
+- [x] Step 1: Design & audit Redis budget keys, Lua scripts, and window boundary calculation.
+- [x] Step 2: Implement deterministic window boundary calculation (UTC, daily, monthly, weekly, custom) preventing expired window blocking.
+- [x] Step 3: Implement atomic ZSet + Hash reservation tracking in Redis Lua scripts to eliminate aggregate inflation on reservation expiry.
+- [x] Step 4: Implement explicit Redis failure policy (`fail_closed` vs `degraded_local`) and non-silent error handling.
+- [x] Step 5: Ensure pricing consistency between gateway estimates, provider reporting, and persisted ledger.
+- [x] Step 6: Write comprehensive regression tests covering all required scenarios against live Redis.
+- [x] Step 7: Run verification suite (`go test ./...`, `./scripts/verify-local.sh`) and update deliverables.
+
+## COMPLETED TASK: Phase A — Repository Verification, Architecture Tracing & Baseline Defect Audit
+- [x] Step 1: Inspect Git status and identify exact repository revision (`30d9a1d12101ca325d516a763098f87287fe4689`).
+- [x] Step 2: Inspect target files (`budget_guard.go`, `gateway.go`, `redis_rate_limiter.go`, `bootstrap/run.go`, `deploy/compose/docker-compose.yml`).
+- [x] Step 3: Trace budget lifecycle, rate-limiting & fallback, pricing calculation, usage persistence, event processing, and analytics.
+- [x] Step 4: Run all feasible baseline tests and record exact results (passing, failing, skipped, blocked).
+- [x] Step 5: Audit existing defects against latest code and create/update `docs/local-readiness/critical-defects.md`.
+
 
 ## COMPLETED TASK: Phase J — Full Regression and Recovery Tests
 - [x] Step 1: Go Test Suite, Formatting, Vetting & Race: run `gofmt`, `go vet`, `go test ./...`, and `go test -race` across backend packages.
