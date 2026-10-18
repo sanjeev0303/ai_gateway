@@ -48,7 +48,7 @@ func (q *Queries) CreatePlan(ctx context.Context, arg CreatePlanParams) (Plan, e
 const createSubscription = `-- name: CreateSubscription :one
 INSERT INTO subscriptions (organization_id, plan_id, status, current_period_start, current_period_end, cancel_at_period_end)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, organization_id, plan_id, status, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at
+RETURNING id, organization_id, plan_id, status, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at, payment_provider, provider_customer_id, provider_subscription_id
 `
 
 type CreateSubscriptionParams struct {
@@ -80,6 +80,9 @@ func (q *Queries) CreateSubscription(ctx context.Context, arg CreateSubscription
 		&i.CancelAtPeriodEnd,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PaymentProvider,
+		&i.ProviderCustomerID,
+		&i.ProviderSubscriptionID,
 	)
 	return i, err
 }
@@ -155,7 +158,7 @@ func (q *Queries) GetBillingEvent(ctx context.Context, arg GetBillingEventParams
 }
 
 const getInvoice = `-- name: GetInvoice :one
-SELECT id, organization_id, subscription_id, number, status, currency, total_micros, period_start, period_end, issued_at, created_at, updated_at FROM invoices
+SELECT id, organization_id, subscription_id, number, status, currency, total_micros, period_start, period_end, issued_at, created_at, updated_at, payment_provider, payment_id, paid_at FROM invoices
 WHERE organization_id = $1 AND id = $2
 `
 
@@ -180,12 +183,15 @@ func (q *Queries) GetInvoice(ctx context.Context, arg GetInvoiceParams) (Invoice
 		&i.IssuedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PaymentProvider,
+		&i.PaymentID,
+		&i.PaidAt,
 	)
 	return i, err
 }
 
 const getSubscription = `-- name: GetSubscription :one
-SELECT id, organization_id, plan_id, status, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at FROM subscriptions
+SELECT id, organization_id, plan_id, status, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at, payment_provider, provider_customer_id, provider_subscription_id FROM subscriptions
 WHERE organization_id = $1 AND id = $2
 `
 
@@ -207,6 +213,9 @@ func (q *Queries) GetSubscription(ctx context.Context, arg GetSubscriptionParams
 		&i.CancelAtPeriodEnd,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PaymentProvider,
+		&i.ProviderCustomerID,
+		&i.ProviderSubscriptionID,
 	)
 	return i, err
 }
@@ -252,7 +261,7 @@ func (q *Queries) ListInvoiceLines(ctx context.Context, arg ListInvoiceLinesPara
 }
 
 const listInvoices = `-- name: ListInvoices :many
-SELECT id, organization_id, subscription_id, number, status, currency, total_micros, period_start, period_end, issued_at, created_at, updated_at FROM invoices
+SELECT id, organization_id, subscription_id, number, status, currency, total_micros, period_start, period_end, issued_at, created_at, updated_at, payment_provider, payment_id, paid_at FROM invoices
 WHERE organization_id = $1
 ORDER BY issued_at DESC, id DESC
 `
@@ -279,6 +288,9 @@ func (q *Queries) ListInvoices(ctx context.Context, organizationID uuid.UUID) ([
 			&i.IssuedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PaymentProvider,
+			&i.PaymentID,
+			&i.PaidAt,
 		); err != nil {
 			return nil, err
 		}
@@ -324,7 +336,7 @@ func (q *Queries) ListPlans(ctx context.Context) ([]Plan, error) {
 }
 
 const listSubscriptions = `-- name: ListSubscriptions :many
-SELECT id, organization_id, plan_id, status, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at FROM subscriptions
+SELECT id, organization_id, plan_id, status, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at, payment_provider, provider_customer_id, provider_subscription_id FROM subscriptions
 WHERE organization_id = $1
 ORDER BY created_at
 `
@@ -348,6 +360,9 @@ func (q *Queries) ListSubscriptions(ctx context.Context, organizationID uuid.UUI
 			&i.CancelAtPeriodEnd,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PaymentProvider,
+			&i.ProviderCustomerID,
+			&i.ProviderSubscriptionID,
 		); err != nil {
 			return nil, err
 		}

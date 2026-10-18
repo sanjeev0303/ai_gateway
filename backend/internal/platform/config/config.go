@@ -156,11 +156,16 @@ type AuthConfig struct {
 	DevLoginEnabled     bool   `env:"DEV_LOGIN_ENABLED" envDefault:"false"`
 }
 
-// BillingConfig describes the billing integration (later milestone).
+// BillingConfig describes the billing integration (dual provider: Stripe and Razorpay).
 type BillingConfig struct {
-	Enabled  bool   `env:"ENABLED" envDefault:"false"`
-	Provider string `env:"PROVIDER" envDefault:"none"`
-	Currency string `env:"CURRENCY" envDefault:"usd"`
+	Enabled               bool   `env:"ENABLED" envDefault:"false"`
+	Provider              string `env:"PROVIDER" envDefault:"none"`
+	Currency              string `env:"CURRENCY" envDefault:"usd"`
+	StripeSecretKey       string `env:"STRIPE_SECRET_KEY"`
+	StripeWebhookSecret   string `env:"STRIPE_WEBHOOK_SECRET"`
+	RazorpayKeyID         string `env:"RAZORPAY_KEY_ID"`
+	RazorpayKeySecret     string `env:"RAZORPAY_KEY_SECRET"`
+	RazorpayWebhookSecret string `env:"RAZORPAY_WEBHOOK_SECRET"`
 }
 
 // ObservabilityConfig tunes slog, tracing and metrics. OTLP/metrics wiring
@@ -388,6 +393,10 @@ func (c Config) Redacted() Config {
 	}
 	c.Secrets.Key = redactIfSet(c.Secrets.Key)
 	c.Secrets.Token = redactIfSet(c.Secrets.Token)
+	c.Billing.StripeSecretKey = redactIfSet(c.Billing.StripeSecretKey)
+	c.Billing.StripeWebhookSecret = redactIfSet(c.Billing.StripeWebhookSecret)
+	c.Billing.RazorpayKeySecret = redactIfSet(c.Billing.RazorpayKeySecret)
+	c.Billing.RazorpayWebhookSecret = redactIfSet(c.Billing.RazorpayWebhookSecret)
 	return c
 }
 

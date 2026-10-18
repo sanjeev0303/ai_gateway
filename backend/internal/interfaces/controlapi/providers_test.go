@@ -664,3 +664,104 @@ func TestValidateProviderCredentialRejected(t *testing.T) {
 		t.Fatal("expected valid=false for a rejected secret")
 	}
 }
+
+func TestUpdateProviderAccountStatus(t *testing.T) {
+	srv, st := newTestServer(t)
+
+	st.providerAccounts.updateStatus = func(_ context.Context, orgID, id uuid.UUID, status string) (domain.ProviderAccount, error) {
+		requireEqual(t, orgID, testOrgID)
+		requireEqual(t, id, testProvAcct)
+		requireEqual(t, status, domain.ProviderStatusDisabled)
+		acct := testProviderAccount
+		acct.Status = status
+		return acct, nil
+	}
+
+	resp := doJSON(t, srv, http.MethodPatch, "/v1/provider-accounts/"+testProvAcct.String(), map[string]any{
+		"status": domain.ProviderStatusDisabled,
+	}, bearerHeader(st, domain.RoleAdmin))
+
+	requireEqual(t, resp.StatusCode, http.StatusOK)
+	var body providerAccountDTO
+	decodeBody(t, resp, &body)
+	requireEqual(t, body.Status, domain.ProviderStatusDisabled)
+}
+
+func TestDeleteProviderAccount(t *testing.T) {
+	srv, st := newTestServer(t)
+
+	st.providerAccounts.get = func(_ context.Context, orgID, id uuid.UUID) (domain.ProviderAccount, error) {
+		return testProviderAccount, nil
+	}
+	st.providerCredentials.listByAccount = func(_ context.Context, orgID, accountID uuid.UUID) ([]domain.ProviderCredential, error) {
+		return []domain.ProviderCredential{
+			{ID: testProvCred, SecretRef: "provider/creds/test-ref"},
+		}, nil
+	}
+	st.providerCredentials.revoke = func(_ context.Context, orgID, id uuid.UUID) (domain.ProviderCredential, error) {
+		return domain.ProviderCredential{ID: id}, nil
+	}
+	st.providerSecrets.values["provider/creds/test-ref"] = "sk-secret"
+
+	deleted := false
+	st.providerAccounts.delete = func(_ context.Context, orgID, id uuid.UUID) error {
+		deleted = true
+		return nil
+	}
+
+	resp := doJSON(t, srv, http.MethodDelete, "/v1/provider-accounts/"+testProvAcct.String(), nil, bearerHeader(st, domain.RoleAdmin))
+	requireEqual(t, resp.StatusCode, http.StatusNoContent)
+	if !deleted {
+		t.Fatal("expected account to be deleted")
+	}
+}
+
+func TestAccountLevelOperationsWithStoredSecret(t *testing.T) {
+	srv, st := newTestServer(t)
+
+	st.providerAccounts.get = func(_ context.Context, orgID, id uuid.UUID) (domain.ProviderAccount, error) {
+		return testProviderAccount, nil
+	}
+	st.providerCredentials.listByAccount = func(_ context.Context, orgID, accountID uuid.UUID) ([]domain.ProviderCredential, error) {
+		return []domain.ProviderCredential{
+			{ID: testProvCred, SecretRef: "provider/creds/test-ref"},
+		}, nil
+	}
+	st.providerSecrets.values["provider/creds/test-ref"] = "sk-ant-valid"
+
+	// 1. POST /v1/provider-accounts/{id}/validate
+	resp := doJSON(t, srv, http.MethodPost, "/v1/provider-accounts/"+testProvAcct.String()+"/validate", nil, bearerHeader(st, domain.RoleAdmin))
+	requireEqual(t, resp.StatusCode, http.StatusOK)
+	var valBody struct {
+		Valid bool `json:"valid"`
+	}
+	decodeBody(t, resp, &valBody)
+	if !valBody.Valid {
+		t.Fatal("expected valid=true for stored valid secret")
+	}
+
+	// 2. POST /v1/provider-accounts/{id}/health
+	resp = doJSON(t, srv, http.MethodPost, "/v1/provider-accounts/"+testProvAcct.String()+"/health", nil, bearerHeader(st, domain.RoleAdmin))
+	requireEqual(t, resp.StatusCode, http.StatusOK)
+	var healthBody providerHealthDTO
+	decodeBody(t, resp, &healthBody)
+	requireEqual(t, healthBody.Status, domain.ProviderHealthHealthy)
+
+	// 3. POST /v1/provider-accounts/{id}/sync
+	st.providerClient.listModels = func(context.Context, string) ([]providerclient.Model, error) {
+		return []providerclient.Model{
+			{ID: "claude-sonnet-4-5", DisplayName: "Claude 3.5 Sonnet"},
+		}, nil
+	}
+	st.providerModels.upsert = func(_ context.Context, kind, slug, name string) (domain.Model, error) {
+		return domain.Model{ProviderKind: kind, ModelSlug: slug, DisplayName: name, IsActive: true}, nil
+	}
+	resp = doJSON(t, srv, http.MethodPost, "/v1/provider-accounts/"+testProvAcct.String()+"/sync", nil, bearerHeader(st, domain.RoleAdmin))
+	requireEqual(t, resp.StatusCode, http.StatusOK)
+	var syncBody struct {
+		Items []modelDTO `json:"items"`
+	}
+	decodeBody(t, resp, &syncBody)
+	requireEqual(t, len(syncBody.Items), 1)
+	requireEqual(t, syncBody.Items[0].ModelSlug, "claude-sonnet-4-5")
+}

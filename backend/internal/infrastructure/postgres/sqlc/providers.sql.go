@@ -92,6 +92,21 @@ func (q *Queries) CreateProviderCredential(ctx context.Context, arg CreateProvid
 	return i, err
 }
 
+const deleteProviderAccount = `-- name: DeleteProviderAccount :exec
+DELETE FROM provider_accounts
+WHERE organization_id = $1 AND id = $2
+`
+
+type DeleteProviderAccountParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ID             uuid.UUID `json:"id"`
+}
+
+func (q *Queries) DeleteProviderAccount(ctx context.Context, arg DeleteProviderAccountParams) error {
+	_, err := q.db.Exec(ctx, deleteProviderAccount, arg.OrganizationID, arg.ID)
+	return err
+}
+
 const getProviderAccount = `-- name: GetProviderAccount :one
 SELECT id, organization_id, provider_kind, name, base_url, status, created_at, updated_at FROM provider_accounts
 WHERE organization_id = $1 AND id = $2
@@ -290,6 +305,35 @@ func (q *Queries) RevokeProviderCredential(ctx context.Context, arg RevokeProvid
 		&i.UpdatedAt,
 		&i.Fingerprint,
 		&i.Tail,
+	)
+	return i, err
+}
+
+const updateProviderAccountStatus = `-- name: UpdateProviderAccountStatus :one
+UPDATE provider_accounts
+SET status = $3, updated_at = now()
+WHERE organization_id = $1 AND id = $2
+RETURNING id, organization_id, provider_kind, name, base_url, status, created_at, updated_at
+`
+
+type UpdateProviderAccountStatusParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ID             uuid.UUID `json:"id"`
+	Status         string    `json:"status"`
+}
+
+func (q *Queries) UpdateProviderAccountStatus(ctx context.Context, arg UpdateProviderAccountStatusParams) (ProviderAccount, error) {
+	row := q.db.QueryRow(ctx, updateProviderAccountStatus, arg.OrganizationID, arg.ID, arg.Status)
+	var i ProviderAccount
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.ProviderKind,
+		&i.Name,
+		&i.BaseUrl,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

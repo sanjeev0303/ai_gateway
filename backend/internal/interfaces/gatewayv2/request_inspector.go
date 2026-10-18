@@ -52,11 +52,15 @@ func (i *RequestInspectorImpl) Inspect(ctx context.Context, body io.Reader) (Ins
 		hints.Provider = strings.ToLower(strings.TrimSpace(provider))
 	}
 
-	// If model has a provider prefix (e.g. "openai/gpt-4o", "anthropic/claude-sonnet-4-5", "gemini/gemini-1.5-pro")
+	// If model has a provider prefix (e.g. "openai/gpt-4o", "anthropic/claude-sonnet-4-5", "gemini/gemini-1.5-pro", "huggingface/meta-llama/Llama-3.3-70B-Instruct")
 	if idx := strings.Index(hints.Model, "/"); idx != -1 {
 		prefix := strings.ToLower(hints.Model[:idx])
-		if prefix == "openai" || prefix == "anthropic" || prefix == "gemini" || prefix == "azure_openai" || prefix == "custom" {
-			hints.Provider = prefix
+		if prefix == "openai" || prefix == "anthropic" || prefix == "gemini" || prefix == "azure_openai" || prefix == "huggingface" || prefix == "hf" || prefix == "custom" {
+			if prefix == "hf" {
+				hints.Provider = "huggingface"
+			} else {
+				hints.Provider = prefix
+			}
 			hints.Model = hints.Model[idx+1:]
 		}
 	}
@@ -70,6 +74,8 @@ func (i *RequestInspectorImpl) Inspect(ctx context.Context, body io.Reader) (Ins
 			hints.Provider = "openai"
 		case strings.HasPrefix(hints.Model, "gemini-"):
 			hints.Provider = "gemini"
+		case strings.HasPrefix(hints.Model, "meta-llama/") || strings.HasPrefix(hints.Model, "mistralai/") || strings.HasPrefix(hints.Model, "Qwen/") || strings.HasPrefix(hints.Model, "deepseek-ai/") || strings.HasPrefix(hints.Model, "hf-") || strings.Contains(hints.Model, "/"):
+			hints.Provider = "huggingface"
 		}
 	}
 

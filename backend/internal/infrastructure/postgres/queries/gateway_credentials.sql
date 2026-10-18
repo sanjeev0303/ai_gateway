@@ -1,6 +1,10 @@
 -- name: CreateGatewayCredential :one
-INSERT INTO gateway_credentials (organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO gateway_credentials (
+    organization_id, name, key_prefix, key_hash, subject_type, subject_id,
+    team_id, project_id, scopes, expires_at,
+    provider_account_id, allowed_providers, allowed_models, rate_limit, budget_limit
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 RETURNING *;
 
 -- name: ResolveGatewayCredentialByKeyHash :one
@@ -37,6 +41,10 @@ WHERE organization_id = $1 AND id = $2
 RETURNING organization_id;
 
 -- name: CreateGatewayCredentialAfterRotate :one
-INSERT INTO gateway_credentials (organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO gateway_credentials (
+    organization_id, name, key_prefix, key_hash, subject_type, subject_id,
+    team_id, project_id, scopes, expires_at,
+    provider_account_id, allowed_providers, allowed_models, rate_limit, budget_limit
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 RETURNING *;

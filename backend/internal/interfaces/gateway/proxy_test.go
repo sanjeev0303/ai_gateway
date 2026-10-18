@@ -78,6 +78,12 @@ func (s *stubAccountsRepo) Get(context.Context, uuid.UUID, uuid.UUID) (domain.Pr
 func (s *stubAccountsRepo) List(context.Context, uuid.UUID) ([]domain.ProviderAccount, error) {
 	return s.accounts, nil
 }
+func (s *stubAccountsRepo) UpdateStatus(context.Context, uuid.UUID, uuid.UUID, string) (domain.ProviderAccount, error) {
+	panic("unused")
+}
+func (s *stubAccountsRepo) Delete(context.Context, uuid.UUID, uuid.UUID) error {
+	panic("unused")
+}
 
 type stubProviderCredRepo struct{ creds []domain.ProviderCredential }
 

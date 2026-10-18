@@ -24,6 +24,7 @@ const (
 	SubscriptionStatusCanceled   = "canceled"
 	SubscriptionStatusPastDue    = "past_due"
 	SubscriptionStatusIncomplete = "incomplete"
+	SubscriptionStatusUnpaid     = "unpaid"
 )
 
 // Billing event statuses, mirroring the CHECK in billing_events.
@@ -33,13 +34,13 @@ const (
 	BillingEventStatusFailed    = "failed"
 )
 
-// Invoice statuses, mirroring the CHECK in invoices. There is deliberately no
-// 'paid' status: no payment processor is integrated, so no state here may imply
-// that money moved.
+// Invoice statuses, mirroring the CHECK in invoices.
 const (
 	InvoiceStatusOpen = "open"
 	InvoiceStatusVoid = "void"
+	InvoiceStatusPaid = "paid"
 )
+
 
 // Alert types, severities and statuses, mirroring the CHECKs in alerts.
 const (
@@ -87,26 +88,86 @@ type Plan struct {
 
 // Subscription links an organization to a plan with billing period dates.
 type Subscription struct {
-	ID                 uuid.UUID
-	OrganizationID     uuid.UUID
-	PlanID             uuid.UUID
-	Status             string
-	CurrentPeriodStart *time.Time
-	CurrentPeriodEnd   *time.Time
-	CancelAtPeriodEnd  bool
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	ID                     uuid.UUID
+	OrganizationID         uuid.UUID
+	PlanID                 uuid.UUID
+	Status                 string
+	CurrentPeriodStart     *time.Time
+	CurrentPeriodEnd       *time.Time
+	CancelAtPeriodEnd      bool
+	PaymentProvider        string
+	ProviderCustomerID     *string
+	ProviderSubscriptionID *string
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
 }
 
-// OrganizationPlan is the organization's current plan and billing cycle. It
-// holds only stored columns — deliberately no price, seats or billing contact.
+// OrganizationPlan is the organization's current plan and billing cycle.
 type OrganizationPlan struct {
-	PlanCode           string
-	PlanName           string
-	Status             string
-	CurrentPeriodStart *time.Time
-	CurrentPeriodEnd   *time.Time
-	CancelAtPeriodEnd  bool
+	PlanCode               string
+	PlanName               string
+	Status                 string
+	CurrentPeriodStart     *time.Time
+	CurrentPeriodEnd       *time.Time
+	CancelAtPeriodEnd      bool
+	PaymentProvider        string
+	ProviderCustomerID     *string
+	ProviderSubscriptionID *string
+}
+
+// PlanEntitlements defines the operational quotas and access tiers for a subscription plan.
+type PlanEntitlements struct {
+	PlanCode            string   `json:"plan_code"`
+	Name                string   `json:"name"`
+	MonthlyRequestQuota int64    `json:"monthly_request_quota"`
+	AllowedProviders    []string `json:"allowed_providers"`
+	MaxProjects         int      `json:"max_projects"`
+	MaxMembers          int      `json:"max_members"`
+	RetentionDays       int      `json:"retention_days"`
+	SupportsGuardrails  bool     `json:"supports_guardrails"`
+	SupportsFullPrivacy bool     `json:"supports_full_privacy"`
+}
+
+// GetPlanEntitlements returns the governance limits and access flags for a plan code.
+func GetPlanEntitlements(planCode string) PlanEntitlements {
+	switch planCode {
+	case "enterprise":
+		return PlanEntitlements{
+			PlanCode:            "enterprise",
+			Name:                "Enterprise Tier",
+			MonthlyRequestQuota: 100_000_000,
+			AllowedProviders:    []string{"openai", "anthropic", "gemini", "azure_openai", "custom", "huggingface"},
+			MaxProjects:         1000,
+			MaxMembers:          500,
+			RetentionDays:       365,
+			SupportsGuardrails:  true,
+			SupportsFullPrivacy: true,
+		}
+	case "pro":
+		return PlanEntitlements{
+			PlanCode:            "pro",
+			Name:                "Pro Tier",
+			MonthlyRequestQuota: 1_000_000,
+			AllowedProviders:    []string{"openai", "anthropic", "gemini", "huggingface"},
+			MaxProjects:         50,
+			MaxMembers:          25,
+			RetentionDays:       30,
+			SupportsGuardrails:  true,
+			SupportsFullPrivacy: true,
+		}
+	default:
+		return PlanEntitlements{
+			PlanCode:            "free",
+			Name:                "Free Tier",
+			MonthlyRequestQuota: 10_000,
+			AllowedProviders:    []string{"openai", "gemini"},
+			MaxProjects:         3,
+			MaxMembers:          5,
+			RetentionDays:       7,
+			SupportsGuardrails:  false,
+			SupportsFullPrivacy: false,
+		}
+	}
 }
 
 // BillingEvent is an append-only ledger of billing transactions.
@@ -122,24 +183,26 @@ type BillingEvent struct {
 	CreatedAt      time.Time
 }
 
-// Invoice is a local billing statement for one subscription period. It holds
-// only stored columns — there is no processor reference, charge id, or PDF, and
-// no field implies a payment was processed.
+// Invoice is a billing statement for one subscription period or payment event.
 type Invoice struct {
-	ID             uuid.UUID
-	OrganizationID uuid.UUID
-	SubscriptionID *uuid.UUID
-	Number         string
-	Status         string
-	Currency       string
-	TotalMicros    int64
-	PeriodStart    time.Time
-	PeriodEnd      time.Time
-	IssuedAt       time.Time
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	Lines          []InvoiceLine
+	ID              uuid.UUID
+	OrganizationID  uuid.UUID
+	SubscriptionID  *uuid.UUID
+	Number          string
+	Status          string
+	Currency        string
+	TotalMicros     int64
+	PeriodStart     time.Time
+	PeriodEnd       time.Time
+	IssuedAt        time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	PaymentProvider *string
+	PaymentID       *string
+	PaidAt          *time.Time
+	Lines           []InvoiceLine
 }
+
 
 // InvoiceLine is one itemisation row behind an invoice total.
 type InvoiceLine struct {

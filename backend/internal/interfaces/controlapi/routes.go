@@ -128,6 +128,11 @@ func registerProviderRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("POST /v1/provider-accounts", a.requireAuth(a.createProviderAccount))
 	mux.Handle("GET /v1/provider-accounts", a.requireAuth(a.listProviderAccounts))
 	mux.Handle("GET /v1/provider-accounts/{id}", a.requireAuth(a.getProviderAccount))
+	mux.Handle("PATCH /v1/provider-accounts/{id}", a.requireAuth(a.updateProviderAccount))
+	mux.Handle("DELETE /v1/provider-accounts/{id}", a.requireAuth(a.deleteProviderAccount))
+	mux.Handle("POST /v1/provider-accounts/{id}/validate", a.requireAuth(a.validateAccountCredential))
+	mux.Handle("POST /v1/provider-accounts/{id}/sync", a.requireAuth(a.syncAccountModels))
+	mux.Handle("POST /v1/provider-accounts/{id}/health", a.requireAuth(a.checkAccountHealth))
 
 	// provider credentials, created under their provider account
 	mux.Handle("POST /v1/provider-accounts/{id}/credentials", a.requireAuth(a.createProviderCredential))

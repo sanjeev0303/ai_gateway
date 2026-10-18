@@ -91,6 +91,7 @@ type SubscriptionRepository interface {
 	ActiveWithPlan(ctx context.Context, orgID uuid.UUID) (domain.OrganizationPlan, error)
 	SetPlan(ctx context.Context, orgID, planID uuid.UUID) error
 	Cancel(ctx context.Context, orgID uuid.UUID) error
+	UpdatePaymentDetails(ctx context.Context, orgID uuid.UUID, provider, subID, custID, status string) error
 }
 
 // BillingEventRepository records the append-only billing ledger.
@@ -108,6 +109,7 @@ type InvoiceRepository interface {
 	// its lines attached.
 	List(ctx context.Context, orgID uuid.UUID) ([]domain.Invoice, error)
 	Get(ctx context.Context, orgID, id uuid.UUID) (domain.Invoice, error)
+	RecordPayment(ctx context.Context, orgID uuid.UUID, paymentProvider, paymentID string, amountMicros int64) error
 }
 
 // PricingModelRepository manages per-organization model price catalogs.

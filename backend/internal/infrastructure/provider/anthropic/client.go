@@ -96,6 +96,14 @@ func (c *Client) ListModels(ctx context.Context, apiKey string) ([]Model, error)
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return nil, ErrInvalidAPIKey
 	}
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusNotImplemented {
+		return []Model{
+			{ID: "claude-3-7-sonnet-20250219", DisplayName: "Claude 3.7 Sonnet"},
+			{ID: "claude-3-5-sonnet-20241022", DisplayName: "Claude 3.5 Sonnet"},
+			{ID: "claude-3-5-haiku-20241022", DisplayName: "Claude 3.5 Haiku"},
+			{ID: "claude-3-opus-20240229", DisplayName: "Claude 3 Opus"},
+		}, nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("anthropic: unexpected status %d listing models", resp.StatusCode)
 	}

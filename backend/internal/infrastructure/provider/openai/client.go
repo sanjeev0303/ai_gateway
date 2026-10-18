@@ -162,8 +162,8 @@ func (c *Client) CreateMessageStream(ctx context.Context, apiKey string, req *Ch
 	}
 
 	return &MessageStream{
-		resp:   resp,
-		reader: json.NewDecoder(resp.Body),
+		resp:    resp,
+		decoder: NewSSEDecoder(resp.Body),
 	}, nil
 }
 
@@ -180,10 +180,10 @@ func (c *Client) CountTokens(ctx context.Context, apiKey string, req *ChatComple
 
 // MessageStream handles streaming responses from OpenAI.
 type MessageStream struct {
-	resp   *http.Response
-	reader *json.Decoder
-	done   bool
-	err    error
+	resp    *http.Response
+	decoder *SSEDecoder
+	done    bool
+	err     error
 }
 
 // Next returns the next streaming event.
@@ -192,8 +192,8 @@ func (s *MessageStream) Next() (*StreamingEvent, error) {
 		return nil, io.EOF
 	}
 
-	var event StreamingEvent
-	if err := s.reader.Decode(&event); err != nil {
+	event, err := s.decoder.Next()
+	if err != nil {
 		s.done = true
 		if err == io.EOF {
 			return nil, io.EOF
@@ -209,17 +209,7 @@ func (s *MessageStream) Next() (*StreamingEvent, error) {
 		return nil, ErrProviderError
 	}
 
-	if event.Object == "chat.completion.chunk" {
-		// Check for finish_reason in choices
-		for _, choice := range event.Choices {
-			if choice.FinishReason != "" {
-				s.done = true
-				break
-			}
-		}
-	}
-
-	return &event, nil
+	return event, nil
 }
 
 // Close closes the stream.

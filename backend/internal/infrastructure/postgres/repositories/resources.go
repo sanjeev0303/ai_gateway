@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -10,6 +11,7 @@ import (
 	"ai-governance-saas/backend/internal/infrastructure/postgres"
 	db "ai-governance-saas/backend/internal/infrastructure/postgres/sqlc"
 	ports "ai-governance-saas/backend/internal/ports/repositories"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -308,6 +310,33 @@ func (r *providerAccountRepo) List(ctx context.Context, orgID uuid.UUID) ([]doma
 		return nil
 	})
 	return accounts, err
+}
+
+func (r *providerAccountRepo) UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status string) (domain.ProviderAccount, error) {
+	var account domain.ProviderAccount
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.UpdateProviderAccountStatus(ctx, db.UpdateProviderAccountStatusParams{
+			OrganizationID: orgID,
+			ID:             id,
+			Status:         status,
+		})
+		if err != nil {
+			return err
+		}
+		account = toProviderAccount(row)
+		return nil
+	})
+	return account, mapNotFound(err)
+}
+
+func (r *providerAccountRepo) Delete(ctx context.Context, orgID, id uuid.UUID) error {
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		return q.DeleteProviderAccount(ctx, db.DeleteProviderAccountParams{
+			OrganizationID: orgID,
+			ID:             id,
+		})
+	})
+	return mapNotFound(err)
 }
 
 type providerCredentialRepo struct {
@@ -850,22 +879,37 @@ func toGatewayCredential(g db.GatewayCredential) domain.GatewayCredential {
 	for i, s := range g.Scopes {
 		scopes[i] = domain.GatewayCredentialScope(s)
 	}
+	var rateLimit *int
+	if g.RateLimit != nil {
+		rl := int(*g.RateLimit)
+		rateLimit = &rl
+	}
+	var budgetLimit *float64
+	if g.BudgetLimit.Valid {
+		f := floatFromNumeric(g.BudgetLimit)
+		budgetLimit = &f
+	}
 	return domain.GatewayCredential{
-		ID:             g.ID,
-		OrganizationID: g.OrganizationID,
-		Name:           g.Name,
-		KeyPrefix:      g.KeyPrefix,
-		KeyHash:        g.KeyHash,
-		SubjectType:    domain.SubjectType(g.SubjectType),
-		SubjectID:      g.SubjectID,
-		TeamID:         g.TeamID,
-		ProjectID:      g.ProjectID,
-		Scopes:         scopes,
-		Status:         domain.GatewayCredentialStatus(g.Status),
-		ExpiresAt:      g.ExpiresAt,
-		LastUsedAt:     g.LastUsedAt,
-		CreatedAt:      g.CreatedAt,
-		UpdatedAt:      g.UpdatedAt,
+		ID:                g.ID,
+		OrganizationID:    g.OrganizationID,
+		Name:              g.Name,
+		KeyPrefix:         g.KeyPrefix,
+		KeyHash:           g.KeyHash,
+		SubjectType:       domain.SubjectType(g.SubjectType),
+		SubjectID:         g.SubjectID,
+		TeamID:            g.TeamID,
+		ProjectID:         g.ProjectID,
+		Scopes:            scopes,
+		ProviderAccountID: g.ProviderAccountID,
+		AllowedProviders:  g.AllowedProviders,
+		AllowedModels:     g.AllowedModels,
+		RateLimit:         rateLimit,
+		BudgetLimit:       budgetLimit,
+		Status:            domain.GatewayCredentialStatus(g.Status),
+		ExpiresAt:         g.ExpiresAt,
+		LastUsedAt:        g.LastUsedAt,
+		CreatedAt:         g.CreatedAt,
+		UpdatedAt:         g.UpdatedAt,
 	}
 }
 
@@ -884,17 +928,37 @@ func NewGatewayCredentialRepository(store *postgres.Store) ports.GatewayCredenti
 func (r *gatewayCredentialRepo) Create(ctx context.Context, orgID uuid.UUID, input domain.NewGatewayCredential) (domain.GatewayCredential, error) {
 	var credential domain.GatewayCredential
 	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		var rl *int32
+		if input.RateLimit != nil {
+			v := int32(*input.RateLimit)
+			rl = &v
+		}
+		bl := floatPtrToNumeric(input.BudgetLimit)
+		allowedProviders := input.AllowedProviders
+		if allowedProviders == nil {
+			allowedProviders = []string{}
+		}
+		allowedModels := input.AllowedModels
+		if allowedModels == nil {
+			allowedModels = []string{}
+		}
+
 		row, err := q.CreateGatewayCredential(ctx, db.CreateGatewayCredentialParams{
-			OrganizationID: orgID,
-			Name:           input.Name,
-			KeyPrefix:      input.KeyPrefix,
-			KeyHash:        input.KeyHash,
-			SubjectType:    db.GatewaySubjectType(input.SubjectType),
-			SubjectID:      input.SubjectID,
-			TeamID:         input.TeamID,
-			ProjectID:      input.ProjectID,
-			Scopes:         toDBScopeSlice(input.Scopes),
-			ExpiresAt:      input.ExpiresAt,
+			OrganizationID:    orgID,
+			Name:              input.Name,
+			KeyPrefix:         input.KeyPrefix,
+			KeyHash:           input.KeyHash,
+			SubjectType:       db.GatewaySubjectType(input.SubjectType),
+			SubjectID:         input.SubjectID,
+			TeamID:            input.TeamID,
+			ProjectID:         input.ProjectID,
+			Scopes:            toDBScopeSlice(input.Scopes),
+			ExpiresAt:         input.ExpiresAt,
+			ProviderAccountID: input.ProviderAccountID,
+			AllowedProviders:  allowedProviders,
+			AllowedModels:     allowedModels,
+			RateLimit:         rl,
+			BudgetLimit:       bl,
 		})
 		if err != nil {
 			return err
@@ -1007,17 +1071,37 @@ func (r *gatewayCredentialRepo) Rotate(ctx context.Context, orgID, id uuid.UUID,
 	// This method just creates the new credential after the old one is revoked.
 	var credential domain.GatewayCredential
 	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		var rl *int32
+		if input.RateLimit != nil {
+			v := int32(*input.RateLimit)
+			rl = &v
+		}
+		bl := floatPtrToNumeric(input.BudgetLimit)
+		allowedProviders := input.AllowedProviders
+		if allowedProviders == nil {
+			allowedProviders = []string{}
+		}
+		allowedModels := input.AllowedModels
+		if allowedModels == nil {
+			allowedModels = []string{}
+		}
+
 		row, err := q.CreateGatewayCredentialAfterRotate(ctx, db.CreateGatewayCredentialAfterRotateParams{
-			OrganizationID: orgID,
-			Name:           input.Name,
-			KeyPrefix:      input.KeyPrefix,
-			KeyHash:        input.KeyHash,
-			SubjectType:    db.GatewaySubjectType(input.SubjectType),
-			SubjectID:      input.SubjectID,
-			TeamID:         input.TeamID,
-			ProjectID:      input.ProjectID,
-			Scopes:         toDBScopeSlice(input.Scopes),
-			ExpiresAt:      input.ExpiresAt,
+			OrganizationID:    orgID,
+			Name:              input.Name,
+			KeyPrefix:         input.KeyPrefix,
+			KeyHash:           input.KeyHash,
+			SubjectType:       db.GatewaySubjectType(input.SubjectType),
+			SubjectID:         input.SubjectID,
+			TeamID:            input.TeamID,
+			ProjectID:         input.ProjectID,
+			Scopes:            toDBScopeSlice(input.Scopes),
+			ExpiresAt:         input.ExpiresAt,
+			ProviderAccountID: input.ProviderAccountID,
+			AllowedProviders:  allowedProviders,
+			AllowedModels:     allowedModels,
+			RateLimit:         rl,
+			BudgetLimit:       bl,
 		})
 		if err != nil {
 			return err
@@ -1054,6 +1138,57 @@ func (r *modelsRepo) List(ctx context.Context) ([]domain.Model, error) {
 	return models, err
 }
 
+func (r *modelsRepo) ListAll(ctx context.Context) ([]domain.Model, error) {
+	var models []domain.Model
+	err := r.store.WithTx(ctx, func(q *db.Queries) error {
+		rows, err := q.ListAllModels(ctx)
+		if err != nil {
+			return err
+		}
+		models = make([]domain.Model, 0, len(rows))
+		for _, row := range rows {
+			models = append(models, toModel(row))
+		}
+		return nil
+	})
+	return models, err
+}
+
+func (r *modelsRepo) ListByProvider(ctx context.Context, providerKind string) ([]domain.Model, error) {
+	var models []domain.Model
+	err := r.store.WithTx(ctx, func(q *db.Queries) error {
+		rows, err := q.ListModelsByProvider(ctx, providerKind)
+		if err != nil {
+			return err
+		}
+		models = make([]domain.Model, 0, len(rows))
+		for _, row := range rows {
+			models = append(models, toModel(row))
+		}
+		return nil
+	})
+	return models, err
+}
+
+func (r *modelsRepo) GetBySlug(ctx context.Context, providerKind, modelSlug string) (domain.Model, error) {
+	var model domain.Model
+	err := r.store.WithTx(ctx, func(q *db.Queries) error {
+		row, err := q.GetModelBySlug(ctx, db.GetModelBySlugParams{
+			ProviderKind: providerKind,
+			ModelSlug:    modelSlug,
+		})
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ports.ErrNotFound
+			}
+			return err
+		}
+		model = toModel(row)
+		return nil
+	})
+	return model, err
+}
+
 func (r *modelsRepo) Upsert(ctx context.Context, providerKind, modelSlug, displayName string) (domain.Model, error) {
 	var model domain.Model
 	err := r.store.WithTx(ctx, func(q *db.Queries) error {
@@ -1072,15 +1207,68 @@ func (r *modelsRepo) Upsert(ctx context.Context, providerKind, modelSlug, displa
 	return model, err
 }
 
+func (r *modelsRepo) UpsertWithMetadata(ctx context.Context, m domain.Model) (domain.Model, error) {
+	var model domain.Model
+	err := r.store.WithTx(ctx, func(q *db.Queries) error {
+		caps := m.Capabilities
+		if caps == nil {
+			caps = []string{}
+		}
+		status := m.Status
+		if status == "" {
+			if m.IsActive {
+				status = domain.ModelStatusActive
+			} else {
+				status = domain.ModelStatusInactive
+			}
+		}
+		row, err := q.UpsertModelWithMetadata(ctx, db.UpsertModelWithMetadataParams{
+			ProviderKind:      m.ProviderKind,
+			ModelSlug:         m.ModelSlug,
+			DisplayName:       m.DisplayName,
+			IsActive:          m.IsActive,
+			Capabilities:      caps,
+			ContextLimit:      int32(m.ContextLimit),
+			SupportsStreaming: m.SupportsStreaming,
+			SupportsTools:     m.SupportsTools,
+			SupportsReasoning: m.SupportsReasoning,
+			Status:            status,
+			PricingVersion:    m.PricingVersion,
+		})
+		if err != nil {
+			return err
+		}
+		model = toModel(row)
+		return nil
+	})
+	return model, err
+}
+
+func (r *modelsRepo) MarkInactiveExcept(ctx context.Context, providerKind string, activeSlugs []string) error {
+	return r.store.WithTx(ctx, func(q *db.Queries) error {
+		return q.MarkModelsInactiveExcept(ctx, db.MarkModelsInactiveExceptParams{
+			ProviderKind: providerKind,
+			Column2:      activeSlugs,
+		})
+	})
+}
+
 func toModel(m db.Model) domain.Model {
 	return domain.Model{
-		ID:           m.ID,
-		ProviderKind: m.ProviderKind,
-		ModelSlug:    m.ModelSlug,
-		DisplayName:  m.DisplayName,
-		IsActive:     m.IsActive,
-		CreatedAt:    m.CreatedAt,
-		UpdatedAt:    m.UpdatedAt,
+		ID:                m.ID,
+		ProviderKind:      m.ProviderKind,
+		ModelSlug:         m.ModelSlug,
+		DisplayName:       m.DisplayName,
+		IsActive:          m.IsActive,
+		Capabilities:      m.Capabilities,
+		ContextLimit:      int(m.ContextLimit),
+		SupportsStreaming: m.SupportsStreaming,
+		SupportsTools:     m.SupportsTools,
+		SupportsReasoning: m.SupportsReasoning,
+		Status:            m.Status,
+		PricingVersion:    m.PricingVersion,
+		CreatedAt:         m.CreatedAt,
+		UpdatedAt:         m.UpdatedAt,
 	}
 }
 

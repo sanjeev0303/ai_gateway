@@ -162,7 +162,7 @@ func (a *AuthenticatorImpl) fromCached(cached *CredentialCacheEntry) GatewayCred
 	scopes := make([]string, len(cached.Scopes))
 	copy(scopes, cached.Scopes)
 
-	var teamID, projectID *uuid.UUID
+	var teamID, projectID, providerAccountID *uuid.UUID
 	if cached.TeamID != nil {
 		id, _ := uuid.Parse(*cached.TeamID)
 		teamID = &id
@@ -171,21 +171,36 @@ func (a *AuthenticatorImpl) fromCached(cached *CredentialCacheEntry) GatewayCred
 		id, _ := uuid.Parse(*cached.ProjectID)
 		projectID = &id
 	}
+	if cached.ProviderAccountID != nil {
+		id, _ := uuid.Parse(*cached.ProviderAccountID)
+		providerAccountID = &id
+	}
+
+	allowedProviders := make([]string, len(cached.AllowedProviders))
+	copy(allowedProviders, cached.AllowedProviders)
+
+	allowedModels := make([]string, len(cached.AllowedModels))
+	copy(allowedModels, cached.AllowedModels)
 
 	subjectID, _ := uuid.Parse(cached.SubjectID)
 	orgID, _ := uuid.Parse(cached.OrganizationID)
 	id, _ := uuid.Parse(cached.ID)
 
 	return GatewayCredential{
-		ID:             id,
-		OrganizationID: orgID,
-		SubjectType:    cached.SubjectType,
-		SubjectID:      subjectID,
-		TeamID:         teamID,
-		ProjectID:      projectID,
-		Scopes:         scopes,
-		Status:         cached.Status,
-		ExpiresAt:      cached.ExpiresAt,
+		ID:                id,
+		OrganizationID:    orgID,
+		SubjectType:       cached.SubjectType,
+		SubjectID:         subjectID,
+		TeamID:            teamID,
+		ProjectID:         projectID,
+		Scopes:            scopes,
+		ProviderAccountID: providerAccountID,
+		AllowedProviders:  allowedProviders,
+		AllowedModels:     allowedModels,
+		RateLimit:         cached.RateLimit,
+		BudgetLimit:       cached.BudgetLimit,
+		Status:            cached.Status,
+		ExpiresAt:         cached.ExpiresAt,
 	}
 }
 
@@ -207,7 +222,7 @@ type CredentialCache interface {
 
 // fromDomain converts a domain.GatewayCredential to gatewayv2.GatewayCredential.
 func (a *AuthenticatorImpl) fromDomain(d domain.GatewayCredential) GatewayCredential {
-	var teamID, projectID *uuid.UUID
+	var teamID, projectID, providerAccountID *uuid.UUID
 	if d.TeamID != nil {
 		id := *d.TeamID
 		teamID = &id
@@ -216,28 +231,43 @@ func (a *AuthenticatorImpl) fromDomain(d domain.GatewayCredential) GatewayCreden
 		id := *d.ProjectID
 		projectID = &id
 	}
+	if d.ProviderAccountID != nil {
+		id := *d.ProviderAccountID
+		providerAccountID = &id
+	}
 
 	scopes := make([]string, len(d.Scopes))
 	for i, s := range d.Scopes {
 		scopes[i] = string(s)
 	}
 
+	allowedProviders := make([]string, len(d.AllowedProviders))
+	copy(allowedProviders, d.AllowedProviders)
+
+	allowedModels := make([]string, len(d.AllowedModels))
+	copy(allowedModels, d.AllowedModels)
+
 	return GatewayCredential{
-		ID:             d.ID,
-		OrganizationID: d.OrganizationID,
-		SubjectType:    string(d.SubjectType),
-		SubjectID:      d.SubjectID,
-		TeamID:         teamID,
-		ProjectID:      projectID,
-		Scopes:         scopes,
-		Status:         string(d.Status),
-		ExpiresAt:      d.ExpiresAt,
+		ID:                d.ID,
+		OrganizationID:    d.OrganizationID,
+		SubjectType:       string(d.SubjectType),
+		SubjectID:         d.SubjectID,
+		TeamID:            teamID,
+		ProjectID:         projectID,
+		Scopes:            scopes,
+		ProviderAccountID: providerAccountID,
+		AllowedProviders:  allowedProviders,
+		AllowedModels:     allowedModels,
+		RateLimit:         d.RateLimit,
+		BudgetLimit:       d.BudgetLimit,
+		Status:            string(d.Status),
+		ExpiresAt:         d.ExpiresAt,
 	}
 }
 
 // toCacheEntry converts a gatewayv2.GatewayCredential to CredentialCacheEntry.
 func (a *AuthenticatorImpl) toCacheEntry(c GatewayCredential) *CredentialCacheEntry {
-	var teamID, projectID *string
+	var teamID, projectID, providerAccountID *string
 	if c.TeamID != nil {
 		s := c.TeamID.String()
 		teamID = &s
@@ -246,20 +276,35 @@ func (a *AuthenticatorImpl) toCacheEntry(c GatewayCredential) *CredentialCacheEn
 		s := c.ProjectID.String()
 		projectID = &s
 	}
+	if c.ProviderAccountID != nil {
+		s := c.ProviderAccountID.String()
+		providerAccountID = &s
+	}
 
 	scopes := make([]string, len(c.Scopes))
 	copy(scopes, c.Scopes)
 
+	allowedProviders := make([]string, len(c.AllowedProviders))
+	copy(allowedProviders, c.AllowedProviders)
+
+	allowedModels := make([]string, len(c.AllowedModels))
+	copy(allowedModels, c.AllowedModels)
+
 	return &CredentialCacheEntry{
-		ID:             c.ID.String(),
-		OrganizationID: c.OrganizationID.String(),
-		SubjectType:    c.SubjectType,
-		SubjectID:      c.SubjectID.String(),
-		TeamID:         teamID,
-		ProjectID:      projectID,
-		Scopes:         scopes,
-		Status:         c.Status,
-		ExpiresAt:      c.ExpiresAt,
-		UpdatedAt:      time.Now(),
+		ID:                c.ID.String(),
+		OrganizationID:    c.OrganizationID.String(),
+		SubjectType:       c.SubjectType,
+		SubjectID:         c.SubjectID.String(),
+		TeamID:            teamID,
+		ProjectID:         projectID,
+		Scopes:            scopes,
+		ProviderAccountID: providerAccountID,
+		AllowedProviders:  allowedProviders,
+		AllowedModels:     allowedModels,
+		RateLimit:         c.RateLimit,
+		BudgetLimit:       c.BudgetLimit,
+		Status:            c.Status,
+		ExpiresAt:         c.ExpiresAt,
+		UpdatedAt:         time.Now(),
 	}
 }

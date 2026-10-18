@@ -14,20 +14,25 @@ import (
 // ---- gateway credential DTOs ------------------------------------------------
 
 type gatewayCredentialDTO struct {
-	ID             string   `json:"id"`
-	OrganizationID string   `json:"organization_id"`
-	Name           string   `json:"name"`
-	KeyPrefix      string   `json:"key_prefix"`
-	SubjectType    string   `json:"subject_type"`
-	SubjectID      string   `json:"subject_id"`
-	TeamID         *string  `json:"team_id,omitempty"`
-	ProjectID      *string  `json:"project_id,omitempty"`
-	Scopes         []string `json:"scopes"`
-	Status         string   `json:"status"`
-	ExpiresAt      *string  `json:"expires_at,omitempty"`
-	LastUsedAt     *string  `json:"last_used_at,omitempty"`
-	CreatedAt      string   `json:"created_at"`
-	UpdatedAt      string   `json:"updated_at"`
+	ID                string   `json:"id"`
+	OrganizationID    string   `json:"organization_id"`
+	Name              string   `json:"name"`
+	KeyPrefix         string   `json:"key_prefix"`
+	SubjectType       string   `json:"subject_type"`
+	SubjectID         string   `json:"subject_id"`
+	TeamID            *string  `json:"team_id,omitempty"`
+	ProjectID         *string  `json:"project_id,omitempty"`
+	Scopes            []string `json:"scopes"`
+	ProviderAccountID *string  `json:"provider_account_id,omitempty"`
+	AllowedProviders  []string `json:"allowed_providers,omitempty"`
+	AllowedModels     []string `json:"allowed_models,omitempty"`
+	RateLimit         *int     `json:"rate_limit,omitempty"`
+	BudgetLimit       *float64 `json:"budget_limit,omitempty"`
+	Status            string   `json:"status"`
+	ExpiresAt         *string  `json:"expires_at,omitempty"`
+	LastUsedAt        *string  `json:"last_used_at,omitempty"`
+	CreatedAt         string   `json:"created_at"`
+	UpdatedAt         string   `json:"updated_at"`
 }
 
 func toGatewayCredentialDTO(c domain.GatewayCredential) gatewayCredentialDTO {
@@ -35,7 +40,7 @@ func toGatewayCredentialDTO(c domain.GatewayCredential) gatewayCredentialDTO {
 	for i, s := range c.Scopes {
 		scopes[i] = string(s)
 	}
-	var teamID, projectID *string
+	var teamID, projectID, providerAccountID *string
 	if c.TeamID != nil {
 		s := c.TeamID.String()
 		teamID = &s
@@ -44,21 +49,37 @@ func toGatewayCredentialDTO(c domain.GatewayCredential) gatewayCredentialDTO {
 		s := c.ProjectID.String()
 		projectID = &s
 	}
+	if c.ProviderAccountID != nil {
+		s := c.ProviderAccountID.String()
+		providerAccountID = &s
+	}
+
+	allowedProviders := make([]string, len(c.AllowedProviders))
+	copy(allowedProviders, c.AllowedProviders)
+
+	allowedModels := make([]string, len(c.AllowedModels))
+	copy(allowedModels, c.AllowedModels)
+
 	return gatewayCredentialDTO{
-		ID:             c.ID.String(),
-		OrganizationID: c.OrganizationID.String(),
-		Name:           c.Name,
-		KeyPrefix:      c.KeyPrefix,
-		SubjectType:    string(c.SubjectType),
-		SubjectID:      c.SubjectID.String(),
-		TeamID:         teamID,
-		ProjectID:      projectID,
-		Scopes:         scopes,
-		Status:         string(c.Status),
-		ExpiresAt:      toTimePtr(c.ExpiresAt),
-		LastUsedAt:     toTimePtr(c.LastUsedAt),
-		CreatedAt:      ts(c.CreatedAt),
-		UpdatedAt:      ts(c.UpdatedAt),
+		ID:                c.ID.String(),
+		OrganizationID:    c.OrganizationID.String(),
+		Name:              c.Name,
+		KeyPrefix:         c.KeyPrefix,
+		SubjectType:       string(c.SubjectType),
+		SubjectID:         c.SubjectID.String(),
+		TeamID:            teamID,
+		ProjectID:         projectID,
+		Scopes:            scopes,
+		ProviderAccountID: providerAccountID,
+		AllowedProviders:  allowedProviders,
+		AllowedModels:     allowedModels,
+		RateLimit:         c.RateLimit,
+		BudgetLimit:       c.BudgetLimit,
+		Status:            string(c.Status),
+		ExpiresAt:         toTimePtr(c.ExpiresAt),
+		LastUsedAt:        toTimePtr(c.LastUsedAt),
+		CreatedAt:         ts(c.CreatedAt),
+		UpdatedAt:         ts(c.UpdatedAt),
 	}
 }
 
@@ -73,19 +94,29 @@ func toTimePtr(t *time.Time) *string {
 // ---- request bodies ---------------------------------------------------------
 
 type createGatewayCredentialRequest struct {
-	Name        string   `json:"name"`
-	SubjectType string   `json:"subject_type"`
-	SubjectID   string   `json:"subject_id"`
-	TeamID      *string  `json:"team_id,omitempty"`
-	ProjectID   *string  `json:"project_id,omitempty"`
-	Scopes      []string `json:"scopes"`
-	ExpiresAt   *string  `json:"expires_at,omitempty"`
+	Name              string   `json:"name"`
+	SubjectType       string   `json:"subject_type"`
+	SubjectID         string   `json:"subject_id"`
+	TeamID            *string  `json:"team_id,omitempty"`
+	ProjectID         *string  `json:"project_id,omitempty"`
+	Scopes            []string `json:"scopes"`
+	ProviderAccountID *string  `json:"provider_account_id,omitempty"`
+	AllowedProviders  []string `json:"allowed_providers,omitempty"`
+	AllowedModels     []string `json:"allowed_models,omitempty"`
+	RateLimit         *int     `json:"rate_limit,omitempty"`
+	BudgetLimit       *float64 `json:"budget_limit,omitempty"`
+	ExpiresAt         *string  `json:"expires_at,omitempty"`
 }
 
 type rotateGatewayCredentialRequest struct {
-	Name      *string  `json:"name,omitempty"`
-	Scopes    []string `json:"scopes,omitempty"`
-	ExpiresAt *string  `json:"expires_at,omitempty"`
+	Name              *string  `json:"name,omitempty"`
+	Scopes            []string `json:"scopes,omitempty"`
+	ProviderAccountID *string  `json:"provider_account_id,omitempty"`
+	AllowedProviders  []string `json:"allowed_providers,omitempty"`
+	AllowedModels     []string `json:"allowed_models,omitempty"`
+	RateLimit         *int     `json:"rate_limit,omitempty"`
+	BudgetLimit       *float64 `json:"budget_limit,omitempty"`
+	ExpiresAt         *string  `json:"expires_at,omitempty"`
 }
 
 // ---- handlers ---------------------------------------------------------------
@@ -144,14 +175,29 @@ func (a *api) createGatewayCredential(w http.ResponseWriter, r *http.Request) {
 		expiresAt = &t
 	}
 
+	var providerAccountID *uuid.UUID
+	if req.ProviderAccountID != nil {
+		id, err := uuid.Parse(*req.ProviderAccountID)
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		providerAccountID = &id
+	}
+
 	credential, rawKey, err := a.svc.CreateGatewayCredential(r.Context(), actor, domain.NewGatewayCredential{
-		Name:        req.Name,
-		SubjectType: subjectType,
-		SubjectID:   subjectID,
-		TeamID:      teamID,
-		ProjectID:   projectID,
-		Scopes:      scopes,
-		ExpiresAt:   expiresAt,
+		Name:              req.Name,
+		SubjectType:       subjectType,
+		SubjectID:         subjectID,
+		TeamID:            teamID,
+		ProjectID:         projectID,
+		Scopes:            scopes,
+		ProviderAccountID: providerAccountID,
+		AllowedProviders:  req.AllowedProviders,
+		AllowedModels:     req.AllowedModels,
+		RateLimit:         req.RateLimit,
+		BudgetLimit:       req.BudgetLimit,
+		ExpiresAt:         expiresAt,
 	})
 	if err != nil {
 		writeServiceError(w, r, err)
@@ -236,6 +282,26 @@ func (a *api) rotateGatewayCredential(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		input.ExpiresAt = &t
+	}
+	if req.ProviderAccountID != nil {
+		id, err := uuid.Parse(*req.ProviderAccountID)
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		input.ProviderAccountID = &id
+	}
+	if len(req.AllowedProviders) > 0 {
+		input.AllowedProviders = req.AllowedProviders
+	}
+	if len(req.AllowedModels) > 0 {
+		input.AllowedModels = req.AllowedModels
+	}
+	if req.RateLimit != nil {
+		input.RateLimit = req.RateLimit
+	}
+	if req.BudgetLimit != nil {
+		input.BudgetLimit = req.BudgetLimit
 	}
 
 	rotated, rawKey, err := a.svc.RotateGatewayCredential(r.Context(), actor, id, input)

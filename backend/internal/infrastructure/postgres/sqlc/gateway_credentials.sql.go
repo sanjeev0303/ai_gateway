@@ -10,25 +10,35 @@ import (
 	"time"
 
 	uuid "github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createGatewayCredential = `-- name: CreateGatewayCredential :one
-INSERT INTO gateway_credentials (organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, status, expires_at, last_used_at, created_at, updated_at
+INSERT INTO gateway_credentials (
+    organization_id, name, key_prefix, key_hash, subject_type, subject_id,
+    team_id, project_id, scopes, expires_at,
+    provider_account_id, allowed_providers, allowed_models, rate_limit, budget_limit
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+RETURNING id, organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, status, expires_at, last_used_at, created_at, updated_at, provider_account_id, allowed_providers, allowed_models, rate_limit, budget_limit
 `
 
 type CreateGatewayCredentialParams struct {
-	OrganizationID uuid.UUID                `json:"organization_id"`
-	Name           string                   `json:"name"`
-	KeyPrefix      string                   `json:"key_prefix"`
-	KeyHash        string                   `json:"key_hash"`
-	SubjectType    GatewaySubjectType       `json:"subject_type"`
-	SubjectID      uuid.UUID                `json:"subject_id"`
-	TeamID         *uuid.UUID               `json:"team_id"`
-	ProjectID      *uuid.UUID               `json:"project_id"`
-	Scopes         []GatewayCredentialScope `json:"scopes"`
-	ExpiresAt      *time.Time               `json:"expires_at"`
+	OrganizationID    uuid.UUID                `json:"organization_id"`
+	Name              string                   `json:"name"`
+	KeyPrefix         string                   `json:"key_prefix"`
+	KeyHash           string                   `json:"key_hash"`
+	SubjectType       GatewaySubjectType       `json:"subject_type"`
+	SubjectID         uuid.UUID                `json:"subject_id"`
+	TeamID            *uuid.UUID               `json:"team_id"`
+	ProjectID         *uuid.UUID               `json:"project_id"`
+	Scopes            []GatewayCredentialScope `json:"scopes"`
+	ExpiresAt         *time.Time               `json:"expires_at"`
+	ProviderAccountID *uuid.UUID               `json:"provider_account_id"`
+	AllowedProviders  []string                 `json:"allowed_providers"`
+	AllowedModels     []string                 `json:"allowed_models"`
+	RateLimit         *int32                   `json:"rate_limit"`
+	BudgetLimit       pgtype.Numeric           `json:"budget_limit"`
 }
 
 func (q *Queries) CreateGatewayCredential(ctx context.Context, arg CreateGatewayCredentialParams) (GatewayCredential, error) {
@@ -43,6 +53,11 @@ func (q *Queries) CreateGatewayCredential(ctx context.Context, arg CreateGateway
 		arg.ProjectID,
 		arg.Scopes,
 		arg.ExpiresAt,
+		arg.ProviderAccountID,
+		arg.AllowedProviders,
+		arg.AllowedModels,
+		arg.RateLimit,
+		arg.BudgetLimit,
 	)
 	var i GatewayCredential
 	err := row.Scan(
@@ -61,27 +76,41 @@ func (q *Queries) CreateGatewayCredential(ctx context.Context, arg CreateGateway
 		&i.LastUsedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProviderAccountID,
+		&i.AllowedProviders,
+		&i.AllowedModels,
+		&i.RateLimit,
+		&i.BudgetLimit,
 	)
 	return i, err
 }
 
 const createGatewayCredentialAfterRotate = `-- name: CreateGatewayCredentialAfterRotate :one
-INSERT INTO gateway_credentials (organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, status, expires_at, last_used_at, created_at, updated_at
+INSERT INTO gateway_credentials (
+    organization_id, name, key_prefix, key_hash, subject_type, subject_id,
+    team_id, project_id, scopes, expires_at,
+    provider_account_id, allowed_providers, allowed_models, rate_limit, budget_limit
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+RETURNING id, organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, status, expires_at, last_used_at, created_at, updated_at, provider_account_id, allowed_providers, allowed_models, rate_limit, budget_limit
 `
 
 type CreateGatewayCredentialAfterRotateParams struct {
-	OrganizationID uuid.UUID                `json:"organization_id"`
-	Name           string                   `json:"name"`
-	KeyPrefix      string                   `json:"key_prefix"`
-	KeyHash        string                   `json:"key_hash"`
-	SubjectType    GatewaySubjectType       `json:"subject_type"`
-	SubjectID      uuid.UUID                `json:"subject_id"`
-	TeamID         *uuid.UUID               `json:"team_id"`
-	ProjectID      *uuid.UUID               `json:"project_id"`
-	Scopes         []GatewayCredentialScope `json:"scopes"`
-	ExpiresAt      *time.Time               `json:"expires_at"`
+	OrganizationID    uuid.UUID                `json:"organization_id"`
+	Name              string                   `json:"name"`
+	KeyPrefix         string                   `json:"key_prefix"`
+	KeyHash           string                   `json:"key_hash"`
+	SubjectType       GatewaySubjectType       `json:"subject_type"`
+	SubjectID         uuid.UUID                `json:"subject_id"`
+	TeamID            *uuid.UUID               `json:"team_id"`
+	ProjectID         *uuid.UUID               `json:"project_id"`
+	Scopes            []GatewayCredentialScope `json:"scopes"`
+	ExpiresAt         *time.Time               `json:"expires_at"`
+	ProviderAccountID *uuid.UUID               `json:"provider_account_id"`
+	AllowedProviders  []string                 `json:"allowed_providers"`
+	AllowedModels     []string                 `json:"allowed_models"`
+	RateLimit         *int32                   `json:"rate_limit"`
+	BudgetLimit       pgtype.Numeric           `json:"budget_limit"`
 }
 
 func (q *Queries) CreateGatewayCredentialAfterRotate(ctx context.Context, arg CreateGatewayCredentialAfterRotateParams) (GatewayCredential, error) {
@@ -96,6 +125,11 @@ func (q *Queries) CreateGatewayCredentialAfterRotate(ctx context.Context, arg Cr
 		arg.ProjectID,
 		arg.Scopes,
 		arg.ExpiresAt,
+		arg.ProviderAccountID,
+		arg.AllowedProviders,
+		arg.AllowedModels,
+		arg.RateLimit,
+		arg.BudgetLimit,
 	)
 	var i GatewayCredential
 	err := row.Scan(
@@ -114,12 +148,17 @@ func (q *Queries) CreateGatewayCredentialAfterRotate(ctx context.Context, arg Cr
 		&i.LastUsedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProviderAccountID,
+		&i.AllowedProviders,
+		&i.AllowedModels,
+		&i.RateLimit,
+		&i.BudgetLimit,
 	)
 	return i, err
 }
 
 const getGatewayCredential = `-- name: GetGatewayCredential :one
-SELECT id, organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, status, expires_at, last_used_at, created_at, updated_at FROM gateway_credentials
+SELECT id, organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, status, expires_at, last_used_at, created_at, updated_at, provider_account_id, allowed_providers, allowed_models, rate_limit, budget_limit FROM gateway_credentials
 WHERE organization_id = $1 AND id = $2
 `
 
@@ -147,12 +186,17 @@ func (q *Queries) GetGatewayCredential(ctx context.Context, arg GetGatewayCreden
 		&i.LastUsedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProviderAccountID,
+		&i.AllowedProviders,
+		&i.AllowedModels,
+		&i.RateLimit,
+		&i.BudgetLimit,
 	)
 	return i, err
 }
 
 const listGatewayCredentials = `-- name: ListGatewayCredentials :many
-SELECT id, organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, status, expires_at, last_used_at, created_at, updated_at FROM gateway_credentials
+SELECT id, organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, status, expires_at, last_used_at, created_at, updated_at, provider_account_id, allowed_providers, allowed_models, rate_limit, budget_limit FROM gateway_credentials
 WHERE organization_id = $1
 ORDER BY created_at DESC
 `
@@ -182,6 +226,11 @@ func (q *Queries) ListGatewayCredentials(ctx context.Context, organizationID uui
 			&i.LastUsedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ProviderAccountID,
+			&i.AllowedProviders,
+			&i.AllowedModels,
+			&i.RateLimit,
+			&i.BudgetLimit,
 		); err != nil {
 			return nil, err
 		}
@@ -194,7 +243,7 @@ func (q *Queries) ListGatewayCredentials(ctx context.Context, organizationID uui
 }
 
 const resolveGatewayCredentialByKeyHash = `-- name: ResolveGatewayCredentialByKeyHash :one
-SELECT id, organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, status, expires_at, last_used_at, created_at, updated_at FROM app.resolve_gateway_credential($1)
+SELECT id, organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, status, expires_at, last_used_at, created_at, updated_at, provider_account_id, allowed_providers, allowed_models, rate_limit, budget_limit FROM app.resolve_gateway_credential($1)
 `
 
 func (q *Queries) ResolveGatewayCredentialByKeyHash(ctx context.Context, pHash string) (GatewayCredential, error) {
@@ -216,12 +265,17 @@ func (q *Queries) ResolveGatewayCredentialByKeyHash(ctx context.Context, pHash s
 		&i.LastUsedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProviderAccountID,
+		&i.AllowedProviders,
+		&i.AllowedModels,
+		&i.RateLimit,
+		&i.BudgetLimit,
 	)
 	return i, err
 }
 
 const resolveGatewayCredentialByKeyPrefix = `-- name: ResolveGatewayCredentialByKeyPrefix :many
-SELECT id, organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, status, expires_at, last_used_at, created_at, updated_at FROM app.resolve_gateway_credential_by_prefix($1)
+SELECT id, organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, status, expires_at, last_used_at, created_at, updated_at, provider_account_id, allowed_providers, allowed_models, rate_limit, budget_limit FROM app.resolve_gateway_credential_by_prefix($1)
 `
 
 func (q *Queries) ResolveGatewayCredentialByKeyPrefix(ctx context.Context, pPrefix string) ([]GatewayCredential, error) {
@@ -249,6 +303,11 @@ func (q *Queries) ResolveGatewayCredentialByKeyPrefix(ctx context.Context, pPref
 			&i.LastUsedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ProviderAccountID,
+			&i.AllowedProviders,
+			&i.AllowedModels,
+			&i.RateLimit,
+			&i.BudgetLimit,
 		); err != nil {
 			return nil, err
 		}
@@ -264,7 +323,7 @@ const revokeGatewayCredential = `-- name: RevokeGatewayCredential :one
 UPDATE gateway_credentials
 SET status = 'revoked', updated_at = now()
 WHERE organization_id = $1 AND id = $2
-RETURNING id, organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, status, expires_at, last_used_at, created_at, updated_at
+RETURNING id, organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, status, expires_at, last_used_at, created_at, updated_at, provider_account_id, allowed_providers, allowed_models, rate_limit, budget_limit
 `
 
 type RevokeGatewayCredentialParams struct {
@@ -291,6 +350,11 @@ func (q *Queries) RevokeGatewayCredential(ctx context.Context, arg RevokeGateway
 		&i.LastUsedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProviderAccountID,
+		&i.AllowedProviders,
+		&i.AllowedModels,
+		&i.RateLimit,
+		&i.BudgetLimit,
 	)
 	return i, err
 }
@@ -318,7 +382,7 @@ const updateGatewayCredentialStatus = `-- name: UpdateGatewayCredentialStatus :o
 UPDATE gateway_credentials
 SET status = $3, updated_at = now()
 WHERE organization_id = $1 AND id = $2
-RETURNING id, organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, status, expires_at, last_used_at, created_at, updated_at
+RETURNING id, organization_id, name, key_prefix, key_hash, subject_type, subject_id, team_id, project_id, scopes, status, expires_at, last_used_at, created_at, updated_at, provider_account_id, allowed_providers, allowed_models, rate_limit, budget_limit
 `
 
 type UpdateGatewayCredentialStatusParams struct {
@@ -346,6 +410,11 @@ func (q *Queries) UpdateGatewayCredentialStatus(ctx context.Context, arg UpdateG
 		&i.LastUsedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProviderAccountID,
+		&i.AllowedProviders,
+		&i.AllowedModels,
+		&i.RateLimit,
+		&i.BudgetLimit,
 	)
 	return i, err
 }

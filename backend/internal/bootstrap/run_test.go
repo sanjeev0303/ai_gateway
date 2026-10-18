@@ -13,9 +13,10 @@ func TestProviderAdapters(t *testing.T) {
 	got := providerAdapters()
 
 	want := map[string]bool{
-		domain.ProviderKindAnthropic: true,
-		domain.ProviderKindOpenAI:    true,
-		domain.ProviderKindGemini:    true,
+		domain.ProviderKindAnthropic:   true,
+		domain.ProviderKindOpenAI:      true,
+		domain.ProviderKindGemini:      true,
+		domain.ProviderKindHuggingFace: true,
 	}
 
 	if len(got) != len(want) {

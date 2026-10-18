@@ -49,12 +49,44 @@ func (f *fakeBillingSubs) ActiveWithPlan(context.Context, uuid.UUID) (domain.Org
 	return f.plan, f.err
 }
 
-func (f *fakeBillingSubs) SetPlan(context.Context, uuid.UUID, uuid.UUID) error {
-	return f.err
+func (f *fakeBillingSubs) SetPlan(_ context.Context, _ uuid.UUID, planID uuid.UUID) error {
+	if f.err != nil {
+		return f.err
+	}
+	if planID == testAcctID {
+		f.plan.PlanCode = "pro"
+		f.plan.PlanName = "Pro Plan"
+	} else if planID == testTeamID {
+		f.plan.PlanCode = "enterprise"
+		f.plan.PlanName = "Enterprise"
+	}
+	f.plan.Status = "active"
+	return nil
 }
 
-func (f *fakeBillingSubs) Cancel(context.Context, uuid.UUID) error {
-	return f.err
+func (f *fakeBillingSubs) Cancel(_ context.Context, _ uuid.UUID) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.plan.CancelAtPeriodEnd = true
+	return nil
+}
+
+func (f *fakeBillingSubs) UpdatePaymentDetails(_ context.Context, _ uuid.UUID, provider, subID, custID, status string) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.plan.PaymentProvider = provider
+	if subID != "" {
+		f.plan.ProviderSubscriptionID = &subID
+	}
+	if custID != "" {
+		f.plan.ProviderCustomerID = &custID
+	}
+	if status != "" {
+		f.plan.Status = status
+	}
+	return nil
 }
 
 type fakeBillingInvoices struct{ invoices []domain.Invoice }
@@ -65,6 +97,21 @@ func (f *fakeBillingInvoices) List(context.Context, uuid.UUID) ([]domain.Invoice
 
 func (f *fakeBillingInvoices) Get(context.Context, uuid.UUID, uuid.UUID) (domain.Invoice, error) {
 	return domain.Invoice{}, errors.New("unused")
+}
+
+func (f *fakeBillingInvoices) RecordPayment(_ context.Context, _ uuid.UUID, prov, pID string, amt int64) error {
+	now := time.Now().UTC()
+	f.invoices = append(f.invoices, domain.Invoice{
+		ID:              uuid.New(),
+		Number:          "INV-TEST-" + pID,
+		Status:          "paid",
+		PaymentProvider: &prov,
+		PaymentID:       &pID,
+		PaidAt:          &now,
+		TotalMicros:     amt,
+		IssuedAt:        now,
+	})
+	return nil
 }
 
 type fakeBillingRollups struct {

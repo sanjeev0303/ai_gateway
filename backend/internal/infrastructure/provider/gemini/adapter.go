@@ -23,6 +23,20 @@ func NewProviderAdapter() *ProviderAdapter {
 	}
 }
 
+// NewCustomProviderAdapter creates a Gemini provider adapter with custom base URL and version.
+func NewCustomProviderAdapter(baseURL, version string) *ProviderAdapter {
+	if baseURL == "" {
+		baseURL = defaultBaseURL
+	}
+	if version == "" {
+		version = defaultVersion
+	}
+	return &ProviderAdapter{
+		baseURL: baseURL,
+		version: version,
+	}
+}
+
 // ValidateCredentials verifies the API key against Gemini.
 func (a *ProviderAdapter) ValidateCredentials(ctx context.Context, apiKey string) error {
 	client, err := New(a.baseURL, a.version, "ai-gateway")

@@ -12,13 +12,14 @@ const (
 	ProviderKindAnthropic   = "anthropic"
 	ProviderKindGemini      = "gemini"
 	ProviderKindAzureOpenAI = "azure_openai"
+	ProviderKindHuggingFace = "huggingface"
 	ProviderKindCustom      = "custom"
 )
 
 // IsProviderKind reports whether kind is a supported provider kind.
 func IsProviderKind(kind string) bool {
 	switch kind {
-	case ProviderKindOpenAI, ProviderKindAnthropic, ProviderKindGemini, ProviderKindAzureOpenAI, ProviderKindCustom:
+	case ProviderKindOpenAI, ProviderKindAnthropic, ProviderKindGemini, ProviderKindAzureOpenAI, ProviderKindHuggingFace, ProviderKindCustom:
 		return true
 	default:
 		return false
@@ -87,15 +88,20 @@ const (
 // a slice for composable permissions. ExpiresAt enables short-lived tokens.
 // KeyPrefix and KeyHash are set by the application layer (not caller-supplied).
 type NewGatewayCredential struct {
-	Name        string
-	KeyPrefix   string
-	KeyHash     string
-	SubjectType SubjectType
-	SubjectID   uuid.UUID
-	TeamID      *uuid.UUID
-	ProjectID   *uuid.UUID
-	Scopes      []GatewayCredentialScope
-	ExpiresAt   *time.Time
+	Name              string
+	KeyPrefix         string
+	KeyHash           string
+	SubjectType       SubjectType
+	SubjectID         uuid.UUID
+	TeamID            *uuid.UUID
+	ProjectID         *uuid.UUID
+	Scopes            []GatewayCredentialScope
+	ProviderAccountID *uuid.UUID
+	AllowedProviders  []string
+	AllowedModels     []string
+	RateLimit         *int
+	BudgetLimit       *float64
+	ExpiresAt         *time.Time
 }
 
 // IsValidSubjectType reports whether the subject type is valid.
@@ -112,21 +118,26 @@ func IsValidGatewayCredentialScope(s GatewayCredentialScope) bool {
 // KeyPrefix is the first 7 chars after the "aigw_" prefix for identification.
 // KeyHash is the argon2id hash of the full raw key.
 type GatewayCredential struct {
-	ID             uuid.UUID
-	OrganizationID uuid.UUID
-	Name           string
-	KeyPrefix      string
-	KeyHash        string
-	SubjectType    SubjectType
-	SubjectID      uuid.UUID
-	TeamID         *uuid.UUID
-	ProjectID      *uuid.UUID
-	Scopes         []GatewayCredentialScope
-	Status         GatewayCredentialStatus
-	ExpiresAt      *time.Time
-	LastUsedAt     *time.Time
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID                uuid.UUID
+	OrganizationID    uuid.UUID
+	Name              string
+	KeyPrefix         string
+	KeyHash           string
+	SubjectType       SubjectType
+	SubjectID         uuid.UUID
+	TeamID            *uuid.UUID
+	ProjectID         *uuid.UUID
+	Scopes            []GatewayCredentialScope
+	ProviderAccountID *uuid.UUID
+	AllowedProviders  []string
+	AllowedModels     []string
+	RateLimit         *int
+	BudgetLimit       *float64
+	Status            GatewayCredentialStatus
+	ExpiresAt         *time.Time
+	LastUsedAt        *time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 const (

@@ -112,12 +112,13 @@ type MessageResponse struct {
 
 // StreamingEvent represents a server-sent event from the streaming API.
 type StreamingEvent struct {
-	Type    string           `json:"type"` // "message_start", "content_block_start", "content_block_delta", "content_block_stop", "message_delta", "message_stop", "ping", "error"
-	Index   *int             `json:"index,omitempty"`
-	Delta   json.RawMessage  `json:"delta,omitempty"`
-	Usage   *Usage           `json:"usage,omitempty"`
-	Message *MessageResponse `json:"message,omitempty"`
-	Error   *ErrorResponse   `json:"error,omitempty"`
+	Type         string           `json:"type"` // "message_start", "content_block_start", "content_block_delta", "content_block_stop", "message_delta", "message_stop", "ping", "error"
+	Index        *int             `json:"index,omitempty"`
+	Delta        json.RawMessage  `json:"delta,omitempty"`
+	ContentBlock *ContentBlock    `json:"content_block,omitempty"`
+	Usage        *Usage           `json:"usage,omitempty"`
+	Message      *MessageResponse `json:"message,omitempty"`
+	Error        *ErrorResponse   `json:"error,omitempty"`
 }
 
 // ErrorResponse represents an error response from the API.

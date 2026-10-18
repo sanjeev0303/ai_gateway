@@ -48,6 +48,7 @@ type Querier interface {
 	DeleteBudget(ctx context.Context, arg DeleteBudgetParams) error
 	DeletePolicy(ctx context.Context, arg DeletePolicyParams) error
 	DeletePolicyRule(ctx context.Context, arg DeletePolicyRuleParams) error
+	DeleteProviderAccount(ctx context.Context, arg DeleteProviderAccountParams) error
 	DeleteUsageDailyInWindow(ctx context.Context, arg DeleteUsageDailyInWindowParams) error
 	DeleteUsageHourlyInWindow(ctx context.Context, arg DeleteUsageHourlyInWindowParams) error
 	DeleteUsageMonthlyInWindow(ctx context.Context, arg DeleteUsageMonthlyInWindowParams) error
@@ -67,6 +68,7 @@ type Querier interface {
 	GetInvoice(ctx context.Context, arg GetInvoiceParams) (Invoice, error)
 	GetLLMRequestByRequestID(ctx context.Context, arg GetLLMRequestByRequestIDParams) (LlmRequest, error)
 	GetLatestAlertEvent(ctx context.Context, arg GetLatestAlertEventParams) (AlertEvent, error)
+	GetModelBySlug(ctx context.Context, arg GetModelBySlugParams) (Model, error)
 	GetOrgMember(ctx context.Context, arg GetOrgMemberParams) (GetOrgMemberRow, error)
 	GetOrganizationByID(ctx context.Context, id uuid.UUID) (Organization, error)
 	GetOrganizationBySlug(ctx context.Context, slug string) (Organization, error)
@@ -103,6 +105,7 @@ type Querier interface {
 	ListAPICredentials(ctx context.Context, organizationID uuid.UUID) ([]ApiCredential, error)
 	ListAlertEvents(ctx context.Context, arg ListAlertEventsParams) ([]AlertEvent, error)
 	ListAlerts(ctx context.Context, organizationID uuid.UUID) ([]Alert, error)
+	ListAllModels(ctx context.Context) ([]Model, error)
 	ListAllOrganizationIDs(ctx context.Context) ([]uuid.UUID, error)
 	// Read-only projection of the append-only ledger. Append-only is preserved
 	// structurally: this file is the only place that names audit_logs, and it
@@ -153,6 +156,7 @@ type Querier interface {
 	ListUsageEventsByRequest(ctx context.Context, arg ListUsageEventsByRequestParams) ([]UsageEvent, error)
 	MarkAllNotificationsRead(ctx context.Context, organizationID uuid.UUID) (int64, error)
 	MarkInvitationAccepted(ctx context.Context, arg MarkInvitationAcceptedParams) (Invitation, error)
+	MarkModelsInactiveExcept(ctx context.Context, arg MarkModelsInactiveExceptParams) error
 	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) (InAppNotification, error)
 	PurgeExpiredAuditLogs(ctx context.Context, arg PurgeExpiredAuditLogsParams) (int64, error)
 	PurgeExpiredBillingEvents(ctx context.Context, arg PurgeExpiredBillingEventsParams) (int64, error)
@@ -196,8 +200,10 @@ type Querier interface {
 	UpdatePolicy(ctx context.Context, arg UpdatePolicyParams) (Policy, error)
 	UpdatePolicyRule(ctx context.Context, arg UpdatePolicyRuleParams) (PolicyRule, error)
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
+	UpdateProviderAccountStatus(ctx context.Context, arg UpdateProviderAccountStatusParams) (ProviderAccount, error)
 	UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error)
 	UpsertModel(ctx context.Context, arg UpsertModelParams) (Model, error)
+	UpsertModelWithMetadata(ctx context.Context, arg UpsertModelWithMetadataParams) (Model, error)
 	UpsertPricingModel(ctx context.Context, arg UpsertPricingModelParams) (PricingModel, error)
 	UpsertProviderHealth(ctx context.Context, arg UpsertProviderHealthParams) (ProviderHealth, error)
 }

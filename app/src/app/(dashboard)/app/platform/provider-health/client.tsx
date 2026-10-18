@@ -58,6 +58,7 @@ export function ProbeProviderDialog() {
     if (val === "anthropic") setApiKey("sk-dummy-anthropic-key");
     else if (val === "openai") setApiKey("sk-dummy-openai-key");
     else if (val === "gemini") setApiKey("sk-dummy-gemini-key");
+    else if (val === "huggingface") setApiKey("hf_dummy_test_token_12345");
     else setApiKey("");
   };
 
@@ -101,6 +102,7 @@ export function ProbeProviderDialog() {
                 <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
                 <SelectItem value="openai">OpenAI (GPT)</SelectItem>
                 <SelectItem value="gemini">Google Gemini</SelectItem>
+                <SelectItem value="huggingface">Hugging Face (Inference Providers)</SelectItem>
                 <SelectItem value="azure_openai">Azure OpenAI</SelectItem>
                 <SelectItem value="custom">Custom Upstream</SelectItem>
               </SelectContent>

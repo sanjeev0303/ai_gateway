@@ -92,6 +92,125 @@ func (t *TenantResolverImpl) ResolveUpstreamForProvider(ctx context.Context, org
 	return upstream, nil
 }
 
+// ResolveUpstreamForAccount resolves the upstream provider account and credential by exact provider account ID.
+func (t *TenantResolverImpl) ResolveUpstreamForAccount(ctx context.Context, orgID, accountID uuid.UUID) (ResolvedUpstream, error) {
+	account, err := t.providerAccounts.Get(ctx, orgID, accountID)
+	if err != nil {
+		return ResolvedUpstream{}, err
+	}
+	if account.Status != domain.ProviderStatusActive {
+		return ResolvedUpstream{}, ErrNoUpstream
+	}
+	creds, err := t.providerCredentials.ListByAccount(ctx, orgID, account.ID)
+	if err != nil {
+		return ResolvedUpstream{}, err
+	}
+	var activeCred *domain.ProviderCredential
+	for i := range creds {
+		if creds[i].Status == domain.ProviderCredentialStatusActive {
+			activeCred = &creds[i]
+			break
+		}
+	}
+	if activeCred == nil {
+		return ResolvedUpstream{}, ErrNoUpstream
+	}
+	upstreamKey, err := t.secrets.Get(ctx, activeCred.SecretRef)
+	if err != nil {
+		if errors.Is(err, secrets.ErrNotFound) {
+			return ResolvedUpstream{}, ErrNoUpstream
+		}
+		return ResolvedUpstream{}, err
+	}
+	baseURL := account.BaseURL
+	if baseURL == "" {
+		switch account.ProviderKind {
+		case domain.ProviderKindAnthropic:
+			baseURL = "https://api.anthropic.com"
+		case domain.ProviderKindOpenAI:
+			baseURL = "https://api.openai.com/"
+		case domain.ProviderKindGemini:
+			baseURL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+		case domain.ProviderKindHuggingFace:
+			baseURL = "https://api-inference.huggingface.co/"
+		default:
+			baseURL = "https://api.anthropic.com/"
+		}
+	}
+	if !strings.HasSuffix(baseURL, "/") {
+		baseURL += "/"
+	}
+	return ResolvedUpstream{
+		ProviderAccount: ProviderAccount{
+			ID:             account.ID,
+			OrganizationID: account.OrganizationID,
+			ProviderKind:   account.ProviderKind,
+			Name:           account.Name,
+			BaseURL:        baseURL,
+			Status:         account.Status,
+			CreatedAt:      account.CreatedAt,
+			UpdatedAt:      account.UpdatedAt,
+		},
+		Credential: ProviderCredential{
+			ID:                activeCred.ID,
+			OrganizationID:    activeCred.OrganizationID,
+			ProviderAccountID: activeCred.ProviderAccountID,
+			SecretRef:         activeCred.SecretRef,
+			Fingerprint:       activeCred.Fingerprint,
+			Tail:              activeCred.Tail,
+			Status:            activeCred.Status,
+			CreatedAt:         activeCred.CreatedAt,
+			UpdatedAt:         activeCred.UpdatedAt,
+		},
+		UpstreamKey: upstreamKey,
+		BaseURL:     baseURL,
+	}, nil
+}
+
+// Invalidate evicts any cached upstream connections for an organization.
+func (t *TenantResolverImpl) Invalidate(orgID uuid.UUID) {
+	if t.cache != nil {
+		t.cache.Invalidate(orgID)
+	}
+}
+
+// ListActiveProviders returns the distinct provider kinds that have an active account
+// and active credential in the organization.
+func (t *TenantResolverImpl) ListActiveProviders(ctx context.Context, orgID uuid.UUID) ([]string, error) {
+	if t.providerAccounts == nil {
+		return nil, nil
+	}
+	accounts, err := t.providerAccounts.List(ctx, orgID)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]bool)
+	var activeKinds []string
+	for _, acc := range accounts {
+		if acc.Status == domain.ProviderStatusActive && !seen[acc.ProviderKind] {
+			if t.providerCredentials != nil {
+				creds, err := t.providerCredentials.ListByAccount(ctx, orgID, acc.ID)
+				if err != nil || len(creds) == 0 {
+					continue
+				}
+				hasActiveCred := false
+				for _, c := range creds {
+					if c.Status == domain.ProviderCredentialStatusActive {
+						hasActiveCred = true
+						break
+					}
+				}
+				if !hasActiveCred {
+					continue
+				}
+			}
+			seen[acc.ProviderKind] = true
+			activeKinds = append(activeKinds, acc.ProviderKind)
+		}
+	}
+	return activeKinds, nil
+}
+
 // resolveFromDB performs the actual database resolution for a given provider kind.
 func (t *TenantResolverImpl) resolveFromDB(ctx context.Context, orgID uuid.UUID, providerKind string) (ResolvedUpstream, error) {
 	accounts, err := t.providerAccounts.List(ctx, orgID)
@@ -150,6 +269,8 @@ func (t *TenantResolverImpl) resolveFromDB(ctx context.Context, orgID uuid.UUID,
 			baseURL = "https://api.openai.com/"
 		case domain.ProviderKindGemini:
 			baseURL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+		case domain.ProviderKindHuggingFace:
+			baseURL = "https://api-inference.huggingface.co/"
 		default:
 			baseURL = "https://api.anthropic.com/"
 		}

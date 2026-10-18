@@ -273,21 +273,26 @@ type ConversationMessage struct {
 }
 
 type GatewayCredential struct {
-	ID             uuid.UUID                `json:"id"`
-	OrganizationID uuid.UUID                `json:"organization_id"`
-	Name           string                   `json:"name"`
-	KeyPrefix      string                   `json:"key_prefix"`
-	KeyHash        string                   `json:"key_hash"`
-	SubjectType    GatewaySubjectType       `json:"subject_type"`
-	SubjectID      uuid.UUID                `json:"subject_id"`
-	TeamID         *uuid.UUID               `json:"team_id"`
-	ProjectID      *uuid.UUID               `json:"project_id"`
-	Scopes         []GatewayCredentialScope `json:"scopes"`
-	Status         GatewayCredentialStatus  `json:"status"`
-	ExpiresAt      *time.Time               `json:"expires_at"`
-	LastUsedAt     *time.Time               `json:"last_used_at"`
-	CreatedAt      time.Time                `json:"created_at"`
-	UpdatedAt      time.Time                `json:"updated_at"`
+	ID                uuid.UUID                `json:"id"`
+	OrganizationID    uuid.UUID                `json:"organization_id"`
+	Name              string                   `json:"name"`
+	KeyPrefix         string                   `json:"key_prefix"`
+	KeyHash           string                   `json:"key_hash"`
+	SubjectType       GatewaySubjectType       `json:"subject_type"`
+	SubjectID         uuid.UUID                `json:"subject_id"`
+	TeamID            *uuid.UUID               `json:"team_id"`
+	ProjectID         *uuid.UUID               `json:"project_id"`
+	Scopes            []GatewayCredentialScope `json:"scopes"`
+	Status            GatewayCredentialStatus  `json:"status"`
+	ExpiresAt         *time.Time               `json:"expires_at"`
+	LastUsedAt        *time.Time               `json:"last_used_at"`
+	CreatedAt         time.Time                `json:"created_at"`
+	UpdatedAt         time.Time                `json:"updated_at"`
+	ProviderAccountID *uuid.UUID               `json:"provider_account_id"`
+	AllowedProviders  []string                 `json:"allowed_providers"`
+	AllowedModels     []string                 `json:"allowed_models"`
+	RateLimit         *int32                   `json:"rate_limit"`
+	BudgetLimit       pgtype.Numeric           `json:"budget_limit"`
 }
 
 type Guardrail struct {
@@ -354,18 +359,21 @@ type Invitation struct {
 }
 
 type Invoice struct {
-	ID             uuid.UUID  `json:"id"`
-	OrganizationID uuid.UUID  `json:"organization_id"`
-	SubscriptionID *uuid.UUID `json:"subscription_id"`
-	Number         string     `json:"number"`
-	Status         string     `json:"status"`
-	Currency       string     `json:"currency"`
-	TotalMicros    int64      `json:"total_micros"`
-	PeriodStart    time.Time  `json:"period_start"`
-	PeriodEnd      time.Time  `json:"period_end"`
-	IssuedAt       time.Time  `json:"issued_at"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID              uuid.UUID  `json:"id"`
+	OrganizationID  uuid.UUID  `json:"organization_id"`
+	SubscriptionID  *uuid.UUID `json:"subscription_id"`
+	Number          string     `json:"number"`
+	Status          string     `json:"status"`
+	Currency        string     `json:"currency"`
+	TotalMicros     int64      `json:"total_micros"`
+	PeriodStart     time.Time  `json:"period_start"`
+	PeriodEnd       time.Time  `json:"period_end"`
+	IssuedAt        time.Time  `json:"issued_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+	PaymentProvider *string    `json:"payment_provider"`
+	PaymentID       *string    `json:"payment_id"`
+	PaidAt          *time.Time `json:"paid_at"`
 }
 
 type InvoiceLine struct {
@@ -582,15 +590,18 @@ type ServiceAccount struct {
 }
 
 type Subscription struct {
-	ID                 uuid.UUID  `json:"id"`
-	OrganizationID     uuid.UUID  `json:"organization_id"`
-	PlanID             uuid.UUID  `json:"plan_id"`
-	Status             string     `json:"status"`
-	CurrentPeriodStart *time.Time `json:"current_period_start"`
-	CurrentPeriodEnd   *time.Time `json:"current_period_end"`
-	CancelAtPeriodEnd  bool       `json:"cancel_at_period_end"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
+	ID                     uuid.UUID  `json:"id"`
+	OrganizationID         uuid.UUID  `json:"organization_id"`
+	PlanID                 uuid.UUID  `json:"plan_id"`
+	Status                 string     `json:"status"`
+	CurrentPeriodStart     *time.Time `json:"current_period_start"`
+	CurrentPeriodEnd       *time.Time `json:"current_period_end"`
+	CancelAtPeriodEnd      bool       `json:"cancel_at_period_end"`
+	CreatedAt              time.Time  `json:"created_at"`
+	UpdatedAt              time.Time  `json:"updated_at"`
+	PaymentProvider        string     `json:"payment_provider"`
+	ProviderCustomerID     *string    `json:"provider_customer_id"`
+	ProviderSubscriptionID *string    `json:"provider_subscription_id"`
 }
 
 type Team struct {

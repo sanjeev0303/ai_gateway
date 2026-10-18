@@ -33,6 +33,14 @@ func notConfigured(method string) {
 	panic("provider test: " + method + " called without a stub")
 }
 
+type stubInvalidator struct {
+	invalidatedOrgs []uuid.UUID
+}
+
+func (s *stubInvalidator) Invalidate(orgID uuid.UUID) {
+	s.invalidatedOrgs = append(s.invalidatedOrgs, orgID)
+}
+
 // testStubs bundles every stub a Service depends on.
 type testStubs struct {
 	accounts    *stubProviderAccounts
@@ -42,6 +50,7 @@ type testStubs struct {
 	audits      *stubAudits
 	secrets     *stubSecrets
 	provider    *stubProvider
+	invalidator *stubInvalidator
 }
 
 // newTestService wires a Service against the stubs with a fixed clock. The
@@ -55,6 +64,7 @@ func newTestService() (*Service, *testStubs) {
 		audits:      &stubAudits{},
 		secrets:     &stubSecrets{values: map[string]string{}},
 		provider:    &stubProvider{},
+		invalidator: &stubInvalidator{},
 	}
 	svc := NewService(ServiceDeps{
 		Accounts:    st.accounts,
@@ -63,6 +73,7 @@ func newTestService() (*Service, *testStubs) {
 		Health:      st.health,
 		Audits:      st.audits,
 		Secrets:     st.secrets,
+		Invalidator: st.invalidator,
 		Providers: map[string]providerclient.Provider{
 			domain.ProviderKindAnthropic: st.provider,
 		},
@@ -110,6 +121,13 @@ func requireEqual[T comparable](t *testing.T, got, want T) {
 	}
 }
 
+func requireTrue(t *testing.T, cond bool, msg string) {
+	t.Helper()
+	if !cond {
+		t.Fatalf("condition failed: %s", msg)
+	}
+}
+
 func requireAudit(t *testing.T, st *testStubs, action string) {
 	t.Helper()
 	for _, a := range st.audits.actions {
@@ -122,9 +140,11 @@ func requireAudit(t *testing.T, st *testStubs, action string) {
 
 type stubProviderAccounts struct {
 	repositories.ProviderAccountRepository
-	create func(context.Context, uuid.UUID, domain.NewProviderAccount) (domain.ProviderAccount, error)
-	get    func(context.Context, uuid.UUID, uuid.UUID) (domain.ProviderAccount, error)
-	list   func(context.Context, uuid.UUID) ([]domain.ProviderAccount, error)
+	create       func(context.Context, uuid.UUID, domain.NewProviderAccount) (domain.ProviderAccount, error)
+	get          func(context.Context, uuid.UUID, uuid.UUID) (domain.ProviderAccount, error)
+	list         func(context.Context, uuid.UUID) ([]domain.ProviderAccount, error)
+	updateStatus func(context.Context, uuid.UUID, uuid.UUID, string) (domain.ProviderAccount, error)
+	delete       func(context.Context, uuid.UUID, uuid.UUID) error
 }
 
 func (s *stubProviderAccounts) Create(ctx context.Context, orgID uuid.UUID, in domain.NewProviderAccount) (domain.ProviderAccount, error) {
@@ -146,6 +166,20 @@ func (s *stubProviderAccounts) List(ctx context.Context, orgID uuid.UUID) ([]dom
 		notConfigured("stubProviderAccounts.List")
 	}
 	return s.list(ctx, orgID)
+}
+
+func (s *stubProviderAccounts) UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status string) (domain.ProviderAccount, error) {
+	if s.updateStatus == nil {
+		notConfigured("stubProviderAccounts.UpdateStatus")
+	}
+	return s.updateStatus(ctx, orgID, id, status)
+}
+
+func (s *stubProviderAccounts) Delete(ctx context.Context, orgID, id uuid.UUID) error {
+	if s.delete == nil {
+		notConfigured("stubProviderAccounts.Delete")
+	}
+	return s.delete(ctx, orgID, id)
 }
 
 type stubProviderCredentials struct {
@@ -194,8 +228,11 @@ func (s *stubProviderCredentials) Revoke(ctx context.Context, orgID, id uuid.UUI
 
 type stubModels struct {
 	repositories.ModelRepository
-	list   func(context.Context) ([]domain.Model, error)
-	upsert func(context.Context, string, string, string) (domain.Model, error)
+	list               func(context.Context) ([]domain.Model, error)
+	upsert             func(context.Context, string, string, string) (domain.Model, error)
+	upsertWithMetadata func(context.Context, domain.Model) (domain.Model, error)
+	markInactiveExcept func(context.Context, string, []string) error
+	getBySlug          func(context.Context, string, string) (domain.Model, error)
 }
 
 func (s *stubModels) List(ctx context.Context) ([]domain.Model, error) {
@@ -210,6 +247,54 @@ func (s *stubModels) Upsert(ctx context.Context, providerKind, modelSlug, displa
 		notConfigured("stubModels.Upsert")
 	}
 	return s.upsert(ctx, providerKind, modelSlug, displayName)
+}
+
+func (s *stubModels) ListAll(ctx context.Context) ([]domain.Model, error) {
+	if s.list != nil {
+		return s.list(ctx)
+	}
+	return nil, nil
+}
+
+func (s *stubModels) ListByProvider(ctx context.Context, providerKind string) ([]domain.Model, error) {
+	if s.list != nil {
+		models, err := s.list(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var filtered []domain.Model
+		for _, m := range models {
+			if m.ProviderKind == providerKind {
+				filtered = append(filtered, m)
+			}
+		}
+		return filtered, nil
+	}
+	return nil, nil
+}
+
+func (s *stubModels) GetBySlug(ctx context.Context, providerKind, modelSlug string) (domain.Model, error) {
+	if s.getBySlug != nil {
+		return s.getBySlug(ctx, providerKind, modelSlug)
+	}
+	return domain.Model{}, nil
+}
+
+func (s *stubModels) UpsertWithMetadata(ctx context.Context, m domain.Model) (domain.Model, error) {
+	if s.upsertWithMetadata != nil {
+		return s.upsertWithMetadata(ctx, m)
+	}
+	if s.upsert != nil {
+		return s.upsert(ctx, m.ProviderKind, m.ModelSlug, m.DisplayName)
+	}
+	return m, nil
+}
+
+func (s *stubModels) MarkInactiveExcept(ctx context.Context, providerKind string, activeSlugs []string) error {
+	if s.markInactiveExcept != nil {
+		return s.markInactiveExcept(ctx, providerKind, activeSlugs)
+	}
+	return nil
 }
 
 type stubProviderHealth struct {

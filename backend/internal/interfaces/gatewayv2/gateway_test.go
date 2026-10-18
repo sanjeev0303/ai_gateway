@@ -42,9 +42,34 @@ func (s *stubGatewayTenantResolver) ResolveUpstream(_ context.Context, _ uuid.UU
 	return s.upstream, s.err
 }
 
-func (s *stubGatewayTenantResolver) ResolveUpstreamForProvider(_ context.Context, _ uuid.UUID, _ string) (ResolvedUpstream, error) {
-	return s.upstream, s.err
+func (s *stubGatewayTenantResolver) ResolveUpstreamForProvider(_ context.Context, _ uuid.UUID, providerKind string) (ResolvedUpstream, error) {
+	if s.err != nil {
+		return ResolvedUpstream{}, s.err
+	}
+	up := s.upstream
+	if providerKind != "" && up.ProviderAccount.ProviderKind != "" && up.ProviderAccount.ProviderKind != providerKind {
+		up.ProviderAccount.ProviderKind = providerKind
+	}
+	return up, nil
 }
+
+func (s *stubGatewayTenantResolver) ListActiveProviders(_ context.Context, _ uuid.UUID) ([]string, error) {
+	if s.upstream.ProviderAccount.ProviderKind != "" && s.upstream.ProviderAccount.Status == "active" {
+		return []string{s.upstream.ProviderAccount.ProviderKind}, nil
+	}
+	return nil, nil
+}
+
+func (s *stubGatewayTenantResolver) ResolveUpstreamForAccount(_ context.Context, _ uuid.UUID, accountID uuid.UUID) (ResolvedUpstream, error) {
+	if s.err != nil {
+		return ResolvedUpstream{}, s.err
+	}
+	up := s.upstream
+	up.ProviderAccount.ID = accountID
+	return up, nil
+}
+
+func (s *stubGatewayTenantResolver) Invalidate(_ uuid.UUID) {}
 
 type stubGatewayPolicyResolver struct {
 	snapshot         PolicySnapshot
@@ -836,3 +861,36 @@ func TestGateway_UnsupportedModel(t *testing.T) {
 	requireTrue(t, res.StatusCode == http.StatusBadRequest, "want 400, got %d", res.StatusCode)
 	requireTrue(t, res.ErrorType == "unsupported_model", "want unsupported_model, got %s", res.ErrorType)
 }
+
+func TestGateway_HuggingFaceRouting(t *testing.T) {
+	g, stubs := newGatewayForPipeline()
+	stubs.inspect.hints.Model = "meta-llama/Llama-3.3-70B-Instruct"
+	up := upstreamFixture()
+	up.ProviderAccount.ProviderKind = "huggingface"
+	up.BaseURL = "https://router.huggingface.co/v1"
+	up.UpstreamKey = "hf_test_token_12345"
+	stubs.tenant.upstream = up
+
+	req := pipelineRequest("key-1", `{"model":"meta-llama/Llama-3.3-70B-Instruct","prompt":"Hello"}`)
+	res := g.executePipeline(context.Background(), req, "req-hf-1")
+
+	requireTrue(t, res.Allowed, "Hugging Face model should pass pipeline: %v", res.ErrorType)
+	requireTrue(t, res.Context != nil && res.Context.Upstream.ProviderAccount.ProviderKind == "huggingface", "expected provider huggingface")
+}
+
+func TestGateway_HuggingFacePrefixRouting(t *testing.T) {
+	g, stubs := newGatewayForPipeline()
+	stubs.inspect.hints.Model = "hf-mistralai/Mistral-7B-Instruct-v0.3"
+	up := upstreamFixture()
+	up.ProviderAccount.ProviderKind = "huggingface"
+	up.BaseURL = "https://router.huggingface.co/v1"
+	up.UpstreamKey = "hf_test_token_12345"
+	stubs.tenant.upstream = up
+
+	req := pipelineRequest("key-1", `{"model":"hf-mistralai/Mistral-7B-Instruct-v0.3","prompt":"Hello"}`)
+	res := g.executePipeline(context.Background(), req, "req-hf-2")
+
+	requireTrue(t, res.Allowed, "Hugging Face prefixed model should pass pipeline: %v", res.ErrorType)
+	requireTrue(t, res.Context != nil && res.Context.Upstream.ProviderAccount.ProviderKind == "huggingface", "expected provider huggingface")
+}
+

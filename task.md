@@ -2,6 +2,110 @@
 
 Updated after each completed prompt.
 
+## COMPLETED TASK: Push Multi-Provider and Billing Implementation to GitHub
+- [x] Step 1: Stage all verified files and untracked artifacts (`git add -A`).
+- [x] Step 2: Commit staged changes with comprehensive commit message.
+- [x] Step 3: Push commits to remote origin main (`git push origin main`).
+- [x] Step 4: Verify clean working directory and remote synchronization.
+
+## COMPLETED TASK: Phase J — Complete end-to-end local verification and final deliverables
+- [x] Step 1: Create reproducible test fixture with 1 organization, 3 independent users with distinct Sentinel credentials, and mock provider connections for Gemini, OpenAI, Anthropic, and Hugging Face.
+- [x] Step 2: Verify independent model discovery for all 4 providers, confirming unavailable models are marked inactive/unselectable.
+- [x] Step 3: Verify Sentinel gateway credentials bound to providers, enforcing strict provider and model scoping.
+- [x] Step 4: Verify Sentinel CLI slash-command registry resolution and command execution across common and provider-specific commands.
+- [x] Step 5: Verify streaming and non-streaming inference requests, routing, token usage attribution, cost tracking, policies, budgets, rate limits, and revocation.
+- [x] Step 6: Verify failure simulation, recovery, and dual-payment checkout (Stripe and Razorpay), webhook authenticity, idempotency, and entitlements.
+- [x] Step 7: Run full Go, frontend, SDK, CLI, and integration test suites.
+- [x] Step 8: Produce final evidence-based report `docs/local-readiness/multi-provider-and-billing-completion.md` and update `task.md`.
+
+## COMPLETED TASK: Phase I — Security and tenant isolation
+- [x] Step 1: Audit multi-provider and billing architecture for tenant isolation and security constraints (cross-tenant credentials, unauthorized connection usage, gateway credential scope escape, model parameter tampering, billing isolation, webhook forgery, RBAC, secret redaction, error sanitization, credential revocation & disabled connections).
+- [x] Step 2: Implement hardening and fixes for any identified isolation or authorization vulnerabilities across Control API, Gateway pipeline, and Billing services.
+- [x] Step 3: Implement comprehensive automated security regression tests covering cross-tenant credentials, unauthorized connection use, scope escape/tampering, billing isolation, forged webhook rejection, RBAC enforcement, secret leakage prevention, and revocation/disablement.
+- [x] Step 4: Run full backend and frontend regression suites (`go test -C backend ./...` and `npm test`).
+- [x] Step 5: Document security guarantees and verification in `docs/security/tenant-isolation-verification.md` and update `task.md`.
+
+## COMPLETED TASK: Phase H — Frontend provider and billing management
+- [x] Step 1: Audit existing frontend provider management (`provider-accounts`, `[id]/provider-detail`, `provider-health`, `model-registry`) and billing views (`subscription`, `invoices`, `usage`).
+- [x] Step 2: Complete Provider Management UI with catalog, connect flow, secure credential submission, status badges (connected, credential invalid, unreachable, discovery unavailable, unauthorized vs authorized/ready), model capabilities, model-access assignment, and rotation/revocation.
+- [x] Step 3: Complete Billing Management UI with current & available plans, dual-gateway checkout (Stripe & Razorpay), subscription state indicators, payment failure alerts, paid invoice history, and quota/usage views.
+- [x] Step 4: Ensure all data binds directly to real backend API endpoints with zero fake mock states in production mode.
+- [x] Step 5: Write automated frontend component/integration tests and verify full typecheck (`npm run typecheck` and `npm test`).
+- [x] Step 6: Create architectural and operational documentation in `docs/architecture/frontend-provider-billing-management.md` and update `task.md`.
+\\
+
+## COMPLETED TASK: Phase G — Stripe and Razorpay Payment Integration
+- [x] Step 1: Audit existing billing domain, schemas, repositories, and interfaces (`ports/payment`, `infrastructure/payment`, `application/billing`).
+- [x] Step 2: Implement Stripe adapter with customer creation/retrieval, subscription checkout, lifecycle webhook parsing, and signature verification.
+- [x] Step 3: Implement Razorpay adapter with customer association, subscription/order creation, signature verification (`order_id|payment_id` and webhook HMAC), and event parsing.
+- [x] Step 4: Implement shared billing application service with idempotent webhook processing, event deduplication, subscription state machine, invoice persistence, and entitlement enforcement.
+- [x] Step 5: Wire Control API endpoints (`/v1/billing/checkout`, `/v1/billing/webhooks/stripe`, `/v1/billing/webhooks/razorpay`, `/v1/billing/verify-payment`) with auth and signature enforcement.
+- [x] Step 6: Connect frontend billing workflows (provider selection, checkout initiation, payment status, payment history, and entitlement display).
+- [x] Step 7: Write comprehensive automated unit, integration, and mock webhook tests (successful/failed checkout, signature verification, idempotency/deduplication, out-of-order events, renewal, cancellation, entitlement changes).
+- [x] Step 8: Create authoritative documentation in `docs/billing/stripe-integration.md`, `docs/billing/razorpay-integration.md`, and `docs/billing/billing-state-machine.md` and verify full test suites.
+
+## COMPLETED TASK: Phase F — Preserve provider-specific features without breaking compatibility
+- [x] Step 1: Design capability-aware provider parameters validation and mapping in `ports/provider/provider.go`.
+- [x] Step 2: Implement provider-specific parameter preservation and strict unsupported parameter rejection across Anthropic, OpenAI, Gemini, and Hugging Face adapters.
+- [x] Step 3: Preserve tool definitions, tool responses (`tool_result`, `function`, `tool`), multimodal data, and system instruction semantics across adapters.
+- [x] Step 4: Implement streaming event and usage metadata preservation (request IDs, tool call deltas, cached/reasoning tokens) across all 4 adapters.
+- [x] Step 5: Add comprehensive adapter contract tests covering parameter preservation, rejection of unsupported parameters, tool semantics, and streaming conversion.
+- [x] Step 6: Create comprehensive documentation in `docs/providers/provider-specific-features.md` and verify full test suites.
+
+## COMPLETED TASK: Phase E — Provider-aware slash commands in the Sentinel CLI
+- [x] Step 1: Design and implement the centralized slash-command registry (`Command`, `CommandRegistry`, provider applicability, capability requirements, arguments, execution handler).
+- [x] Step 2: Implement common Sentinel commands (`/help`, `/model`, `/provider`, `/status`, `/usage`, `/cost`, `/permissions`, `/clear`, `/compact`, `/stream`, `/exit`) with real conversation compaction and history management.
+- [x] Step 3: Implement provider-specific command sets (Anthropic, Gemini, OpenAI, Hugging Face) matching authorized connection and model capabilities.
+- [x] Step 4: Implement interactive slash-command menu on `/` and dynamic command set updating on `/provider` or `/model` switch.
+- [x] Step 5: Implement comprehensive unit and integration tests covering registry resolution, provider filtering, permission checks, `/clear`, and `/compact`.
+- [x] Step 6: Create comprehensive documentation in `docs/cli/slash-commands.md` and verify full test suites.
+
+## COMPLETED TASK: Phase D — Provider-bound Sentinel gateway credentials
+- [x] Step 1: Extend Gateway Credential domain models, types, and database queries (`AllowedProviders`, `AllowedModels`, `ProviderAccountID`, `RateLimit`, `BudgetLimit`).
+- [x] Step 2: Update identity service and Control API (`/v1/gateway-credentials`) to persist and return provider connection bindings and model restrictions.
+- [x] Step 3: Implement server-side scope enforcement in Gateway pipeline (`executePipeline`) and model listing (`handleListModels`) preventing model and provider escapes.
+- [x] Step 4: Adapt CLI session, slash commands (`/provider`, `/model`), and client to authorized providers and permitted models.
+- [x] Step 5: Implement automated tests verifying provider bounding, model restriction enforcement, revocation, rotation safety, and spoofing resistance.
+- [x] Step 6: Create comprehensive architecture documentation in `docs/security/provider-bound-credentials.md` and verify full regression suite.
+
+## COMPLETED TASK: Phase C — Dynamic Model Discovery and Registry
+- [x] Step 1: Extend model metadata storage (`domain.Model`, `ports/repositories`, sqlc queries) with capabilities, context limits, pricing version, and status.
+- [x] Step 2: Implement dynamic provider model discovery with capabilities discovery across adapters (OpenAI, Gemini, Hugging Face, Anthropic supported models).
+- [x] Step 3: Implement provider-aware model filtering in Gateway (`/v1/models`) and Control API (`/v1/models`), strictly eliminating un-connected provider models and static fallbacks.
+- [x] Step 4: Enforce connection existence, active status, valid credentials, and model availability in Gateway request routing.
+- [x] Step 5: Update Frontend Model Registry and selection UI to display rich metadata and provider connection status.
+- [x] Step 6: Write automated regression tests covering 2 organizations with different provider connections, unavailable/revoked models, and unauthorized policy denials.
+- [x] Step 7: Document dynamic model discovery architecture in `docs/models/dynamic-model-discovery.md` and verify full test suite.
+
+## COMPLETED TASK: Phase B — Secure Provider Credential Management
+- [x] Step 1: Audit existing provider accounts and credentials subsystem against security and workflow requirements.
+- [x] Step 2: Implement Provider Account disable/enable (`UpdateStatus`) and deletion (`Delete`) with cascade secret cleanup in repository, application service, and control API.
+- [x] Step 3: Implement Account-level validation (`ValidateAccount`), health check (`CheckAccountHealth`), and model discovery (`SyncAccountModels`) using stored credentials.
+- [x] Step 4: Verify credential ownership boundaries (Org Provider Keys vs Gateway Credentials vs User Model-Access Scope).
+- [x] Step 5: Update Frontend Provider Accounts UI to support testing connection, model discovery, disabling/enabling, rotation, and deletion.
+- [x] Step 6: Write comprehensive unit and integration tests for tenant isolation, RBAC, rotation rollback, secret non-leakage, and account lifecycle.
+- [x] Step 7: Document security model and credential architecture in `docs/security/provider-credential-management.md` and run full regression suite.
+
+## COMPLETED TASK: Phase A — Multi-Provider Adapter Architecture & Compatibility Matrix
+- [x] Step 1: Design and extend unified provider contract and normalized inference representation in `ports/provider/provider.go`.
+- [x] Step 2: Implement `InferenceProvider` interface on Anthropic adapter with capability discovery and message conversion.
+- [x] Step 3: Implement `InferenceProvider` interface on OpenAI adapter with capability discovery and chat conversion.
+- [x] Step 4: Implement `InferenceProvider` interface on Google Gemini adapter with capability discovery and content generation conversion.
+- [x] Step 5: Implement `InferenceProvider` interface on Hugging Face adapter with capability discovery and inference endpoints conversion.
+- [x] Step 6: Update application provider `Registry` to support `InferenceProvider` resolution without breaking existing stubs.
+- [x] Step 7: Write comprehensive provider-specific unit tests and backward-compatibility tests across all 4 adapters.
+- [x] Step 8: Create authoritative architectural documentation in `docs/providers/provider-adapter-architecture.md` and verify full suite.
+
+## COMPLETED TASK: Extend Sentinel with Hugging Face, Dual Payments (Stripe & Razorpay), and CLI Slash Commands
+- [x] Step 1: Inspect repository, Git status, provider interfaces, billing modules, model registry, and CLI structure.
+- [x] Step 2: Produce dependency-aware implementation plan artifact (`multi_provider_dual_payments_plan.md`).
+- [x] Step 3: Implement Hugging Face Inference Providers adapter with dynamic model discovery and gateway routing.
+- [x] Step 4: Implement dual payment-provider subsystem (Stripe + Razorpay) for checkout, subscriptions, and webhooks.
+- [x] Step 5: Implement provider-aware slash commands in the Sentinel CLI (`/provider`, `/model`, `/stream`, `/tokens`, `/cost`, etc.).
+- [x] Step 6: Update frontend routes for provider selection (Hugging Face) and dual payment gateways (Stripe & Razorpay).
+- [x] Step 7: Write comprehensive automated regression tests for Hugging Face, Stripe, Razorpay, and CLI slash commands.
+- [x] Step 8: Verify full test suite (`go test ./...`, `./scripts/verify-local.sh`), update documentation, and update `task.md`.
+
 ## COMPLETED TASK: Push Changes to GitHub on Explicit User Command
 - [x] Step 1: Stage verified modifications and untracked readiness files (`git add -A`).
 - [x] Step 2: Commit changes with descriptive message.

@@ -49,6 +49,18 @@ export interface ProvidersModule {
   ): Promise<ProviderAccount>;
   listAccounts(options?: RequestOptions): Promise<ListResponse<ProviderAccount>>;
   getAccount(accountId: string, options?: RequestOptions): Promise<ProviderAccount>;
+  updateAccount(
+    accountId: string,
+    input: { status: string },
+    options?: RequestOptions,
+  ): Promise<ProviderAccount>;
+  deleteAccount(accountId: string, options?: RequestOptions): Promise<void>;
+  validateAccount(accountId: string, options?: RequestOptions): Promise<{ valid: boolean }>;
+  checkAccountHealth(accountId: string, options?: RequestOptions): Promise<ProviderHealth>;
+  syncAccountModels(
+    accountId: string,
+    options?: RequestOptions,
+  ): Promise<{ models_created: number; models_updated: number; total: number }>;
 
   createCredential(
     accountId: string,
@@ -81,6 +93,32 @@ export function createProvidersModule(transport: Transport): ProvidersModule {
       transport.request<ListResponse<ProviderAccount>>("/v1/provider-accounts", options),
     getAccount: (accountId, options) =>
       transport.requestAt<ProviderAccount>(`/v1/provider-accounts/${encodeURIComponent(accountId)}`, options),
+    updateAccount: (accountId, input, options) =>
+      transport.requestAt<ProviderAccount>(`/v1/provider-accounts/${encodeURIComponent(accountId)}`, {
+        ...options,
+        method: "PATCH",
+        body: input,
+      }),
+    deleteAccount: (accountId, options) =>
+      transport.requestAt<void>(`/v1/provider-accounts/${encodeURIComponent(accountId)}`, {
+        ...options,
+        method: "DELETE",
+      }),
+    validateAccount: (accountId, options) =>
+      transport.requestAt<{ valid: boolean }>(
+        `/v1/provider-accounts/${encodeURIComponent(accountId)}/validate`,
+        { ...options, method: "POST" },
+      ),
+    checkAccountHealth: (accountId, options) =>
+      transport.requestAt<ProviderHealth>(
+        `/v1/provider-accounts/${encodeURIComponent(accountId)}/health`,
+        { ...options, method: "POST" },
+      ),
+    syncAccountModels: (accountId, options) =>
+      transport.requestAt<{ models_created: number; models_updated: number; total: number }>(
+        `/v1/provider-accounts/${encodeURIComponent(accountId)}/sync`,
+        { ...options, method: "POST" },
+      ),
 
     createCredential: (accountId, input, options) =>
       transport.requestAt<ProviderCredential>(

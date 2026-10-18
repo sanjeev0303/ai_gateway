@@ -31,6 +31,12 @@ func (s *stubAccountRepo) List(ctx context.Context, orgID uuid.UUID) ([]domain.P
 	}
 	return s.listFn(ctx, orgID)
 }
+func (s *stubAccountRepo) UpdateStatus(context.Context, uuid.UUID, uuid.UUID, string) (domain.ProviderAccount, error) {
+	panic("stubAccountRepo.UpdateStatus not configured")
+}
+func (s *stubAccountRepo) Delete(context.Context, uuid.UUID, uuid.UUID) error {
+	panic("stubAccountRepo.Delete not configured")
+}
 
 type stubCredentialRepo struct {
 	listByAccountFn func(ctx context.Context, orgID, accountID uuid.UUID) ([]domain.ProviderCredential, error)

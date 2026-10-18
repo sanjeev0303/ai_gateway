@@ -66,6 +66,11 @@ func (r *ProviderRouterImpl) Route(ctx context.Context, upstream ResolvedUpstrea
 		return r.routeGemini(upstreamURL, headers, upstream, hints)
 	case "azure_openai":
 		return r.routeAzureOpenAI(upstreamURL, headers, upstream, hints)
+	case "huggingface":
+		if upstream.BaseURL == "" {
+			upstreamURL = "https://api-inference.huggingface.co/v1/"
+		}
+		return r.routeHuggingFace(upstreamURL, headers, upstream, hints)
 	case "custom":
 		return r.routeCustom(upstreamURL, headers, upstream, hints)
 	default:
@@ -83,6 +88,17 @@ func (r *ProviderRouterImpl) routeAnthropic(baseURL string, headers http.Header,
 // routeOpenAI handles OpenAI-compatible routing.
 func (r *ProviderRouterImpl) routeOpenAI(baseURL string, headers http.Header, upstream ResolvedUpstream, hints InspectorHints) (string, http.Header, error) {
 	// OpenAI-compatible providers use Authorization: Bearer
+	if key := headers.Get("x-api-key"); key != "" {
+		headers.Set("Authorization", "Bearer "+key)
+		headers.Del("x-api-key")
+	}
+	headers.Del("anthropic-version")
+	headers.Del("anthropic-beta")
+	return baseURL, headers, nil
+}
+
+// routeHuggingFace handles Hugging Face provider routing with Authorization Bearer.
+func (r *ProviderRouterImpl) routeHuggingFace(baseURL string, headers http.Header, upstream ResolvedUpstream, hints InspectorHints) (string, http.Header, error) {
 	if key := headers.Get("x-api-key"); key != "" {
 		headers.Set("Authorization", "Bearer "+key)
 		headers.Del("x-api-key")
@@ -136,7 +152,7 @@ func (p *ProviderRewriter) RewriteForUpstream(r *http.Request, upstream Resolved
 	switch upstream.ProviderAccount.ProviderKind {
 	case "anthropic":
 		return p.rewriteForAnthropic(r, upstream, hints)
-	case "openai":
+	case "openai", "huggingface":
 		return p.rewriteForOpenAI(r, upstream, hints)
 	}
 	return nil

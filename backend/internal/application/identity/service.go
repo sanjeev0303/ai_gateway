@@ -957,15 +957,20 @@ func (s *Service) CreateGatewayCredential(ctx context.Context, actor domain.Acto
 	}
 
 	credential, err := s.gatewayCredentials.Create(ctx, actor.OrganizationID, domain.NewGatewayCredential{
-		Name:        input.Name,
-		KeyPrefix:   rawKey[:len(apiKeyPrefix)+7],
-		KeyHash:     hash,
-		SubjectType: input.SubjectType,
-		SubjectID:   input.SubjectID,
-		TeamID:      input.TeamID,
-		ProjectID:   input.ProjectID,
-		Scopes:      input.Scopes,
-		ExpiresAt:   input.ExpiresAt,
+		Name:              input.Name,
+		KeyPrefix:         rawKey[:len(apiKeyPrefix)+7],
+		KeyHash:           hash,
+		SubjectType:       input.SubjectType,
+		SubjectID:         input.SubjectID,
+		TeamID:            input.TeamID,
+		ProjectID:         input.ProjectID,
+		Scopes:            input.Scopes,
+		ProviderAccountID: input.ProviderAccountID,
+		AllowedProviders:  input.AllowedProviders,
+		AllowedModels:     input.AllowedModels,
+		RateLimit:         input.RateLimit,
+		BudgetLimit:       input.BudgetLimit,
+		ExpiresAt:         input.ExpiresAt,
 	})
 	if err != nil {
 		return domain.GatewayCredential{}, "", err
@@ -1052,17 +1057,22 @@ func (s *Service) RotateGatewayCredential(ctx context.Context, actor domain.Acto
 		return domain.GatewayCredential{}, "", err
 	}
 
-	// Create new credential with rotation input (preserves subject/team/project if not overridden)
+	// Create new credential with rotation input (preserves subject/team/project/scopes/providers/models if not overridden)
 	newInput := domain.NewGatewayCredential{
-		Name:        name,
-		KeyPrefix:   rawKey[:len(apiKeyPrefix)+7],
-		KeyHash:     hash,
-		SubjectType: existing.SubjectType,
-		SubjectID:   existing.SubjectID,
-		TeamID:      existing.TeamID,
-		ProjectID:   existing.ProjectID,
-		Scopes:      existing.Scopes,
-		ExpiresAt:   existing.ExpiresAt,
+		Name:              name,
+		KeyPrefix:         rawKey[:len(apiKeyPrefix)+7],
+		KeyHash:           hash,
+		SubjectType:       existing.SubjectType,
+		SubjectID:         existing.SubjectID,
+		TeamID:            existing.TeamID,
+		ProjectID:         existing.ProjectID,
+		Scopes:            existing.Scopes,
+		ProviderAccountID: existing.ProviderAccountID,
+		AllowedProviders:  existing.AllowedProviders,
+		AllowedModels:     existing.AllowedModels,
+		RateLimit:         existing.RateLimit,
+		BudgetLimit:       existing.BudgetLimit,
+		ExpiresAt:         existing.ExpiresAt,
 	}
 	if len(input.Scopes) > 0 {
 		newInput.Scopes = input.Scopes
@@ -1075,6 +1085,21 @@ func (s *Service) RotateGatewayCredential(ctx context.Context, actor domain.Acto
 	}
 	if input.ProjectID != nil {
 		newInput.ProjectID = input.ProjectID
+	}
+	if input.ProviderAccountID != nil {
+		newInput.ProviderAccountID = input.ProviderAccountID
+	}
+	if len(input.AllowedProviders) > 0 {
+		newInput.AllowedProviders = input.AllowedProviders
+	}
+	if len(input.AllowedModels) > 0 {
+		newInput.AllowedModels = input.AllowedModels
+	}
+	if input.RateLimit != nil {
+		newInput.RateLimit = input.RateLimit
+	}
+	if input.BudgetLimit != nil {
+		newInput.BudgetLimit = input.BudgetLimit
 	}
 
 	// Use transaction to revoke old and create new
@@ -1172,50 +1197,70 @@ func (s *Service) ResolveGatewayCredential(ctx context.Context, rawKey string) (
 // toCachedCredential converts a domain.GatewayCredential to a platform credentialcache.CachedCredential.
 func (s *Service) toCachedCredential(c *domain.GatewayCredential) *credentialcache.CachedCredential {
 	scopes := make([]string, len(c.Scopes))
-	for i, s := range c.Scopes {
-		scopes[i] = string(s)
+	for i, sc := range c.Scopes {
+		scopes[i] = string(sc)
 	}
+	allowedProviders := make([]string, len(c.AllowedProviders))
+	copy(allowedProviders, c.AllowedProviders)
+	allowedModels := make([]string, len(c.AllowedModels))
+	copy(allowedModels, c.AllowedModels)
+
 	return &credentialcache.CachedCredential{
-		ID:             c.ID,
-		OrganizationID: c.OrganizationID,
-		Name:           c.Name,
-		KeyPrefix:      c.KeyPrefix,
-		KeyHash:        c.KeyHash,
-		SubjectType:    string(c.SubjectType),
-		SubjectID:      c.SubjectID,
-		TeamID:         c.TeamID,
-		ProjectID:      c.ProjectID,
-		Scopes:         scopes,
-		Status:         string(c.Status),
-		ExpiresAt:      c.ExpiresAt,
-		LastUsedAt:     c.LastUsedAt,
-		CreatedAt:      c.CreatedAt,
-		UpdatedAt:      c.UpdatedAt,
+		ID:                c.ID,
+		OrganizationID:    c.OrganizationID,
+		Name:              c.Name,
+		KeyPrefix:         c.KeyPrefix,
+		KeyHash:           c.KeyHash,
+		SubjectType:       string(c.SubjectType),
+		SubjectID:         c.SubjectID,
+		TeamID:            c.TeamID,
+		ProjectID:         c.ProjectID,
+		Scopes:            scopes,
+		ProviderAccountID: c.ProviderAccountID,
+		AllowedProviders:  allowedProviders,
+		AllowedModels:     allowedModels,
+		RateLimit:         c.RateLimit,
+		BudgetLimit:       c.BudgetLimit,
+		Status:            string(c.Status),
+		ExpiresAt:         c.ExpiresAt,
+		LastUsedAt:        c.LastUsedAt,
+		CreatedAt:         c.CreatedAt,
+		UpdatedAt:         c.UpdatedAt,
 	}
 }
 
 // fromCachedCredential converts a platform credentialcache.CachedCredential to a domain.GatewayCredential.
 func (s *Service) fromCachedCredential(c *credentialcache.CachedCredential) domain.GatewayCredential {
 	scopes := make([]domain.GatewayCredentialScope, len(c.Scopes))
-	for i, s := range c.Scopes {
-		scopes[i] = domain.GatewayCredentialScope(s)
+	for i, sc := range c.Scopes {
+		scopes[i] = domain.GatewayCredentialScope(sc)
 	}
+	allowedProviders := make([]string, len(c.AllowedProviders))
+	copy(allowedProviders, c.AllowedProviders)
+	allowedModels := make([]string, len(c.AllowedModels))
+	copy(allowedModels, c.AllowedModels)
+
 	return domain.GatewayCredential{
-		ID:             c.ID,
-		OrganizationID: c.OrganizationID,
-		Name:           c.Name,
-		KeyPrefix:      c.KeyPrefix,
-		KeyHash:        c.KeyHash,
-		SubjectType:    domain.SubjectType(c.SubjectType),
-		SubjectID:      c.SubjectID,
-		TeamID:         c.TeamID,
-		ProjectID:      c.ProjectID,
-		Scopes:         scopes,
-		Status:         domain.GatewayCredentialStatus(c.Status),
-		ExpiresAt:      c.ExpiresAt,
-		LastUsedAt:     c.LastUsedAt,
-		CreatedAt:      c.CreatedAt,
-		UpdatedAt:      c.UpdatedAt,
+		ID:                c.ID,
+		OrganizationID:    c.OrganizationID,
+		Name:              c.Name,
+		KeyPrefix:         c.KeyPrefix,
+		KeyHash:           c.KeyHash,
+		SubjectType:       domain.SubjectType(c.SubjectType),
+		SubjectID:         c.SubjectID,
+		TeamID:            c.TeamID,
+		ProjectID:         c.ProjectID,
+		Scopes:            scopes,
+		ProviderAccountID: c.ProviderAccountID,
+		AllowedProviders:  allowedProviders,
+		AllowedModels:     allowedModels,
+		RateLimit:         c.RateLimit,
+		BudgetLimit:       c.BudgetLimit,
+		Status:            domain.GatewayCredentialStatus(c.Status),
+		ExpiresAt:         c.ExpiresAt,
+		LastUsedAt:        c.LastUsedAt,
+		CreatedAt:         c.CreatedAt,
+		UpdatedAt:         c.UpdatedAt,
 	}
 }
 

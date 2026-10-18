@@ -9,6 +9,78 @@ import (
 	"context"
 )
 
+const getModelBySlug = `-- name: GetModelBySlug :one
+SELECT id, provider_kind, model_slug, display_name, is_active, created_at, updated_at, capabilities, context_limit, supports_streaming, supports_tools, supports_reasoning, status, pricing_version FROM models
+WHERE provider_kind = $1 AND model_slug = $2
+`
+
+type GetModelBySlugParams struct {
+	ProviderKind string `json:"provider_kind"`
+	ModelSlug    string `json:"model_slug"`
+}
+
+func (q *Queries) GetModelBySlug(ctx context.Context, arg GetModelBySlugParams) (Model, error) {
+	row := q.db.QueryRow(ctx, getModelBySlug, arg.ProviderKind, arg.ModelSlug)
+	var i Model
+	err := row.Scan(
+		&i.ID,
+		&i.ProviderKind,
+		&i.ModelSlug,
+		&i.DisplayName,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Capabilities,
+		&i.ContextLimit,
+		&i.SupportsStreaming,
+		&i.SupportsTools,
+		&i.SupportsReasoning,
+		&i.Status,
+		&i.PricingVersion,
+	)
+	return i, err
+}
+
+const listAllModels = `-- name: ListAllModels :many
+SELECT id, provider_kind, model_slug, display_name, is_active, created_at, updated_at, capabilities, context_limit, supports_streaming, supports_tools, supports_reasoning, status, pricing_version FROM models
+ORDER BY provider_kind, model_slug
+`
+
+func (q *Queries) ListAllModels(ctx context.Context) ([]Model, error) {
+	rows, err := q.db.Query(ctx, listAllModels)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Model{}
+	for rows.Next() {
+		var i Model
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProviderKind,
+			&i.ModelSlug,
+			&i.DisplayName,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Capabilities,
+			&i.ContextLimit,
+			&i.SupportsStreaming,
+			&i.SupportsTools,
+			&i.SupportsReasoning,
+			&i.Status,
+			&i.PricingVersion,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listModels = `-- name: ListModels :many
 SELECT id, provider_kind, model_slug, display_name, is_active, created_at, updated_at, capabilities, context_limit, supports_streaming, supports_tools, supports_reasoning, status, pricing_version FROM models
 WHERE is_active = true
@@ -91,12 +163,29 @@ func (q *Queries) ListModelsByProvider(ctx context.Context, providerKind string)
 	return items, nil
 }
 
+const markModelsInactiveExcept = `-- name: MarkModelsInactiveExcept :exec
+UPDATE models
+SET is_active = false, status = 'inactive', updated_at = now()
+WHERE provider_kind = $1 AND NOT (model_slug = ANY($2::text[]))
+`
+
+type MarkModelsInactiveExceptParams struct {
+	ProviderKind string   `json:"provider_kind"`
+	Column2      []string `json:"column_2"`
+}
+
+func (q *Queries) MarkModelsInactiveExcept(ctx context.Context, arg MarkModelsInactiveExceptParams) error {
+	_, err := q.db.Exec(ctx, markModelsInactiveExcept, arg.ProviderKind, arg.Column2)
+	return err
+}
+
 const upsertModel = `-- name: UpsertModel :one
 INSERT INTO models (provider_kind, model_slug, display_name, is_active)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (provider_kind, model_slug) DO UPDATE
 SET display_name = EXCLUDED.display_name,
-    is_active    = EXCLUDED.is_active
+    is_active    = EXCLUDED.is_active,
+    updated_at   = now()
 RETURNING id, provider_kind, model_slug, display_name, is_active, created_at, updated_at, capabilities, context_limit, supports_streaming, supports_tools, supports_reasoning, status, pricing_version
 `
 
@@ -113,6 +202,77 @@ func (q *Queries) UpsertModel(ctx context.Context, arg UpsertModelParams) (Model
 		arg.ModelSlug,
 		arg.DisplayName,
 		arg.IsActive,
+	)
+	var i Model
+	err := row.Scan(
+		&i.ID,
+		&i.ProviderKind,
+		&i.ModelSlug,
+		&i.DisplayName,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Capabilities,
+		&i.ContextLimit,
+		&i.SupportsStreaming,
+		&i.SupportsTools,
+		&i.SupportsReasoning,
+		&i.Status,
+		&i.PricingVersion,
+	)
+	return i, err
+}
+
+const upsertModelWithMetadata = `-- name: UpsertModelWithMetadata :one
+INSERT INTO models (
+    provider_kind, model_slug, display_name, is_active,
+    capabilities, context_limit, supports_streaming, supports_tools, supports_reasoning,
+    status, pricing_version
+) VALUES (
+    $1, $2, $3, $4,
+    $5, $6, $7, $8, $9,
+    $10, $11
+) ON CONFLICT (provider_kind, model_slug) DO UPDATE
+SET display_name       = EXCLUDED.display_name,
+    is_active          = EXCLUDED.is_active,
+    capabilities       = EXCLUDED.capabilities,
+    context_limit      = EXCLUDED.context_limit,
+    supports_streaming = EXCLUDED.supports_streaming,
+    supports_tools     = EXCLUDED.supports_tools,
+    supports_reasoning = EXCLUDED.supports_reasoning,
+    status             = EXCLUDED.status,
+    pricing_version    = EXCLUDED.pricing_version,
+    updated_at         = now()
+RETURNING id, provider_kind, model_slug, display_name, is_active, created_at, updated_at, capabilities, context_limit, supports_streaming, supports_tools, supports_reasoning, status, pricing_version
+`
+
+type UpsertModelWithMetadataParams struct {
+	ProviderKind      string   `json:"provider_kind"`
+	ModelSlug         string   `json:"model_slug"`
+	DisplayName       string   `json:"display_name"`
+	IsActive          bool     `json:"is_active"`
+	Capabilities      []string `json:"capabilities"`
+	ContextLimit      int32    `json:"context_limit"`
+	SupportsStreaming bool     `json:"supports_streaming"`
+	SupportsTools     bool     `json:"supports_tools"`
+	SupportsReasoning bool     `json:"supports_reasoning"`
+	Status            string   `json:"status"`
+	PricingVersion    string   `json:"pricing_version"`
+}
+
+func (q *Queries) UpsertModelWithMetadata(ctx context.Context, arg UpsertModelWithMetadataParams) (Model, error) {
+	row := q.db.QueryRow(ctx, upsertModelWithMetadata,
+		arg.ProviderKind,
+		arg.ModelSlug,
+		arg.DisplayName,
+		arg.IsActive,
+		arg.Capabilities,
+		arg.ContextLimit,
+		arg.SupportsStreaming,
+		arg.SupportsTools,
+		arg.SupportsReasoning,
+		arg.Status,
+		arg.PricingVersion,
 	)
 	var i Model
 	err := row.Scan(

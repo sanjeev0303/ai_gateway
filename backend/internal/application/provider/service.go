@@ -43,6 +43,10 @@ type ServiceDeps struct {
 	// to the client that validates/health-checks that upstream.
 	Providers map[string]providerclient.Provider
 
+	Invalidator interface {
+		Invalidate(orgID uuid.UUID)
+	}
+
 	Log *slog.Logger
 	Now func() time.Time
 }
@@ -58,6 +62,10 @@ type Service struct {
 
 	secrets   secrets.Store
 	providers map[string]providerclient.Provider
+
+	invalidator interface {
+		Invalidate(orgID uuid.UUID)
+	}
 
 	log *slog.Logger
 	now func() time.Time
@@ -83,6 +91,7 @@ func NewService(deps ServiceDeps) *Service {
 		securityEvents: deps.SecurityEvents,
 		secrets:        deps.Secrets,
 		providers:      deps.Providers,
+		invalidator:    deps.Invalidator,
 		log:            log,
 		now:            now,
 	}
@@ -122,6 +131,9 @@ func (s *Service) CreateAccount(ctx context.Context, actor domain.Actor, input d
 	if err != nil {
 		return domain.ProviderAccount{}, err
 	}
+	if s.invalidator != nil {
+		s.invalidator.Invalidate(actor.OrganizationID)
+	}
 	s.audit(ctx, actor, "provider_account.create", "provider_account", &account.ID, nil, nil)
 	return account, nil
 }
@@ -140,6 +152,115 @@ func (s *Service) ListAccounts(ctx context.Context, actor domain.Actor) ([]domai
 		return nil, err
 	}
 	return s.accounts.List(ctx, actor.OrganizationID)
+}
+
+// UpdateAccountStatus updates the provider account status (e.g. active or disabled).
+func (s *Service) UpdateAccountStatus(ctx context.Context, actor domain.Actor, accountID uuid.UUID, status string) (domain.ProviderAccount, error) {
+	if err := s.RequirePermission(actor, domain.PermissionProvidersManage); err != nil {
+		return domain.ProviderAccount{}, err
+	}
+	status = strings.ToLower(strings.TrimSpace(status))
+	if status != domain.ProviderStatusActive && status != domain.ProviderStatusDisabled {
+		return domain.ProviderAccount{}, repositories.ErrInvalid
+	}
+	account, err := s.accounts.UpdateStatus(ctx, actor.OrganizationID, accountID, status)
+	if err != nil {
+		return domain.ProviderAccount{}, err
+	}
+	if s.invalidator != nil {
+		s.invalidator.Invalidate(actor.OrganizationID)
+	}
+	s.audit(ctx, actor, "provider_account.update_status", "provider_account", &account.ID, nil, []byte(status))
+	return account, nil
+}
+
+// DeleteAccount deletes a provider account, revoking and deleting secrets for all its credentials.
+func (s *Service) DeleteAccount(ctx context.Context, actor domain.Actor, accountID uuid.UUID) error {
+	if err := s.RequirePermission(actor, domain.PermissionProvidersManage); err != nil {
+		return err
+	}
+	account, err := s.accounts.Get(ctx, actor.OrganizationID, accountID)
+	if err != nil {
+		return err
+	}
+	creds, err := s.credentials.ListByAccount(ctx, actor.OrganizationID, accountID)
+	if err == nil {
+		for _, cred := range creds {
+			_, _ = s.credentials.Revoke(ctx, actor.OrganizationID, cred.ID)
+			if derr := s.secrets.Delete(ctx, cred.SecretRef); derr != nil && !errors.Is(derr, secrets.ErrNotFound) {
+				s.log.WarnContext(ctx, "provider: secret delete during account delete failed",
+					"credential_id", cred.ID, "error", derr)
+			}
+		}
+	}
+	if err := s.accounts.Delete(ctx, actor.OrganizationID, accountID); err != nil {
+		return err
+	}
+	if s.invalidator != nil {
+		s.invalidator.Invalidate(actor.OrganizationID)
+	}
+	s.audit(ctx, actor, "provider_account.delete", "provider_account", &account.ID, nil, nil)
+	return nil
+}
+
+// ValidateAccount validates the active credential associated with the provider account.
+func (s *Service) ValidateAccount(ctx context.Context, actor domain.Actor, accountID uuid.UUID) error {
+	if err := s.RequirePermission(actor, domain.PermissionProvidersManage); err != nil {
+		return err
+	}
+	account, err := s.accounts.Get(ctx, actor.OrganizationID, accountID)
+	if err != nil {
+		return err
+	}
+	creds, err := s.credentials.ListByAccount(ctx, actor.OrganizationID, accountID)
+	if err != nil || len(creds) == 0 {
+		return repositories.ErrNotFound
+	}
+	secret, err := s.secrets.Get(ctx, creds[0].SecretRef)
+	if err != nil {
+		return err
+	}
+	return s.ValidateCredential(ctx, actor, account.ProviderKind, secret)
+}
+
+// CheckAccountHealth runs a health check using the active credential associated with the provider account.
+func (s *Service) CheckAccountHealth(ctx context.Context, actor domain.Actor, accountID uuid.UUID) (domain.ProviderHealthState, error) {
+	if err := s.RequirePermission(actor, domain.PermissionProvidersRead); err != nil {
+		return domain.ProviderHealthState{}, err
+	}
+	account, err := s.accounts.Get(ctx, actor.OrganizationID, accountID)
+	if err != nil {
+		return domain.ProviderHealthState{}, err
+	}
+	creds, err := s.credentials.ListByAccount(ctx, actor.OrganizationID, accountID)
+	if err != nil || len(creds) == 0 {
+		return domain.ProviderHealthState{}, repositories.ErrNotFound
+	}
+	secret, err := s.secrets.Get(ctx, creds[0].SecretRef)
+	if err != nil {
+		return domain.ProviderHealthState{}, err
+	}
+	return s.CheckHealth(ctx, actor, account.ProviderKind, secret)
+}
+
+// SyncAccountModels syncs models using the active credential associated with the provider account.
+func (s *Service) SyncAccountModels(ctx context.Context, actor domain.Actor, accountID uuid.UUID) ([]domain.Model, error) {
+	if err := s.RequirePermission(actor, domain.PermissionProvidersManage); err != nil {
+		return nil, err
+	}
+	account, err := s.accounts.Get(ctx, actor.OrganizationID, accountID)
+	if err != nil {
+		return nil, err
+	}
+	creds, err := s.credentials.ListByAccount(ctx, actor.OrganizationID, accountID)
+	if err != nil || len(creds) == 0 {
+		return nil, repositories.ErrNotFound
+	}
+	secret, err := s.secrets.Get(ctx, creds[0].SecretRef)
+	if err != nil {
+		return nil, err
+	}
+	return s.SyncModels(ctx, actor, account.ProviderKind, secret)
 }
 
 // CreateCredential attaches an upstream key to a provider account. The raw
@@ -207,6 +328,9 @@ func (s *Service) CreateCredential(ctx context.Context, actor domain.Actor, acco
 		return domain.ProviderCredential{}, err
 	}
 	s.audit(ctx, actor, "provider_credential.create", "provider_credential", &credential.ID, nil, nil)
+	if s.invalidator != nil {
+		s.invalidator.Invalidate(actor.OrganizationID)
+	}
 	return credential, nil
 }
 
@@ -242,6 +366,9 @@ func (s *Service) RevokeCredential(ctx context.Context, actor domain.Actor, cred
 			"credential_id", credential.ID, "error", err)
 	}
 	s.audit(ctx, actor, "provider_credential.revoke", "provider_credential", &credential.ID, nil, nil)
+	if s.invalidator != nil {
+		s.invalidator.Invalidate(actor.OrganizationID)
+	}
 	return nil
 }
 
@@ -330,6 +457,9 @@ func (s *Service) RotateCredential(ctx context.Context, actor domain.Actor, cred
 	}
 	before, _ := json.Marshal(existing.ID)
 	s.audit(ctx, actor, "provider_credential.rotate", "provider_credential", &rotated.ID, before, nil)
+	if s.invalidator != nil {
+		s.invalidator.Invalidate(actor.OrganizationID)
+	}
 	return rotated, nil
 }
 
@@ -340,6 +470,14 @@ func (s *Service) ListModels(ctx context.Context, actor domain.Actor) ([]domain.
 		return nil, err
 	}
 	return s.models.List(ctx)
+}
+
+// ListAllModels returns all entries in the DB catalog including inactive ones.
+func (s *Service) ListAllModels(ctx context.Context, actor domain.Actor) ([]domain.Model, error) {
+	if err := s.RequirePermission(actor, domain.PermissionProvidersRead); err != nil {
+		return nil, err
+	}
+	return s.models.ListAll(ctx)
 }
 
 // CheckHealth runs a live connectivity probe for providerKind using the
@@ -459,22 +597,29 @@ func (s *Service) SyncModels(ctx context.Context, actor domain.Actor, providerKi
 		switch providerKind {
 		case domain.ProviderKindAnthropic:
 			remote = []providerclient.Model{
-				{ID: "claude-3-5-sonnet", DisplayName: "Claude 3.5 Sonnet"},
-				{ID: "claude-3-5-haiku", DisplayName: "Claude 3.5 Haiku"},
-				{ID: "claude-3-opus", DisplayName: "Claude 3 Opus"},
+				{ID: "claude-3-5-sonnet", DisplayName: "Claude 3.5 Sonnet", Capabilities: []string{"text_generation", "streaming", "tool_calling", "multimodal"}, ContextLimit: 200000},
+				{ID: "claude-3-5-haiku", DisplayName: "Claude 3.5 Haiku", Capabilities: []string{"text_generation", "streaming", "tool_calling"}, ContextLimit: 200000},
+				{ID: "claude-3-opus", DisplayName: "Claude 3 Opus", Capabilities: []string{"text_generation", "streaming", "tool_calling", "multimodal"}, ContextLimit: 200000},
 			}
 		case domain.ProviderKindOpenAI:
 			remote = []providerclient.Model{
-				{ID: "gpt-4o", DisplayName: "GPT-4o"},
-				{ID: "gpt-4o-mini", DisplayName: "GPT-4o Mini"},
-				{ID: "o1", DisplayName: "o1"},
+				{ID: "gpt-4o", DisplayName: "GPT-4o", Capabilities: []string{"text_generation", "streaming", "tool_calling", "multimodal"}, ContextLimit: 128000},
+				{ID: "gpt-4o-mini", DisplayName: "GPT-4o Mini", Capabilities: []string{"text_generation", "streaming", "tool_calling"}, ContextLimit: 128000},
+				{ID: "o1", DisplayName: "o1", Capabilities: []string{"text_generation", "reasoning"}, ContextLimit: 200000},
 			}
 		case domain.ProviderKindGemini:
 			remote = []providerclient.Model{
-				{ID: "gemini-2.5-flash", DisplayName: "Gemini 2.5 Flash"},
-				{ID: "gemini-2.5-pro", DisplayName: "Gemini 2.5 Pro"},
-				{ID: "gemini-1.5-pro", DisplayName: "Gemini 1.5 Pro"},
-				{ID: "gemini-1.5-flash", DisplayName: "Gemini 1.5 Flash"},
+				{ID: "gemini-2.5-flash", DisplayName: "Gemini 2.5 Flash", Capabilities: []string{"generateContent", "countTokens", "streaming"}, ContextLimit: 1048576},
+				{ID: "gemini-2.5-pro", DisplayName: "Gemini 2.5 Pro", Capabilities: []string{"generateContent", "countTokens", "streaming"}, ContextLimit: 2097152},
+				{ID: "gemini-1.5-pro", DisplayName: "Gemini 1.5 Pro", Capabilities: []string{"generateContent", "countTokens", "streaming"}, ContextLimit: 2097152},
+				{ID: "gemini-1.5-flash", DisplayName: "Gemini 1.5 Flash", Capabilities: []string{"generateContent", "countTokens", "streaming"}, ContextLimit: 1048576},
+			}
+		case domain.ProviderKindHuggingFace:
+			remote = []providerclient.Model{
+				{ID: "meta-llama/Llama-3.3-70B-Instruct", DisplayName: "Llama 3.3 70B Instruct", Capabilities: []string{"text_generation", "streaming"}, ContextLimit: 131072},
+				{ID: "mistralai/Mistral-7B-Instruct-v0.3", DisplayName: "Mistral 7B Instruct v0.3", Capabilities: []string{"text_generation", "streaming"}, ContextLimit: 32768},
+				{ID: "Qwen/Qwen2.5-72B-Instruct", DisplayName: "Qwen 2.5 72B Instruct", Capabilities: []string{"text_generation", "streaming"}, ContextLimit: 131072},
+				{ID: "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B", DisplayName: "DeepSeek R1 Distill Qwen 32B", Capabilities: []string{"text_generation", "streaming", "reasoning"}, ContextLimit: 65536},
 			}
 		}
 	} else {
@@ -489,18 +634,90 @@ func (s *Service) SyncModels(ctx context.Context, actor domain.Actor, providerKi
 			return nil, fmt.Errorf("list models for %s: %w", providerKind, err)
 		}
 	}
+
+	var infProv providerclient.InferenceProvider
+	if ip, ok := client.(providerclient.InferenceProvider); ok {
+		infProv = ip
+	}
+
+	activeSlugs := make([]string, 0, len(remote))
 	synced := make([]domain.Model, 0, len(remote))
+
 	for _, m := range remote {
+		activeSlugs = append(activeSlugs, m.ID)
 		displayName := m.DisplayName
 		if displayName == "" {
 			displayName = m.ID
 		}
-		model, err := s.models.Upsert(ctx, providerKind, m.ID, displayName)
+
+		caps := m.Capabilities
+		contextLimit := m.ContextLimit
+		supportsStreaming := true
+		supportsTools := false
+		supportsReasoning := false
+
+		if infProv != nil {
+			if mc, err := infProv.GetModelCapabilities(ctx, m.ID); err == nil {
+				if len(caps) == 0 {
+					for _, c := range mc.Capabilities {
+						caps = append(caps, string(c))
+					}
+				}
+				if contextLimit == 0 {
+					contextLimit = mc.ContextLimit
+				}
+				supportsStreaming = mc.SupportsStreaming
+				supportsTools = mc.SupportsTools
+			}
+		}
+
+		modelLower := strings.ToLower(m.ID)
+		if strings.Contains(modelLower, "o1") || strings.Contains(modelLower, "o3") || strings.Contains(modelLower, "r1") || strings.Contains(modelLower, "reasoning") {
+			supportsReasoning = true
+		}
+		for _, c := range caps {
+			cl := strings.ToLower(c)
+			if strings.Contains(cl, "stream") {
+				supportsStreaming = true
+			}
+			if strings.Contains(cl, "tool") || strings.Contains(cl, "function") {
+				supportsTools = true
+			}
+			if strings.Contains(cl, "reason") {
+				supportsReasoning = true
+			}
+		}
+
+		modelIn := domain.Model{
+			ProviderKind:      providerKind,
+			ModelSlug:         m.ID,
+			DisplayName:       displayName,
+			Capabilities:      caps,
+			ContextLimit:      contextLimit,
+			SupportsStreaming: supportsStreaming,
+			SupportsTools:     supportsTools,
+			SupportsReasoning: supportsReasoning,
+			Status:            "active",
+			PricingVersion:    "v1",
+			IsActive:          true,
+		}
+
+		model, err := s.models.UpsertWithMetadata(ctx, modelIn)
 		if err != nil {
-			return nil, fmt.Errorf("upsert model %s/%s: %w", providerKind, m.ID, err)
+			model, err = s.models.Upsert(ctx, providerKind, m.ID, displayName)
+			if err != nil {
+				return nil, fmt.Errorf("upsert model %s/%s: %w", providerKind, m.ID, err)
+			}
 		}
 		synced = append(synced, model)
 	}
+
+	if len(activeSlugs) > 0 {
+		if err := s.models.MarkInactiveExcept(ctx, providerKind, activeSlugs); err != nil {
+			s.log.WarnContext(ctx, "failed to mark stale models inactive", "provider_kind", providerKind, "error", err)
+		}
+	}
+
 	payload, _ := json.Marshal(map[string]any{"provider_kind": providerKind, "count": len(synced)})
 	s.audit(ctx, actor, "provider.models.sync", "provider_kind", nil, nil, payload)
 	return synced, nil
@@ -534,7 +751,8 @@ func (s *Service) ListHealth(ctx context.Context, actor domain.Actor) ([]domain.
 func isProviderKind(kind string) bool {
 	switch strings.ToLower(strings.TrimSpace(kind)) {
 	case domain.ProviderKindOpenAI, domain.ProviderKindAnthropic,
-		domain.ProviderKindGemini, domain.ProviderKindAzureOpenAI, domain.ProviderKindCustom,
+		domain.ProviderKindGemini, domain.ProviderKindAzureOpenAI,
+		domain.ProviderKindHuggingFace, domain.ProviderKindCustom,
 		"google":
 		return true
 	default:
@@ -582,7 +800,7 @@ func (s *Service) audit(ctx context.Context, actor domain.Actor, action, resourc
 // isDummyKey returns true for dummy test keys used during development and testing.
 func isDummyKey(secret string) bool {
 	s := strings.TrimSpace(secret)
-	return s == "sk-dummy-key" || strings.HasPrefix(s, "sk-dummy-") || strings.HasPrefix(s, "dummy-")
+	return s == "sk-dummy-key" || strings.HasPrefix(s, "sk-dummy-") || strings.HasPrefix(s, "dummy-") || strings.HasPrefix(s, "hf_dummy") || strings.HasPrefix(s, "hf-dummy")
 }
 
 // ErrInvalidProviderCredential marks a live rejection of the presented key

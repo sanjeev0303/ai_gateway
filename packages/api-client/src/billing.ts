@@ -21,14 +21,11 @@ export type SubscriptionStatus =
   | "trialing"
   | "canceled"
   | "past_due"
-  | "incomplete";
+  | "incomplete"
+  | "unpaid";
 
-/**
- * The only invoice statuses this service can store. There is deliberately no
- * `paid`: with no payment processor integrated, no invoice here implies that
- * money moved.
- */
-export type InvoiceStatus = "open" | "void";
+/** Supported invoice statuses in Sentinel. */
+export type InvoiceStatus = "open" | "void" | "paid";
 
 export interface Plan {
   id: string;
@@ -52,6 +49,9 @@ export interface Subscription {
   /** RFC3339, or null when the stored column is NULL. */
   current_period_end: string | null;
   cancel_at_period_end: boolean;
+  payment_provider?: string;
+  provider_customer_id?: string | null;
+  provider_subscription_id?: string | null;
 }
 
 export interface InvoiceLine {
@@ -80,7 +80,39 @@ export interface Invoice {
   period_end: string;
   /** RFC3339. */
   issued_at: string;
+  payment_provider?: string | null;
+  payment_id?: string | null;
+  paid_at?: string | null;
   lines: InvoiceLine[];
+}
+
+export interface CheckoutSessionParams {
+  plan_code: string;
+  payment_provider: "stripe" | "razorpay";
+  customer_email?: string;
+  success_url?: string;
+  cancel_url?: string;
+}
+
+export interface CheckoutSessionResponse {
+  session_id: string;
+  payment_provider: "stripe" | "razorpay";
+  checkout_url?: string;
+  publishable_key?: string;
+  order_id?: string;
+  key_id?: string;
+  amount_cents: number;
+  currency: string;
+  plan_code: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface VerifyPaymentParams {
+  payment_provider: "stripe" | "razorpay";
+  order_id?: string;
+  payment_id: string;
+  signature: string;
+  plan_code?: string;
 }
 
 export interface BillingModule {
@@ -104,6 +136,10 @@ export interface BillingModule {
   updateSubscription(planCode: string, options?: RequestOptions): Promise<Subscription>;
   /** Cancel the subscription at the end of the current billing period. */
   cancelSubscription(options?: RequestOptions): Promise<Subscription>;
+  /** Create a payment checkout session with Stripe or Razorpay. */
+  createCheckoutSession(params: CheckoutSessionParams, options?: RequestOptions): Promise<CheckoutSessionResponse>;
+  /** Verify client-side checkout callback HMAC signature. */
+  verifyPayment(params: VerifyPaymentParams, options?: RequestOptions): Promise<Subscription>;
 }
 
 export function createBillingModule(transport: Transport): BillingModule {
@@ -126,6 +162,18 @@ export function createBillingModule(transport: Transport): BillingModule {
       transport.request<Subscription>("/v1/billing/subscription", {
         ...options,
         method: "DELETE",
+      }),
+    createCheckoutSession: (params, options) =>
+      transport.request<CheckoutSessionResponse>("/v1/billing/checkout", {
+        ...options,
+        method: "POST",
+        body: params,
+      }),
+    verifyPayment: (params, options) =>
+      transport.request<Subscription>("/v1/billing/verify-payment", {
+        ...options,
+        method: "POST",
+        body: params,
       }),
   };
 }

@@ -40,13 +40,20 @@ type providerCredentialDTO struct {
 }
 
 type modelDTO struct {
-	ID           string `json:"id"`
-	ProviderKind string `json:"provider_kind"`
-	ModelSlug    string `json:"model_slug"`
-	DisplayName  string `json:"display_name"`
-	IsActive     bool   `json:"is_active"`
-	CreatedAt    string `json:"created_at"`
-	UpdatedAt    string `json:"updated_at"`
+	ID                string   `json:"id"`
+	ProviderKind      string   `json:"provider_kind"`
+	ModelSlug         string   `json:"model_slug"`
+	DisplayName       string   `json:"display_name"`
+	Capabilities      []string `json:"capabilities,omitempty"`
+	ContextLimit      int      `json:"context_limit,omitempty"`
+	SupportsStreaming bool     `json:"supports_streaming"`
+	SupportsTools     bool     `json:"supports_tools"`
+	SupportsReasoning bool     `json:"supports_reasoning"`
+	Status            string   `json:"status,omitempty"`
+	PricingVersion    string   `json:"pricing_version,omitempty"`
+	IsActive          bool     `json:"is_active"`
+	CreatedAt         string   `json:"created_at"`
+	UpdatedAt         string   `json:"updated_at"`
 }
 
 func toProviderAccountDTO(a domain.ProviderAccount) providerAccountDTO {
@@ -78,14 +85,29 @@ func toProviderCredentialDTO(c domain.ProviderCredential) providerCredentialDTO 
 }
 
 func toModelDTO(m domain.Model) modelDTO {
+	status := m.Status
+	if status == "" {
+		if m.IsActive {
+			status = "active"
+		} else {
+			status = "inactive"
+		}
+	}
 	return modelDTO{
-		ID:           m.ID.String(),
-		ProviderKind: m.ProviderKind,
-		ModelSlug:    m.ModelSlug,
-		DisplayName:  m.DisplayName,
-		IsActive:     m.IsActive,
-		CreatedAt:    ts(m.CreatedAt),
-		UpdatedAt:    ts(m.UpdatedAt),
+		ID:                m.ID.String(),
+		ProviderKind:      m.ProviderKind,
+		ModelSlug:         m.ModelSlug,
+		DisplayName:       m.DisplayName,
+		Capabilities:      m.Capabilities,
+		ContextLimit:      m.ContextLimit,
+		SupportsStreaming: m.SupportsStreaming,
+		SupportsTools:     m.SupportsTools,
+		SupportsReasoning: m.SupportsReasoning,
+		Status:            status,
+		PricingVersion:    m.PricingVersion,
+		IsActive:          m.IsActive,
+		CreatedAt:         ts(m.CreatedAt),
+		UpdatedAt:         ts(m.UpdatedAt),
 	}
 }
 
@@ -95,6 +117,10 @@ type createProviderAccountRequest struct {
 	ProviderKind string `json:"provider_kind"`
 	Name         string `json:"name"`
 	BaseURL      string `json:"base_url,omitempty"`
+}
+
+type updateProviderAccountRequest struct {
+	Status string `json:"status"`
 }
 
 type createProviderCredentialRequest struct {
@@ -181,6 +207,93 @@ func (a *api) getProviderAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, toProviderAccountDTO(account))
+}
+
+func (a *api) updateProviderAccount(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	id, err := pathUUID(r, "id")
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	var req updateProviderAccountRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	account, err := a.providers.UpdateAccountStatus(r.Context(), actor, id, req.Status)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toProviderAccountDTO(account))
+}
+
+func (a *api) deleteProviderAccount(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	id, err := pathUUID(r, "id")
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	if err := a.providers.DeleteAccount(r.Context(), actor, id); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *api) validateAccountCredential(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	id, err := pathUUID(r, "id")
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	err = a.providers.ValidateAccount(r.Context(), actor, id)
+	if err == nil {
+		httpx.WriteJSON(w, http.StatusOK, map[string]any{"valid": true})
+		return
+	}
+	if errors.Is(err, provider.ErrInvalidProviderCredential) {
+		httpx.WriteJSON(w, http.StatusOK, map[string]any{"valid": false})
+		return
+	}
+	writeServiceError(w, r, err)
+}
+
+func (a *api) syncAccountModels(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	id, err := pathUUID(r, "id")
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	models, err := a.providers.SyncAccountModels(r.Context(), actor, id)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	items := make([]modelDTO, 0, len(models))
+	for _, m := range models {
+		items = append(items, toModelDTO(m))
+	}
+	httpx.WriteJSON(w, http.StatusOK, listDTO{Items: items})
+}
+
+func (a *api) checkAccountHealth(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	id, err := pathUUID(r, "id")
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	state, err := a.providers.CheckAccountHealth(r.Context(), actor, id)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toProviderHealthDTO(state))
 }
 
 // ---- provider credential handlers ----------------------------------------
@@ -272,7 +385,15 @@ func (a *api) rotateProviderCredential(w http.ResponseWriter, r *http.Request) {
 
 func (a *api) listModels(w http.ResponseWriter, r *http.Request) {
 	actor, _ := actorFrom(r.Context())
-	models, err := a.providers.ListModels(r.Context(), actor)
+	var (
+		models []domain.Model
+		err    error
+	)
+	if r.URL.Query().Get("all") == "true" {
+		models, err = a.providers.ListAllModels(r.Context(), actor)
+	} else {
+		models, err = a.providers.ListModels(r.Context(), actor)
+	}
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -355,7 +476,7 @@ func (a *api) syncProviderModels(w http.ResponseWriter, r *http.Request) {
 		allModels = append(allModels, models...)
 	} else {
 		// Sync across all supported provider kinds
-		for _, kind := range []string{domain.ProviderKindAnthropic, domain.ProviderKindOpenAI, domain.ProviderKindGemini} {
+		for _, kind := range []string{domain.ProviderKindAnthropic, domain.ProviderKindOpenAI, domain.ProviderKindGemini, domain.ProviderKindHuggingFace} {
 			apiKey := req.APIKey
 			if apiKey == "" {
 				apiKey = "sk-dummy-key"

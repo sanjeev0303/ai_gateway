@@ -23,7 +23,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { changeSubscriptionPlan, cancelSubscriptionAction } from "./actions";
+import { changeSubscriptionPlan, cancelSubscriptionAction, createCheckoutSessionAction } from "./actions";
 
 interface Plan {
   id: string;
@@ -68,6 +68,7 @@ export function ChangePlanDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<string>(currentPlanCode ?? "pro");
+  const [paymentProvider, setPaymentProvider] = useState<"stripe" | "razorpay">("stripe");
   const [isPending, startTransition] = useTransition();
 
   const handleConfirm = () => {
@@ -77,13 +78,26 @@ export function ChangePlanDialog({
     }
 
     startTransition(async () => {
+      if (selectedPlan !== "free") {
+        const checkoutRes = await createCheckoutSessionAction(selectedPlan, paymentProvider);
+        if (checkoutRes.error) {
+          toast.error(checkoutRes.error);
+          return;
+        }
+        if (checkoutRes.checkoutUrl && checkoutRes.checkoutUrl.startsWith("http") && !checkoutRes.checkoutUrl.includes("checkout.stripe.com/test")) {
+          window.location.href = checkoutRes.checkoutUrl;
+          return;
+        }
+      }
+
       const fd = new FormData();
       fd.append("plan_code", selectedPlan);
       const res = await changeSubscriptionPlan({}, fd);
       if (res.error) {
         toast.error(res.error);
       } else {
-        toast.success(`Successfully switched to ${selectedPlan.toUpperCase()} plan!`);
+        const provTag = selectedPlan !== "free" ? ` (${paymentProvider.toUpperCase()})` : "";
+        toast.success(`Successfully switched to ${selectedPlan.toUpperCase()} plan${provTag}!`);
         setOpen(false);
       }
     });
@@ -100,7 +114,7 @@ export function ChangePlanDialog({
         <DialogHeader>
           <DialogTitle className="text-xl">Change Organization Plan</DialogTitle>
           <DialogDescription>
-            Select a tier that matches your expected monthly token consumption and governance requirements.
+            Select a tier and payment provider for your organization's subscription billing.
           </DialogDescription>
         </DialogHeader>
 
@@ -163,6 +177,37 @@ export function ChangePlanDialog({
           })}
         </div>
 
+        {selectedPlan !== "free" && (
+          <div className="rounded-lg border p-3 bg-muted/40 space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs font-semibold">Payment Gateway</div>
+                <div className="text-[11px] text-muted-foreground">Choose processing partner for subscription invoices & checkout</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={paymentProvider === "stripe" ? "default" : "outline"}
+                  onClick={() => setPaymentProvider("stripe")}
+                  className="text-xs h-7 px-3"
+                >
+                  Stripe
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={paymentProvider === "razorpay" ? "default" : "outline"}
+                  onClick={() => setPaymentProvider("razorpay")}
+                  className="text-xs h-7 px-3"
+                >
+                  Razorpay
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="ghost" onClick={() => setOpen(false)} disabled={isPending}>
             Cancel
@@ -172,7 +217,7 @@ export function ChangePlanDialog({
             disabled={isPending || selectedPlan === currentPlanCode}
             className="gap-2"
           >
-            {isPending ? "Updating…" : `Confirm Switch to ${selectedPlan.toUpperCase()}`}
+            {isPending ? "Processing…" : `Confirm Switch to ${selectedPlan.toUpperCase()}`}
             <ArrowRight className="size-4" />
           </Button>
         </DialogFooter>

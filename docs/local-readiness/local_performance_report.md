@@ -1,6 +1,6 @@
 # Sentinel Local Performance & Resilience Validation Report (Phase 16)
 
-**Execution Date:** 2026-10-18 01:52:24 UTC  
+**Execution Date:** 2026-10-18 04:01:42 UTC  
 **Test Environment:** Linux / 12 CPU Cores / 7.5 GiB RAM (Local Docker Compose stack)
 
 ---
@@ -9,15 +9,15 @@
 
 | Metric | Acceptance Threshold | Measured Value | Result |
 |---|---|---|---|
-| **Gateway Throughput** | >= 10.0 req/s (local mock proxy) | **419.18 req/s** | ✅ PASS |
-| **Gateway Latency (p50)** | <= 250 ms | **11ms** | ✅ PASS |
-| **Gateway Latency (p95)** | <= 1500 ms | **54ms** | ✅ PASS |
-| **Gateway Latency (p99)** | <= 2500 ms | **68ms** | ✅ PASS |
-| **Streaming TTFT (p50)** | <= 500 ms | **10ms** | ✅ PASS |
-| **Streaming TTFT (p95)** | <= 1000 ms | **50ms** | ✅ PASS |
+| **Gateway Throughput** | >= 10.0 req/s (local mock proxy) | **392.34 req/s** | ✅ PASS |
+| **Gateway Latency (p50)** | <= 250 ms | **13ms** | ✅ PASS |
+| **Gateway Latency (p95)** | <= 1500 ms | **44ms** | ✅ PASS |
+| **Gateway Latency (p99)** | <= 2500 ms | **78ms** | ✅ PASS |
+| **Streaming TTFT (p50)** | <= 500 ms | **14ms** | ✅ PASS |
+| **Streaming TTFT (p95)** | <= 1000 ms | **59ms** | ✅ PASS |
 | **Memory Growth (Sustained)** | < 30.0 MB heap delta | **-0.14 MB** | ✅ PASS |
 | **Goroutine Leak Delta** | <= 5 goroutines | **+0** | ✅ PASS |
-| **Database Connections** | <= 50 concurrent | **36** | ✅ PASS |
+| **Database Connections** | <= 50 concurrent | **35** | ✅ PASS |
 | **Duplicate Usage Events** | Strictly 0 | **0** | ✅ PASS |
 | **SSR Page Latency** | <= 600 ms | **< 250 ms** | ✅ PASS |
 
@@ -28,15 +28,15 @@
 - **Successful Proxied Requests:** 64
 - **Governance / Error Handled Requests:** 16
 - **Failed Requests:** 0
-- **Total Duration:** 191ms
+- **Total Duration:** 204ms
 - **Latency Distribution:**
-  - Min: 5ms
-  - p50: 11ms
-  - p90: 29ms
-  - p95: 54ms
-  - p99: 68ms
-  - Max: 68ms
-  - Mean: 17ms
+  - Min: 6ms
+  - p50: 13ms
+  - p90: 35ms
+  - p95: 44ms
+  - p99: 78ms
+  - Max: 78ms
+  - Mean: 19ms
 
 ---
 

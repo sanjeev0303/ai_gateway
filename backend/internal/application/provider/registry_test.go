@@ -111,3 +111,84 @@ func TestQualifiedModelID(t *testing.T) {
 		t.Fatalf("QualifiedModelID = %q", got)
 	}
 }
+
+type stubInferenceProvider struct {
+	stubProvider
+	meta providerclient.ProviderMetadata
+	caps providerclient.ModelCapabilities
+}
+
+func (s *stubInferenceProvider) Name() string { return "Stub Inference" }
+func (s *stubInferenceProvider) Kind() string { return domain.ProviderKindOpenAI }
+func (s *stubInferenceProvider) Metadata() providerclient.ProviderMetadata { return s.meta }
+func (s *stubInferenceProvider) GetModelCapabilities(_ context.Context, modelID string) (providerclient.ModelCapabilities, error) {
+	caps := s.caps
+	caps.ModelID = modelID
+	return caps, nil
+}
+func (s *stubInferenceProvider) Execute(_ context.Context, _ string, _ providerclient.NormalizedRequest) (*providerclient.NormalizedResponse, error) {
+	return nil, nil
+}
+func (s *stubInferenceProvider) Stream(_ context.Context, _ string, _ providerclient.NormalizedRequest) (providerclient.NormalizedStream, error) {
+	return nil, nil
+}
+func (s *stubInferenceProvider) EstimateTokens(_ context.Context, _ string, _ providerclient.NormalizedRequest) (*providerclient.TokenUsage, error) {
+	return nil, nil
+}
+
+func TestRegistryInferenceProviderResolution(t *testing.T) {
+	ctx := context.Background()
+	plainStub := &stubProvider{}
+	infStub := &stubInferenceProvider{
+		meta: providerclient.ProviderMetadata{
+			Kind:        domain.ProviderKindOpenAI,
+			DisplayName: "Stub OpenAI",
+		},
+		caps: providerclient.ModelCapabilities{
+			Provider:     domain.ProviderKindOpenAI,
+			ContextLimit: 128000,
+		},
+	}
+
+	r := NewRegistry(map[string]providerclient.Provider{
+		domain.ProviderKindAnthropic: plainStub,
+		domain.ProviderKindOpenAI:    infStub,
+	})
+
+	// Plain provider does not implement InferenceProvider
+	if ip := r.InferenceProvider(domain.ProviderKindAnthropic); ip != nil {
+		t.Errorf("expected nil InferenceProvider for plain stub, got %v", ip)
+	}
+	if meta := r.Metadata(domain.ProviderKindAnthropic); meta != nil {
+		t.Errorf("expected nil Metadata for plain stub, got %v", meta)
+	}
+
+	// Registered InferenceProvider resolves
+	ip := r.InferenceProvider(domain.ProviderKindOpenAI)
+	if ip == nil {
+		t.Fatalf("expected non-nil InferenceProvider for infStub")
+	}
+	if ip.Name() != "Stub Inference" {
+		t.Errorf("expected name 'Stub Inference', got %s", ip.Name())
+	}
+
+	meta := r.Metadata(domain.ProviderKindOpenAI)
+	if meta == nil || meta.DisplayName != "Stub OpenAI" {
+		t.Errorf("unexpected metadata: %+v", meta)
+	}
+
+	caps, err := r.GetModelCapabilities(ctx, domain.ProviderKindOpenAI, "gpt-4o")
+	if err != nil {
+		t.Fatalf("GetModelCapabilities failed: %v", err)
+	}
+	if caps.ModelID != "gpt-4o" || caps.ContextLimit != 128000 {
+		t.Errorf("unexpected capabilities: %+v", caps)
+	}
+
+	// Unknown provider returns ErrUnknownProvider
+	_, err = r.GetModelCapabilities(ctx, "nonexistent", "model-1")
+	if !errors.Is(err, providerclient.ErrUnknownProvider) {
+		t.Errorf("expected ErrUnknownProvider, got %v", err)
+	}
+}
+

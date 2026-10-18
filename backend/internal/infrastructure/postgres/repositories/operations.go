@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -1091,22 +1092,41 @@ func (r *subscriptionRepo) List(ctx context.Context, orgID uuid.UUID) ([]domain.
 func (r *subscriptionRepo) ActiveWithPlan(ctx context.Context, orgID uuid.UUID) (domain.OrganizationPlan, error) {
 	var plan domain.OrganizationPlan
 	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
-		row, err := q.GetActiveSubscriptionWithPlan(ctx, orgID)
+		var (
+			status, planCode, planName string
+			paymentProvider            string
+			custID, subID              *string
+			periodStart, periodEnd     *time.Time
+			cancelAtPeriodEnd          bool
+		)
+		err := r.store.Pool().QueryRow(ctx, `
+			SELECT s.status, s.current_period_start, s.current_period_end, s.cancel_at_period_end,
+			       p.code, p.name, s.payment_provider, s.provider_customer_id, s.provider_subscription_id
+			FROM subscriptions s
+			JOIN plans p ON p.id = s.plan_id
+			WHERE s.organization_id = $1 AND s.status IN ('active', 'trialing')
+			ORDER BY s.created_at DESC
+			LIMIT 1
+		`, orgID).Scan(&status, &periodStart, &periodEnd, &cancelAtPeriodEnd, &planCode, &planName, &paymentProvider, &custID, &subID)
 		if err != nil {
 			return err
 		}
 		plan = domain.OrganizationPlan{
-			PlanCode:           row.PlanCode,
-			PlanName:           row.PlanName,
-			Status:             row.SubscriptionStatus,
-			CurrentPeriodStart: row.CurrentPeriodStart,
-			CurrentPeriodEnd:   row.CurrentPeriodEnd,
-			CancelAtPeriodEnd:  row.CancelAtPeriodEnd,
+			PlanCode:               planCode,
+			PlanName:               planName,
+			Status:                 status,
+			CurrentPeriodStart:     periodStart,
+			CurrentPeriodEnd:       periodEnd,
+			CancelAtPeriodEnd:      cancelAtPeriodEnd,
+			PaymentProvider:        paymentProvider,
+			ProviderCustomerID:     custID,
+			ProviderSubscriptionID: subID,
 		}
 		return nil
 	})
 	return plan, mapNotFound(err)
 }
+
 
 func (r *subscriptionRepo) SetPlan(ctx context.Context, orgID, planID uuid.UUID) error {
 	return r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
@@ -1142,6 +1162,17 @@ func (r *subscriptionRepo) Cancel(ctx context.Context, orgID uuid.UUID) error {
 			SET cancel_at_period_end = true, updated_at = now()
 			WHERE organization_id = $1 AND status IN ('active', 'trialing')
 		`, orgID)
+		return err
+	})
+}
+
+func (r *subscriptionRepo) UpdatePaymentDetails(ctx context.Context, orgID uuid.UUID, provider, subID, custID, status string) error {
+	return r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		_, err := r.store.Pool().Exec(ctx, `
+			UPDATE subscriptions
+			SET payment_provider = $1, provider_subscription_id = $2, provider_customer_id = $3, status = $4, updated_at = now()
+			WHERE organization_id = $5 AND status IN ('active', 'trialing', 'past_due', 'canceled', 'incomplete')
+		`, provider, subID, custID, status, orgID)
 		return err
 	})
 }
@@ -1263,6 +1294,38 @@ func (r *invoiceRepo) Get(ctx context.Context, orgID, id uuid.UUID) (domain.Invo
 		return nil
 	})
 	return invoice, mapNotFound(err)
+}
+
+func (r *invoiceRepo) RecordPayment(ctx context.Context, orgID uuid.UUID, paymentProvider, paymentID string, amountMicros int64) error {
+	return r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		tag, err := r.store.Pool().Exec(ctx, `
+			UPDATE invoices
+			SET status = 'paid', payment_provider = $1, payment_id = $2, paid_at = now(), updated_at = now()
+			WHERE organization_id = $3 AND status = 'open'
+		`, paymentProvider, paymentID, orgID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			now := time.Now().UTC()
+			invNumber := fmt.Sprintf("INV-%d", now.Unix())
+			var invID uuid.UUID
+			err = r.store.Pool().QueryRow(ctx, `
+				INSERT INTO invoices (organization_id, number, status, currency, total_micros, period_start, period_end, issued_at, payment_provider, payment_id, paid_at)
+				VALUES ($1, $2, 'paid', 'usd', $3, $4 - interval '30 days', $4, $4, $5, $6, $4)
+				RETURNING id
+			`, orgID, invNumber, amountMicros, now, paymentProvider, paymentID).Scan(&invID)
+			if err != nil {
+				return err
+			}
+			_, err = r.store.Pool().Exec(ctx, `
+				INSERT INTO invoice_lines (organization_id, invoice_id, description, quantity, unit_micros, amount_micros)
+				VALUES ($1, $2, 'Subscription payment', 1, $3, $3)
+			`, orgID, invID, amountMicros)
+			return err
+		}
+		return nil
+	})
 }
 
 type pricingModelRepo struct {
@@ -1861,15 +1924,18 @@ func toPlan(row db.Plan) domain.Plan {
 
 func toSubscription(row db.Subscription) domain.Subscription {
 	return domain.Subscription{
-		ID:                 row.ID,
-		OrganizationID:     row.OrganizationID,
-		PlanID:             row.PlanID,
-		Status:             row.Status,
-		CurrentPeriodStart: row.CurrentPeriodStart,
-		CurrentPeriodEnd:   row.CurrentPeriodEnd,
-		CancelAtPeriodEnd:  row.CancelAtPeriodEnd,
-		CreatedAt:          row.CreatedAt,
-		UpdatedAt:          row.UpdatedAt,
+		ID:                     row.ID,
+		OrganizationID:         row.OrganizationID,
+		PlanID:                 row.PlanID,
+		Status:                 row.Status,
+		CurrentPeriodStart:     row.CurrentPeriodStart,
+		CurrentPeriodEnd:       row.CurrentPeriodEnd,
+		CancelAtPeriodEnd:      row.CancelAtPeriodEnd,
+		PaymentProvider:        row.PaymentProvider,
+		ProviderCustomerID:     row.ProviderCustomerID,
+		ProviderSubscriptionID: row.ProviderSubscriptionID,
+		CreatedAt:              row.CreatedAt,
+		UpdatedAt:              row.UpdatedAt,
 	}
 }
 
@@ -1889,20 +1955,24 @@ func toBillingEvent(row db.BillingEvent) domain.BillingEvent {
 
 func toInvoice(row db.Invoice) domain.Invoice {
 	return domain.Invoice{
-		ID:             row.ID,
-		OrganizationID: row.OrganizationID,
-		SubscriptionID: row.SubscriptionID,
-		Number:         row.Number,
-		Status:         row.Status,
-		Currency:       row.Currency,
-		TotalMicros:    row.TotalMicros,
-		PeriodStart:    row.PeriodStart,
-		PeriodEnd:      row.PeriodEnd,
-		IssuedAt:       row.IssuedAt,
-		CreatedAt:      row.CreatedAt,
-		UpdatedAt:      row.UpdatedAt,
+		ID:              row.ID,
+		OrganizationID:  row.OrganizationID,
+		SubscriptionID:  row.SubscriptionID,
+		Number:          row.Number,
+		Status:          row.Status,
+		Currency:        row.Currency,
+		TotalMicros:     row.TotalMicros,
+		PeriodStart:     row.PeriodStart,
+		PeriodEnd:       row.PeriodEnd,
+		IssuedAt:        row.IssuedAt,
+		CreatedAt:       row.CreatedAt,
+		UpdatedAt:       row.UpdatedAt,
+		PaymentProvider: row.PaymentProvider,
+		PaymentID:       row.PaymentID,
+		PaidAt:          row.PaidAt,
 	}
 }
+
 
 func toInvoiceLine(row db.InvoiceLine) domain.InvoiceLine {
 	return domain.InvoiceLine{

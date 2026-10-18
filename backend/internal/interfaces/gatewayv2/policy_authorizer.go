@@ -42,6 +42,34 @@ func (p PolicySnapshot) Authorize(hints InspectorHints, cred ...GatewayCredentia
 				return false, "credential lacks gateway scope"
 			}
 		}
+
+		// 2b. Provider restrictions on credential
+		if len(c.AllowedProviders) > 0 && hints.Provider != "" {
+			providerAllowed := false
+			for _, p := range c.AllowedProviders {
+				if strings.EqualFold(p, hints.Provider) {
+					providerAllowed = true
+					break
+				}
+			}
+			if !providerAllowed {
+				return false, fmt.Sprintf("credential is not authorized for provider %q", hints.Provider)
+			}
+		}
+
+		// 2c. Model restrictions on credential
+		if len(c.AllowedModels) > 0 && hints.Model != "" {
+			modelAllowed := false
+			for _, m := range c.AllowedModels {
+				if m == hints.Model {
+					modelAllowed = true
+					break
+				}
+			}
+			if !modelAllowed {
+				return false, fmt.Sprintf("credential is not authorized for model %q", hints.Model)
+			}
+		}
 	}
 
 	// 3. Content size bounds enforcement (max input / output tokens)
@@ -253,6 +281,19 @@ func (p PolicySnapshot) applicableRateLimits(cred GatewayCredential) []RateLimit
 	var out []RateLimitConfig
 	seen := make(map[string]bool)
 
+	// Direct credential-level rate limit override if configured
+	if cred.RateLimit != nil && *cred.RateLimit > 0 {
+		key := "credential_direct:" + cred.ID.String()
+		out = append(out, RateLimitConfig{
+			Key:     key,
+			Limit:   *cred.RateLimit,
+			Window:  time.Minute,
+			Scope:   "credential",
+			ScopeID: cred.ID.String(),
+		})
+		seen[key] = true
+	}
+
 	addIfMatch := func(cfg RateLimitConfig) {
 		if cfg.Limit <= 0 || seen[cfg.Key] {
 			return
@@ -300,6 +341,20 @@ func (p PolicySnapshot) applicableRateLimits(cred GatewayCredential) []RateLimit
 func (p PolicySnapshot) applicableBudgets(cred GatewayCredential) []BudgetConfig {
 	var out []BudgetConfig
 	seen := make(map[string]bool)
+
+	// Direct credential-level budget limit override if configured
+	if cred.BudgetLimit != nil && *cred.BudgetLimit > 0 {
+		key := "credential_direct:" + cred.ID.String()
+		out = append(out, BudgetConfig{
+			Key:       key,
+			Limit:     *cred.BudgetLimit,
+			Window:    30 * 24 * time.Hour,
+			Scope:     "credential",
+			ScopeID:   cred.ID.String(),
+			LimitType: "spend",
+		})
+		seen[key] = true
+	}
 
 	addIfMatch := func(cfg BudgetConfig) {
 		if cfg.Limit <= 0 || seen[cfg.Key] {

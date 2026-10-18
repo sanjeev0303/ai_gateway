@@ -38,6 +38,8 @@ type ProviderAccountRepository interface {
 	Create(ctx context.Context, orgID uuid.UUID, input domain.NewProviderAccount) (domain.ProviderAccount, error)
 	Get(ctx context.Context, orgID, id uuid.UUID) (domain.ProviderAccount, error)
 	List(ctx context.Context, orgID uuid.UUID) ([]domain.ProviderAccount, error)
+	UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status string) (domain.ProviderAccount, error)
+	Delete(ctx context.Context, orgID, id uuid.UUID) error
 }
 
 // ProviderCredentialRepository manages upstream keys/tokens by secret ref.
@@ -55,7 +57,12 @@ type ProviderCredentialRepository interface {
 // design (models are not tenant-owned), so operations are never org-scoped.
 type ModelRepository interface {
 	List(ctx context.Context) ([]domain.Model, error)
+	ListAll(ctx context.Context) ([]domain.Model, error)
+	ListByProvider(ctx context.Context, providerKind string) ([]domain.Model, error)
+	GetBySlug(ctx context.Context, providerKind, modelSlug string) (domain.Model, error)
 	Upsert(ctx context.Context, providerKind, modelSlug, displayName string) (domain.Model, error)
+	UpsertWithMetadata(ctx context.Context, model domain.Model) (domain.Model, error)
+	MarkInactiveExcept(ctx context.Context, providerKind string, activeSlugs []string) error
 }
 
 // ProviderHealthRepository records the last observed connectivity state of

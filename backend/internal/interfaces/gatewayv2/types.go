@@ -15,15 +15,20 @@ import (
 
 // GatewayCredential represents a resolved gateway credential.
 type GatewayCredential struct {
-	ID             uuid.UUID
-	OrganizationID uuid.UUID
-	SubjectType    string // "user" | "service_account"
-	SubjectID      uuid.UUID
-	TeamID         *uuid.UUID
-	ProjectID      *uuid.UUID
-	Scopes         []string
-	Status         string
-	ExpiresAt      *time.Time
+	ID                uuid.UUID
+	OrganizationID    uuid.UUID
+	SubjectType       string // "user" | "service_account"
+	SubjectID         uuid.UUID
+	TeamID            *uuid.UUID
+	ProjectID         *uuid.UUID
+	Scopes            []string
+	ProviderAccountID *uuid.UUID
+	AllowedProviders  []string
+	AllowedModels     []string
+	RateLimit         *int
+	BudgetLimit       *float64
+	Status            string
+	ExpiresAt         *time.Time
 }
 
 // ProviderAccount represents an upstream provider connection.
@@ -171,6 +176,9 @@ type Authenticator interface {
 type TenantResolver interface {
 	ResolveUpstream(ctx context.Context, orgID uuid.UUID) (ResolvedUpstream, error)
 	ResolveUpstreamForProvider(ctx context.Context, orgID uuid.UUID, providerKind string) (ResolvedUpstream, error)
+	ResolveUpstreamForAccount(ctx context.Context, orgID, accountID uuid.UUID) (ResolvedUpstream, error)
+	ListActiveProviders(ctx context.Context, orgID uuid.UUID) ([]string, error)
+	Invalidate(orgID uuid.UUID)
 }
 
 // PolicyResolver provides immutable policy snapshots for evaluation.

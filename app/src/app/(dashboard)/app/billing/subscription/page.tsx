@@ -16,7 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
 import {
@@ -24,6 +24,7 @@ import {
   CancelSubscriptionButton,
   PlanActionsCellWrapper,
 } from "./client";
+import { CheckCircle2, AlertTriangle, XCircle, CreditCard } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Subscription · Sentinel",
@@ -60,22 +61,54 @@ const createPlanColumns = (currentCode?: string): readonly Column<PlanRow>[] => 
 async function loadSubscription(): Promise<{
   subscription: Subscription | null;
   plans: Plan[];
+  usageSummary: { Requests: number };
 }> {
   const { billing } = await getApiClient();
-  const plans = (await billing.listPlans()).items;
+  const [plansRes, usageRes] = await Promise.all([
+    billing.listPlans(),
+    billing.getUsage().catch(() => ({ Requests: 0 })),
+  ]);
+  const plans = plansRes.items;
 
   try {
-    return { subscription: await billing.getSubscription(), plans };
+    return {
+      subscription: await billing.getSubscription(),
+      plans,
+      usageSummary: usageRes as any,
+    };
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
-      return { subscription: null, plans };
+      return {
+        subscription: null,
+        plans,
+        usageSummary: usageRes as any,
+      };
     }
     throw error;
   }
 }
 
-export default async function SubscriptionPage() {
-  const { subscription, plans } = await loadSubscription();
+export default async function SubscriptionPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = searchParams ? await searchParams : {};
+  const { subscription, plans, usageSummary } = await loadSubscription();
+
+  const isCheckoutSuccess = params.success === "true";
+  const isCheckoutCancelled = params.cancelled === "true";
+  const checkoutError = typeof params.error === "string" ? params.error : null;
+
+  const quotaLimit =
+    subscription?.plan_code === "enterprise"
+      ? 100_000_000
+      : subscription?.plan_code === "pro"
+      ? 1_000_000
+      : 10_000;
+
+  const currentRequests = usageSummary.Requests || 0;
+  const usagePercent = Math.min(100, Math.round((currentRequests / quotaLimit) * 100));
 
   const activePlans: PlanRow[] = plans
     .filter((plan) => plan.status === "active")
@@ -101,10 +134,66 @@ export default async function SubscriptionPage() {
           />
         }
       >
+        {/* Checkout & Payment Notification Banners */}
+        {isCheckoutSuccess && (
+          <div className="flex items-center gap-3 p-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 mb-4">
+            <CheckCircle2 className="size-5 shrink-0 text-emerald-600" />
+            <div>
+              <div className="font-semibold text-sm">Checkout Completed</div>
+              <div className="text-xs">
+                Your payment was verified successfully and your organization subscription has been upgraded.
+              </div>
+            </div>
+          </div>
+        )}
+        {isCheckoutCancelled && (
+          <div className="flex items-center gap-3 p-4 rounded-lg border border-border bg-muted/40 text-muted-foreground mb-4">
+            <AlertTriangle className="size-5 shrink-0 text-amber-500" />
+            <div>
+              <div className="font-semibold text-sm text-foreground">Checkout Cancelled</div>
+              <div className="text-xs">
+                The checkout session was cancelled. No charges were made and your subscription remains unchanged.
+              </div>
+            </div>
+          </div>
+        )}
+        {checkoutError && (
+          <div className="flex items-center gap-3 p-4 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive mb-4">
+            <XCircle className="size-5 shrink-0" />
+            <div>
+              <div className="font-semibold text-sm">Payment Verification Error</div>
+              <div className="text-xs">{checkoutError}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Payment Failure Warning Banner */}
+        {subscription && (subscription.status === "past_due" || subscription.status === "unpaid") && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-lg border border-destructive bg-destructive/10 text-destructive mb-4 shadow-xs">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="size-6 shrink-0 text-destructive" />
+              <div>
+                <div className="font-semibold text-sm">Action Required: Subscription Payment Failed</div>
+                <div className="text-xs text-muted-foreground">
+                  Your recent subscription renewal payment could not be settled ({subscription.status}). Please update payment details or re-run checkout to avoid request quota suspension.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {subscription ? (
           <>
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <StatCard label="Plan" value={subscription.plan_name} hint={subscription.plan_code} />
+              <StatCard
+                label="Plan"
+                value={subscription.plan_name}
+                hint={
+                  subscription.payment_provider
+                    ? `${subscription.plan_code} · ${subscription.payment_provider.toUpperCase()}`
+                    : subscription.plan_code
+                }
+              />
               <div className="flex flex-col justify-between rounded-lg border bg-card p-4 shadow-sm">
                 <div>
                   <div className="text-xs font-medium text-muted-foreground">Status</div>
@@ -145,16 +234,59 @@ export default async function SubscriptionPage() {
               <CardHeader>
                 <CardTitle>Organization Entitlements & Billing Scope</CardTitle>
                 <CardDescription>
-                  Local billing state and governance capabilities granted by {subscription.plan_name}.
+                  Governance capabilities and gateway quotas granted by {subscription.plan_name}.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm text-muted-foreground">
-                <p>
-                  This plan and cycle govern policy enforcement limits, guardrail rules, and retention thresholds across all gateway routes.
-                </p>
-                <p className="rounded-md border bg-muted/40 p-3 text-xs">
-                  <strong>Usage Reporting Scope:</strong> Local billing operates as an internal usage accounting and quota tier system. No external payment processor or financial transactions are integrated.
-                </p>
+              <CardContent className="space-y-3 text-sm text-muted-foreground">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-md border p-3 bg-muted/20">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-semibold text-foreground">Monthly Request Quota</div>
+                      <span className="text-[11px] font-mono font-medium text-muted-foreground">
+                        {usagePercent}%
+                      </span>
+                    </div>
+                    <div className="text-base font-bold text-primary mt-1">
+                      {formatNumber(currentRequests)} / {formatNumber(quotaLimit)}
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-1.5 mt-2 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          usagePercent > 90 ? "bg-destructive" : usagePercent > 75 ? "bg-amber-500" : "bg-primary"
+                        }`}
+                        style={{ width: `${usagePercent}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-3 bg-muted/20">
+                    <div className="text-xs font-semibold text-foreground">Payment Processor</div>
+                    <div className="text-base font-bold text-primary mt-1 uppercase">
+                      {subscription.payment_provider || "Local / System"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-3 bg-muted/20">
+                    <div className="text-xs font-semibold text-foreground">Privacy & Guardrails</div>
+                    <div className="text-base font-bold text-primary mt-1">
+                      {subscription.plan_code === "enterprise"
+                        ? "Full Content & Metadata"
+                        : subscription.plan_code === "pro"
+                        ? "Standard Guardrails"
+                        : "Basic Policy"}
+                    </div>
+                  </div>
+                </div>
+
+                {subscription.provider_customer_id && (
+                  <p className="rounded-md border bg-muted/40 p-3 text-xs">
+                    <strong>Processor Reference:</strong> Customer ID:{" "}
+                    <code>{subscription.provider_customer_id}</code>
+                    {subscription.provider_subscription_id && (
+                      <>
+                        {" "}· Subscription ID: <code>{subscription.provider_subscription_id}</code>
+                      </>
+                    )}
+                  </p>
+                )}
                 <p>
                   Recorded consumption for the current cycle is priced by the worker and shown under Billing → Usage.
                 </p>

@@ -436,9 +436,11 @@ func (s *stubAudits) Append(ctx context.Context, orgID uuid.UUID, in domain.NewA
 
 type stubProviderAccounts struct {
 	repositories.ProviderAccountRepository
-	create func(context.Context, uuid.UUID, domain.NewProviderAccount) (domain.ProviderAccount, error)
-	get    func(context.Context, uuid.UUID, uuid.UUID) (domain.ProviderAccount, error)
-	list   func(context.Context, uuid.UUID) ([]domain.ProviderAccount, error)
+	create       func(context.Context, uuid.UUID, domain.NewProviderAccount) (domain.ProviderAccount, error)
+	get          func(context.Context, uuid.UUID, uuid.UUID) (domain.ProviderAccount, error)
+	list         func(context.Context, uuid.UUID) ([]domain.ProviderAccount, error)
+	updateStatus func(context.Context, uuid.UUID, uuid.UUID, string) (domain.ProviderAccount, error)
+	delete       func(context.Context, uuid.UUID, uuid.UUID) error
 }
 
 func (s *stubProviderAccounts) Create(ctx context.Context, orgID uuid.UUID, in domain.NewProviderAccount) (domain.ProviderAccount, error) {
@@ -460,6 +462,20 @@ func (s *stubProviderAccounts) List(ctx context.Context, orgID uuid.UUID) ([]dom
 		notConfigured("stubProviderAccounts.List")
 	}
 	return s.list(ctx, orgID)
+}
+
+func (s *stubProviderAccounts) UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status string) (domain.ProviderAccount, error) {
+	if s.updateStatus == nil {
+		notConfigured("stubProviderAccounts.UpdateStatus")
+	}
+	return s.updateStatus(ctx, orgID, id, status)
+}
+
+func (s *stubProviderAccounts) Delete(ctx context.Context, orgID, id uuid.UUID) error {
+	if s.delete == nil {
+		notConfigured("stubProviderAccounts.Delete")
+	}
+	return s.delete(ctx, orgID, id)
 }
 
 type stubProviderCredentials struct {
@@ -508,8 +524,9 @@ func (s *stubProviderCredentials) Revoke(ctx context.Context, orgID, id uuid.UUI
 
 type stubModels struct {
 	repositories.ModelRepository
-	list   func(context.Context) ([]domain.Model, error)
-	upsert func(context.Context, string, string, string) (domain.Model, error)
+	list    func(context.Context) ([]domain.Model, error)
+	listAll func(context.Context) ([]domain.Model, error)
+	upsert  func(context.Context, string, string, string) (domain.Model, error)
 }
 
 func (s *stubModels) List(ctx context.Context) ([]domain.Model, error) {
@@ -524,6 +541,48 @@ func (s *stubModels) Upsert(ctx context.Context, providerKind, modelSlug, displa
 		notConfigured("stubModels.Upsert")
 	}
 	return s.upsert(ctx, providerKind, modelSlug, displayName)
+}
+
+func (s *stubModels) ListAll(ctx context.Context) ([]domain.Model, error) {
+	if s.listAll != nil {
+		return s.listAll(ctx)
+	}
+	if s.list != nil {
+		return s.list(ctx)
+	}
+	return nil, nil
+}
+
+func (s *stubModels) ListByProvider(ctx context.Context, providerKind string) ([]domain.Model, error) {
+	if s.list != nil {
+		models, err := s.list(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var filtered []domain.Model
+		for _, m := range models {
+			if m.ProviderKind == providerKind {
+				filtered = append(filtered, m)
+			}
+		}
+		return filtered, nil
+	}
+	return nil, nil
+}
+
+func (s *stubModels) GetBySlug(ctx context.Context, providerKind, modelSlug string) (domain.Model, error) {
+	return domain.Model{}, nil
+}
+
+func (s *stubModels) UpsertWithMetadata(ctx context.Context, m domain.Model) (domain.Model, error) {
+	if s.upsert != nil {
+		return s.upsert(ctx, m.ProviderKind, m.ModelSlug, m.DisplayName)
+	}
+	return m, nil
+}
+
+func (s *stubModels) MarkInactiveExcept(ctx context.Context, providerKind string, activeSlugs []string) error {
+	return nil
 }
 
 type stubProviderHealth struct {

@@ -9,17 +9,22 @@ import (
 
 // CredentialCacheEntry represents a cached credential for fast lookup.
 type CredentialCacheEntry struct {
-	ID             string
-	KeyHash        string
-	OrganizationID string
-	SubjectType    string
-	SubjectID      string
-	TeamID         *string
-	ProjectID      *string
-	Scopes         []string
-	Status         string
-	ExpiresAt      *time.Time
-	UpdatedAt      time.Time
+	ID                string
+	KeyHash           string
+	OrganizationID    string
+	SubjectType       string
+	SubjectID         string
+	TeamID            *string
+	ProjectID         *string
+	Scopes            []string
+	ProviderAccountID *string
+	AllowedProviders  []string
+	AllowedModels     []string
+	RateLimit         *int
+	BudgetLimit       *float64
+	Status            string
+	ExpiresAt         *time.Time
+	UpdatedAt         time.Time
 }
 
 // InMemoryCredentialCache is a high-performance, thread-safe LRU cache

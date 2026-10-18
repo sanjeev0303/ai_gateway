@@ -694,3 +694,287 @@ func TestValidateCredential(t *testing.T) {
 		requireErrIs(t, svc.ValidateCredential(ctx, userActor(domain.RoleMember), domain.ProviderKindAnthropic, "k"), repositories.ErrForbidden)
 	})
 }
+
+func TestUpdateAccountStatus(t *testing.T) {
+	ctx := context.Background()
+	svc, st := newTestService()
+
+	st.accounts.updateStatus = func(_ context.Context, orgID, id uuid.UUID, status string) (domain.ProviderAccount, error) {
+		requireEqual(t, orgID, testOrgID)
+		requireEqual(t, id, testAccountID)
+		requireEqual(t, status, domain.ProviderStatusDisabled)
+		return domain.ProviderAccount{ID: id, OrganizationID: orgID, Status: status}, nil
+	}
+
+	acct, err := svc.UpdateAccountStatus(ctx, userActor(domain.RoleAdmin), testAccountID, domain.ProviderStatusDisabled)
+	requireNoErr(t, err)
+	requireEqual(t, acct.Status, domain.ProviderStatusDisabled)
+	requireAudit(t, st, "provider_account.update_status")
+
+	// Invalid status
+	_, err = svc.UpdateAccountStatus(ctx, userActor(domain.RoleAdmin), testAccountID, "invalid_status")
+	requireErrIs(t, err, repositories.ErrInvalid)
+
+	// Member forbidden
+	_, err = svc.UpdateAccountStatus(ctx, userActor(domain.RoleMember), testAccountID, domain.ProviderStatusDisabled)
+	requireErrIs(t, err, repositories.ErrForbidden)
+}
+
+func TestDeleteAccount(t *testing.T) {
+	ctx := context.Background()
+	svc, st := newTestService()
+
+	st.accounts.get = func(_ context.Context, orgID, id uuid.UUID) (domain.ProviderAccount, error) {
+		return domain.ProviderAccount{ID: id, OrganizationID: orgID}, nil
+	}
+	st.credentials.listByAccount = func(_ context.Context, orgID, accountID uuid.UUID) ([]domain.ProviderCredential, error) {
+		return []domain.ProviderCredential{
+			{ID: testCredID, SecretRef: "provider/creds/test-ref"},
+		}, nil
+	}
+	st.credentials.revoke = func(_ context.Context, orgID, id uuid.UUID) (domain.ProviderCredential, error) {
+		return domain.ProviderCredential{ID: id}, nil
+	}
+	st.secrets.values["provider/creds/test-ref"] = "sk-secret"
+
+	deletedAccount := false
+	st.accounts.delete = func(_ context.Context, orgID, id uuid.UUID) error {
+		deletedAccount = true
+		return nil
+	}
+
+	err := svc.DeleteAccount(ctx, userActor(domain.RoleAdmin), testAccountID)
+	requireNoErr(t, err)
+	if !deletedAccount {
+		t.Fatal("expected account to be deleted")
+	}
+	// Verify secret was purged from SecretStore
+	if _, ok := st.secrets.values["provider/creds/test-ref"]; ok {
+		t.Fatal("expected secret to be purged from SecretStore")
+	}
+	requireAudit(t, st, "provider_account.delete")
+}
+
+func TestAccountOperationsWithStoredCredential(t *testing.T) {
+	ctx := context.Background()
+	svc, st := newTestService()
+
+	st.accounts.get = func(_ context.Context, orgID, id uuid.UUID) (domain.ProviderAccount, error) {
+		return domain.ProviderAccount{ID: id, OrganizationID: orgID, ProviderKind: domain.ProviderKindAnthropic}, nil
+	}
+	st.credentials.listByAccount = func(_ context.Context, orgID, accountID uuid.UUID) ([]domain.ProviderCredential, error) {
+		return []domain.ProviderCredential{
+			{ID: testCredID, SecretRef: "provider/creds/test-ref"},
+		}, nil
+	}
+	st.secrets.values["provider/creds/test-ref"] = "sk-ant-valid"
+
+	// 1. ValidateAccount
+	st.provider.validateErr = nil
+	err := svc.ValidateAccount(ctx, userActor(domain.RoleAdmin), testAccountID)
+	requireNoErr(t, err)
+
+	// 2. CheckAccountHealth
+	st.provider.healthErr = nil
+	health, err := svc.CheckAccountHealth(ctx, userActor(domain.RoleAdmin), testAccountID)
+	requireNoErr(t, err)
+	requireEqual(t, health.Status, domain.ProviderHealthHealthy)
+
+	// 3. SyncAccountModels
+	st.provider.listModels = func(context.Context, string) ([]providerclient.Model, error) {
+		return []providerclient.Model{
+			{ID: "claude-sonnet-4-5", DisplayName: "Claude 3.5 Sonnet"},
+		}, nil
+	}
+	st.models.upsert = func(_ context.Context, kind, slug, name string) (domain.Model, error) {
+		return domain.Model{ProviderKind: kind, ModelSlug: slug, DisplayName: name}, nil
+	}
+	models, err := svc.SyncAccountModels(ctx, userActor(domain.RoleAdmin), testAccountID)
+	requireNoErr(t, err)
+	requireEqual(t, len(models), 1)
+	requireEqual(t, models[0].ModelSlug, "claude-sonnet-4-5")
+}
+
+func TestMultiTenantIsolation_ProviderAccountsAndCredentials(t *testing.T) {
+	ctx := context.Background()
+	svc, st := newTestService()
+
+	orgA := testOrgID
+	orgB := uuid.MustParse("00000000-0000-0000-0000-000000000099")
+	adminA := userActor(domain.RoleAdmin)
+	adminA.OrganizationID = orgA
+
+	accountB := uuid.MustParse("00000000-0000-0000-0000-000000000088")
+	credB := uuid.MustParse("00000000-0000-0000-0000-000000000077")
+
+	// Setup stubs to enforce org scoping
+	st.accounts.get = func(_ context.Context, orgID, id uuid.UUID) (domain.ProviderAccount, error) {
+		if orgID != orgB || id != accountB {
+			return domain.ProviderAccount{}, repositories.ErrNotFound
+		}
+		return domain.ProviderAccount{ID: id, OrganizationID: orgB, ProviderKind: domain.ProviderKindAnthropic}, nil
+	}
+	st.accounts.updateStatus = func(_ context.Context, orgID, id uuid.UUID, _ string) (domain.ProviderAccount, error) {
+		if orgID != orgB {
+			return domain.ProviderAccount{}, repositories.ErrNotFound
+		}
+		return domain.ProviderAccount{ID: id, OrganizationID: orgB}, nil
+	}
+	st.accounts.delete = func(_ context.Context, orgID, id uuid.UUID) error {
+		if orgID != orgB {
+			return repositories.ErrNotFound
+		}
+		return nil
+	}
+	st.credentials.get = func(_ context.Context, orgID, id uuid.UUID) (domain.ProviderCredential, error) {
+		if orgID != orgB || id != credB {
+			return domain.ProviderCredential{}, repositories.ErrNotFound
+		}
+		return domain.ProviderCredential{ID: id, OrganizationID: orgB}, nil
+	}
+	st.credentials.revoke = func(_ context.Context, orgID, id uuid.UUID) (domain.ProviderCredential, error) {
+		if orgID != orgB {
+			return domain.ProviderCredential{}, repositories.ErrNotFound
+		}
+		return domain.ProviderCredential{ID: id, OrganizationID: orgB}, nil
+	}
+
+	// 1. Admin A cannot read Org B's account
+	_, err := svc.GetAccount(ctx, adminA, accountB)
+	requireErrIs(t, err, repositories.ErrNotFound)
+
+	// 2. Admin A cannot update status of Org B's account
+	_, err = svc.UpdateAccountStatus(ctx, adminA, accountB, "disabled")
+	requireErrIs(t, err, repositories.ErrNotFound)
+
+	// 3. Admin A cannot delete Org B's account
+	err = svc.DeleteAccount(ctx, adminA, accountB)
+	requireErrIs(t, err, repositories.ErrNotFound)
+
+	// 4. Admin A cannot validate Org B's account
+	err = svc.ValidateAccount(ctx, adminA, accountB)
+	requireErrIs(t, err, repositories.ErrNotFound)
+
+	// 5. Admin A cannot check health of Org B's account
+	_, err = svc.CheckAccountHealth(ctx, adminA, accountB)
+	requireErrIs(t, err, repositories.ErrNotFound)
+
+	// 6. Admin A cannot sync models of Org B's account
+	_, err = svc.SyncAccountModels(ctx, adminA, accountB)
+	requireErrIs(t, err, repositories.ErrNotFound)
+
+	// 7. Admin A cannot get Org B's credential
+	_, err = svc.GetCredential(ctx, adminA, credB)
+	requireErrIs(t, err, repositories.ErrNotFound)
+
+	// 8. Admin A cannot revoke Org B's credential
+	err = svc.RevokeCredential(ctx, adminA, credB)
+	requireErrIs(t, err, repositories.ErrNotFound)
+
+	// 9. Admin A cannot rotate Org B's credential
+	_, err = svc.RotateCredential(ctx, adminA, credB, "sk-ant-new")
+	requireErrIs(t, err, repositories.ErrNotFound)
+}
+
+func TestRBAC_NewAccountEndpoints(t *testing.T) {
+	ctx := context.Background()
+	svc, _ := newTestService()
+	member := userActor(domain.RoleMember)
+
+	// 1. UpdateAccountStatus forbidden for member
+	_, err := svc.UpdateAccountStatus(ctx, member, testAccountID, "disabled")
+	requireErrIs(t, err, repositories.ErrForbidden)
+
+	// 2. DeleteAccount forbidden for member
+	err = svc.DeleteAccount(ctx, member, testAccountID)
+	requireErrIs(t, err, repositories.ErrForbidden)
+
+	// 3. ValidateAccount forbidden for member
+	err = svc.ValidateAccount(ctx, member, testAccountID)
+	requireErrIs(t, err, repositories.ErrForbidden)
+
+	// 4. CheckAccountHealth forbidden for member
+	_, err = svc.CheckAccountHealth(ctx, member, testAccountID)
+	requireErrIs(t, err, repositories.ErrForbidden)
+
+	// 5. SyncAccountModels forbidden for member
+	_, err = svc.SyncAccountModels(ctx, member, testAccountID)
+	requireErrIs(t, err, repositories.ErrForbidden)
+}
+
+func TestSecretNonLeakage(t *testing.T) {
+	rawSecret := "sk-ant-api03-very-secret-key-12345"
+
+	// Fingerprint and tail derivation
+	fp := fingerprint(rawSecret)
+	tail := tailOf(rawSecret)
+
+	if fp == rawSecret {
+		t.Fatal("fingerprint leaked raw secret")
+	}
+	if tail == rawSecret {
+		t.Fatal("tail leaked raw secret")
+	}
+	if len(tail) > 8 {
+		t.Fatalf("tail too long, got %q", tail)
+	}
+
+	// Verify error strings sanitize secret material
+	err := ErrInvalidProviderCredential
+	if err.Error() == rawSecret {
+		t.Fatal("error leaked raw secret")
+	}
+}
+
+func TestCacheInvalidation_OnProviderMutations(t *testing.T) {
+	ctx := context.Background()
+	svc, st := newTestService()
+	admin := userActor(domain.RoleAdmin)
+
+	st.accounts.create = func(_ context.Context, orgID uuid.UUID, in domain.NewProviderAccount) (domain.ProviderAccount, error) {
+		return domain.ProviderAccount{ID: testAccountID, OrganizationID: orgID, Name: in.Name, Status: domain.ProviderStatusActive}, nil
+	}
+	st.accounts.updateStatus = func(_ context.Context, orgID, id uuid.UUID, status string) (domain.ProviderAccount, error) {
+		return domain.ProviderAccount{ID: id, OrganizationID: orgID, Status: status}, nil
+	}
+	st.accounts.get = func(_ context.Context, orgID, id uuid.UUID) (domain.ProviderAccount, error) {
+		return domain.ProviderAccount{ID: id, OrganizationID: orgID, ProviderKind: domain.ProviderKindAnthropic, Status: domain.ProviderStatusActive}, nil
+	}
+	st.accounts.delete = func(context.Context, uuid.UUID, uuid.UUID) error {
+		return nil
+	}
+	st.credentials.listByAccount = func(context.Context, uuid.UUID, uuid.UUID) ([]domain.ProviderCredential, error) {
+		return nil, nil
+	}
+	st.credentials.create = func(_ context.Context, orgID uuid.UUID, in domain.NewProviderCredential) (domain.ProviderCredential, error) {
+		return domain.ProviderCredential{ID: testCredID, OrganizationID: orgID, Status: domain.ProviderCredentialStatusActive}, nil
+	}
+	st.credentials.revoke = func(_ context.Context, orgID, id uuid.UUID) (domain.ProviderCredential, error) {
+		return domain.ProviderCredential{ID: id, OrganizationID: orgID, Status: domain.ProviderCredentialStatusRevoked}, nil
+	}
+
+	// 1. CreateAccount invalidates cache
+	_, err := svc.CreateAccount(ctx, admin, domain.NewProviderAccount{ProviderKind: domain.ProviderKindAnthropic, Name: "Test"})
+	requireNoErr(t, err)
+	requireEqual(t, len(st.invalidator.invalidatedOrgs), 1)
+
+	// 2. UpdateAccountStatus invalidates cache
+	_, err = svc.UpdateAccountStatus(ctx, admin, testAccountID, "disabled")
+	requireNoErr(t, err)
+	requireEqual(t, len(st.invalidator.invalidatedOrgs), 2)
+
+	// 3. DeleteAccount invalidates cache
+	err = svc.DeleteAccount(ctx, admin, testAccountID)
+	requireNoErr(t, err)
+	requireEqual(t, len(st.invalidator.invalidatedOrgs), 3)
+
+	// 4. CreateCredential invalidates cache
+	_, err = svc.CreateCredential(ctx, admin, testAccountID, "key", domain.CredentialKindAPIKey, "sk-ant-dummy")
+	requireNoErr(t, err)
+	requireEqual(t, len(st.invalidator.invalidatedOrgs), 4)
+
+	// 5. RevokeCredential invalidates cache
+	err = svc.RevokeCredential(ctx, admin, testCredID)
+	requireNoErr(t, err)
+	requireEqual(t, len(st.invalidator.invalidatedOrgs), 5)
+}

@@ -57,20 +57,63 @@ const COLUMNS: readonly Column<AccountRow>[] = [
 
 async function loadProviderAccounts() {
   const { providers } = await getApiClient();
-  const list = await providers.listAccounts();
+  const [list, healthList] = await Promise.all([
+    providers.listAccounts(),
+    providers.health().catch(() => ({ items: [] })),
+  ]);
+
+  const healthMap = new Map<string, any>(
+    healthList.items.map((h: any) => [h.provider_kind, h])
+  );
 
   const rows: AccountRow[] = [...list.items]
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((account) => ({
-      id: account.id,
-      name: account.name,
-      kind: display(account.provider_kind),
-      baseUrl: account.base_url ?? "Provider default",
-      status: account.status,
-      tone: toneFor(PROVIDER_TONE, account.status),
-      created: formatDate(account.created_at),
-      detailUrl: `/app/platform/provider-accounts/${account.id}`,
-    }));
+    .map((account) => {
+      let validationStatus = "Provider connected";
+      let tone: StatusTone = "success";
+
+      if (account.status === "disabled") {
+        validationStatus = "Disabled";
+        tone = "neutral";
+      } else {
+        const h = healthMap.get(account.provider_kind);
+        if (h) {
+          const errStr = `${h.status_reason || ""} ${h.last_error || ""}`.toLowerCase();
+          if (h.status === "unhealthy" || h.status === "error") {
+            if (
+              errStr.includes("credential") ||
+              errStr.includes("auth") ||
+              errStr.includes("401") ||
+              errStr.includes("403") ||
+              errStr.includes("key")
+            ) {
+              validationStatus = "Credential invalid";
+              tone = "danger";
+            } else if (errStr.includes("discovery") || errStr.includes("model")) {
+              validationStatus = "Model discovery unavailable";
+              tone = "warning";
+            } else {
+              validationStatus = "Provider unreachable";
+              tone = "danger";
+            }
+          } else if (h.status === "degraded") {
+            validationStatus = "Degraded";
+            tone = "warning";
+          }
+        }
+      }
+
+      return {
+        id: account.id,
+        name: account.name,
+        kind: display(account.provider_kind),
+        baseUrl: account.base_url ?? "Provider default",
+        status: validationStatus,
+        tone,
+        created: formatDate(account.created_at),
+        detailUrl: `/app/platform/provider-accounts/${account.id}`,
+      };
+    });
 
   const kindCounts = new Map<string, number>();
   for (const row of rows) {

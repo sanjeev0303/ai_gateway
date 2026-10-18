@@ -30,6 +30,42 @@ func (r *Registry) Provider(kind string) providerclient.Provider {
 	return r.providers[kind]
 }
 
+// InferenceProvider returns the InferenceProvider registered under kind,
+// or nil when absent or if the registered provider does not implement InferenceProvider.
+func (r *Registry) InferenceProvider(kind string) providerclient.InferenceProvider {
+	p := r.providers[kind]
+	if p == nil {
+		return nil
+	}
+	if ip, ok := p.(providerclient.InferenceProvider); ok {
+		return ip
+	}
+	return nil
+}
+
+// Metadata returns the metadata of the registered inference provider, or nil if not an InferenceProvider.
+func (r *Registry) Metadata(kind string) *providerclient.ProviderMetadata {
+	ip := r.InferenceProvider(kind)
+	if ip == nil {
+		return nil
+	}
+	meta := ip.Metadata()
+	return &meta
+}
+
+// GetModelCapabilities returns model capabilities from the underlying InferenceProvider.
+func (r *Registry) GetModelCapabilities(ctx context.Context, kind, modelID string) (*providerclient.ModelCapabilities, error) {
+	ip := r.InferenceProvider(kind)
+	if ip == nil {
+		return nil, providerclient.ErrUnknownProvider
+	}
+	caps, err := ip.GetModelCapabilities(ctx, modelID)
+	if err != nil {
+		return nil, err
+	}
+	return &caps, nil
+}
+
 // ListModels aggregates the provider-advertised models of every registered
 // provider whose key is present in apiKeys, in stable kind-then-ID order. A
 // provider without a key is skipped so one missing credential does not fail

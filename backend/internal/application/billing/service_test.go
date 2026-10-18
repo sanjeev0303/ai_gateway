@@ -82,6 +82,10 @@ func (f *fakeSubscriptions) Cancel(_ context.Context, _ uuid.UUID) error {
 	return f.err
 }
 
+func (f *fakeSubscriptions) UpdatePaymentDetails(_ context.Context, _ uuid.UUID, _ string, _ string, _ string, _ string) error {
+	return f.err
+}
+
 type fakeInvoices struct {
 	invoices []domain.Invoice
 	err      error
@@ -97,6 +101,10 @@ func (f *fakeInvoices) List(_ context.Context, orgID uuid.UUID) ([]domain.Invoic
 
 func (f *fakeInvoices) Get(context.Context, uuid.UUID, uuid.UUID) (domain.Invoice, error) {
 	return domain.Invoice{}, errors.New("unused")
+}
+
+func (f *fakeInvoices) RecordPayment(_ context.Context, _ uuid.UUID, _ string, _ string, _ int64) error {
+	return f.err
 }
 
 // fakeRollups records the tenant and filter it was handed so the usage tests can

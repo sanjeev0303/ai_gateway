@@ -23,10 +23,22 @@ type GatewayClient struct {
 
 // Model represents a permitted model returned by the gateway.
 type Model struct {
-	ID          string `json:"id"`
-	Object      string `json:"object"`
-	Provider    string `json:"provider"`
-	DisplayName string `json:"display_name,omitempty"`
+	ID                string   `json:"id"`
+	Object            string   `json:"object"`
+	Provider          string   `json:"provider"`
+	DisplayName       string   `json:"display_name,omitempty"`
+	Capabilities      []string `json:"capabilities,omitempty"`
+	ContextLimit      int      `json:"context_limit,omitempty"`
+	SupportsStreaming bool     `json:"supports_streaming"`
+	SupportsTools     bool     `json:"supports_tools"`
+	SupportsReasoning bool     `json:"supports_reasoning"`
+}
+
+// ChatMessage represents a single message in a multi-turn conversation.
+type ChatMessage struct {
+	Role      string    `json:"role"`
+	Content   string    `json:"content"`
+	Timestamp time.Time `json:"timestamp,omitempty"`
 }
 
 // RequestMetadata contains execution statistics for a gateway call.
@@ -44,11 +56,15 @@ type RequestMetadata struct {
 
 // RequestPayload specifies the parameters for an LLM prompt.
 type RequestPayload struct {
-	Model     string
-	Prompt    string
-	Stream    bool
-	MaxTokens int
-	ProjectID string
+	Model           string
+	Prompt          string
+	Messages        []ChatMessage
+	Stream          bool
+	MaxTokens       int
+	ProjectID       string
+	SystemPrompt    string
+	Temperature     *float64
+	ReasoningEffort string
 }
 
 // New creates a new GatewayClient.
@@ -471,17 +487,49 @@ func (c *GatewayClient) buildRequestBody(payload RequestPayload, stream, isOpenA
 		maxTokens = 1024
 	}
 
-	m := map[string]any{
-		"model":  payload.Model,
-		"stream": stream,
-		"messages": []map[string]string{
+	var msgs []map[string]string
+	if len(payload.Messages) > 0 {
+		for _, m := range payload.Messages {
+			if m.Content != "" {
+				msgs = append(msgs, map[string]string{
+					"role":    m.Role,
+					"content": m.Content,
+				})
+			}
+		}
+	} else if payload.Prompt != "" {
+		msgs = []map[string]string{
 			{"role": "user", "content": payload.Prompt},
-		},
+		}
 	}
-	if isOpenAI {
-		m["max_tokens"] = maxTokens
-	} else {
-		m["max_tokens"] = maxTokens
+
+	m := map[string]any{
+		"model":      payload.Model,
+		"stream":     stream,
+		"messages":   msgs,
+		"max_tokens": maxTokens,
+	}
+	if payload.SystemPrompt != "" {
+		if isOpenAI {
+			hasSystem := false
+			for _, msg := range msgs {
+				if msg["role"] == "system" {
+					hasSystem = true
+					break
+				}
+			}
+			if !hasSystem {
+				m["messages"] = append([]map[string]string{{"role": "system", "content": payload.SystemPrompt}}, msgs...)
+			}
+		} else {
+			m["system"] = payload.SystemPrompt
+		}
+	}
+	if payload.Temperature != nil {
+		m["temperature"] = *payload.Temperature
+	}
+	if payload.ReasoningEffort != "" && isOpenAI {
+		m["reasoning_effort"] = payload.ReasoningEffort
 	}
 	if payload.ProjectID != "" {
 		m["project_id"] = payload.ProjectID

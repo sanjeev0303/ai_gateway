@@ -49,6 +49,12 @@ interface ModelRow {
   display_name: string;
   model_slug: string;
   provider_kind: string;
+  capabilities?: string[];
+  context_limit?: number;
+  supports_streaming?: boolean;
+  supports_tools?: boolean;
+  supports_reasoning?: boolean;
+  status?: string;
   is_active: boolean;
   updated_at: string;
 }
@@ -69,13 +75,17 @@ async function loadModelRegistry() {
   const rows: ModelRow[] = [...registry.items]
     .sort((a, b) => a.display_name.localeCompare(b.display_name))
     .map((model) => {
-      const stats = usage.get(model.model_slug);
-      const status = model.is_active ? "active" : "inactive";
       return {
         id: model.id,
         display_name: model.display_name,
         model_slug: model.model_slug,
         provider_kind: model.provider_kind,
+        capabilities: model.capabilities,
+        context_limit: model.context_limit,
+        supports_streaming: model.supports_streaming,
+        supports_tools: model.supports_tools,
+        supports_reasoning: model.supports_reasoning,
+        status: model.status,
         is_active: model.is_active,
         updated_at: model.updated_at,
       };

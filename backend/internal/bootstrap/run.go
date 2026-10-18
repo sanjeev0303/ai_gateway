@@ -31,11 +31,15 @@ import (
 	"ai-governance-saas/backend/internal/domain"
 	"ai-governance-saas/backend/internal/infrastructure/auth"
 	"ai-governance-saas/backend/internal/infrastructure/invalidation"
+	"ai-governance-saas/backend/internal/infrastructure/payment/razorpay"
+	"ai-governance-saas/backend/internal/infrastructure/payment/stripe"
 	"ai-governance-saas/backend/internal/infrastructure/postgres"
 	"ai-governance-saas/backend/internal/infrastructure/postgres/repositories"
 	"ai-governance-saas/backend/internal/infrastructure/provider/anthropic"
 	"ai-governance-saas/backend/internal/infrastructure/provider/gemini"
+	"ai-governance-saas/backend/internal/infrastructure/provider/huggingface"
 	"ai-governance-saas/backend/internal/infrastructure/provider/openai"
+	"ai-governance-saas/backend/internal/ports/payment"
 	"ai-governance-saas/backend/internal/infrastructure/secrets"
 	"ai-governance-saas/backend/internal/interfaces/controlapi"
 	"ai-governance-saas/backend/internal/interfaces/gateway"
@@ -224,6 +228,7 @@ func RunGatewayV2(ctx context.Context) error {
 							if err := json.Unmarshal([]byte(msg.Payload), &payload); err == nil {
 								if orgID, err := uuid.Parse(payload.OrganizationID); err == nil {
 									gatewayV2.InvalidatePolicy(orgID)
+									gatewayV2.InvalidateUpstream(orgID)
 								}
 							}
 						case invalidation.CredentialInvalidationChannel:
@@ -389,6 +394,7 @@ func RunControlAPI(ctx context.Context) error {
 			SecurityEvents: securityEventSvc,
 			Secrets:        secretStore,
 			Providers:      providerAdapters(),
+			Invalidator:    redisInvalidator,
 			Log:            log,
 		})
 
@@ -431,11 +437,20 @@ func RunControlAPI(ctx context.Context) error {
 			Evaluator: alertEval,
 		})
 
+		stripeGw := stripe.New(cfg.Billing.StripeSecretKey, cfg.Billing.StripeWebhookSecret)
+		razorpayGw := razorpay.New(cfg.Billing.RazorpayKeyID, cfg.Billing.RazorpayKeySecret, cfg.Billing.RazorpayWebhookSecret)
+
 		billingSvc := billing.NewService(billing.ServiceDeps{
 			Plans:         repositories.NewPlanRepository(store),
 			Subscriptions: repositories.NewSubscriptionRepository(store),
 			Invoices:      repositories.NewInvoiceRepository(store),
 			Rollups:       repositories.NewUsageRollupRepository(store),
+			BillingEvents: repositories.NewBillingEventRepository(store),
+			Audits:        repositories.NewAuditLogRepository(store),
+			PaymentGateways: map[string]payment.PaymentGateway{
+				"stripe":   stripeGw,
+				"razorpay": razorpayGw,
+			},
 		})
 
 		guardrailsSvc := guardrails.NewService(
@@ -493,9 +508,10 @@ func RunControlAPI(ctx context.Context) error {
 // rather than validated against the wrong upstream.
 func providerAdapters() map[string]providerclient.Provider {
 	return map[string]providerclient.Provider{
-		domain.ProviderKindAnthropic: anthropic.NewProviderAdapter(),
-		domain.ProviderKindOpenAI:    openai.NewProviderAdapter(),
-		domain.ProviderKindGemini:    gemini.NewProviderAdapter(),
+		domain.ProviderKindAnthropic:  anthropic.NewProviderAdapter(),
+		domain.ProviderKindOpenAI:     openai.NewProviderAdapter(),
+		domain.ProviderKindGemini:     gemini.NewProviderAdapter(),
+		domain.ProviderKindHuggingFace: huggingface.NewProviderAdapter(),
 	}
 }
 

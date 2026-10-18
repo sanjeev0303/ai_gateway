@@ -31,6 +31,7 @@ export const metadata: Metadata = {
 const INVOICE_TONE: Record<InvoiceStatus, StatusTone> = {
   open: "warning",
   void: "neutral",
+  paid: "success",
 };
 
 async function loadInvoices(): Promise<Invoice[]> {
@@ -136,6 +137,12 @@ export default async function InvoicesPage() {
                   <CardDescription className="mt-1">
                     {formatDate(invoice.period_start)} – {formatDate(invoice.period_end)} ·{" "}
                     issued {formatDate(invoice.issued_at)}
+                    {invoice.payment_provider && (
+                      <span className="ml-2 inline-flex items-center text-xs font-medium text-muted-foreground">
+                        · Processed via {invoice.payment_provider.toUpperCase()}
+                        {invoice.payment_id ? ` (${invoice.payment_id})` : ""}
+                      </span>
+                    )}
                   </CardDescription>
                 </div>
                 <InvoiceActions invoice={invoice} />

@@ -355,6 +355,37 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 		hints = InspectorHints{}
 	}
 
+	// Detect API parameter tampering: inspect query string and URL path for conflicting model or provider overrides
+	queryModel := strings.TrimSpace(r.URL.Query().Get("model"))
+	if queryModel != "" {
+		if hints.Model != "" && !strings.EqualFold(queryModel, hints.Model) {
+			return g.pipelineError("request_inspector", fmt.Errorf("parameter tampering detected: query model %q conflicts with payload model %q", queryModel, hints.Model), http.StatusBadRequest, "parameter_tampering")
+		}
+		if hints.Model == "" {
+			hints.Model = queryModel
+		}
+	}
+
+	pathModel := extractModelFromPath(r.URL.Path)
+	if pathModel != "" {
+		if hints.Model != "" && !strings.EqualFold(pathModel, hints.Model) {
+			return g.pipelineError("request_inspector", fmt.Errorf("parameter tampering detected: path model %q conflicts with payload model %q", pathModel, hints.Model), http.StatusBadRequest, "parameter_tampering")
+		}
+		if hints.Model == "" {
+			hints.Model = pathModel
+		}
+	}
+
+	queryProvider := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("provider")))
+	if queryProvider != "" {
+		if hints.Provider != "" && !strings.EqualFold(queryProvider, hints.Provider) {
+			return g.pipelineError("request_inspector", fmt.Errorf("parameter tampering detected: query provider %q conflicts with payload provider %q", queryProvider, hints.Provider), http.StatusBadRequest, "parameter_tampering")
+		}
+		if hints.Provider == "" {
+			hints.Provider = queryProvider
+		}
+	}
+
 	// Verify payload project_id integrity
 	if hints.ProjectID != nil {
 		if cred.ProjectID != nil && *hints.ProjectID != *cred.ProjectID {
@@ -371,11 +402,6 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 
 	// Determine requested provider
 	providerKind := hints.Provider
-	if providerKind == "" {
-		if p := r.Header.Get("x-provider"); p != "" {
-			providerKind = strings.ToLower(strings.TrimSpace(p))
-		}
-	}
 	if providerKind == "" && hints.Model != "" {
 		switch {
 		case strings.HasPrefix(hints.Model, "claude-"):
@@ -384,6 +410,13 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 			providerKind = domain.ProviderKindOpenAI
 		case strings.HasPrefix(hints.Model, "gemini-"):
 			providerKind = domain.ProviderKindGemini
+		case strings.HasPrefix(hints.Model, "meta-llama/") || strings.HasPrefix(hints.Model, "mistralai/") || strings.HasPrefix(hints.Model, "Qwen/") || strings.HasPrefix(hints.Model, "deepseek-ai/") || strings.HasPrefix(hints.Model, "hf-") || strings.Contains(hints.Model, "/"):
+			providerKind = domain.ProviderKindHuggingFace
+		}
+	}
+	if providerKind == "" {
+		if p := r.Header.Get("x-provider"); p != "" {
+			providerKind = strings.ToLower(strings.TrimSpace(p))
 		}
 	}
 	if providerKind == "" {
@@ -395,16 +428,39 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 	}
 	hints.Provider = providerKind
 
-	// Stage 3: Resolve tenant/upstream for the specific provider (with fallback)
-	upstream, err := g.tenantResolver.ResolveUpstreamForProvider(ctx, cred.OrganizationID, providerKind)
-	if err != nil {
-		upstream, err = g.tenantResolver.ResolveUpstream(ctx, cred.OrganizationID)
-		if err != nil {
-			return g.pipelineError("tenant_resolver", err, http.StatusServiceUnavailable, "upstream_unavailable")
+	// Enforce provider authorization:
+	// 1. Untrusted header x-provider must not escape credential scope or conflict with model provider.
+	if pHeader := r.Header.Get("x-provider"); pHeader != "" {
+		trimmedHeader := strings.ToLower(strings.TrimSpace(pHeader))
+		if len(cred.AllowedProviders) > 0 && !sliceContainsFold(cred.AllowedProviders, trimmedHeader) {
+			return g.pipelineError("authenticate", fmt.Errorf("credential is not authorized for provider %q", trimmedHeader), http.StatusForbidden, "permission_error")
+		}
+		if providerKind != "" && !strings.EqualFold(trimmedHeader, providerKind) {
+			return g.pipelineError("authenticate", fmt.Errorf("header x-provider %q conflicts with requested model provider %q", trimmedHeader, providerKind), http.StatusForbidden, "permission_error")
 		}
 	}
 
-	// Stage 4: Load policy snapshot (fail closed)
+	// 2. The resolved effective providerKind must be authorized for this credential.
+	if len(cred.AllowedProviders) > 0 {
+		if providerKind == "" {
+			return g.pipelineError("authenticate", errors.New("credential requires an authorized provider; none specified"), http.StatusForbidden, "permission_error")
+		}
+		if !sliceContainsFold(cred.AllowedProviders, providerKind) {
+			return g.pipelineError("authenticate", fmt.Errorf("credential is not authorized for provider %q", providerKind), http.StatusForbidden, "permission_error")
+		}
+	}
+
+	// 3. The requested model must be authorized if credential has allowed_models.
+	if len(cred.AllowedModels) > 0 {
+		if hints.Model == "" {
+			return g.pipelineError("authenticate", errors.New("credential requires an authorized model; none specified"), http.StatusForbidden, "permission_error")
+		}
+		if !sliceContains(cred.AllowedModels, hints.Model) {
+			return g.pipelineError("authenticate", fmt.Errorf("credential is not authorized for model %q", hints.Model), http.StatusForbidden, "permission_error")
+		}
+	}
+
+	// Stage 3: Load policy snapshot (fail closed)
 	policy, err := g.policyResolver.GetSnapshot(ctx, cred.OrganizationID)
 	if err != nil {
 		return g.pipelineError("policy_resolver", err, http.StatusServiceUnavailable, "policy_unavailable")
@@ -417,13 +473,12 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 
 	reqCtx := &RequestContext{
 		Credential:     cred,
-		Upstream:       upstream,
 		PolicySnapshot: policy,
 		InspectorHints: hints,
 		StartTime:      time.Now(),
 	}
 
-	// Stage 4.5: Guardrails
+	// Stage 3.5: Guardrails
 	if g.guardrails != nil {
 		gResult := g.guardrails.CheckInput(ctx, body, cred.OrganizationID.String(), reqID, cred)
 		if gResult.Triggered && gResult.Action == domain.GuardrailActionBlock {
@@ -433,19 +488,63 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 		}
 	}
 
-	// Stage 5: Authorize the requested model against policy.
+	// Stage 4: Authorize the requested model against policy.
 	if allowed, reason := policy.Authorize(hints, cred); !allowed {
 		res := g.pipelineError("policy_authorizer", errors.New(reason), http.StatusForbidden, "policy_denied")
 		res.Context = reqCtx
 		return res
 	}
 
-	// Validate model is supported
-	if hints.Model != "" && !g.isModelSupported(ctx, hints.Model) {
-		res := g.pipelineError("model_resolver", fmt.Errorf("model %q is not supported", hints.Model), http.StatusBadRequest, "unsupported_model")
+	// Validate model is supported and active
+	if hints.Model != "" && !g.isModelSupported(ctx, providerKind, hints.Model) {
+		res := g.pipelineError("model_resolver", fmt.Errorf("model %q is not supported or is inactive", hints.Model), http.StatusBadRequest, "unsupported_model")
 		res.Context = reqCtx
 		return res
 	}
+
+	// Stage 5: Resolve tenant/upstream connection for the specific provider
+	var upstream ResolvedUpstream
+	if cred.ProviderAccountID != nil {
+		upstream, err = g.tenantResolver.ResolveUpstreamForAccount(ctx, cred.OrganizationID, *cred.ProviderAccountID)
+		if err != nil {
+			res := g.pipelineError("tenant_resolver", fmt.Errorf("failed to resolve restricted provider connection: %w", err), http.StatusServiceUnavailable, "upstream_unavailable")
+			res.Context = reqCtx
+			return res
+		}
+		if providerKind != "" && upstream.ProviderAccount.ProviderKind != providerKind {
+			res := g.pipelineError("tenant_resolver", fmt.Errorf("credential is restricted to provider %q, cannot invoke %q", upstream.ProviderAccount.ProviderKind, providerKind), http.StatusForbidden, "permission_error")
+			res.Context = reqCtx
+			return res
+		}
+	} else {
+		upstream, err = g.tenantResolver.ResolveUpstreamForProvider(ctx, cred.OrganizationID, providerKind)
+		if err != nil {
+			if providerKind == "" {
+				upstream, err = g.tenantResolver.ResolveUpstream(ctx, cred.OrganizationID)
+			}
+			if err != nil {
+				res := g.pipelineError("tenant_resolver", fmt.Errorf("no active connection for provider %q: %w", providerKind, err), http.StatusServiceUnavailable, "upstream_unavailable")
+				res.Context = reqCtx
+				return res
+			}
+		}
+	}
+	if upstream.ProviderAccount.ProviderKind != "" && providerKind != "" && upstream.ProviderAccount.ProviderKind != providerKind {
+		res := g.pipelineError("tenant_resolver", fmt.Errorf("no active connection for provider %q", providerKind), http.StatusServiceUnavailable, "upstream_unavailable")
+		res.Context = reqCtx
+		return res
+	}
+	if upstream.ProviderAccount.Status != "" && upstream.ProviderAccount.Status != domain.ProviderStatusActive {
+		res := g.pipelineError("tenant_resolver", fmt.Errorf("provider account for %q is not active", providerKind), http.StatusServiceUnavailable, "upstream_unavailable")
+		res.Context = reqCtx
+		return res
+	}
+	if upstream.Credential.Status != "" && upstream.Credential.Status != domain.ProviderCredentialStatusActive {
+		res := g.pipelineError("tenant_resolver", fmt.Errorf("provider credential for %q is not active", providerKind), http.StatusServiceUnavailable, "upstream_unavailable")
+		res.Context = reqCtx
+		return res
+	}
+	reqCtx.Upstream = upstream
 
 	// Stage 6: Rate limiting across all applicable scopes
 	applicableRLs := policy.applicableRateLimits(cred)
@@ -1055,6 +1154,13 @@ func (g *Gateway) InvalidateCredentialByID(ctx context.Context, id string) {
 	}
 }
 
+// InvalidateUpstream immediately evicts cached upstream connections for an organization.
+func (g *Gateway) InvalidateUpstream(orgID uuid.UUID) {
+	if g.tenantResolver != nil {
+		g.tenantResolver.Invalidate(orgID)
+	}
+}
+
 // handleListModels serves GET /v1/models, returning permitted models for the authenticated credential.
 func (g *Gateway) handleListModels(w http.ResponseWriter, r *http.Request, reqID string) {
 	cred, err := g.authenticate(r.Context(), r)
@@ -1074,51 +1180,111 @@ func (g *Gateway) handleListModels(w http.ResponseWriter, r *http.Request, reqID
 	}
 
 	type modelEntry struct {
-		ID          string `json:"id"`
-		Object      string `json:"object"`
-		Created     int64  `json:"created"`
-		OwnedBy     string `json:"owned_by"`
-		Provider    string `json:"provider"`
-		DisplayName string `json:"display_name,omitempty"`
+		ID                string   `json:"id"`
+		Object            string   `json:"object"`
+		Created           int64    `json:"created"`
+		OwnedBy           string   `json:"owned_by"`
+		Provider          string   `json:"provider"`
+		DisplayName       string   `json:"display_name,omitempty"`
+		Capabilities      []string `json:"capabilities,omitempty"`
+		ContextLimit      int      `json:"context_limit,omitempty"`
+		SupportsStreaming bool     `json:"supports_streaming"`
+		SupportsTools     bool     `json:"supports_tools"`
+		SupportsReasoning bool     `json:"supports_reasoning"`
+		Status            string   `json:"status,omitempty"`
+		PricingVersion    string   `json:"pricing_version,omitempty"`
+	}
+
+	activeProviders, err := g.tenantResolver.ListActiveProviders(r.Context(), cred.OrganizationID)
+	if err != nil || len(activeProviders) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"object": "list",
+			"data":   []modelEntry{},
+			"items":  []modelEntry{},
+		})
+		return
+	}
+
+	activeMap := make(map[string]bool, len(activeProviders))
+	for _, p := range activeProviders {
+		activeMap[p] = true
 	}
 
 	var allModels []modelEntry
 	if g.modelRepo != nil {
 		if dbModels, err := g.modelRepo.List(r.Context()); err == nil && len(dbModels) > 0 {
 			for _, m := range dbModels {
-				allModels = append(allModels, modelEntry{
-					ID:          m.ModelSlug,
-					Object:      "model",
-					Created:     m.CreatedAt.Unix(),
-					OwnedBy:     m.ProviderKind,
-					Provider:    m.ProviderKind,
-					DisplayName: m.DisplayName,
-				})
+				if m.IsActive && m.Status != "inactive" && activeMap[m.ProviderKind] {
+					allModels = append(allModels, modelEntry{
+						ID:                m.ModelSlug,
+						Object:            "model",
+						Created:           m.CreatedAt.Unix(),
+						OwnedBy:           m.ProviderKind,
+						Provider:          m.ProviderKind,
+						DisplayName:       m.DisplayName,
+						Capabilities:      m.Capabilities,
+						ContextLimit:      m.ContextLimit,
+						SupportsStreaming: m.SupportsStreaming,
+						SupportsTools:     m.SupportsTools,
+						SupportsReasoning: m.SupportsReasoning,
+						Status:            m.Status,
+						PricingVersion:    m.PricingVersion,
+					})
+				}
 			}
 		}
 	}
 
-	if len(allModels) == 0 {
-		// Standard default catalog across supported providers
-		allModels = []modelEntry{
-			{ID: "claude-sonnet-4-5", Object: "model", Created: 1700000000, OwnedBy: "anthropic", Provider: "anthropic", DisplayName: "Claude 3.5 Sonnet"},
-			{ID: "claude-3-5-sonnet-20241022", Object: "model", Created: 1700000000, OwnedBy: "anthropic", Provider: "anthropic", DisplayName: "Claude 3.5 Sonnet (20241022)"},
-			{ID: "claude-3-haiku-20240307", Object: "model", Created: 1700000000, OwnedBy: "anthropic", Provider: "anthropic", DisplayName: "Claude 3 Haiku"},
-			{ID: "claude-3-opus-20240229", Object: "model", Created: 1700000000, OwnedBy: "anthropic", Provider: "anthropic", DisplayName: "Claude 3 Opus"},
-			{ID: "gpt-4o", Object: "model", Created: 1700000000, OwnedBy: "openai", Provider: "openai", DisplayName: "GPT-4o"},
-			{ID: "gpt-4o-mini", Object: "model", Created: 1700000000, OwnedBy: "openai", Provider: "openai", DisplayName: "GPT-4o Mini"},
-			{ID: "o1", Object: "model", Created: 1700000000, OwnedBy: "openai", Provider: "openai", DisplayName: "o1"},
-			{ID: "o3-mini", Object: "model", Created: 1700000000, OwnedBy: "openai", Provider: "openai", DisplayName: "o3 Mini"},
+	if len(allModels) == 0 && g.modelRepo == nil {
+		candidates := []modelEntry{
+			{ID: "claude-sonnet-4-5", Object: "model", Created: 1700000000, OwnedBy: "anthropic", Provider: "anthropic", DisplayName: "Claude 3.5 Sonnet", SupportsStreaming: true, SupportsTools: true},
+			{ID: "claude-3-5-sonnet-20241022", Object: "model", Created: 1700000000, OwnedBy: "anthropic", Provider: "anthropic", DisplayName: "Claude 3.5 Sonnet (20241022)", SupportsStreaming: true, SupportsTools: true},
+			{ID: "claude-3-haiku-20240307", Object: "model", Created: 1700000000, OwnedBy: "anthropic", Provider: "anthropic", DisplayName: "Claude 3 Haiku", SupportsStreaming: true, SupportsTools: true},
+			{ID: "claude-3-opus-20240229", Object: "model", Created: 1700000000, OwnedBy: "anthropic", Provider: "anthropic", DisplayName: "Claude 3 Opus", SupportsStreaming: true, SupportsTools: true},
+			{ID: "gpt-4o", Object: "model", Created: 1700000000, OwnedBy: "openai", Provider: "openai", DisplayName: "GPT-4o", SupportsStreaming: true, SupportsTools: true},
+			{ID: "gpt-4o-mini", Object: "model", Created: 1700000000, OwnedBy: "openai", Provider: "openai", DisplayName: "GPT-4o Mini", SupportsStreaming: true, SupportsTools: true},
+			{ID: "o1", Object: "model", Created: 1700000000, OwnedBy: "openai", Provider: "openai", DisplayName: "o1", SupportsReasoning: true},
+			{ID: "o3-mini", Object: "model", Created: 1700000000, OwnedBy: "openai", Provider: "openai", DisplayName: "o3 Mini", SupportsReasoning: true},
 			{ID: "text-embedding-3-small", Object: "model", Created: 1700000000, OwnedBy: "openai", Provider: "openai", DisplayName: "Text Embedding 3 Small"},
-			{ID: "gemini-1.5-pro", Object: "model", Created: 1700000000, OwnedBy: "gemini", Provider: "gemini", DisplayName: "Gemini 1.5 Pro"},
-			{ID: "gemini-1.5-flash", Object: "model", Created: 1700000000, OwnedBy: "gemini", Provider: "gemini", DisplayName: "Gemini 1.5 Flash"},
-			{ID: "gemini-2.5-flash", Object: "model", Created: 1700000000, OwnedBy: "gemini", Provider: "gemini", DisplayName: "Gemini 2.5 Flash"},
-			{ID: "gemini-2.5-pro", Object: "model", Created: 1700000000, OwnedBy: "gemini", Provider: "gemini", DisplayName: "Gemini 2.5 Pro"},
+			{ID: "gemini-1.5-pro", Object: "model", Created: 1700000000, OwnedBy: "gemini", Provider: "gemini", DisplayName: "Gemini 1.5 Pro", SupportsStreaming: true},
+			{ID: "gemini-1.5-flash", Object: "model", Created: 1700000000, OwnedBy: "gemini", Provider: "gemini", DisplayName: "Gemini 1.5 Flash", SupportsStreaming: true},
+			{ID: "gemini-2.5-flash", Object: "model", Created: 1700000000, OwnedBy: "gemini", Provider: "gemini", DisplayName: "Gemini 2.5 Flash", SupportsStreaming: true},
+			{ID: "gemini-2.5-pro", Object: "model", Created: 1700000000, OwnedBy: "gemini", Provider: "gemini", DisplayName: "Gemini 2.5 Pro", SupportsStreaming: true},
+			{ID: "meta-llama/Llama-3.3-70B-Instruct", Object: "model", Created: 1700000000, OwnedBy: "huggingface", Provider: "huggingface", DisplayName: "Llama 3.3 70B Instruct", SupportsStreaming: true},
+			{ID: "mistralai/Mistral-7B-Instruct-v0.3", Object: "model", Created: 1700000000, OwnedBy: "huggingface", Provider: "huggingface", DisplayName: "Mistral 7B Instruct v0.3", SupportsStreaming: true},
+			{ID: "Qwen/Qwen2.5-72B-Instruct", Object: "model", Created: 1700000000, OwnedBy: "huggingface", Provider: "huggingface", DisplayName: "Qwen 2.5 72B Instruct", SupportsStreaming: true},
+			{ID: "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B", Object: "model", Created: 1700000000, OwnedBy: "huggingface", Provider: "huggingface", DisplayName: "DeepSeek R1 Distill Qwen 32B", SupportsStreaming: true, SupportsReasoning: true},
+		}
+		for _, c := range candidates {
+			if activeMap[c.Provider] {
+				allModels = append(allModels, c)
+			}
 		}
 	}
 
 	var permitted []modelEntry
 	for _, m := range allModels {
+		// If bound to a specific provider account, restrict to that provider account's provider kind
+		if cred.ProviderAccountID != nil {
+			if boundUpstream, err := g.tenantResolver.ResolveUpstreamForAccount(r.Context(), cred.OrganizationID, *cred.ProviderAccountID); err == nil {
+				if !strings.EqualFold(boundUpstream.ProviderAccount.ProviderKind, m.Provider) {
+					continue
+				}
+			}
+		}
+
+		// If bound to specific allowed providers
+		if len(cred.AllowedProviders) > 0 && !sliceContainsFold(cred.AllowedProviders, m.Provider) {
+			continue
+		}
+
+		// If bound to specific allowed models
+		if len(cred.AllowedModels) > 0 && !sliceContains(cred.AllowedModels, m.ID) {
+			continue
+		}
+
 		allowed, _ := policy.Authorize(InspectorHints{Model: m.ID, Provider: m.Provider}, cred)
 		if allowed {
 			permitted = append(permitted, m)
@@ -1134,26 +1300,64 @@ func (g *Gateway) handleListModels(w http.ResponseWriter, r *http.Request, reqID
 	})
 }
 
-// isModelSupported checks whether a requested model matches known provider patterns or catalog entries.
-func (g *Gateway) isModelSupported(ctx context.Context, model string) bool {
+// isModelSupported checks whether a requested model matches known provider patterns or catalog entries and is active.
+func (g *Gateway) isModelSupported(ctx context.Context, providerKind, model string) bool {
 	if model == "" {
 		return true
 	}
-	if strings.HasPrefix(model, "claude-") ||
-		strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") ||
-		strings.HasPrefix(model, "text-embedding") || strings.HasPrefix(model, "dall-e") ||
-		strings.HasPrefix(model, "gemini-") {
-		return true
-	}
-
 	if g.modelRepo != nil {
+		if m, err := g.modelRepo.GetBySlug(ctx, providerKind, model); err == nil {
+			return m.IsActive && m.Status != "inactive"
+		}
 		if models, err := g.modelRepo.List(ctx); err == nil {
 			for _, m := range models {
-				if m.ModelSlug == model || m.DisplayName == model {
-					return true
+				if (m.ModelSlug == model || m.DisplayName == model) && (providerKind == "" || m.ProviderKind == providerKind) {
+					return m.IsActive && m.Status != "inactive"
 				}
 			}
 		}
 	}
+	if strings.HasPrefix(model, "claude-") ||
+		strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") ||
+		strings.HasPrefix(model, "text-embedding") || strings.HasPrefix(model, "dall-e") ||
+		strings.HasPrefix(model, "gemini-") ||
+		strings.HasPrefix(model, "meta-llama/") || strings.HasPrefix(model, "mistralai/") ||
+		strings.HasPrefix(model, "Qwen/") || strings.HasPrefix(model, "deepseek-ai/") ||
+		strings.HasPrefix(model, "hf-") || strings.Contains(model, "/") {
+		return true
+	}
 	return false
+}
+
+func sliceContainsFold(slice []string, val string) bool {
+	for _, s := range slice {
+		if strings.EqualFold(s, val) {
+			return true
+		}
+	}
+	return false
+}
+
+func sliceContains(slice []string, val string) bool {
+	for _, s := range slice {
+		if s == val {
+			return true
+		}
+	}
+	return false
+}
+
+func extractModelFromPath(path string) string {
+	idx := strings.Index(path, "/models/")
+	if idx == -1 {
+		return ""
+	}
+	rest := path[idx+len("/models/"):]
+	if colonIdx := strings.Index(rest, ":"); colonIdx != -1 {
+		rest = rest[:colonIdx]
+	}
+	if slashIdx := strings.Index(rest, "/"); slashIdx != -1 {
+		rest = rest[:slashIdx]
+	}
+	return strings.TrimSpace(rest)
 }

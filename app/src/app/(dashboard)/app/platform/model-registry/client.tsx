@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useState, useTransition, useMemo } from "react";
-import { RefreshCw, ExternalLink, Search, Sparkles, Database } from "lucide-react";
+import { RefreshCw, ExternalLink, Search, Sparkles, Database, CheckCircle2, AlertTriangle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,6 +39,12 @@ export interface ModelRow {
   display_name: string;
   model_slug: string;
   provider_kind: string;
+  capabilities?: string[];
+  context_limit?: number;
+  supports_streaming?: boolean;
+  supports_tools?: boolean;
+  supports_reasoning?: boolean;
+  status?: string;
   is_active: boolean;
   updated_at: string;
 }
@@ -54,6 +60,7 @@ export function SyncModelsDialog() {
     if (val === "anthropic") setApiKey("sk-dummy-anthropic-key");
     else if (val === "openai") setApiKey("sk-dummy-openai-key");
     else if (val === "gemini") setApiKey("sk-dummy-gemini-key");
+    else if (val === "huggingface") setApiKey("hf_dummy_test_token_12345");
     else setApiKey("");
   };
 
@@ -99,6 +106,7 @@ export function SyncModelsDialog() {
                 <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
                 <SelectItem value="openai">OpenAI (GPT & o-series)</SelectItem>
                 <SelectItem value="gemini">Google Gemini</SelectItem>
+                <SelectItem value="huggingface">Hugging Face (Inference Providers)</SelectItem>
                 <SelectItem value="azure_openai">Azure OpenAI</SelectItem>
                 <SelectItem value="custom">Custom Provider</SelectItem>
               </SelectContent>
@@ -137,6 +145,7 @@ export function ModelRegistryClient({ initialRows }: { initialRows: ModelRow[] }
   const [rows, setRows] = useState(initialRows);
   const [search, setSearch] = useState("");
   const [providerFilter, setProviderFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "authorized" | "unauthorized">("all");
   const [isRefreshing, startRefreshing] = useTransition();
 
   const handleRefresh = () => {
@@ -161,9 +170,13 @@ export function ModelRegistryClient({ initialRows }: { initialRows: ModelRow[] }
         row.model_slug.toLowerCase().includes(search.toLowerCase());
       const matchesProvider =
         providerFilter === "all" || row.provider_kind === providerFilter;
-      return matchesSearch && matchesProvider;
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "authorized" && row.is_active) ||
+        (statusFilter === "unauthorized" && !row.is_active);
+      return matchesSearch && matchesProvider && matchesStatus;
     });
-  }, [rows, search, providerFilter]);
+  }, [rows, search, providerFilter, statusFilter]);
 
   const columns: readonly Column<ModelRow>[] = [
     {
@@ -181,20 +194,56 @@ export function ModelRegistryClient({ initialRows }: { initialRows: ModelRow[] }
       render: (row) => display(row.provider_kind),
     },
     {
-      key: "is_active",
-      header: "Status",
+      key: "capabilities",
+      header: "Capabilities",
+      primary: "model_slug",
+      render: (row) => (
+        <div className="flex flex-wrap gap-1">
+          {row.supports_streaming && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-600">
+              Stream
+            </span>
+          )}
+          {row.supports_tools && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-600">
+              Tools
+            </span>
+          )}
+          {row.supports_reasoning && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-600">
+              Reason
+            </span>
+          )}
+          {!row.supports_streaming && !row.supports_tools && !row.supports_reasoning && (
+            <span className="text-xs text-muted-foreground">Standard</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "context_limit",
+      header: "Context Limit",
+      primary: "model_slug",
+      render: (row) =>
+        row.context_limit && row.context_limit > 0
+          ? `${(row.context_limit / 1000).toFixed(0)}k tokens`
+          : "—",
+    },
+    {
+      key: "status",
+      header: "Status & Authorization",
       primary: "model_slug",
       sort: "is_active",
       render: (row) => (
-        <span
-          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-            row.is_active
-              ? "bg-emerald-500/10 text-emerald-600"
-              : "bg-muted text-muted-foreground"
-          }`}
-        >
-          {row.is_active ? "Active" : "Inactive"}
-        </span>
+        row.is_active ? (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+            <CheckCircle2 className="size-3" /> Model authorized and ready
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-600 border border-amber-500/30">
+            <AlertTriangle className="size-3" /> Model discovered but unauthorized
+          </span>
+        )
       ),
     },
     {
@@ -238,6 +287,19 @@ export function ModelRegistryClient({ initialRows }: { initialRows: ModelRow[] }
                   {display(p)}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={statusFilter}
+            onValueChange={(val: any) => setStatusFilter(val)}
+          >
+            <SelectTrigger className="w-36 h-8 text-xs">
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="authorized">Authorized & Ready</SelectItem>
+              <SelectItem value="unauthorized">Discovered / Unauthorized</SelectItem>
             </SelectContent>
           </Select>
           <Button

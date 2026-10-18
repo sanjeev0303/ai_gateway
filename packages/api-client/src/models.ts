@@ -6,6 +6,13 @@ export interface Model {
   provider_kind: string;
   model_slug: string;
   display_name: string;
+  capabilities?: string[];
+  context_limit?: number;
+  supports_streaming?: boolean;
+  supports_tools?: boolean;
+  supports_reasoning?: boolean;
+  status?: string;
+  pricing_version?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;

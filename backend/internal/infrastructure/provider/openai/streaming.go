@@ -330,7 +330,10 @@ func (d *SSEDecoder) Next() (*StreamingEvent, error) {
 		return nil, io.EOF
 	}
 
-	eventData := []byte(data.String())
+	eventData := []byte(strings.TrimSpace(data.String()))
+	if bytes.Equal(eventData, []byte("[DONE]")) {
+		return nil, io.EOF
+	}
 
 	var event StreamingEvent
 	event.Object = eventType
