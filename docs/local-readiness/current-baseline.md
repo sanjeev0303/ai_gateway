@@ -3,7 +3,8 @@
 ## 1. Environment & Toolchains Baseline
 
 - **Evaluation Date**: 2026-10-19
-- **Repository Checkout**: Commit `d3c47a1` on branch `main`
+- **Final Verdict**: **`READY WITH DOCUMENTED LIMITATIONS`**
+- **Repository Checkout**: Commit `562525d` on branch `main`
 - **Host System**: Linux fedora (x86_64, 12 cores, 15.3 GiB RAM)
 - **Toolchains & Versions**:
   - **Go**: `go version go1.25.10 X:nodwarf5 linux/amd64` (exceeds declared minimum `go 1.25.7` in `backend/go.mod`)
@@ -65,6 +66,7 @@
 | **Frontend Unit Tests** | `cd app && npm test` | 0 | **PASS** | 34/34 tests pass (auth, widgets, billing, forms, error boundaries) |
 | **Frontend Production Build** | `cd app && npm run build` | 0 | **PASS** | 49/49 static and dynamic routes compiled successfully |
 | **Config Validation** | `cd backend && go run ./cmd/config-validate` | 0 | **PASS** | Configuration loads and validates development schema |
+| **Provider Live Smoke Tests** | `cd backend && go test -v ./internal/infrastructure/provider/...` | 0 | **PASS** | Unit & contract tests pass; live smoke tests skip cleanly when env credentials are absent |
 
 ---
 
