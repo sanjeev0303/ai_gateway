@@ -37,6 +37,11 @@ var sensitiveKeyPatterns = []string{
 	"cookie",
 	"set-cookie",
 	"credential",
+	"prompt",
+	"prompt_content",
+	"user_prompt",
+	"system_prompt",
+	"messages",
 }
 
 func IsSensitiveKey(key string) bool {
@@ -65,8 +70,10 @@ func RedactAttr(groups []string, a slog.Attr) slog.Attr {
 			return slog.String(a.Key, "Bearer <redacted>")
 		}
 		if strings.HasPrefix(lower, "sk_live_") || strings.HasPrefix(lower, "sk_test_") ||
+			strings.HasPrefix(lower, "sk-") ||
 			strings.HasPrefix(lower, "whsec_") || strings.HasPrefix(lower, "rzp_test_") ||
-			strings.HasPrefix(lower, "rzp_live_") || strings.HasPrefix(lower, "hf_") {
+			strings.HasPrefix(lower, "rzp_live_") || strings.HasPrefix(lower, "hf_") ||
+			strings.HasPrefix(lower, "ai-governance-") {
 			return slog.String(a.Key, "<redacted>")
 		}
 		if strings.HasPrefix(lower, "postgres://") || strings.HasPrefix(lower, "postgresql://") {

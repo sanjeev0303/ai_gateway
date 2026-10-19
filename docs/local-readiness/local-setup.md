@@ -91,11 +91,17 @@ make dev-reset       # or: bash scripts/dev-ctl.sh reset [--confirm]
 ## 4. Database Migrations & Seeding
 
 ```bash
-# Apply pending Goose migrations (00001 -> 00032)
-make db-migrate
+# Apply pending Goose migrations (00001 -> 00036)
+make db-migrate      # or: bash scripts/dev-ctl.sh migrate
 
 # Seed demo records (organizations, users, sample providers)
-make dev-seed
+make dev-seed        # or: bash scripts/dev-ctl.sh seed
+
+# Validate local environment setup and dependencies
+make dev-setup       # or: bash scripts/dev-ctl.sh setup
+
+# Run functional health probe suite
+make dev-health      # or: bash scripts/dev-ctl.sh health
 ```
 
 ---

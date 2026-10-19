@@ -27,6 +27,9 @@ func TestLoggingRedaction(t *testing.T) {
 		slog.String("provider_key", "sk_test_51US8k9Re9Q2dGkBU"),
 		slog.String("signing_key", "hmac-secret-signing-key-32bytes"),
 		slog.String("raw_dsn", "postgres://gateway:supersecret@localhost:5432/ai_gateway"),
+		slog.String("prompt", "What is the nuclear launch code?"),
+		slog.String("user_prompt", "Sensitive user question"),
+		slog.String("openai_key", "sk-proj-abc123456789"),
 		slog.String("safe_key", "public_value"),
 		slog.String("custom_header", "Bearer eyJhbGciOi..."),
 	)
@@ -37,6 +40,15 @@ func TestLoggingRedaction(t *testing.T) {
 	}
 	if strings.Contains(out, "sk-proj-1234567890") {
 		t.Errorf("output leaked api key: %s", out)
+	}
+	if strings.Contains(out, "sk-proj-abc123456789") {
+		t.Errorf("output leaked openai key: %s", out)
+	}
+	if strings.Contains(out, "nuclear launch code") {
+		t.Errorf("output leaked prompt content: %s", out)
+	}
+	if strings.Contains(out, "Sensitive user question") {
+		t.Errorf("output leaked user_prompt content: %s", out)
 	}
 	if strings.Contains(out, "p@ssw0rd!") {
 		t.Errorf("output leaked password: %s", out)

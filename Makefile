@@ -1,6 +1,9 @@
-.PHONY: build test vet lint tidy format generate db-migrate db-seed dev-up dev-down dev-seed dev-logs dev-start dev-stop dev-status dev-reset dev-gateway dev-gateway-v1 dev-control-api dev-worker check-boundaries verify check
+.PHONY: build test vet lint tidy format generate db-migrate db-seed dev-setup dev-up dev-down dev-seed dev-logs dev-start dev-stop dev-status dev-reset dev-health dev-gateway dev-gateway-v1 dev-control-api dev-worker check-boundaries verify check
 
 # --- Local Service Lifecycle Management (safe, non-destructive defaults) ---
+dev-setup:
+	bash scripts/dev-ctl.sh setup
+
 dev-start:
 	bash scripts/dev-ctl.sh start
 
@@ -9,6 +12,9 @@ dev-stop:
 
 dev-status:
 	bash scripts/dev-ctl.sh status
+
+dev-health:
+	bash scripts/dev-ctl.sh health
 
 dev-reset:
 	bash scripts/dev-ctl.sh reset

@@ -9,7 +9,8 @@
   },
   "scripts": {
     "generate": "openapi-typescript ../../backend/api/openapi/openapi.yaml -o src/generated.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsc --noEmit"
   },
   "devDependencies": {
     "openapi-typescript": "^7.5.2",

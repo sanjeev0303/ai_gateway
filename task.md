@@ -2,6 +2,92 @@
 
 Updated after each completed prompt.
 
+## COMPLETED TASK: Phases 10 and 11 — Complete Local Acceptance Testing & Final Documentation
+- [x] Phase 10: Run complete local acceptance tests
+  - [x] A. Static & unit checks: `go vet`, formatting, TypeScript typecheck, ESLint, Go unit tests, NPM test suite
+  - [x] B. Integration checks: Postgres repositories, migrations, Redis operations, NATS/eventbus, worker, adapters, auth, billing
+  - [x] C. End-to-end scenarios (1 through 8):
+    - [x] Scenario 1 — New organization: Admin signup, org setup, provider connection, credential validation, model discovery
+    - [x] Scenario 2 — Employee inference: Member invite, role assignment, gateway credential, CLI/SDK prompt, usage record
+    - [x] Scenario 3 — Governance enforcement: Model restrictions, budget exhaustion, policy rejection, server-side block
+    - [x] Scenario 4 — Tenant isolation: Multi-org isolation across API, CLI, SDK, and DB
+    - [x] Scenario 5 — Usage reconciliation: Known token counts, event processing, cost calculation, dashboard reconciliation
+    - [x] Scenario 6 — Recovery: Redis outage (fail-closed vs degraded), worker restarts, recovery without duplicate usage
+    - [x] Scenario 7 — Billing: Disabled/simulation modes, HMAC signature checks, idempotent webhooks, subscription changes
+    - [x] Scenario 8 — Regression: Complete test suite execution across backend, CLI, SDK, contracts, frontend
+- [x] Phase 11: Documentation and final report
+  - [x] Update `docs/local-readiness/local-setup.md` with verified commands and prerequisites
+  - [x] Update `docs/local-readiness/provider-verification.md` with model discovery & capability matrix
+  - [x] Update `docs/local-readiness/security-verification.md` with tenant isolation & SSRF defense
+  - [x] Update `docs/local-readiness/billing-verification.md` with dual payment modes & signature checks
+  - [x] Update `docs/local-readiness/final-test-report.md` with pass/fail counts, blockers, and final readiness status
+  - [x] Update `docs/local-readiness/remaining-gaps.md` with honest remaining non-critical limitations
+
+## COMPLETED TASK: Phases 5, 6, 7, 8, and 9 — Governance, Telemetry/Pricing, Billing, Frontend/API, Security/Privacy
+- [x] Phase 5: Make governance effective
+  - [x] Org, team, project, and user access control + model access restrictions
+  - [x] Policy creation, validation, evaluation, guardrails, and policy rejection responses
+  - [x] User, team, project, and organization budget limits + rate limiting and concurrency control
+  - [x] Audit events for privileged actions + policy cache invalidation after updates
+  - [x] Server-side enforcement decisions + fail-closed Redis outage verification
+- [x] Phase 6: Make usage, pricing and event processing reliable
+  - [x] Consistent Request IDs and correlation IDs across gateway, bus, worker, and database
+  - [x] Durable usage events with idempotent processing (no duplicate counting or dropped records)
+  - [x] Reliable worker restart recovery, retries, and dead-letter handling
+  - [x] Exact provider-reported token counts and accurate multi-tier pricing resolution
+  - [x] Explicit unknown pricing handling + concurrent budget reservations and releases
+  - [x] Accurate service-account attribution and reconciliation against dashboard aggregate records
+- [x] Phase 7: Complete billing safely
+  - [x] Explicit billing modes: disabled, simulation, and real provider test mode
+  - [x] Configuration validation, startup errors, and safe local development defaults
+  - [x] Real checkout session creation with valid test credentials + webhook signature verification
+  - [x] Idempotent webhook handling, out-of-order event resilience, and subscription lifecycle
+  - [x] Entitlement synchronization, invoice reconciliation, and simulation non-entitlement safety
+- [x] Phase 8: Complete frontend and API integration
+  - [x] Connect all dashboard routes to live backend APIs (auth, orgs, credentials, models, policies, guardrails, budgets, billing)
+  - [x] Verify loading, empty, partial-failure, permission-denied, and backend-unavailable states
+  - [x] Eliminate fake/mock production UI data and fix broken links/labels
+- [x] Phase 9: Security and privacy verification
+  - [x] Tenant-scoped authorization at every backend entry point + cross-tenant leak prevention
+  - [x] Secure session handling, CSRF defense, credential encryption, and secret redaction
+  - [x] Server-side SSRF validation for outbound provider endpoints + safe CORS/cookies
+  - [x] Administrative audit logging + retention, deletion, and privacy controls
+
+## COMPLETED TASK: Phases 2, 3, and 4 — Local Reproducibility, Provider Integration, CLI/SDK E2E
+- [x] Phase 2: Make local development reproducible
+  - [x] Verify toolchain versions (Go, Node.js, package manager) against repository configs
+  - [x] Verify Compose services, ports, dependency ordering, health checks, volumes, environment variables
+  - [x] Verify database migrations run in correct order and fail visibly on error
+  - [x] Verify PostgreSQL, Redis, NATS and app services connectivity and usage
+  - [x] Ensure application startup fails clearly when required dependencies are unavailable
+  - [x] Provide safe, explicit local-development defaults without insecure defaults in other modes
+  - [x] Ensure logs contain actionable diagnostics without credentials, tokens, API keys, or prompt content
+  - [x] Add/repair repository local setup, startup, shutdown, migration, and health-check commands
+- [x] Phase 3: Complete provider integration
+  - [x] Verify Gemini, OpenAI, Anthropic, Hugging Face adapters for credential validation and secure storage
+  - [x] Verify provider connection status and actionable error reporting
+  - [x] Verify credential-specific model discovery (no unverified fallbacks) and capability metadata
+  - [x] Verify model selection, provider routing, streaming (SSE) and non-streaming inference
+  - [x] Verify provider-specific parameter preservation, usage/token extraction, timeouts/retries
+  - [x] Verify upstream auth errors, unavailable models, malformed responses, usage event persistence
+  - [x] Verify mock-based deterministic tests and real-provider env-gated smoke tests
+- [x] Phase 4: Finish CLI and SDK end-to-end behavior
+  - [x] Inspect and trace every advertised CLI command and SDK feature
+  - [x] Verify login, logout, credential handling, and revocation
+  - [x] Verify model selection, listing, provider-specific settings, streaming/non-streaming
+  - [x] Verify usage and cost commands, conversation clearing and compaction
+  - [x] Enforce SSRF protection and server-side allowlists on custom endpoints
+  - [x] Ensure consistency between interactive REPL, single-request mode, and SDK
+  - [x] Run and add regression tests for all repaired commands and options
+
+## COMPLETED TASK: Phase 1 — Establish Actual Repository State & Deliverables
+- [x] Step 1: Deep inspection of all repository subsystems (Control API, Gateway-v2, Adapters, Frontend, CLI, SDK, Postgres schemas/migrations, Redis limiters/budgets, NATS worker, Auth/RBAC, Policies/Guardrails, Usage/Billing, Docker Compose/scripts, test suites).
+- [x] Step 2: Trace end-to-end user workflows across frontend -> API -> database/services -> gateway -> provider -> event processing -> dashboard.
+- [x] Step 3: Create/update `docs/local-readiness/repository-audit.md` with honest findings, source files, actual behavior, and defects.
+- [x] Step 4: Create/update `docs/local-readiness/implementation-plan.md` detailing the execution roadmap to achieve complete local readiness.
+- [x] Step 5: Create/update `docs/local-readiness/feature-verification-matrix.md` with source files, persistence, authorization, tests, known defects, and completion criteria for every feature.
+- [x] Step 6: Update `task.md`.
+
 ## COMPLETED TASK: Push Verified Multi-Provider, Billing, and Test Changes to Remote
 - [x] Step 1: Stage all verified changes and untracked files (`git add -A`).
 - [x] Step 2: Commit staged changes with descriptive message.

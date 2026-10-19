@@ -260,20 +260,139 @@ cmd_logs() {
     docker compose -f "$COMPOSE_FILE" logs -f "$@"
 }
 
+cmd_setup() {
+    log_info "Running local development setup..."
+    ensure_env_files
+    log_info "Verifying required local dependencies..."
+    local missing=()
+    for dep in go node npm docker curl; do
+        if ! command -v "$dep" >/dev/null 2>&1; then
+            missing+=("$dep")
+        fi
+    done
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        log_err "Missing required local dependencies: ${missing[*]}"
+        exit 1
+    fi
+    log_ok "Toolchains detected (Go $(go version | awk '{print $3}'), Node $(node -v), npm $(npm -v), $(docker --version | awk '{print $1,$2,$3}'))"
+    log_ok "Local development environment is configured and ready."
+}
+
+cmd_migrate() {
+    log_info "Running database schema migrations..."
+    ensure_env_files
+    if docker compose -f "$COMPOSE_FILE" ps postgres 2>/dev/null | grep -q "Up"; then
+        docker compose -f "$COMPOSE_FILE" run --rm migrate
+    else
+        log_info "Postgres container not running in compose; attempting local backend migration..."
+        (cd "$REPO_ROOT/backend" && export AIGW_DATABASE_URL="${AIGW_DATABASE_URL:-postgres://gateway:gateway@localhost:5432/ai_gateway?sslmode=disable}" && go run ./cmd/migrate)
+    fi
+    log_ok "Database migrations completed successfully."
+}
+
+cmd_seed() {
+    log_info "Running database demo seed..."
+    ensure_env_files
+    if docker compose -f "$COMPOSE_FILE" ps postgres 2>/dev/null | grep -q "Up"; then
+        docker compose -f "$COMPOSE_FILE" --profile seed run --rm seed
+    else
+        log_info "Postgres container not running in compose; attempting local backend seed..."
+        (cd "$REPO_ROOT/backend" && export AIGW_DATABASE_URL="${AIGW_DATABASE_URL:-postgres://gateway:gateway@localhost:5432/ai_gateway?sslmode=disable}" && go run ./cmd/seed)
+    fi
+    log_ok "Database seed completed successfully."
+}
+
+cmd_health() {
+    log_info "Running functional health checks on Sentinel services..."
+    local failed=0
+
+    # PostgreSQL
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q 'ai-gateway-postgres-1'; then
+        if docker exec ai-gateway-postgres-1 pg_isready -U gateway -d ai_gateway >/dev/null 2>&1; then
+            log_ok "PostgreSQL: healthy"
+        else
+            log_err "PostgreSQL: pg_isready failed"
+            failed=$((failed + 1))
+        fi
+    else
+        log_warn "PostgreSQL: container not running"
+    fi
+
+    # Redis
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q 'ai-gateway-redis-1'; then
+        local rpass="${AIGW_REDIS_PASSWORD:-${REDIS_PASSWORD:-change-me}}"
+        if docker exec -e REDISCLI_AUTH="$rpass" ai-gateway-redis-1 redis-cli ping >/dev/null 2>&1; then
+            log_ok "Redis: healthy"
+        else
+            log_err "Redis: ping failed"
+            failed=$((failed + 1))
+        fi
+    else
+        log_warn "Redis: container not running"
+    fi
+
+    # NATS
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q 'ai-gateway-nats-1'; then
+        if curl -s -f http://localhost:8222/healthz >/dev/null 2>&1; then
+            log_ok "NATS JetStream: healthy"
+        else
+            log_err "NATS JetStream: healthz probe failed"
+            failed=$((failed + 1))
+        fi
+    else
+        log_warn "NATS JetStream: container not running"
+    fi
+
+    # Control API
+    if curl -s -f http://localhost:8081/readyz >/dev/null 2>&1; then
+        log_ok "Control API (/readyz): healthy"
+    else
+        log_warn "Control API (/readyz): not reachable at http://localhost:8081"
+    fi
+
+    # Gateway v2
+    if curl -s -f http://localhost:8084/readyz >/dev/null 2>&1; then
+        log_ok "Gateway v2 (/readyz): healthy"
+    else
+        log_warn "Gateway v2 (/readyz): not reachable at http://localhost:8084"
+    fi
+
+    # Worker
+    if curl -s -f http://localhost:8082/readyz >/dev/null 2>&1; then
+        log_ok "Worker (/readyz): healthy"
+    else
+        log_warn "Worker (/readyz): not reachable at http://localhost:8082"
+    fi
+
+    if [[ $failed -gt 0 ]]; then
+        log_err "Health check completed with $failed failure(s)"
+        return 1
+    fi
+    log_ok "Health check evaluation complete."
+    return 0
+}
+
 usage() {
-    echo "Usage: $0 {start|stop|down|status|reset [--confirm]|logs [service]}"
+    echo "Usage: $0 {setup|start|stop|down|status|reset [--confirm]|migrate|seed|health|logs [service]}"
     echo ""
     echo "Commands:"
+    echo "  setup     Initialize local development environment and check toolchains"
     echo "  start     Safely start all local containers and verify functional readiness"
     echo "  stop      Stop containers gracefully without destroying data"
     echo "  down      Tear down containers while preserving persistent volumes"
     echo "  status    Show checkout commit, endpoints, container status, and /readyz health"
     echo "  reset     Destructive reset: wipe volumes and recreate (requires explicit confirmation)"
+    echo "  migrate   Run database schema migrations"
+    echo "  seed      Seed local database with demo records"
+    echo "  health    Execute functional health probe suite against running services"
     echo "  logs      Follow container logs"
     exit 1
 }
 
 case "${1:-status}" in
+    setup)
+        cmd_setup
+        ;;
     start)
         shift
         cmd_start "$@"
@@ -291,6 +410,15 @@ case "${1:-status}" in
         shift
         cmd_reset "$@"
         ;;
+    migrate)
+        cmd_migrate
+        ;;
+    seed)
+        cmd_seed
+        ;;
+    health)
+        cmd_health
+        ;;
     logs)
         shift
         cmd_logs "$@"
@@ -299,3 +427,4 @@ case "${1:-status}" in
         usage
         ;;
 esac
+
