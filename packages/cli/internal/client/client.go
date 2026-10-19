@@ -65,6 +65,8 @@ type RequestPayload struct {
 	SystemPrompt    string
 	Temperature     *float64
 	ReasoningEffort string
+	SafetySettings  string
+	HFEndpoint      string
 }
 
 // New creates a new GatewayClient.
@@ -159,6 +161,9 @@ func (c *GatewayClient) StreamRequest(ctx context.Context, payload RequestPayloa
 	c.setHeaders(req)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
+	if payload.HFEndpoint != "" {
+		req.Header.Set("x-hf-endpoint", payload.HFEndpoint)
+	}
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -323,6 +328,9 @@ func (c *GatewayClient) SendRequest(ctx context.Context, payload RequestPayload)
 	}
 	c.setHeaders(req)
 	req.Header.Set("Content-Type", "application/json")
+	if payload.HFEndpoint != "" {
+		req.Header.Set("x-hf-endpoint", payload.HFEndpoint)
+	}
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -525,11 +533,34 @@ func (c *GatewayClient) buildRequestBody(payload RequestPayload, stream, isOpenA
 			m["system"] = payload.SystemPrompt
 		}
 	}
-	if payload.Temperature != nil {
+	isReasoningModel := strings.HasPrefix(payload.Model, "o1") || strings.HasPrefix(payload.Model, "o3")
+	isGemini := strings.HasPrefix(payload.Model, "gemini-") || strings.Contains(payload.Model, "gemini")
+
+	if payload.Temperature != nil && !isReasoningModel {
 		m["temperature"] = *payload.Temperature
 	}
-	if payload.ReasoningEffort != "" && isOpenAI {
+	if payload.ReasoningEffort != "" && isOpenAI && isReasoningModel {
 		m["reasoning_effort"] = payload.ReasoningEffort
+	}
+	if payload.SafetySettings != "" && isGemini {
+		categories := []string{
+			"HARM_CATEGORY_HARASSMENT",
+			"HARM_CATEGORY_HATE_SPEECH",
+			"HARM_CATEGORY_SEXUALLY_EXPLICIT",
+			"HARM_CATEGORY_DANGEROUS_CONTENT",
+		}
+		var safetyList []map[string]string
+		for _, cat := range categories {
+			safetyList = append(safetyList, map[string]string{
+				"category":  cat,
+				"threshold": payload.SafetySettings,
+			})
+		}
+		m["safety_settings"] = safetyList
+		m["safetySettings"] = safetyList
+	}
+	if payload.HFEndpoint != "" {
+		m["endpoint"] = payload.HFEndpoint
 	}
 	if payload.ProjectID != "" {
 		m["project_id"] = payload.ProjectID

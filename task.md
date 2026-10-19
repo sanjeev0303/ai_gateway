@@ -2,6 +2,90 @@
 
 Updated after each completed prompt.
 
+## ACTIVE TASK: Push Verified Multi-Provider, Billing, and Test Changes to Remote
+- [ ] Step 1: Stage all verified changes and untracked files (`git add -A`).
+- [ ] Step 2: Commit staged changes with descriptive message.
+- [ ] Step 3: Push commits to remote origin main (`git push origin main`).
+- [ ] Step 4: Verify clean working directory and remote synchronization.
+- [ ] Step 5: Mark task complete in `task.md`.
+
+## COMPLETED TASK: Phase H — Run Tests and Produce Evidence
+- [x] Step 1: Discover repository commands, environment prerequisites, Go version, Node dependencies, and Docker availability.
+- [x] Step 2: Run Go formatting, vetting, race detection, unit and integration test suites (`backend`, `packages/cli`, `packages/sdk`).
+- [x] Step 3: Run Frontend type checking, linting, and build validation (`app`).
+- [x] Step 4: Run database migration validation, provider-adapter contract tests, model discovery tests, slash-command execution tests, payment adapter tests, and tenant isolation tests.
+- [x] Step 5: Create/update required deliverables in `docs/local-readiness/`: `critical-defects.md`, `provider-discovery-verification.md`, `cli-command-verification.md`, `billing-verification.md`, `local-configuration-verification.md`, `final-test-report.md`, and `remaining-gaps.md`.
+- [x] Step 6: Assign honest final status and update `task.md`.
+
+## COMPLETED TASK: Phase G — End-to-End Test Scenario
+- [x] Step 1: Create reproducible local test fixtures with 1 organization, 3 independent users, separate Sentinel credentials, different provider/model access restrictions, explicit test budgets, rate limits, and deterministic mock providers.
+- [x] Step 2: Verify user authentication, Sentinel CLI session startup, dynamic `/` command menu inspection, and execution of common vs provider-specific slash commands for each user.
+- [x] Step 3: Verify CLI inference requests, provider/model routing, unauthorized model rejection, token usage, cost calculation, status, and latency metrics.
+- [x] Step 4: Verify corresponding dashboard records and assert strict tenant/user isolation (prevent cross-user reading of conversations, credentials, usage, or billing records).
+- [x] Step 5: Verify immediate credential revocation enforcement and separation of hermetic mock-provider fixtures from live provider tests.
+- [x] Step 6: Execute end-to-end verification suites, verify zero regressions, and update `task.md`.
+
+## COMPLETED TASK: Phase F — Verify the Full Multi-Provider Gateway
+- [x] Step 1: Audit multi-provider adapters (Gemini, OpenAI, Anthropic, Hugging Face), adapter contracts (`ports/provider`), gateway routing (`provider_router.go`), and control plane discovery.
+- [x] Step 2: Verify credential validation and dynamic model discovery / availability verification across all 4 providers.
+- [x] Step 3: Verify provider-bound Sentinel credential enforcement, authorized model selection, and scope escape prevention.
+- [x] Step 4: Verify streaming (SSE) and non-streaming request/response mapping, provider-specific options preservation, token usage extraction, error translation, and timeout/cancellation handling.
+- [x] Step 5: Verify usage and cost persistence, multi-dimensional request attribution (user/org/project), and dashboard analytics aggregation.
+- [x] Step 6: Execute comprehensive multi-provider test suite, document capabilities and known limitations per provider, and update `task.md`.
+
+## COMPLETED TASK: Phase E — Correct Local Configuration and Service Wiring
+- [x] Step 1: Inspect `deploy/compose/docker-compose.yml`, environment templates, startup scripts, and application bootstrap (`run.go`).
+- [x] Step 2: Validate unified Redis credentials and verify gateway Redis-backed budget and rate-limit wiring with explicit fail-open/fail-closed outage policy.
+- [x] Step 3: Ensure strict placeholder secret rejection and make development login, disabled CSRF, and insecure session defaults explicit opt-ins.
+- [x] Step 4: Verify NATS configuration alignment with publisher/consumer, service readiness probes, log sanitization, and remove obsolete comments.
+- [x] Step 5: Ensure verification scripts (`scripts/verify-local.sh`, `scripts/dev-ctl.sh`) preserve `.env` files and target correct checkout/endpoints.
+- [x] Step 6: Implement automated regression tests for configuration, service wiring, and Redis outage policies, and verify full test suites.
+
+## COMPLETED TASK: Phase D — Make Billing Modes Explicit and Safe
+- [x] Step 1: Inspect existing billing configuration, payment gateways, controlapi handlers, and adapters (Stripe & Razorpay).
+- [x] Step 2: Implement explicit billing modes (Disabled, Simulation, Provider Test Mode) across config, billing service, and API handlers.
+- [x] Step 3: Enforce strict safety rules: reject fake checkout URLs when not in simulation mode; prevent simulated checkouts from granting real entitlements; require valid webhook signatures; verify idempotency.
+- [x] Step 4: Verify live/test-mode API interactions using user-provided Stripe and Razorpay test credentials.
+- [x] Step 5: Implement comprehensive regression tests covering all modes, missing/invalid credentials, webhooks, duplicate processing, failures, and cancellations.
+- [x] Step 6: Verify full test suites and update task.md.
+
+## COMPLETED TASK: Configure User-Provided Stripe and Razorpay Test Credentials
+- [x] Step 1: Update `backend/.env` and `backend/.env.example` with Razorpay key ID/secret and Stripe secret/publishable keys.
+- [x] Step 2: Update root `.env` and `.env.example` with the active test credentials.
+- [x] Step 3: Update `deploy/compose/.env` and `deploy/compose/.env.example` with the active test credentials.
+- [x] Step 4: Create `app/.env.example` and `app/.env.local` with public frontend keys (`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_RAZORPAY_KEY_ID`).
+- [x] Step 5: Verify backend configuration loading, payment adapters, and update task.md.
+
+## COMPLETED TASK: Phase C — Fix Provider-Aware CLI Command Execution
+- [x] Step 1: Trace command registry, slash-command handlers, gateway request DTOs, and provider adapters.
+- [x] Step 2: Implement capability-gated commands (/safety for Gemini only, /endpoint with SSRF validation, /model permission filtering, /usage and /cost from gateway, /compact and /clear).
+- [x] Step 3: Ensure request-path consistency between CLI interactive session, single-shot requests, gateway-v2 DTOs, and provider adapters.
+- [x] Step 4: Add comprehensive regression tests for slash commands, state transitions, payload serialization, and SSRF prevention.
+- [x] Step 5: Verify all CLI and backend test suites and update task.md.
+
+## COMPLETED TASK: Provide Stripe and Razorpay Credentials in .env and .env.example
+- [x] Step 1: Configure Stripe and Razorpay test credentials in backend/.env.example and backend/.env.
+- [x] Step 2: Configure consolidated .env.example and .env at repository root.
+- [x] Step 3: Configure Stripe and Razorpay environment variables in deploy/compose/.env.example and deploy/compose/.env.
+- [x] Step 4: Verify backend configuration loading and test suites.
+- [x] Step 5: Update task.md.
+
+## COMPLETED TASK: Phase B — Fix Model Discovery and Availability
+- [x] Step 1: Audit existing model discovery logic across Hugging Face, Anthropic, OpenAI, and Gemini adapters.
+- [x] Step 2: Ensure model discovery never returns hardcoded fallback models as verified; query provider listing endpoints with actual credential.
+- [x] Step 3: Track discovery status, last sync timestamp, and connection association in provider account & model registry.
+- [x] Step 4: Ensure UI & Gateway distinguish discovered, authorized, ready, unavailable, and revoked connection states.
+- [x] Step 5: Write comprehensive regression tests (successful discovery, empty lists, invalid credentials, timeouts, unsupported endpoints, revoked credentials, org isolation, stale models).
+- [x] Step 6: Verify all test suites and update task.md.
+
+## COMPLETED TASK: Phase A — Establish Current Baseline and Audit Integration Gaps
+- [x] Step 1: Inspect Git status, commit SHA, and toolchain versions.
+- [x] Step 2: Inspect implementation files across Hugging Face, Anthropic, Gateway V2, Bootstrap, CLI, and Payment adapters.
+- [x] Step 3: Trace end-to-end flows (provider discovery, credential auth, CLI slash commands, billing checkout, webhooks, entitlements).
+- [x] Step 4: Run baseline test suites (Go backend, CLI, SDK, Frontend) and record exact exit codes.
+- [x] Step 5: Create or update docs/local-readiness/critical-defects.md with confirmed findings, root causes, and verification status.
+- [x] Step 6: Update task.md with completed steps.
+
 ## COMPLETED TASK: Push Multi-Provider and Billing Implementation to GitHub
 - [x] Step 1: Stage all verified files and untracked artifacts (`git add -A`).
 - [x] Step 2: Commit staged changes with comprehensive commit message.

@@ -155,6 +155,7 @@ type InspectorHints struct {
 	ProjectID             *uuid.UUID
 	RoutingTags           map[string]string
 	Warnings              []string
+	CustomEndpoint        string
 }
 
 // UpstreamResponse represents the upstream provider response.

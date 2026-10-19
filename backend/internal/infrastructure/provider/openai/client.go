@@ -88,6 +88,9 @@ func (c *Client) ListModels(ctx context.Context, apiKey string) ([]provider.Mode
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return nil, ErrInvalidAPIKey
 	}
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusNotImplemented {
+		return nil, fmt.Errorf("%w: openai models endpoint returned status %d", provider.ErrDiscoveryUnavailable, resp.StatusCode)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("openai: unexpected status %d listing models", resp.StatusCode)
 	}

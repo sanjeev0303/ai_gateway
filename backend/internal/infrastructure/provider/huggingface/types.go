@@ -90,7 +90,7 @@ type HubWhoAmI struct {
 	Name  string `json:"name"`
 	Email string `json:"email,omitempty"`
 	Auth  struct {
-		Type        string   `json:"type"`
+		Type        string `json:"type"`
 		AccessToken struct {
 			DisplayName string   `json:"displayName"`
 			Role        string   `json:"role"`

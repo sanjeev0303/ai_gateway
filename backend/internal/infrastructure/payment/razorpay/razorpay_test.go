@@ -22,8 +22,9 @@ func TestCreateCheckoutSession(t *testing.T) {
 
 	orgID := uuid.New()
 
-	t.Run("simulated fallback for dummy keys", func(t *testing.T) {
+	t.Run("explicit simulation mode", func(t *testing.T) {
 		gw := New("dummy-key", "dummy-secret", "dummy-webhook")
+		gw.SetMode("simulation")
 		params := payment.CheckoutParams{
 			OrganizationID: orgID,
 			PlanCode:       "enterprise",
@@ -37,11 +38,43 @@ func TestCreateCheckoutSession(t *testing.T) {
 		if sess.Provider != "razorpay" {
 			t.Errorf("expected razorpay provider, got %s", sess.Provider)
 		}
-		if !strings.HasPrefix(sess.SessionID, "sub_link_") {
-			t.Errorf("expected session ID to start with sub_link_, got %s", sess.SessionID)
+		if !sess.IsSimulated {
+			t.Errorf("expected IsSimulated to be true")
 		}
-		if !strings.Contains(sess.URL, "rzp.io/i/") {
-			t.Errorf("expected URL to contain rzp.io/i/, got %s", sess.URL)
+		if sess.Mode != "simulation" {
+			t.Errorf("expected Mode simulation, got %s", sess.Mode)
+		}
+		if !strings.HasPrefix(sess.SessionID, "sub_sim_") {
+			t.Errorf("expected session ID to start with sub_sim_, got %s", sess.SessionID)
+		}
+		if !strings.Contains(sess.URL, "rzp.io/simulate/") {
+			t.Errorf("expected URL to contain rzp.io/simulate/, got %s", sess.URL)
+		}
+	})
+
+	t.Run("test mode rejects dummy key with invalid credentials error", func(t *testing.T) {
+		gw := New("dummy-key", "dummy-secret", "dummy-webhook")
+		gw.SetMode("test")
+		params := payment.CheckoutParams{
+			OrganizationID: orgID,
+			PlanCode:       "enterprise",
+		}
+		_, err := gw.CreateCheckoutSession(context.Background(), params)
+		if !errors.Is(err, payment.ErrInvalidCredentials) {
+			t.Fatalf("expected ErrInvalidCredentials, got %v", err)
+		}
+	})
+
+	t.Run("test mode rejects empty key with missing credentials error", func(t *testing.T) {
+		gw := New("", "", "dummy-webhook")
+		gw.SetMode("test")
+		params := payment.CheckoutParams{
+			OrganizationID: orgID,
+			PlanCode:       "enterprise",
+		}
+		_, err := gw.CreateCheckoutSession(context.Background(), params)
+		if !errors.Is(err, payment.ErrMissingCredentials) {
+			t.Fatalf("expected ErrMissingCredentials, got %v", err)
 		}
 	})
 

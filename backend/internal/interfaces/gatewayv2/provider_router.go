@@ -3,7 +3,11 @@ package gatewayv2
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -97,8 +101,61 @@ func (r *ProviderRouterImpl) routeOpenAI(baseURL string, headers http.Header, up
 	return baseURL, headers, nil
 }
 
-// routeHuggingFace handles Hugging Face provider routing with Authorization Bearer.
+// ValidateHFEndpoint validates a Hugging Face dedicated inference endpoint URL against SSRF and unauthorized hosts.
+func ValidateHFEndpoint(rawURL string) error {
+	if rawURL == "" {
+		return nil
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid endpoint URL format: %w", err)
+	}
+	if u.Scheme != "https" {
+		return errors.New("endpoint URL must use HTTPS scheme")
+	}
+	host := u.Hostname()
+	if host == "" {
+		return errors.New("endpoint URL must specify a valid hostname")
+	}
+
+	hostLower := strings.ToLower(host)
+
+	// Block loopback, metadata, and cloud metadata hostnames
+	if hostLower == "localhost" || strings.HasSuffix(hostLower, ".localhost") ||
+		hostLower == "metadata.google.internal" || hostLower == "instance-data" ||
+		hostLower == "metadata" {
+		return fmt.Errorf("prohibited endpoint host %q", host)
+	}
+
+	// Reject IP addresses to prevent SSRF against internal/cloud network ranges
+	if ip := net.ParseIP(hostLower); ip != nil {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return fmt.Errorf("prohibited endpoint IP address %q: private and loopback networks forbidden", host)
+		}
+		return fmt.Errorf("prohibited endpoint host %q: direct IP addresses not permitted", host)
+	}
+
+	// Must belong to verified Hugging Face endpoint or Hub domains
+	isAllowedHFDomain := strings.HasSuffix(hostLower, ".endpoints.huggingface.cloud") ||
+		hostLower == "router.huggingface.co" ||
+		hostLower == "api-inference.huggingface.co" ||
+		strings.HasSuffix(hostLower, ".huggingface.co")
+
+	if !isAllowedHFDomain {
+		return fmt.Errorf("unauthorized endpoint host %q: must be a verified Hugging Face domain (*.endpoints.huggingface.cloud or *.huggingface.co)", host)
+	}
+
+	return nil
+}
+
+// routeHuggingFace handles Hugging Face provider routing with Authorization Bearer and validated dedicated endpoints.
 func (r *ProviderRouterImpl) routeHuggingFace(baseURL string, headers http.Header, upstream ResolvedUpstream, hints InspectorHints) (string, http.Header, error) {
+	if hints.CustomEndpoint != "" {
+		if err := ValidateHFEndpoint(hints.CustomEndpoint); err != nil {
+			return "", nil, err
+		}
+		baseURL = strings.TrimRight(hints.CustomEndpoint, "/") + "/"
+	}
 	if key := headers.Get("x-api-key"); key != "" {
 		headers.Set("Authorization", "Bearer "+key)
 		headers.Del("x-api-key")

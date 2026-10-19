@@ -355,6 +355,14 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 		hints = InspectorHints{}
 	}
 
+	// Validate and extract Hugging Face custom endpoint if supplied
+	if hfEp := strings.TrimSpace(r.Header.Get("x-hf-endpoint")); hfEp != "" {
+		if err := ValidateHFEndpoint(hfEp); err != nil {
+			return g.pipelineError("request_inspector", fmt.Errorf("invalid x-hf-endpoint: %w", err), http.StatusBadRequest, "invalid_endpoint")
+		}
+		hints.CustomEndpoint = hfEp
+	}
+
 	// Detect API parameter tampering: inspect query string and URL path for conflicting model or provider overrides
 	queryModel := strings.TrimSpace(r.URL.Query().Get("model"))
 	if queryModel != "" {

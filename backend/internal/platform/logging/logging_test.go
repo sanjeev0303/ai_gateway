@@ -23,6 +23,10 @@ func TestLoggingRedaction(t *testing.T) {
 		slog.String("authorization", "Bearer super-secret-token"),
 		slog.String("api_key", "sk-proj-1234567890"),
 		slog.String("password", "p@ssw0rd!"),
+		slog.String("webhook_secret", "whsec_test_secret_abc"),
+		slog.String("provider_key", "sk_test_51US8k9Re9Q2dGkBU"),
+		slog.String("signing_key", "hmac-secret-signing-key-32bytes"),
+		slog.String("raw_dsn", "postgres://gateway:supersecret@localhost:5432/ai_gateway"),
 		slog.String("safe_key", "public_value"),
 		slog.String("custom_header", "Bearer eyJhbGciOi..."),
 	)
@@ -36,6 +40,18 @@ func TestLoggingRedaction(t *testing.T) {
 	}
 	if strings.Contains(out, "p@ssw0rd!") {
 		t.Errorf("output leaked password: %s", out)
+	}
+	if strings.Contains(out, "whsec_test_secret_abc") {
+		t.Errorf("output leaked webhook secret: %s", out)
+	}
+	if strings.Contains(out, "sk_test_51US8k9Re9Q2dGkBU") {
+		t.Errorf("output leaked provider key: %s", out)
+	}
+	if strings.Contains(out, "hmac-secret-signing-key-32bytes") {
+		t.Errorf("output leaked signing key: %s", out)
+	}
+	if strings.Contains(out, "supersecret") {
+		t.Errorf("output leaked database password in DSN: %s", out)
 	}
 	if !strings.Contains(out, "<redacted>") {
 		t.Errorf("output should contain <redacted>: %s", out)

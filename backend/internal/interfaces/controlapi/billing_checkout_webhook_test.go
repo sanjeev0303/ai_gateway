@@ -38,6 +38,7 @@ func newPaymentBillingServer(t *testing.T, st *controlStubs, stripeSecret, razor
 	razorpayGw := razorpay.New("dummy-rzp-key", "dummy-rzp-secret", razorpaySecret)
 
 	billingSvc := billing.NewService(billing.ServiceDeps{
+		Mode:          "simulation",
 		Plans:         plans,
 		Subscriptions: subs,
 		Invoices:      inv,
@@ -320,4 +321,3 @@ func TestBillingVerifyPaymentEndpoint(t *testing.T) {
 		}
 	})
 }
-

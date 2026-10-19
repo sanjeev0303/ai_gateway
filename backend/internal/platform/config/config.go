@@ -11,14 +11,13 @@ package config
 import (
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
-
-	"ai-governance-saas/backend/internal/domain"
 )
 
 // EnvPrefix is the prefix of every environment variable this service reads.
@@ -59,6 +58,16 @@ func Load() (*Config, error) {
 	if err := env.ParseWithOptions(cfg, env.Options{Prefix: EnvPrefix}); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
+
+	// Fallback Redis password from REDIS_PASSWORD if AIGW_REDIS_PASSWORD was not set
+	if cfg.Redis.Password == "" && os.Getenv("REDIS_PASSWORD") != "" {
+		cfg.Redis.Password = os.Getenv("REDIS_PASSWORD")
+	}
+	// Fallback Redis outage policy from legacy env vars if not explicitly set
+	if !cfg.Redis.FailClosed && (os.Getenv("AIGW_RATE_LIMIT_FAIL_CLOSED") == "true" || os.Getenv("AIGW_BUDGET_FAIL_CLOSED") == "true") {
+		cfg.Redis.FailClosed = true
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate config: %w", err)
 	}
@@ -91,10 +100,17 @@ type DatabaseConfig struct {
 
 // RedisConfig describes the Redis cache/rate-limit store (gateway milestone).
 type RedisConfig struct {
-	Enabled  bool   `env:"ENABLED" envDefault:"false"`
-	Addr     string `env:"ADDR" envDefault:"localhost:6379"`
-	Password string `env:"PASSWORD"` // never logged
-	DB       int    `env:"DB" envDefault:"0"`
+	Enabled      bool   `env:"ENABLED" envDefault:"false"`
+	Addr         string `env:"ADDR" envDefault:"localhost:6379"`
+	Password     string `env:"PASSWORD"` // never logged
+	DB           int    `env:"DB" envDefault:"0"`
+	OutagePolicy string `env:"OUTAGE_POLICY" envDefault:"degraded_local"` // degraded_local | fail_closed
+	FailClosed   bool   `env:"FAIL_CLOSED" envDefault:"false"`
+}
+
+// IsFailClosed returns true if the Redis outage policy is set to fail-closed.
+func (r RedisConfig) IsFailClosed() bool {
+	return r.FailClosed || strings.ToLower(strings.TrimSpace(r.OutagePolicy)) == "fail_closed"
 }
 
 // EventbusConfig describes the outbox/event bus used by worker-heavy flows.
@@ -151,21 +167,53 @@ type AuthConfig struct {
 	// The refresh and CSRF cookie names derive from it, so a deployment only
 	// ever has to pick one prefix.
 	SessionCookieName   string `env:"SESSION_COOKIE_NAME" envDefault:"session"`
-	SessionCookieSecure bool   `env:"SESSION_COOKIE_SECURE" envDefault:"false"`
-	CSRFEnabled         bool   `env:"CSRF_ENABLED" envDefault:"false"`
+	SessionCookieSecure bool   `env:"SESSION_COOKIE_SECURE" envDefault:"true"`
+	CSRFEnabled         bool   `env:"CSRF_ENABLED" envDefault:"true"`
 	DevLoginEnabled     bool   `env:"DEV_LOGIN_ENABLED" envDefault:"false"`
 }
+
+// Explicit billing modes.
+const (
+	BillingModeDisabled   = "disabled"
+	BillingModeSimulation = "simulation"
+	BillingModeTest       = "test"
+	BillingModeLive       = "live"
+)
 
 // BillingConfig describes the billing integration (dual provider: Stripe and Razorpay).
 type BillingConfig struct {
 	Enabled               bool   `env:"ENABLED" envDefault:"false"`
+	Mode                  string `env:"MODE" envDefault:"disabled"` // disabled | simulation | test | live
 	Provider              string `env:"PROVIDER" envDefault:"none"`
 	Currency              string `env:"CURRENCY" envDefault:"usd"`
 	StripeSecretKey       string `env:"STRIPE_SECRET_KEY"`
+	StripePublishableKey  string `env:"STRIPE_PUBLISHABLE_KEY"`
 	StripeWebhookSecret   string `env:"STRIPE_WEBHOOK_SECRET"`
 	RazorpayKeyID         string `env:"RAZORPAY_KEY_ID"`
 	RazorpayKeySecret     string `env:"RAZORPAY_KEY_SECRET"`
 	RazorpayWebhookSecret string `env:"RAZORPAY_WEBHOOK_SECRET"`
+}
+
+// EffectiveMode returns the active billing mode. If Enabled is false, it returns "disabled".
+func (c BillingConfig) EffectiveMode() string {
+	if !c.Enabled {
+		return BillingModeDisabled
+	}
+	m := strings.ToLower(strings.TrimSpace(c.Mode))
+	switch m {
+	case "simulation", "simulated":
+		return BillingModeSimulation
+	case "test", "testing":
+		return BillingModeTest
+	case "live", "production":
+		return BillingModeLive
+	case "disabled":
+		return BillingModeDisabled
+	case "":
+		return BillingModeTest
+	default:
+		return m
+	}
 }
 
 // ObservabilityConfig tunes slog, tracing and metrics. OTLP/metrics wiring
@@ -266,9 +314,26 @@ func (c Config) Validate() error {
 		if c.Database.Enabled && isPlaceholderSecret(c.Database.URL) {
 			add(fmt.Errorf("DATABASE_URL contains a known placeholder secret, prohibited in %s environment", c.Env))
 		}
+		if c.Billing.Enabled {
+			mode := c.Billing.EffectiveMode()
+			if mode == BillingModeLive || mode == BillingModeTest {
+				if isPlaceholderSecret(c.Billing.StripeSecretKey) {
+					add(fmt.Errorf("BILLING_STRIPE_SECRET_KEY uses a known placeholder secret, prohibited in %s environment", c.Env))
+				}
+				if isPlaceholderSecret(c.Billing.RazorpayKeySecret) {
+					add(fmt.Errorf("BILLING_RAZORPAY_KEY_SECRET uses a known placeholder secret, prohibited in %s environment", c.Env))
+				}
+			}
+		}
 	} else if c.Env == "development" {
 		if c.Auth.DevLoginEnabled && !c.AllowInsecureDev {
 			add(errors.New("AUTH_DEV_LOGIN_ENABLED=true is a development convenience; set AIGW_ALLOW_INSECURE_DEV=true to confirm this choice"))
+		}
+		if !c.Auth.CSRFEnabled && !c.AllowInsecureDev {
+			add(errors.New("AUTH_CSRF_ENABLED=false disables CSRF protection; set AUTH_CSRF_ENABLED=true or set AIGW_ALLOW_INSECURE_DEV=true for local development"))
+		}
+		if !c.Auth.SessionCookieSecure && !c.AllowInsecureDev {
+			add(errors.New("AUTH_SESSION_COOKIE_SECURE=false allows unencrypted session cookies; set AUTH_SESSION_COOKIE_SECURE=true or set AIGW_ALLOW_INSECURE_DEV=true for local development"))
 		}
 		if isPlaceholderSecret(c.Auth.HMACSigningKey) && !c.AllowInsecureDev {
 			add(errors.New("AUTH_HMAC_SIGNING_KEY uses a known placeholder secret; set a secure 32+ byte key or set AIGW_ALLOW_INSECURE_DEV=true for local development"))
@@ -287,6 +352,17 @@ func (c Config) Validate() error {
 				add(fmt.Errorf("AUTH_HMAC_PREVIOUS_KEYS entry %d uses a known placeholder secret; set a secure key or set AIGW_ALLOW_INSECURE_DEV=true for local development", i))
 			}
 		}
+		if c.Billing.Enabled {
+			mode := c.Billing.EffectiveMode()
+			if (mode == BillingModeLive || mode == BillingModeTest) && !c.AllowInsecureDev {
+				if isPlaceholderSecret(c.Billing.StripeSecretKey) {
+					add(errors.New("BILLING_STRIPE_SECRET_KEY uses a known placeholder secret; provide a valid key or set AIGW_ALLOW_INSECURE_DEV=true for local development"))
+				}
+				if isPlaceholderSecret(c.Billing.RazorpayKeySecret) {
+					add(errors.New("BILLING_RAZORPAY_KEY_SECRET uses a known placeholder secret; provide a valid secret or set AIGW_ALLOW_INSECURE_DEV=true for local development"))
+				}
+			}
+		}
 	}
 
 	if c.Server.Addr == "" {
@@ -302,8 +378,13 @@ func (c Config) Validate() error {
 		add(errors.New("SERVER_SHUTDOWN_TIMEOUT must be > 0"))
 	}
 
-	if c.Database.Enabled && c.Database.URL == "" {
-		add(errors.New("DATABASE_ENABLED=true requires DATABASE_URL"))
+	if c.Database.Enabled {
+		if c.Database.URL == "" {
+			add(errors.New("DATABASE_ENABLED=true requires DATABASE_URL"))
+		}
+		if c.Auth.HMACSigningKey == "" {
+			add(errors.New("DATABASE_ENABLED=true requires AUTH_HMAC_SIGNING_KEY"))
+		}
 	}
 	if c.Database.MaxOpenConns < 1 || c.Database.MaxIdleConns < 0 {
 		add(errors.New("DATABASE pool sizes are invalid"))
@@ -312,8 +393,14 @@ func (c Config) Validate() error {
 		add(errors.New("DATABASE_CONNECT_TIMEOUT must be > 0"))
 	}
 
-	if c.Redis.Enabled && c.Redis.Addr == "" {
-		add(errors.New("REDIS_ENABLED=true requires REDIS_ADDR"))
+	if c.Redis.Enabled {
+		if c.Redis.Addr == "" {
+			add(errors.New("REDIS_ENABLED=true requires REDIS_ADDR"))
+		}
+		outage := strings.ToLower(strings.TrimSpace(c.Redis.OutagePolicy))
+		if outage != "" && outage != "degraded_local" && outage != "fail_closed" {
+			add(fmt.Errorf("REDIS_OUTAGE_POLICY %q is invalid: must be degraded_local|fail_closed", c.Redis.OutagePolicy))
+		}
 	}
 
 	if c.Eventbus.Enabled {
@@ -339,8 +426,17 @@ func (c Config) Validate() error {
 		add(errors.New("SECRETS_PROVIDER=vault requires SECRETS_URL"))
 	}
 
-	if c.Billing.Enabled && c.Billing.Provider == "" {
-		add(errors.New("BILLING_ENABLED=true requires BILLING_PROVIDER"))
+	if c.Billing.Enabled {
+		if c.Billing.Provider == "" {
+			add(errors.New("BILLING_ENABLED=true requires BILLING_PROVIDER"))
+		}
+		mode := c.Billing.EffectiveMode()
+		if !slices.Contains([]string{BillingModeDisabled, BillingModeSimulation, BillingModeTest, BillingModeLive}, mode) {
+			add(fmt.Errorf("BILLING_MODE %q is invalid: must be one of disabled|simulation|test|live", c.Billing.Mode))
+		}
+		if isProdLike && mode == BillingModeSimulation {
+			add(fmt.Errorf("BILLING_MODE cannot be simulation in %s environment", c.Env))
+		}
 	}
 
 	if !slices.Contains(validLogLevels, c.Observability.LogLevel) {
@@ -371,7 +467,9 @@ func (c Config) Validate() error {
 		add(errors.New("AUTH_DEV_LOGIN_ENABLED=true still requires AUTH_HMAC_SIGNING_KEY"))
 	}
 
-	if _, ok := domain.ParsePrivacyMode(c.Conversation.PrivacyDefault); !ok {
+	switch c.Conversation.PrivacyDefault {
+	case "OFF", "METADATA_ONLY", "PROMPT_ONLY", "FULL_CONTENT":
+	default:
 		add(fmt.Errorf("CONVERSATION_PRIVACY_DEFAULT %q is not one of OFF|METADATA_ONLY|PROMPT_ONLY|FULL_CONTENT", c.Conversation.PrivacyDefault))
 	}
 

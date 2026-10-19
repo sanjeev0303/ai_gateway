@@ -134,23 +134,49 @@ func (c *Client) ListModels(ctx context.Context, apiKey string) ([]provider.Mode
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpointModelsURL, nil)
 		if err == nil {
 			c.setHeaders(req, apiKey)
-			if resp, err := c.httpClient.Do(req); err == nil && resp.StatusCode == http.StatusOK {
+			if resp, err := c.httpClient.Do(req); err == nil {
 				defer resp.Body.Close()
-				var data struct {
-					Data []struct {
-						ID string `json:"id"`
-					} `json:"data"`
+				if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+					return nil, provider.ErrInvalidCredentials
 				}
-				if json.NewDecoder(resp.Body).Decode(&data) == nil && len(data.Data) > 0 {
-					out := make([]provider.Model, 0, len(data.Data))
-					for _, m := range data.Data {
-						out = append(out, provider.Model{
-							ID:          m.ID,
-							Provider:    "huggingface",
-							DisplayName: m.ID,
-						})
+				if resp.StatusCode == http.StatusOK {
+					bodyBytes, _ := io.ReadAll(resp.Body)
+					var data struct {
+						Data []struct {
+							ID string `json:"id"`
+						} `json:"data"`
 					}
-					return out, nil
+					if err := json.Unmarshal(bodyBytes, &data); err == nil && len(data.Data) > 0 {
+						out := make([]provider.Model, 0, len(data.Data))
+						for _, m := range data.Data {
+							if m.ID != "" {
+								out = append(out, provider.Model{
+									ID:           m.ID,
+									Provider:     "huggingface",
+									DisplayName:  m.ID,
+									Capabilities: []string{"text-generation", "chat"},
+								})
+							}
+						}
+						return out, nil
+					}
+					var directItems []struct {
+						ID string `json:"id"`
+					}
+					if err := json.Unmarshal(bodyBytes, &directItems); err == nil {
+						out := make([]provider.Model, 0, len(directItems))
+						for _, m := range directItems {
+							if m.ID != "" {
+								out = append(out, provider.Model{
+									ID:           m.ID,
+									Provider:     "huggingface",
+									DisplayName:  m.ID,
+									Capabilities: []string{"text-generation", "chat"},
+								})
+							}
+						}
+						return out, nil
+					}
 				}
 			}
 		}
@@ -160,7 +186,7 @@ func (c *Client) ListModels(ctx context.Context, apiKey string) ([]provider.Mode
 	hubAPIURL := fmt.Sprintf("%s/api/models?pipeline_tag=text-generation&sort=trendingScore&direction=-1&limit=20", strings.TrimRight(c.hubURL.String(), "/"))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, hubAPIURL, nil)
 	if err != nil {
-		return c.fallbackModels(), nil
+		return nil, fmt.Errorf("huggingface: hub models request: %w", err)
 	}
 	if apiKey != "" {
 		c.setHeaders(req, apiKey)
@@ -168,21 +194,23 @@ func (c *Client) ListModels(ctx context.Context, apiKey string) ([]provider.Mode
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return c.fallbackModels(), nil
+		return nil, fmt.Errorf("huggingface: hub models query: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return nil, provider.ErrInvalidCredentials
 	}
-
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusNotImplemented {
+		return nil, fmt.Errorf("%w: hub models returned %d", provider.ErrDiscoveryUnavailable, resp.StatusCode)
+	}
 	if resp.StatusCode != http.StatusOK {
-		return c.fallbackModels(), nil
+		return nil, fmt.Errorf("huggingface: hub models returned unexpected status %d", resp.StatusCode)
 	}
 
 	var items []HubModelItem
-	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil || len(items) == 0 {
-		return c.fallbackModels(), nil
+	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+		return nil, fmt.Errorf("huggingface: decode hub models: %w", err)
 	}
 
 	result := make([]provider.Model, 0, len(items))
@@ -191,26 +219,14 @@ func (c *Client) ListModels(ctx context.Context, apiKey string) ([]provider.Mode
 			continue
 		}
 		result = append(result, provider.Model{
-			ID:          it.ID,
-			Provider:    "huggingface",
-			DisplayName: it.ID,
+			ID:           it.ID,
+			Provider:     "huggingface",
+			DisplayName:  it.ID,
 			Capabilities: []string{"text-generation", "chat"},
 		})
 	}
 
-	if len(result) == 0 {
-		return c.fallbackModels(), nil
-	}
 	return result, nil
-}
-
-func (c *Client) fallbackModels() []provider.Model {
-	return []provider.Model{
-		{ID: "meta-llama/Llama-3.3-70B-Instruct", Provider: "huggingface", DisplayName: "Llama 3.3 70B Instruct", Capabilities: []string{"chat"}},
-		{ID: "mistralai/Mistral-7B-Instruct-v0.3", Provider: "huggingface", DisplayName: "Mistral 7B Instruct v0.3", Capabilities: []string{"chat"}},
-		{ID: "Qwen/Qwen2.5-72B-Instruct", Provider: "huggingface", DisplayName: "Qwen 2.5 72B Instruct", Capabilities: []string{"chat"}},
-		{ID: "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B", Provider: "huggingface", DisplayName: "DeepSeek R1 Distill Qwen 32B", Capabilities: []string{"chat"}},
-	}
 }
 
 // CreateMessage sends a non-streaming chat completion request.

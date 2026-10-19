@@ -6,9 +6,8 @@
 #
 # Services
 #   postgres   control-plane database (migrations, tenants, policies, audit)
-#   redis      cache + rate limits (provisioned; wired when the Redis milestone lands)
-#   nats       event bus (provisioned; reserved for the distributed transport. The bus-backed
-#              usage pipeline currently runs in-process, so AIGW_EVENTBUS_KIND=inmemory)
+#   redis      cache + rate limits (distributed sliding window, budget tracking, pub/sub invalidation)
+#   nats       event bus (distributed JetStream transport for telemetry and security events)
 #   migrate    one-shot: applies DB migrations, then exits
 #   seed       optional (profile "seed"): one-shot demo data
 #   gateway      data plane v1, FROZEN (profile "legacy-v1", not started by default; ADR-5)
@@ -40,10 +39,11 @@ x-backend-env: &backend-env
   AIGW_DATABASE_CONN_MAX_LIFETIME: 5m
   AIGW_DATABASE_CONNECT_TIMEOUT: 5s
 
-  AIGW_REDIS_ENABLED: "true" # flip to "true" with the Redis milestone
+  AIGW_REDIS_ENABLED: "true" # distributed rate limiting, budget tracking, pub/sub invalidation
   AIGW_REDIS_ADDR: redis:6379
   AIGW_REDIS_PASSWORD: ${REDIS_PASSWORD:-change-me}
   AIGW_REDIS_DB: "0"
+  AIGW_REDIS_OUTAGE_POLICY: ${AIGW_REDIS_OUTAGE_POLICY:-degraded_local}
 
   AIGW_EVENTBUS_ENABLED: "true"
   AIGW_EVENTBUS_KIND: nats # distributed persistent event transport via NATS JetStream
@@ -66,9 +66,15 @@ x-backend-env: &backend-env
 
   AIGW_SECURITY_CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
 
-  AIGW_BILLING_ENABLED: "false"
-  AIGW_BILLING_PROVIDER: none
-  AIGW_BILLING_CURRENCY: usd
+  AIGW_BILLING_ENABLED: ${AIGW_BILLING_ENABLED:-true}
+  AIGW_BILLING_PROVIDER: ${AIGW_BILLING_PROVIDER:-dual}
+  AIGW_BILLING_CURRENCY: ${AIGW_BILLING_CURRENCY:-usd}
+  AIGW_BILLING_STRIPE_SECRET_KEY: ${AIGW_BILLING_STRIPE_SECRET_KEY:-sk_test_51MockStripeKeyForTestingOnly0000000000}
+  AIGW_BILLING_STRIPE_WEBHOOK_SECRET: ${AIGW_BILLING_STRIPE_WEBHOOK_SECRET:-whsec_test_mock_stripe_webhook_secret_for_local_testing}
+  AIGW_BILLING_RAZORPAY_KEY_ID: ${AIGW_BILLING_RAZORPAY_KEY_ID:-rzp_test_MockRazorpayKeyID0001}
+  AIGW_BILLING_RAZORPAY_KEY_SECRET: ${AIGW_BILLING_RAZORPAY_KEY_SECRET:-mock_razorpay_key_secret_for_testing}
+  AIGW_BILLING_RAZORPAY_WEBHOOK_SECRET: ${AIGW_BILLING_RAZORPAY_WEBHOOK_SECRET:-whsec_mock_razorpay_webhook_secret_for_testing}
+
 
   AIGW_OBSERVABILITY_LOG_LEVEL: info
   AIGW_OBSERVABILITY_LOG_FORMAT: json
@@ -96,7 +102,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-change-me}"]
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-change-me}
     ports:
@@ -104,7 +110,7 @@ services:
     volumes:
       - redisdata:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping"]
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD:-change-me} ping"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -266,6 +272,12 @@ services:
     depends_on:
       control-api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
 
 volumes:

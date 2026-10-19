@@ -893,4 +893,3 @@ func TestGateway_HuggingFacePrefixRouting(t *testing.T) {
 	requireTrue(t, res.Allowed, "Hugging Face prefixed model should pass pipeline: %v", res.ErrorType)
 	requireTrue(t, res.Context != nil && res.Context.Upstream.ProviderAccount.ProviderKind == "huggingface", "expected provider huggingface")
 }
-

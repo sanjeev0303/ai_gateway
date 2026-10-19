@@ -1127,7 +1127,6 @@ func (r *subscriptionRepo) ActiveWithPlan(ctx context.Context, orgID uuid.UUID) 
 	return plan, mapNotFound(err)
 }
 
-
 func (r *subscriptionRepo) SetPlan(ctx context.Context, orgID, planID uuid.UUID) error {
 	return r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
 		tag, err := r.store.Pool().Exec(ctx, `
@@ -1972,7 +1971,6 @@ func toInvoice(row db.Invoice) domain.Invoice {
 		PaidAt:          row.PaidAt,
 	}
 }
-
 
 func toInvoiceLine(row db.InvoiceLine) domain.InvoiceLine {
 	return domain.InvoiceLine{

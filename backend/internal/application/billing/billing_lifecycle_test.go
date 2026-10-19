@@ -16,6 +16,7 @@ import (
 
 type mockGateway struct {
 	name         string
+	mode         string
 	checkoutFn   func(ctx context.Context, params payment.CheckoutParams) (*payment.CheckoutSession, error)
 	webhookFn    func(ctx context.Context, payload []byte, sig string) (*payment.WebhookEvent, error)
 	verifyCbFn   func(ctx context.Context, orderID, paymentID, sig string) error
@@ -24,6 +25,14 @@ type mockGateway struct {
 }
 
 func (m *mockGateway) Name() string { return m.name }
+func (m *mockGateway) Mode() string {
+	if m.mode == "" {
+		return "test"
+	}
+	return m.mode
+}
+func (m *mockGateway) SetMode(mode string) { m.mode = mode }
+
 func (m *mockGateway) CreateOrGetCustomer(ctx context.Context, orgID uuid.UUID, email, name string) (string, error) {
 	if m.createCustFn != nil {
 		return m.createCustFn(ctx, orgID, email, name)

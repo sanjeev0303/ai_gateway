@@ -246,3 +246,66 @@ func TestProviderError_IsErrNoUpstream(t *testing.T) {
 		t.Fatal("unrelated ProviderError must not match ErrNoUpstream")
 	}
 }
+
+func TestValidateHFEndpoint_SSRFProtection(t *testing.T) {
+	valid := []string{
+		"https://my-custom-endpoint.us-east-1.aws.endpoints.huggingface.cloud",
+		"https://router.huggingface.co/v1",
+		"https://api-inference.huggingface.co/v1",
+		"https://custom.huggingface.co",
+	}
+	for _, ep := range valid {
+		if err := ValidateHFEndpoint(ep); err != nil {
+			t.Fatalf("expected valid HF endpoint for %q, got error: %v", ep, err)
+		}
+	}
+
+	invalid := []string{
+		"http://my-custom-endpoint.endpoints.huggingface.cloud", // HTTP scheme rejected
+		"http://169.254.169.254/latest/meta-data",               // Cloud metadata
+		"https://127.0.0.1:8080/admin",                          // Loopback
+		"https://10.0.0.1/private",                              // Private RFC1918
+		"https://192.168.1.1/secret",                            // Private RFC1918
+		"https://metadata.google.internal/compute",              // GCP metadata
+		"https://localhost:443",                                 // Localhost
+		"https://attacker.com/steal",                            // Non-HF domain
+	}
+	for _, ep := range invalid {
+		if err := ValidateHFEndpoint(ep); err == nil {
+			t.Fatalf("expected SSRF error for %q, got nil", ep)
+		}
+	}
+}
+
+func TestProviderRouter_Route_HuggingFaceDedicatedEndpoint(t *testing.T) {
+	r := testRouter(t)
+	upstream := ResolvedUpstream{
+		ProviderAccount: ProviderAccount{ProviderKind: "huggingface"},
+		UpstreamKey:     "hf_token_123",
+	}
+
+	// 1. Default Hub endpoint
+	url, headers, err := r.Route(context.Background(), upstream, InspectorHints{})
+	requireNoErr(t, err)
+	if url != "https://api-inference.huggingface.co/v1/" {
+		t.Fatalf("expected default HF hub router URL, got %q", url)
+	}
+	if got := headers.Get("Authorization"); got != "Bearer hf_token_123" {
+		t.Fatalf("expected Authorization Bearer header, got %q", got)
+	}
+
+	// 2. Verified dedicated HF inference endpoint
+	customEP := "https://my-endpoint.us-east-1.aws.endpoints.huggingface.cloud"
+	url, _, err = r.Route(context.Background(), upstream, InspectorHints{CustomEndpoint: customEP})
+	requireNoErr(t, err)
+	if url != "https://my-endpoint.us-east-1.aws.endpoints.huggingface.cloud/" {
+		t.Fatalf("expected custom endpoint URL with trailing slash, got %q", url)
+	}
+
+	// 3. Malicious SSRF endpoint rejected
+	badEP := "https://169.254.169.254/latest/meta-data"
+	_, _, err = r.Route(context.Background(), upstream, InspectorHints{CustomEndpoint: badEP})
+	if err == nil {
+		t.Fatal("expected SSRF validation error, got nil")
+	}
+}

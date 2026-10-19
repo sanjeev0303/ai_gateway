@@ -2,8 +2,11 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,6 +17,18 @@ import (
 )
 
 // SlashCommand defines metadata, applicability, validation, and execution for a CLI slash command.
+// CommandClassification categorizes each slash command's implementation and execution tier.
+type CommandClassification string
+
+const (
+	ClassImplementedAndFunctional CommandClassification = "Implemented & Functional"
+	ClassLocalOnlyAndFunctional   CommandClassification = "Local & Functional"
+	ClassInformational            CommandClassification = "Informational"
+	ClassPartiallyImplemented     CommandClassification = "Partially Implemented"
+	ClassUnsupported              CommandClassification = "Unsupported"
+)
+
+// SlashCommand defines metadata, applicability, validation, and execution for a CLI slash command.
 type SlashCommand struct {
 	Name            string
 	Aliases         []string
@@ -21,10 +36,58 @@ type SlashCommand struct {
 	Provider        string // "common", "anthropic", "openai", "gemini", "huggingface"
 	Capability      string // "", "reasoning", "streaming", "system"
 	RequiresGateway bool   // true if execution involves a gateway API call
+	Classification  CommandClassification
 	ArgsDescription string
 	HelpText        string
 	ValidateArgs    func(args []string) error
 	Execute         func(ctx context.Context, session *SessionState, args []string, out io.Writer) error
+}
+
+// ValidateHFEndpoint validates a Hugging Face dedicated inference endpoint URL against SSRF and unauthorized hosts.
+func ValidateHFEndpoint(rawURL string) error {
+	if rawURL == "" {
+		return nil
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid endpoint URL format: %w", err)
+	}
+	if u.Scheme != "https" {
+		return errors.New("endpoint URL must use HTTPS scheme")
+	}
+	host := u.Hostname()
+	if host == "" {
+		return errors.New("endpoint URL must specify a valid hostname")
+	}
+
+	hostLower := strings.ToLower(host)
+
+	// Block loopback, metadata, and cloud metadata hostnames
+	if hostLower == "localhost" || strings.HasSuffix(hostLower, ".localhost") ||
+		hostLower == "metadata.google.internal" || hostLower == "instance-data" ||
+		hostLower == "metadata" {
+		return fmt.Errorf("prohibited endpoint host %q", host)
+	}
+
+	// Reject IP addresses to prevent SSRF against internal/cloud network ranges
+	if ip := net.ParseIP(hostLower); ip != nil {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return fmt.Errorf("prohibited endpoint IP address %q: private and loopback networks forbidden", host)
+		}
+		return fmt.Errorf("prohibited endpoint host %q: direct IP addresses not permitted", host)
+	}
+
+	// Must belong to verified Hugging Face endpoint or Hub domains
+	isAllowedHFDomain := strings.HasSuffix(hostLower, ".endpoints.huggingface.cloud") ||
+		hostLower == "router.huggingface.co" ||
+		hostLower == "api-inference.huggingface.co" ||
+		strings.HasSuffix(hostLower, ".huggingface.co")
+
+	if !isAllowedHFDomain {
+		return fmt.Errorf("unauthorized endpoint host %q: must be a verified Hugging Face domain (*.endpoints.huggingface.cloud or *.huggingface.co)", host)
+	}
+
+	return nil
 }
 
 // CommandRegistry holds all registered slash commands and provides provider-aware discovery.
@@ -48,6 +111,7 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 		Aliases:         []string{"/?"},
 		Description:     "Display available slash commands for the active provider and model",
 		Provider:        "common",
+		Classification:  ClassInformational,
 		ArgsDescription: "[command]",
 		HelpText:        "Type /help to display the command menu, or /help <cmd> for detailed usage.",
 		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
@@ -60,16 +124,17 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 				if cmd == nil || !session.Registry.IsCommandAvailable(cmd, session) {
 					return fmt.Errorf("command %q is not available for active provider %s", target, session.Provider)
 				}
-				fmt.Fprintf(out, "Command:     %s %s\n", cmd.Name, cmd.ArgsDescription)
-				fmt.Fprintf(out, "Provider:    %s\n", cmd.Provider)
-				fmt.Fprintf(out, "Description: %s\n", cmd.Description)
+				fmt.Fprintf(out, "Command:        %s %s\n", cmd.Name, cmd.ArgsDescription)
+				fmt.Fprintf(out, "Provider:       %s\n", cmd.Provider)
+				fmt.Fprintf(out, "Classification: %s\n", cmd.Classification)
+				fmt.Fprintf(out, "Description:    %s\n", cmd.Description)
 				if cmd.HelpText != "" {
-					fmt.Fprintf(out, "Usage:       %s\n", cmd.HelpText)
+					fmt.Fprintf(out, "Usage:          %s\n", cmd.HelpText)
 				}
 				if cmd.RequiresGateway {
-					fmt.Fprintln(out, "Execution:   Gateway API call")
+					fmt.Fprintln(out, "Execution:      Gateway API call")
 				} else {
-					fmt.Fprintln(out, "Execution:   Local client operation")
+					fmt.Fprintln(out, "Execution:      Local client operation")
 				}
 				return nil
 			}
@@ -82,6 +147,7 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 		Name:            "/provider",
 		Description:     "Display current provider or switch authorized provider connection",
 		Provider:        "common",
+		Classification:  ClassLocalOnlyAndFunctional,
 		ArgsDescription: "[name]",
 		HelpText:        "/provider [openai|anthropic|gemini|huggingface] — switch provider if permitted by your credential.",
 		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
@@ -145,6 +211,7 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 		Name:            "/model",
 		Description:     "Display active model, select model, or list permitted models from gateway",
 		Provider:        "common",
+		Classification:  ClassImplementedAndFunctional,
 		RequiresGateway: true,
 		ArgsDescription: "[model_id]",
 		HelpText:        "/model to list permitted models, or /model <id> to switch active model.",
@@ -182,19 +249,29 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 			}
 
 			newModel := args[0]
+			// Populate permitted models from gateway if cache is unpopulated
+			if len(session.PermittedModels) == 0 && session.Client != nil {
+				listCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				models, err := session.Client.ListModels(listCtx)
+				cancel()
+				if err == nil && len(models) > 0 {
+					session.PermittedModels = models
+				}
+			}
+
 			if len(session.PermittedModels) > 0 {
-				isPermitted := false
+				var matchedModel *client.Model
 				for _, m := range session.PermittedModels {
 					if m.ID == newModel {
-						isPermitted = true
-						if m.Provider != "" {
-							session.Provider = m.Provider
-						}
+						matchedModel = &m
 						break
 					}
 				}
-				if !isPermitted {
+				if matchedModel == nil {
 					return fmt.Errorf("model %q is not permitted for this credential", newModel)
+				}
+				if matchedModel.Provider != "" {
+					session.Provider = matchedModel.Provider
 				}
 			} else {
 				detected := DetectProvider(newModel)
@@ -202,6 +279,20 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 					session.Provider = detected
 				}
 			}
+
+			if len(session.AuthorizedProviders) > 0 && session.Provider != "" {
+				authorized := false
+				for _, p := range session.AuthorizedProviders {
+					if strings.EqualFold(p, session.Provider) {
+						authorized = true
+						break
+					}
+				}
+				if !authorized {
+					return fmt.Errorf("provider %q for model %q is not authorized for this credential", session.Provider, newModel)
+				}
+			}
+
 			session.Model = newModel
 			fmt.Fprintf(out, "Active model set to: %s (provider: %s)\n", session.Model, session.Provider)
 			return nil
@@ -209,10 +300,11 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 	})
 
 	r.Register(&SlashCommand{
-		Name:            "/status",
-		Description:     "Show gateway URL, masked credential, active provider/model, and session telemetry",
-		Provider:        "common",
-		HelpText:        "/status shows full session environment and telemetry metrics.",
+		Name:           "/status",
+		Description:    "Show gateway URL, masked credential, active provider/model, and session telemetry",
+		Provider:       "common",
+		Classification: ClassInformational,
+		HelpText:       "/status shows full session environment and telemetry metrics.",
 		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
 			prov := session.Provider
 			if prov == "" || prov == "unknown" {
@@ -251,38 +343,59 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 	})
 
 	r.Register(&SlashCommand{
-		Name:            "/usage",
-		Aliases:         []string{"/tokens"},
-		Description:     "Show cumulative session token usage breakdown",
-		Provider:        "common",
-		HelpText:        "/usage displays prompt, completion, and total session tokens.",
+		Name:           "/usage",
+		Aliases:        []string{"/tokens"},
+		Description:    "Show cumulative session token usage breakdown (reported vs estimated)",
+		Provider:       "common",
+		Classification: ClassInformational,
+		HelpText:       "/usage displays prompt, completion, and total session tokens with source attribution.",
 		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
-			fmt.Fprintln(out, "Session Cumulative Token Usage:")
-			fmt.Fprintf(out, "  Prompt/Input:  %d tokens\n", session.TotalInputTokens)
-			fmt.Fprintf(out, "  Completion:    %d tokens\n", session.TotalOutputTokens)
-			fmt.Fprintf(out, "  Total:         %d tokens\n", session.TotalTokens)
-			fmt.Fprintf(out, "  Messages:      %d turns in context\n", len(session.Messages))
+			fmt.Fprintln(out, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+			fmt.Fprintln(out, "Session Cumulative Token Usage")
+			fmt.Fprintf(out, "  Prompt/Input:       %d tokens\n", session.TotalInputTokens)
+			fmt.Fprintf(out, "  Completion/Output:  %d tokens\n", session.TotalOutputTokens)
+			fmt.Fprintf(out, "  Total Tokens:       %d tokens\n", session.TotalTokens)
+			fmt.Fprintln(out, "  Token Source Breakdown:")
+			if session.HasReportedUsage {
+				fmt.Fprintf(out, "    - Provider-Reported: %d tokens (in: %d, out: %d)\n", session.ReportedTotalTokens, session.ReportedInputTokens, session.ReportedOutputTokens)
+			} else {
+				fmt.Fprintln(out, "    - Provider-Reported: 0 tokens (none reported upstream)")
+			}
+			if session.HasEstimatedUsage {
+				fmt.Fprintf(out, "    - Locally-Estimated: %d tokens (fallback heuristic)\n", session.EstimatedTokens)
+			} else {
+				fmt.Fprintln(out, "    - Locally-Estimated: 0 tokens")
+			}
+			fmt.Fprintf(out, "  Conversation Context: %d message turns\n", len(session.Messages))
+			fmt.Fprintln(out, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 			return nil
 		},
 	})
 
 	r.Register(&SlashCommand{
-		Name:            "/cost",
-		Description:     "Show cumulative estimated session cost in USD",
-		Provider:        "common",
-		HelpText:        "/cost displays cumulative estimated cost based on token consumption.",
+		Name:           "/cost",
+		Description:    "Show cumulative estimated session cost in USD",
+		Provider:       "common",
+		Classification: ClassInformational,
+		HelpText:       "/cost displays cumulative estimated cost based on token consumption.",
 		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
-			fmt.Fprintf(out, "Session Cumulative Estimated Cost: $%.6f USD (based on %d total tokens)\n", session.EstimatedCost, session.TotalTokens)
+			fmt.Fprintln(out, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+			fmt.Fprintf(out, "Session Cumulative Estimated Cost: $%.6f USD\n", session.EstimatedCost)
+			fmt.Fprintf(out, "  Basis: %d total tokens (%d provider-reported, %d locally-estimated)\n", session.TotalTokens, session.ReportedTotalTokens, session.EstimatedTokens)
+			fmt.Fprintln(out, "  Note:  Local catalog estimation based on public model pricing.")
+			fmt.Fprintln(out, "         Official usage billing and invoices are managed via Stripe / Razorpay in the Sentinel Dashboard.")
+			fmt.Fprintln(out, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 			return nil
 		},
 	})
 
 	r.Register(&SlashCommand{
-		Name:            "/permissions",
-		Aliases:         []string{"/auth"},
-		Description:     "Inspect effective authorization scope, bound provider account, and limits",
-		Provider:        "common",
-		HelpText:        "/permissions shows authorized providers, model restrictions, and scope boundaries.",
+		Name:           "/permissions",
+		Aliases:        []string{"/auth"},
+		Description:    "Inspect effective authorization scope, bound provider account, and limits",
+		Provider:       "common",
+		Classification: ClassInformational,
+		HelpText:       "/permissions shows authorized providers, model restrictions, and scope boundaries.",
 		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
 			fmt.Fprintln(out, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 			fmt.Fprintln(out, "Sentinel Credential Authorization Scope")
@@ -313,16 +426,23 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 	})
 
 	r.Register(&SlashCommand{
-		Name:            "/clear",
-		Description:     "Reset conversation message history and session usage counters",
-		Provider:        "common",
-		HelpText:        "/clear wipes local multi-turn context and resets session token counters.",
+		Name:           "/clear",
+		Description:    "Reset conversation message history and session usage counters",
+		Provider:       "common",
+		Classification: ClassLocalOnlyAndFunctional,
+		HelpText:       "/clear wipes local multi-turn context and resets session token counters.",
 		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
 			turns := len(session.Messages)
 			session.Messages = nil
 			session.TotalInputTokens = 0
 			session.TotalOutputTokens = 0
 			session.TotalTokens = 0
+			session.ReportedInputTokens = 0
+			session.ReportedOutputTokens = 0
+			session.ReportedTotalTokens = 0
+			session.EstimatedTokens = 0
+			session.HasReportedUsage = false
+			session.HasEstimatedUsage = false
 			session.EstimatedCost = 0.0
 			fmt.Fprintf(out, "Conversation history cleared (%d messages removed). Usage counters reset.\n", turns)
 			return nil
@@ -333,6 +453,7 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 		Name:            "/compact",
 		Description:     "Compact conversation history via gateway summarization to save context tokens",
 		Provider:        "common",
+		Classification:  ClassImplementedAndFunctional,
 		RequiresGateway: true,
 		HelpText:        "/compact summarizes prior message turns, keeping essential context while freeing tokens.",
 		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
@@ -406,6 +527,7 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 		Name:            "/stream",
 		Description:     "Toggle or set streaming response mode",
 		Provider:        "common",
+		Classification:  ClassLocalOnlyAndFunctional,
 		ArgsDescription: "[on|off]",
 		HelpText:        "/stream [on|off] toggles token streaming.",
 		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
@@ -435,6 +557,7 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 		Name:            "/system",
 		Description:     "Set or inspect active system prompt instructions",
 		Provider:        "common",
+		Classification:  ClassLocalOnlyAndFunctional,
 		ArgsDescription: "[instructions]",
 		HelpText:        "/system without arguments shows current system prompt; /system <prompt> sets it.",
 		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
@@ -453,11 +576,12 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 	})
 
 	r.Register(&SlashCommand{
-		Name:        "/exit",
-		Aliases:     []string{"/quit"},
-		Description: "Exit the interactive session",
-		Provider:    "common",
-		HelpText:    "/exit or /quit exits the Sentinel CLI.",
+		Name:           "/exit",
+		Aliases:        []string{"/quit"},
+		Description:    "Exit the interactive session",
+		Provider:       "common",
+		Classification: ClassLocalOnlyAndFunctional,
+		HelpText:       "/exit or /quit exits the Sentinel CLI.",
 		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
 			fmt.Fprintln(out, "Exiting Sentinel session. Goodbye!")
 			return nil
@@ -468,6 +592,7 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 		Name:            "/temp",
 		Description:     "Set or inspect sampling temperature (0.0 to 1.0 for Claude, 0.0 to 2.0 for others)",
 		Provider:        "common",
+		Classification:  ClassLocalOnlyAndFunctional,
 		ArgsDescription: "[number]",
 		HelpText:        "/temp <value> sets sampling temperature for the active provider.",
 		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
@@ -487,6 +612,7 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 		Name:            "/max-tokens",
 		Description:     "Set maximum token limit for Claude completion responses",
 		Provider:        "anthropic",
+		Classification:  ClassLocalOnlyAndFunctional,
 		ArgsDescription: "<number>",
 		HelpText:        "/max-tokens <int> sets max response tokens.",
 		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
@@ -513,8 +639,9 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 		Description:     "Set reasoning effort level for OpenAI reasoning models (o1, o3-mini)",
 		Provider:        "openai",
 		Capability:      "reasoning",
-		ArgsDescription: "[low|medium|high]",
-		HelpText:        "/reasoning [low|medium|high] sets reasoning effort on supported OpenAI models.",
+		Classification:  ClassLocalOnlyAndFunctional,
+		ArgsDescription: "[low|medium|high|off]",
+		HelpText:        "/reasoning [low|medium|high|off] sets reasoning effort on supported OpenAI models.",
 		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
 			if len(args) == 0 {
 				effort := session.ReasoningEffort
@@ -547,29 +674,45 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 		Name:            "/safety",
 		Description:     "Inspect or set Google Gemini safety threshold settings",
 		Provider:        "gemini",
-		ArgsDescription: "[standard|strict|permissive]",
-		HelpText:        "/safety shows or configures Gemini content safety threshold preset.",
+		Classification:  ClassImplementedAndFunctional,
+		ArgsDescription: "[standard|strict|permissive|off]",
+		HelpText:        "/safety shows or configures Gemini content safety threshold preset (standard, strict, permissive, off).",
 		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
+			if !strings.EqualFold(session.Provider, "gemini") {
+				return fmt.Errorf("safety settings are not supported for provider %q: /safety is only supported for Google Gemini", session.Provider)
+			}
+			if strings.Contains(strings.ToLower(session.Model), "embedding") {
+				return fmt.Errorf("safety settings are not supported for embedding model %q", session.Model)
+			}
+
 			if len(args) == 0 {
 				setting := session.SafetySettings
 				if setting == "" {
-					setting = "BLOCK_MEDIUM_AND_ABOVE (standard)"
+					setting = "BLOCK_MEDIUM_AND_ABOVE (standard default)"
 				}
 				fmt.Fprintf(out, "Active Gemini safety setting: %s\n", setting)
+				fmt.Fprintln(out, "Available presets:")
+				fmt.Fprintln(out, "  - standard:   BLOCK_MEDIUM_AND_ABOVE (blocks medium and high harm content)")
+				fmt.Fprintln(out, "  - strict:     BLOCK_LOW_AND_ABOVE (blocks low, medium, and high harm content)")
+				fmt.Fprintln(out, "  - permissive: BLOCK_ONLY_HIGH (blocks only high harm content)")
+				fmt.Fprintln(out, "  - off:        BLOCK_NONE (disables safety threshold filtering)")
 				return nil
 			}
-			val := strings.ToLower(args[0])
+
+			val := strings.ToLower(strings.TrimSpace(args[0]))
 			switch val {
-			case "standard", "default":
+			case "standard", "default", "block_medium_and_above":
 				session.SafetySettings = "BLOCK_MEDIUM_AND_ABOVE"
-			case "strict":
+			case "strict", "block_low_and_above":
 				session.SafetySettings = "BLOCK_LOW_AND_ABOVE"
-			case "permissive":
+			case "permissive", "block_only_high":
 				session.SafetySettings = "BLOCK_ONLY_HIGH"
+			case "off", "none", "block_none":
+				session.SafetySettings = "BLOCK_NONE"
 			default:
-				return fmt.Errorf("invalid safety preset %q: choose standard, strict, or permissive", val)
+				return fmt.Errorf("invalid safety preset %q: choose standard, strict, permissive, or off", val)
 			}
-			fmt.Fprintf(out, "Gemini safety threshold set to %s\n", session.SafetySettings)
+			fmt.Fprintf(out, "Gemini safety threshold set to %s for active model %s\n", session.SafetySettings, session.Model)
 			return nil
 		},
 	})
@@ -582,32 +725,48 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 		Name:            "/endpoint",
 		Description:     "View or configure dedicated Hugging Face Inference Endpoint URL",
 		Provider:        "huggingface",
-		ArgsDescription: "[url]",
-		HelpText:        "/endpoint [url] sets custom Hugging Face dedicated inference endpoint.",
+		Classification:  ClassImplementedAndFunctional,
+		ArgsDescription: "[url|reset]",
+		HelpText:        "/endpoint [url] sets custom Hugging Face dedicated inference endpoint (SSRF-protected).",
 		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
+			if !strings.EqualFold(session.Provider, "huggingface") {
+				return fmt.Errorf("endpoint selection is not supported for provider %q: /endpoint is only available for Hugging Face", session.Provider)
+			}
+
 			if len(args) == 0 {
 				if session.HFEndpoint == "" {
-					fmt.Fprintln(out, "HF Endpoint: https://router.huggingface.co/v1 (default serverless router)")
+					fmt.Fprintln(out, "HF Endpoint: Serverless Hub Router (default: https://router.huggingface.co/v1)")
 				} else {
-					fmt.Fprintf(out, "HF Endpoint: %s\n", session.HFEndpoint)
+					fmt.Fprintf(out, "HF Endpoint: %s (Dedicated Private Endpoint)\n", session.HFEndpoint)
 				}
+				fmt.Fprintln(out, "Hugging Face Dedicated Endpoints route inference directly to customer-managed private infrastructure (*.endpoints.huggingface.cloud).")
+				fmt.Fprintln(out, "Usage: /endpoint <https://...> to set, or /endpoint reset to revert to serverless router.")
 				return nil
 			}
-			url := strings.TrimSpace(args[0])
-			if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-				return fmt.Errorf("invalid endpoint URL %q: must begin with http:// or https://", url)
+
+			arg := strings.TrimSpace(args[0])
+			if strings.EqualFold(arg, "reset") || strings.EqualFold(arg, "clear") || strings.EqualFold(arg, "default") {
+				session.HFEndpoint = ""
+				fmt.Fprintln(out, "Hugging Face endpoint reset to default serverless router (https://router.huggingface.co/v1).")
+				return nil
 			}
-			session.HFEndpoint = url
-			fmt.Fprintf(out, "Hugging Face endpoint updated: %s\n", session.HFEndpoint)
+
+			if err := ValidateHFEndpoint(arg); err != nil {
+				return fmt.Errorf("invalid Hugging Face endpoint URL: %w", err)
+			}
+
+			session.HFEndpoint = arg
+			fmt.Fprintf(out, "Hugging Face dedicated endpoint updated: %s\nSubsequent Hugging Face inference requests will target this endpoint.\n", session.HFEndpoint)
 			return nil
 		},
 	})
 
 	r.Register(&SlashCommand{
-		Name:            "/params",
-		Description:     "Display active Hugging Face decoding and inference parameters",
-		Provider:        "huggingface",
-		HelpText:        "/params shows current model decoding configuration.",
+		Name:           "/params",
+		Description:    "Display active Hugging Face decoding and inference parameters",
+		Provider:       "huggingface",
+		Classification: ClassInformational,
+		HelpText:       "/params shows current model decoding configuration.",
 		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
 			fmt.Fprintln(out, "Hugging Face Model Parameters:")
 			fmt.Fprintf(out, "  Model:       %s\n", session.Model)
@@ -664,6 +823,11 @@ func (r *CommandRegistry) Find(name string) *SlashCommand {
 
 // IsCommandAvailable reports whether a command applies to the current session provider and capabilities.
 func (r *CommandRegistry) IsCommandAvailable(cmd *SlashCommand, session *SessionState) bool {
+	// Do not display or make available unsupported features
+	if cmd.Classification == ClassUnsupported {
+		return false
+	}
+
 	// Provider check
 	if cmd.Provider != "common" && !strings.EqualFold(cmd.Provider, session.Provider) {
 		return false
@@ -735,10 +899,7 @@ func (r *CommandRegistry) RenderMenu(session *SessionState, out io.Writer) {
 	if len(provCmds) > 0 {
 		fmt.Fprintf(out, "\n  [%s Specific Commands]\n", provLabel)
 		for _, cmd := range provCmds {
-			badge := "Local"
-			if cmd.RequiresGateway {
-				badge = "Gateway"
-			}
+			badge := string(cmd.Classification)
 			syntax := cmd.Name
 			if cmd.ArgsDescription != "" {
 				syntax += " " + cmd.ArgsDescription
@@ -754,10 +915,7 @@ func (r *CommandRegistry) RenderMenu(session *SessionState, out io.Writer) {
 			return commonCmds[i].Name < commonCmds[j].Name
 		})
 		for _, cmd := range commonCmds {
-			badge := "Local"
-			if cmd.RequiresGateway {
-				badge = "Gateway"
-			}
+			badge := string(cmd.Classification)
 			syntax := cmd.Name
 			if cmd.ArgsDescription != "" {
 				syntax += " " + cmd.ArgsDescription

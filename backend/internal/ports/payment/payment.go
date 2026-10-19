@@ -10,6 +10,10 @@ import (
 )
 
 var (
+	ErrBillingDisabled     = errors.New("payment: billing is disabled")
+	ErrSimulationOnly      = errors.New("payment: simulation mode active")
+	ErrMissingCredentials  = errors.New("payment: missing provider credentials")
+	ErrInvalidCredentials  = errors.New("payment: invalid provider credentials")
 	ErrInvalidSignature    = errors.New("payment: invalid webhook signature")
 	ErrUnsupportedProvider = errors.New("payment: unsupported payment provider")
 	ErrPlanNotFound        = errors.New("payment: plan not found")
@@ -37,27 +41,33 @@ type CheckoutSession struct {
 	SubscriptionID string `json:"subscription_id,omitempty"`
 	OrderID        string `json:"order_id,omitempty"`
 	KeyID          string `json:"key_id,omitempty"`
+	Mode           string `json:"mode"`         // "disabled", "simulation", "test", "live"
+	IsSimulated    bool   `json:"is_simulated"` // true when explicitly simulated
 }
 
 // WebhookEvent represents a standardized billing lifecycle event from an external processor.
 type WebhookEvent struct {
-	EventID        string `json:"event_id"`
-	EventType      string `json:"event_type"` // e.g. "checkout.completed", "subscription.updated", "subscription.deleted", "payment.succeeded", "payment.failed"
+	EventID        string    `json:"event_id"`
+	EventType      string    `json:"event_type"` // e.g. "checkout.completed", "subscription.updated", "subscription.deleted", "payment.succeeded", "payment.failed"
 	OrganizationID uuid.UUID `json:"organization_id"`
-	PlanCode       string `json:"plan_code"`
-	SubscriptionID string `json:"subscription_id"`
-	CustomerID     string `json:"customer_id"`
-	PaymentID      string `json:"payment_id"`
-	AmountMicros   int64  `json:"amount_micros"`
-	Currency       string `json:"currency"`
-	Status         string `json:"status"` // "active", "trialing", "canceled", "past_due", "paid", "incomplete"
-	Payload        []byte `json:"payload"`
+	PlanCode       string    `json:"plan_code"`
+	SubscriptionID string    `json:"subscription_id"`
+	CustomerID     string    `json:"customer_id"`
+	PaymentID      string    `json:"payment_id"`
+	AmountMicros   int64     `json:"amount_micros"`
+	Currency       string    `json:"currency"`
+	Status         string    `json:"status"` // "active", "trialing", "canceled", "past_due", "paid", "incomplete"
+	Payload        []byte    `json:"payload"`
 }
 
 // PaymentGateway abstracts external payment providers (Stripe, Razorpay).
 type PaymentGateway interface {
 	// Name returns the provider identifier ("stripe", "razorpay").
 	Name() string
+	// Mode returns the active operational mode ("simulation", "test", "live").
+	Mode() string
+	// SetMode configures the active operational mode.
+	SetMode(mode string)
 	// CreateOrGetCustomer provisions or retrieves the upstream customer entity.
 	CreateOrGetCustomer(ctx context.Context, orgID uuid.UUID, email, name string) (string, error)
 	// CreateCheckoutSession generates a checkout URL or session for plan subscription.
@@ -69,4 +79,3 @@ type PaymentGateway interface {
 	// CancelSubscription terminates or schedules cancellation of an upstream subscription.
 	CancelSubscription(ctx context.Context, subID string) error
 }
-

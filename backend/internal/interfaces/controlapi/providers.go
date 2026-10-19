@@ -2,12 +2,14 @@ package controlapi
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
 	"ai-governance-saas/backend/internal/application/provider"
 	"ai-governance-saas/backend/internal/domain"
 	"ai-governance-saas/backend/internal/platform/httpx"
+	"ai-governance-saas/backend/internal/ports/repositories"
 )
 
 // ---- provider DTOs --------------------------------------------------------
@@ -468,22 +470,49 @@ func (a *api) syncProviderModels(w http.ResponseWriter, r *http.Request) {
 
 	var allModels []domain.Model
 	if req.ProviderKind != "" {
-		models, err := a.providers.SyncModels(r.Context(), actor, req.ProviderKind, req.APIKey)
-		if err != nil {
-			writeServiceError(w, r, err)
-			return
-		}
-		allModels = append(allModels, models...)
-	} else {
-		// Sync across all supported provider kinds
-		for _, kind := range []string{domain.ProviderKindAnthropic, domain.ProviderKindOpenAI, domain.ProviderKindGemini, domain.ProviderKindHuggingFace} {
-			apiKey := req.APIKey
-			if apiKey == "" {
-				apiKey = "sk-dummy-key"
+		if req.APIKey != "" {
+			models, err := a.providers.SyncModels(r.Context(), actor, req.ProviderKind, req.APIKey)
+			if err != nil {
+				writeServiceError(w, r, err)
+				return
 			}
-			models, err := a.providers.SyncModels(r.Context(), actor, kind, apiKey)
-			if err == nil {
-				allModels = append(allModels, models...)
+			allModels = append(allModels, models...)
+		} else {
+			// Find connected active account for this provider
+			accounts, err := a.providers.ListAccounts(r.Context(), actor)
+			if err != nil {
+				writeServiceError(w, r, err)
+				return
+			}
+			var syncedForKind bool
+			for _, acc := range accounts {
+				if acc.ProviderKind == req.ProviderKind && acc.Status == domain.ProviderStatusActive {
+					models, err := a.providers.SyncAccountModels(r.Context(), actor, acc.ID)
+					if err != nil {
+						writeServiceError(w, r, err)
+						return
+					}
+					allModels = append(allModels, models...)
+					syncedForKind = true
+					break
+				}
+			}
+			if !syncedForKind {
+				writeServiceError(w, r, fmt.Errorf("%w: api_key or connected active provider account required for %s", repositories.ErrInvalid, req.ProviderKind))
+				return
+			}
+		}
+	} else {
+		// Sync across all connected active provider accounts for this organization
+		accounts, err := a.providers.ListAccounts(r.Context(), actor)
+		if err == nil {
+			for _, acc := range accounts {
+				if acc.Status == domain.ProviderStatusActive {
+					models, err := a.providers.SyncAccountModels(r.Context(), actor, acc.ID)
+					if err == nil {
+						allModels = append(allModels, models...)
+					}
+				}
 			}
 		}
 	}

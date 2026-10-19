@@ -59,6 +59,9 @@ func (f *fakeBillingSubs) SetPlan(_ context.Context, _ uuid.UUID, planID uuid.UU
 	} else if planID == testTeamID {
 		f.plan.PlanCode = "enterprise"
 		f.plan.PlanName = "Enterprise"
+	} else if planID == testUserID {
+		f.plan.PlanCode = "free"
+		f.plan.PlanName = "Free Plan"
 	}
 	f.plan.Status = "active"
 	return nil

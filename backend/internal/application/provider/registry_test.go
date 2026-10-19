@@ -118,8 +118,8 @@ type stubInferenceProvider struct {
 	caps providerclient.ModelCapabilities
 }
 
-func (s *stubInferenceProvider) Name() string { return "Stub Inference" }
-func (s *stubInferenceProvider) Kind() string { return domain.ProviderKindOpenAI }
+func (s *stubInferenceProvider) Name() string                              { return "Stub Inference" }
+func (s *stubInferenceProvider) Kind() string                              { return domain.ProviderKindOpenAI }
 func (s *stubInferenceProvider) Metadata() providerclient.ProviderMetadata { return s.meta }
 func (s *stubInferenceProvider) GetModelCapabilities(_ context.Context, modelID string) (providerclient.ModelCapabilities, error) {
 	caps := s.caps
@@ -191,4 +191,3 @@ func TestRegistryInferenceProviderResolution(t *testing.T) {
 		t.Errorf("expected ErrUnknownProvider, got %v", err)
 	}
 }
-

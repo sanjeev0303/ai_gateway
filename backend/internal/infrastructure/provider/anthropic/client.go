@@ -97,12 +97,7 @@ func (c *Client) ListModels(ctx context.Context, apiKey string) ([]Model, error)
 		return nil, ErrInvalidAPIKey
 	}
 	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusNotImplemented {
-		return []Model{
-			{ID: "claude-3-7-sonnet-20250219", DisplayName: "Claude 3.7 Sonnet"},
-			{ID: "claude-3-5-sonnet-20241022", DisplayName: "Claude 3.5 Sonnet"},
-			{ID: "claude-3-5-haiku-20241022", DisplayName: "Claude 3.5 Haiku"},
-			{ID: "claude-3-opus-20240229", DisplayName: "Claude 3 Opus"},
-		}, nil
+		return nil, fmt.Errorf("%w: endpoint returned %d", ErrDiscoveryUnavailable, resp.StatusCode)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("anthropic: unexpected status %d listing models", resp.StatusCode)

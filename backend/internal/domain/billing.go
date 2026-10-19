@@ -41,7 +41,6 @@ const (
 	InvoiceStatusPaid = "paid"
 )
 
-
 // Alert types, severities and statuses, mirroring the CHECKs in alerts.
 const (
 	AlertTypeSpendLimit        = "spend_limit"
@@ -202,7 +201,6 @@ type Invoice struct {
 	PaidAt          *time.Time
 	Lines           []InvoiceLine
 }
-
 
 // InvoiceLine is one itemisation row behind an invoice total.
 type InvoiceLine struct {

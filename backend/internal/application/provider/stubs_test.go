@@ -309,10 +309,15 @@ type stubProviderHealth struct {
 // CheckHealth always reads the prior state to decide whether an observation is a
 // transition. Tests that exercise transitions set get explicitly.
 func (s *stubProviderHealth) Get(ctx context.Context, providerKind string) (domain.ProviderHealthState, error) {
-	if s.get == nil {
-		return domain.ProviderHealthState{}, repositories.ErrNotFound
+	if s.get != nil {
+		return s.get(ctx, providerKind)
 	}
-	return s.get(ctx, providerKind)
+	for i := len(s.states) - 1; i >= 0; i-- {
+		if s.states[i].ProviderKind == providerKind {
+			return s.states[i], nil
+		}
+	}
+	return domain.ProviderHealthState{}, repositories.ErrNotFound
 }
 
 func (s *stubProviderHealth) List(ctx context.Context) ([]domain.ProviderHealthState, error) {

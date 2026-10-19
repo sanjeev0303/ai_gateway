@@ -10,12 +10,13 @@ import (
 )
 
 var (
-	ErrInvalidAPIKey  = errors.New("anthropic: invalid API key")
-	ErrRateLimited    = errors.New("anthropic: rate limited")
-	ErrProviderError  = errors.New("anthropic: provider error")
-	ErrInvalidRequest = errors.New("anthropic: invalid request")
-	ErrModelNotFound  = errors.New("anthropic: model not found")
-	ErrOverloaded     = errors.New("anthropic: overloaded")
+	ErrInvalidAPIKey        = errors.New("anthropic: invalid API key")
+	ErrRateLimited          = errors.New("anthropic: rate limited")
+	ErrProviderError        = errors.New("anthropic: provider error")
+	ErrInvalidRequest       = errors.New("anthropic: invalid request")
+	ErrModelNotFound        = errors.New("anthropic: model not found")
+	ErrOverloaded           = errors.New("anthropic: overloaded")
+	ErrDiscoveryUnavailable = errors.New("anthropic: model discovery unavailable")
 )
 
 const (

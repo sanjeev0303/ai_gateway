@@ -326,6 +326,31 @@ func convertNormalizedRequestToGemini(req provider.NormalizedRequest) (*Generate
 	if req.CustomParameters != nil {
 		if ss, ok := req.CustomParameters["safety_settings"]; ok {
 			switch v := ss.(type) {
+			case string:
+				threshold := v
+				categories := []string{
+					"HARM_CATEGORY_HARASSMENT",
+					"HARM_CATEGORY_HATE_SPEECH",
+					"HARM_CATEGORY_SEXUALLY_EXPLICIT",
+					"HARM_CATEGORY_DANGEROUS_CONTENT",
+				}
+				var settings []SafetySetting
+				for _, cat := range categories {
+					settings = append(settings, SafetySetting{
+						Category:  cat,
+						Threshold: threshold,
+					})
+				}
+				geminiReq.SafetySettings = settings
+			case []map[string]string:
+				var settings []SafetySetting
+				for _, item := range v {
+					settings = append(settings, SafetySetting{
+						Category:  item["category"],
+						Threshold: item["threshold"],
+					})
+				}
+				geminiReq.SafetySettings = settings
 			case []SafetySetting:
 				geminiReq.SafetySettings = v
 			case []map[string]any:

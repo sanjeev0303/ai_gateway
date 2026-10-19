@@ -70,6 +70,12 @@ func (a *ProviderAdapter) ListModels(ctx context.Context, apiKey string) ([]prov
 	}
 	localModels, err := client.ListModels(ctx, apiKey)
 	if err != nil {
+		if errors.Is(err, ErrInvalidAPIKey) {
+			return nil, fmt.Errorf("%w: %w", ErrInvalidAPIKey, provider.ErrInvalidCredentials)
+		}
+		if errors.Is(err, ErrDiscoveryUnavailable) {
+			return nil, fmt.Errorf("%w: %w", ErrDiscoveryUnavailable, provider.ErrDiscoveryUnavailable)
+		}
 		return nil, err
 	}
 	models := make([]provider.Model, len(localModels))

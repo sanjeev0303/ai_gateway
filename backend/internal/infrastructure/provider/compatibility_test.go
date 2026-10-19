@@ -203,11 +203,11 @@ func TestProviderAdapter_StrictParameterRejection(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name      string
-		adapter   providerclient.InferenceProvider
-		model     string
-		alienKey  string
-		alienVal  any
+		name     string
+		adapter  providerclient.InferenceProvider
+		model    string
+		alienKey string
+		alienVal any
 	}{
 		{
 			name:     "Anthropic rejects reasoning_effort",
@@ -317,8 +317,8 @@ func TestProviderAdapter_ParameterPreservationAndToolSemantics(t *testing.T) {
 				"content":     []map[string]any{{"type": "text", "text": "Result is 42"}},
 				"stop_reason": "end_turn",
 				"usage": map[string]any{
-					"input_tokens":              25,
-					"output_tokens":             12,
+					"input_tokens":            25,
+					"output_tokens":           12,
 					"cache_read_input_tokens": 10,
 				},
 			})

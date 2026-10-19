@@ -252,15 +252,52 @@ func (s *Service) SyncAccountModels(ctx context.Context, actor domain.Actor, acc
 	if err != nil {
 		return nil, err
 	}
+	if account.Status == domain.ProviderStatusDisabled {
+		return nil, fmt.Errorf("%w: provider account %s is disabled", ErrDisabledAccount, accountID)
+	}
 	creds, err := s.credentials.ListByAccount(ctx, actor.OrganizationID, accountID)
 	if err != nil || len(creds) == 0 {
 		return nil, repositories.ErrNotFound
 	}
-	secret, err := s.secrets.Get(ctx, creds[0].SecretRef)
+	var activeCred *domain.ProviderCredential
+	for i := range creds {
+		if creds[i].Status != domain.ProviderCredentialStatusRevoked {
+			activeCred = &creds[i]
+			break
+		}
+	}
+	if activeCred == nil {
+		return nil, fmt.Errorf("%w: no active credentials on account %s", ErrRevokedCredential, accountID)
+	}
+	secret, err := s.secrets.Get(ctx, activeCred.SecretRef)
 	if err != nil {
 		return nil, err
 	}
-	return s.SyncModels(ctx, actor, account.ProviderKind, secret)
+	models, err := s.SyncModels(ctx, actor, account.ProviderKind, secret)
+	if err != nil {
+		reason := "discovery_failed"
+		if errors.Is(err, ErrInvalidProviderCredential) || errors.Is(err, providerclient.ErrInvalidCredentials) {
+			reason = "credentials_rejected"
+		} else if errors.Is(err, ErrDiscoveryUnavailable) || errors.Is(err, providerclient.ErrDiscoveryUnavailable) {
+			reason = "discovery_unavailable"
+		}
+		_ = s.health.Upsert(ctx, domain.ProviderHealthState{
+			ProviderKind: account.ProviderKind,
+			Status:       domain.ProviderHealthUnhealthy,
+			StatusReason: reason,
+			LastError:    err.Error(),
+			CheckedAt:    s.now(),
+		})
+		return nil, err
+	}
+
+	_ = s.health.Upsert(ctx, domain.ProviderHealthState{
+		ProviderKind: account.ProviderKind,
+		Status:       domain.ProviderHealthHealthy,
+		StatusReason: "discovery_succeeded",
+		CheckedAt:    s.now(),
+	})
+	return models, nil
 }
 
 // CreateCredential attaches an upstream key to a provider account. The raw
@@ -592,47 +629,19 @@ func (s *Service) SyncModels(ctx context.Context, actor domain.Actor, providerKi
 	if err != nil {
 		return nil, err
 	}
-	var remote []providerclient.Model
-	if isDummyKey(apiKey) {
-		switch providerKind {
-		case domain.ProviderKindAnthropic:
-			remote = []providerclient.Model{
-				{ID: "claude-3-5-sonnet", DisplayName: "Claude 3.5 Sonnet", Capabilities: []string{"text_generation", "streaming", "tool_calling", "multimodal"}, ContextLimit: 200000},
-				{ID: "claude-3-5-haiku", DisplayName: "Claude 3.5 Haiku", Capabilities: []string{"text_generation", "streaming", "tool_calling"}, ContextLimit: 200000},
-				{ID: "claude-3-opus", DisplayName: "Claude 3 Opus", Capabilities: []string{"text_generation", "streaming", "tool_calling", "multimodal"}, ContextLimit: 200000},
-			}
-		case domain.ProviderKindOpenAI:
-			remote = []providerclient.Model{
-				{ID: "gpt-4o", DisplayName: "GPT-4o", Capabilities: []string{"text_generation", "streaming", "tool_calling", "multimodal"}, ContextLimit: 128000},
-				{ID: "gpt-4o-mini", DisplayName: "GPT-4o Mini", Capabilities: []string{"text_generation", "streaming", "tool_calling"}, ContextLimit: 128000},
-				{ID: "o1", DisplayName: "o1", Capabilities: []string{"text_generation", "reasoning"}, ContextLimit: 200000},
-			}
-		case domain.ProviderKindGemini:
-			remote = []providerclient.Model{
-				{ID: "gemini-2.5-flash", DisplayName: "Gemini 2.5 Flash", Capabilities: []string{"generateContent", "countTokens", "streaming"}, ContextLimit: 1048576},
-				{ID: "gemini-2.5-pro", DisplayName: "Gemini 2.5 Pro", Capabilities: []string{"generateContent", "countTokens", "streaming"}, ContextLimit: 2097152},
-				{ID: "gemini-1.5-pro", DisplayName: "Gemini 1.5 Pro", Capabilities: []string{"generateContent", "countTokens", "streaming"}, ContextLimit: 2097152},
-				{ID: "gemini-1.5-flash", DisplayName: "Gemini 1.5 Flash", Capabilities: []string{"generateContent", "countTokens", "streaming"}, ContextLimit: 1048576},
-			}
-		case domain.ProviderKindHuggingFace:
-			remote = []providerclient.Model{
-				{ID: "meta-llama/Llama-3.3-70B-Instruct", DisplayName: "Llama 3.3 70B Instruct", Capabilities: []string{"text_generation", "streaming"}, ContextLimit: 131072},
-				{ID: "mistralai/Mistral-7B-Instruct-v0.3", DisplayName: "Mistral 7B Instruct v0.3", Capabilities: []string{"text_generation", "streaming"}, ContextLimit: 32768},
-				{ID: "Qwen/Qwen2.5-72B-Instruct", DisplayName: "Qwen 2.5 72B Instruct", Capabilities: []string{"text_generation", "streaming"}, ContextLimit: 131072},
-				{ID: "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B", DisplayName: "DeepSeek R1 Distill Qwen 32B", Capabilities: []string{"text_generation", "streaming", "reasoning"}, ContextLimit: 65536},
-			}
+	remote, err := client.ListModels(ctx, apiKey)
+	if err != nil {
+		if errors.Is(err, providerclient.ErrInvalidCredentials) ||
+			errors.Is(err, ErrInvalidProviderCredential) ||
+			strings.Contains(strings.ToLower(err.Error()), "invalid api key") ||
+			strings.Contains(strings.ToLower(err.Error()), "invalid credentials") {
+			return nil, fmt.Errorf("%w: %s", ErrInvalidProviderCredential, providerKind)
 		}
-	} else {
-		var err error
-		remote, err = client.ListModels(ctx, apiKey)
-		if err != nil {
-			if errors.Is(err, providerclient.ErrInvalidCredentials) ||
-				strings.Contains(strings.ToLower(err.Error()), "invalid api key") ||
-				strings.Contains(strings.ToLower(err.Error()), "invalid credentials") {
-				return nil, fmt.Errorf("%w: %s", ErrInvalidProviderCredential, providerKind)
-			}
-			return nil, fmt.Errorf("list models for %s: %w", providerKind, err)
+		if errors.Is(err, providerclient.ErrDiscoveryUnavailable) ||
+			strings.Contains(strings.ToLower(err.Error()), "discovery unavailable") {
+			return nil, fmt.Errorf("%w: %s (%v)", ErrDiscoveryUnavailable, providerKind, err)
 		}
+		return nil, fmt.Errorf("list models for %s: %w", providerKind, err)
 	}
 
 	var infProv providerclient.InferenceProvider
@@ -712,10 +721,8 @@ func (s *Service) SyncModels(ctx context.Context, actor domain.Actor, providerKi
 		synced = append(synced, model)
 	}
 
-	if len(activeSlugs) > 0 {
-		if err := s.models.MarkInactiveExcept(ctx, providerKind, activeSlugs); err != nil {
-			s.log.WarnContext(ctx, "failed to mark stale models inactive", "provider_kind", providerKind, "error", err)
-		}
+	if err := s.models.MarkInactiveExcept(ctx, providerKind, activeSlugs); err != nil {
+		s.log.WarnContext(ctx, "failed to mark stale models inactive", "provider_kind", providerKind, "error", err)
 	}
 
 	payload, _ := json.Marshal(map[string]any{"provider_kind": providerKind, "count": len(synced)})
@@ -805,4 +812,9 @@ func isDummyKey(secret string) bool {
 
 // ErrInvalidProviderCredential marks a live rejection of the presented key
 // by the upstream provider (HTTP 401/403).
-var ErrInvalidProviderCredential = errors.New("provider: credentials rejected by provider")
+var (
+	ErrInvalidProviderCredential = errors.New("provider: credentials rejected by provider")
+	ErrDisabledAccount           = errors.New("provider: account is disabled")
+	ErrRevokedCredential         = errors.New("provider: credential is revoked")
+	ErrDiscoveryUnavailable      = errors.New("provider: model discovery unavailable")
+)

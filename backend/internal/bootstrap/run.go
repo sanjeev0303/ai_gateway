@@ -39,7 +39,6 @@ import (
 	"ai-governance-saas/backend/internal/infrastructure/provider/gemini"
 	"ai-governance-saas/backend/internal/infrastructure/provider/huggingface"
 	"ai-governance-saas/backend/internal/infrastructure/provider/openai"
-	"ai-governance-saas/backend/internal/ports/payment"
 	"ai-governance-saas/backend/internal/infrastructure/secrets"
 	"ai-governance-saas/backend/internal/interfaces/controlapi"
 	"ai-governance-saas/backend/internal/interfaces/gateway"
@@ -50,6 +49,7 @@ import (
 	"ai-governance-saas/backend/internal/platform/health"
 	"ai-governance-saas/backend/internal/platform/httpx"
 	"ai-governance-saas/backend/internal/platform/logging"
+	"ai-governance-saas/backend/internal/ports/payment"
 	providerclient "ai-governance-saas/backend/internal/ports/provider"
 )
 
@@ -174,8 +174,19 @@ func RunGatewayV2(ctx context.Context) error {
 		var rateLimiter gatewayv2.RateLimiter
 		var budgetGuard gatewayv2.BudgetGuard
 		if redisClient != nil {
-			rateLimiter = gatewayv2.NewRedisRateLimiter(redisClient, log)
-			budgetGuard = gatewayv2.NewBudgetGuardWithRedis(redisClient, log)
+			rl := gatewayv2.NewRedisRateLimiter(redisClient, log)
+			bg := gatewayv2.NewBudgetGuardWithRedis(redisClient, log)
+			if cfg.Redis.IsFailClosed() {
+				rl.WithMode(gatewayv2.ModeFailClosed)
+				bg.WithMode(gatewayv2.BudgetModeFailClosed)
+				log.Info("redis outage policy configured as fail-closed", "rate_limiter", "fail_closed", "budget_guard", "fail_closed")
+			} else {
+				rl.WithMode(gatewayv2.ModeDegradedLocal)
+				bg.WithMode(gatewayv2.BudgetModeDegradedLocal)
+				log.Info("redis outage policy configured as degraded-local (fail-open)", "rate_limiter", "degraded_local", "budget_guard", "degraded_local")
+			}
+			rateLimiter = rl
+			budgetGuard = bg
 		} else {
 			rateLimiter = gatewayv2.NewRateLimiter()
 			budgetGuard = gatewayv2.NewBudgetGuard()
@@ -437,10 +448,14 @@ func RunControlAPI(ctx context.Context) error {
 			Evaluator: alertEval,
 		})
 
+		billingMode := cfg.Billing.EffectiveMode()
 		stripeGw := stripe.New(cfg.Billing.StripeSecretKey, cfg.Billing.StripeWebhookSecret)
+		stripeGw.SetMode(billingMode)
 		razorpayGw := razorpay.New(cfg.Billing.RazorpayKeyID, cfg.Billing.RazorpayKeySecret, cfg.Billing.RazorpayWebhookSecret)
+		razorpayGw.SetMode(billingMode)
 
 		billingSvc := billing.NewService(billing.ServiceDeps{
+			Mode:          billingMode,
 			Plans:         repositories.NewPlanRepository(store),
 			Subscriptions: repositories.NewSubscriptionRepository(store),
 			Invoices:      repositories.NewInvoiceRepository(store),
@@ -508,9 +523,9 @@ func RunControlAPI(ctx context.Context) error {
 // rather than validated against the wrong upstream.
 func providerAdapters() map[string]providerclient.Provider {
 	return map[string]providerclient.Provider{
-		domain.ProviderKindAnthropic:  anthropic.NewProviderAdapter(),
-		domain.ProviderKindOpenAI:     openai.NewProviderAdapter(),
-		domain.ProviderKindGemini:     gemini.NewProviderAdapter(),
+		domain.ProviderKindAnthropic:   anthropic.NewProviderAdapter(),
+		domain.ProviderKindOpenAI:      openai.NewProviderAdapter(),
+		domain.ProviderKindGemini:      gemini.NewProviderAdapter(),
 		domain.ProviderKindHuggingFace: huggingface.NewProviderAdapter(),
 	}
 }

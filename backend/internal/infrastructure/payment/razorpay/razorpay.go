@@ -30,6 +30,7 @@ type Gateway struct {
 	keySecret     string
 	webhookSecret string
 	apiURL        string
+	mode          string
 	httpClient    *http.Client
 }
 
@@ -40,6 +41,7 @@ func New(keyID, keySecret, webhookSecret string) *Gateway {
 		keySecret:     keySecret,
 		webhookSecret: webhookSecret,
 		apiURL:        defaultRazorpayAPIURL,
+		mode:          "test",
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -56,6 +58,7 @@ func NewCustomGateway(keyID, keySecret, webhookSecret, apiURL string) *Gateway {
 		keySecret:     keySecret,
 		webhookSecret: webhookSecret,
 		apiURL:        apiURL,
+		mode:          "test",
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -67,13 +70,32 @@ func (g *Gateway) Name() string {
 	return "razorpay"
 }
 
+// Mode returns the active operational mode ("simulation", "test", "live").
+func (g *Gateway) Mode() string {
+	if g.mode == "" {
+		return "test"
+	}
+	return g.mode
+}
+
+// SetMode configures the active operational mode.
+func (g *Gateway) SetMode(mode string) {
+	g.mode = mode
+}
+
 // CreateOrGetCustomer provisions or retrieves the upstream Razorpay customer entity.
 func (g *Gateway) CreateOrGetCustomer(ctx context.Context, orgID uuid.UUID, email, name string) (string, error) {
 	if orgID == uuid.Nil {
 		return "", errors.New("razorpay: organization ID is required")
 	}
-	if g.keyID == "" || strings.HasPrefix(g.keyID, "dummy-") || strings.HasPrefix(g.keyID, "rzp_test_placeholder") {
-		return "cust_rzp_" + orgID.String()[:12], nil
+	if g.Mode() == "simulation" {
+		return "cust_sim_" + orgID.String()[:12], nil
+	}
+	if g.keyID == "" || g.keySecret == "" {
+		return "", payment.ErrMissingCredentials
+	}
+	if strings.HasPrefix(g.keyID, "dummy-") || strings.HasPrefix(g.keyID, "rzp_test_placeholder") || strings.HasPrefix(g.keySecret, "dummy-") {
+		return "", payment.ErrInvalidCredentials
 	}
 
 	bodyMap := map[string]any{
@@ -125,18 +147,27 @@ func (g *Gateway) CreateCheckoutSession(ctx context.Context, params payment.Chec
 		return nil, errors.New("razorpay: organization ID is required")
 	}
 
-	// If no keys configured or test dummy, return a simulated deterministic checkout link
-	if g.keyID == "" || strings.HasPrefix(g.keyID, "dummy-") || strings.HasPrefix(g.keyID, "rzp_test_placeholder") {
-		sessionID := "sub_link_" + uuid.NewString()[:18]
-		checkoutURL := fmt.Sprintf("https://rzp.io/i/%s?plan=%s&org=%s", sessionID, params.PlanCode, params.OrganizationID.String())
+	// If simulation mode, return an explicitly identified simulated checkout link
+	if g.Mode() == "simulation" {
+		sessionID := "sub_sim_" + uuid.NewString()[:18]
+		checkoutURL := fmt.Sprintf("https://rzp.io/simulate/%s?plan=%s&org=%s", sessionID, params.PlanCode, params.OrganizationID.String())
 		return &payment.CheckoutSession{
-			SessionID:  sessionID,
-			URL:        checkoutURL,
-			Provider:   "razorpay",
-			CustomerID: params.CustomerID,
-			OrderID:    "order_test_" + uuid.NewString()[:12],
-			KeyID:      "rzp_test_dummy",
+			SessionID:   sessionID,
+			URL:         checkoutURL,
+			Provider:    "razorpay",
+			CustomerID:  params.CustomerID,
+			OrderID:     "order_sim_" + uuid.NewString()[:12],
+			KeyID:       "rzp_sim_dummy",
+			Mode:        "simulation",
+			IsSimulated: true,
 		}, nil
+	}
+
+	if g.keyID == "" || g.keySecret == "" {
+		return nil, payment.ErrMissingCredentials
+	}
+	if strings.HasPrefix(g.keyID, "dummy-") || strings.HasPrefix(g.keyID, "rzp_test_placeholder") || strings.HasPrefix(g.keySecret, "dummy-") {
+		return nil, payment.ErrInvalidCredentials
 	}
 
 	bodyMap := map[string]any{
@@ -179,6 +210,9 @@ func (g *Gateway) CreateCheckoutSession(ctx context.Context, params payment.Chec
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return nil, fmt.Errorf("%w: razorpay authentication failed (HTTP %d): %s", payment.ErrInvalidCredentials, resp.StatusCode, string(body))
+		}
 		return nil, fmt.Errorf("razorpay payment link creation failed (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 
@@ -191,12 +225,14 @@ func (g *Gateway) CreateCheckoutSession(ctx context.Context, params payment.Chec
 	}
 
 	return &payment.CheckoutSession{
-		SessionID:  res.ID,
-		URL:        res.ShortURL,
-		Provider:   "razorpay",
-		CustomerID: params.CustomerID,
-		OrderID:    res.ID,
-		KeyID:      g.keyID,
+		SessionID:   res.ID,
+		URL:         res.ShortURL,
+		Provider:    "razorpay",
+		CustomerID:  params.CustomerID,
+		OrderID:     res.ID,
+		KeyID:       g.keyID,
+		Mode:        g.Mode(),
+		IsSimulated: false,
 	}, nil
 }
 
@@ -208,8 +244,14 @@ func (g *Gateway) VerifyPaymentCallback(ctx context.Context, orderID, paymentID,
 	if paymentID == "" {
 		return errors.New("razorpay: payment_id is required")
 	}
-	if g.keySecret == "" || strings.HasPrefix(g.keySecret, "dummy-") || strings.HasPrefix(g.keySecret, "rzp_test_placeholder") {
-		return nil
+	if g.Mode() == "simulation" {
+		return payment.ErrSimulationOnly
+	}
+	if g.keySecret == "" {
+		return payment.ErrMissingCredentials
+	}
+	if strings.HasPrefix(g.keySecret, "dummy-") || strings.HasPrefix(g.keySecret, "rzp_test_placeholder") {
+		return payment.ErrInvalidCredentials
 	}
 
 	// Subscriptions sign payment_id|subscription_id; standard orders sign order_id|payment_id
@@ -244,7 +286,10 @@ func (g *Gateway) VerifyPaymentCallback(ctx context.Context, orderID, paymentID,
 
 // VerifyAndParseWebhook validates the Razorpay webhook signature and maps the payload into a WebhookEvent.
 func (g *Gateway) VerifyAndParseWebhook(ctx context.Context, payload []byte, signature string) (*payment.WebhookEvent, error) {
-	if g.webhookSecret == "" || signature == "" {
+	if g.webhookSecret == "" {
+		return nil, payment.ErrMissingCredentials
+	}
+	if signature == "" {
 		return nil, payment.ErrInvalidSignature
 	}
 	mac := hmac.New(sha256.New, []byte(g.webhookSecret))
@@ -380,8 +425,14 @@ func (g *Gateway) CancelSubscription(ctx context.Context, subID string) error {
 	if subID == "" {
 		return errors.New("razorpay: subscription ID required")
 	}
-	if g.keyID == "" || strings.HasPrefix(g.keyID, "dummy-") {
+	if g.Mode() == "simulation" {
 		return nil
+	}
+	if g.keyID == "" || g.keySecret == "" {
+		return payment.ErrMissingCredentials
+	}
+	if strings.HasPrefix(g.keyID, "dummy-") || strings.HasPrefix(g.keySecret, "dummy-") {
+		return payment.ErrInvalidCredentials
 	}
 
 	reqURL := fmt.Sprintf("%s/v1/subscriptions/%s/cancel", strings.TrimRight(g.apiURL, "/"), subID)
@@ -403,4 +454,3 @@ func (g *Gateway) CancelSubscription(ctx context.Context, subID string) error {
 	}
 	return nil
 }
-

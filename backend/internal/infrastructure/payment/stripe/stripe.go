@@ -23,7 +23,7 @@ import (
 
 const (
 	defaultStripeAPIURL = "https://api.stripe.com"
-	defaultTolerance   = 5 * time.Minute
+	defaultTolerance    = 5 * time.Minute
 )
 
 // Gateway implements payment.PaymentGateway for Stripe.
@@ -31,6 +31,7 @@ type Gateway struct {
 	secretKey     string
 	webhookSecret string
 	apiURL        string
+	mode          string
 	httpClient    *http.Client
 }
 
@@ -40,6 +41,7 @@ func New(secretKey, webhookSecret string) *Gateway {
 		secretKey:     secretKey,
 		webhookSecret: webhookSecret,
 		apiURL:        defaultStripeAPIURL,
+		mode:          "test",
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -55,6 +57,7 @@ func NewCustomGateway(secretKey, webhookSecret, apiURL string) *Gateway {
 		secretKey:     secretKey,
 		webhookSecret: webhookSecret,
 		apiURL:        apiURL,
+		mode:          "test",
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -66,13 +69,32 @@ func (g *Gateway) Name() string {
 	return "stripe"
 }
 
+// Mode returns the active operational mode ("simulation", "test", "live").
+func (g *Gateway) Mode() string {
+	if g.mode == "" {
+		return "test"
+	}
+	return g.mode
+}
+
+// SetMode configures the active operational mode.
+func (g *Gateway) SetMode(mode string) {
+	g.mode = mode
+}
+
 // CreateOrGetCustomer provisions or retrieves the upstream Stripe customer entity.
 func (g *Gateway) CreateOrGetCustomer(ctx context.Context, orgID uuid.UUID, email, name string) (string, error) {
 	if orgID == uuid.Nil {
 		return "", errors.New("stripe: organization ID is required")
 	}
-	if g.secretKey == "" || strings.HasPrefix(g.secretKey, "dummy-") || strings.HasPrefix(g.secretKey, "sk_test_placeholder") {
-		return "cus_test_" + orgID.String()[:12], nil
+	if g.Mode() == "simulation" {
+		return "cus_sim_" + orgID.String()[:12], nil
+	}
+	if g.secretKey == "" {
+		return "", payment.ErrMissingCredentials
+	}
+	if strings.HasPrefix(g.secretKey, "dummy-") || strings.HasPrefix(g.secretKey, "sk_test_placeholder") {
+		return "", payment.ErrInvalidCredentials
 	}
 
 	// 1. Check if customer already exists by email
@@ -145,19 +167,28 @@ func (g *Gateway) CreateCheckoutSession(ctx context.Context, params payment.Chec
 		return nil, errors.New("stripe: organization ID is required")
 	}
 
-	// If no secret key is set or using a test dummy, return a simulated deterministic checkout session
-	if g.secretKey == "" || strings.HasPrefix(g.secretKey, "dummy-") || strings.HasPrefix(g.secretKey, "sk_test_placeholder") {
-		sessionID := "cs_test_" + uuid.NewString()[:18]
-		checkoutURL := fmt.Sprintf("https://checkout.stripe.com/c/pay/%s?plan=%s&org=%s", sessionID, params.PlanCode, params.OrganizationID.String())
+	// If simulation mode, return an explicitly identified simulated checkout session
+	if g.Mode() == "simulation" {
+		sessionID := "cs_sim_" + uuid.NewString()[:18]
+		checkoutURL := fmt.Sprintf("https://checkout.stripe.com/simulate/%s?plan=%s&org=%s", sessionID, params.PlanCode, params.OrganizationID.String())
 		if params.SuccessURL != "" {
 			checkoutURL += "&success_url=" + url.QueryEscape(params.SuccessURL)
 		}
 		return &payment.CheckoutSession{
-			SessionID:  sessionID,
-			URL:        checkoutURL,
-			Provider:   "stripe",
-			CustomerID: params.CustomerID,
+			SessionID:   sessionID,
+			URL:         checkoutURL,
+			Provider:    "stripe",
+			CustomerID:  params.CustomerID,
+			Mode:        "simulation",
+			IsSimulated: true,
 		}, nil
+	}
+
+	if g.secretKey == "" {
+		return nil, payment.ErrMissingCredentials
+	}
+	if strings.HasPrefix(g.secretKey, "dummy-") || strings.HasPrefix(g.secretKey, "sk_test_placeholder") {
+		return nil, payment.ErrInvalidCredentials
 	}
 
 	data := url.Values{}
@@ -194,6 +225,9 @@ func (g *Gateway) CreateCheckoutSession(ctx context.Context, params payment.Chec
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return nil, fmt.Errorf("%w: stripe authentication failed (HTTP %d): %s", payment.ErrInvalidCredentials, resp.StatusCode, string(body))
+		}
 		return nil, fmt.Errorf("stripe checkout session failed (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 
@@ -207,16 +241,22 @@ func (g *Gateway) CreateCheckoutSession(ctx context.Context, params payment.Chec
 	}
 
 	return &payment.CheckoutSession{
-		SessionID:  res.ID,
-		URL:        res.URL,
-		Provider:   "stripe",
-		CustomerID: res.Customer,
+		SessionID:   res.ID,
+		URL:         res.URL,
+		Provider:    "stripe",
+		CustomerID:  res.Customer,
+		Mode:        g.Mode(),
+		IsSimulated: false,
 	}, nil
+
 }
 
 // VerifyAndParseWebhook validates the Stripe signature and converts the event into a standard WebhookEvent.
 func (g *Gateway) VerifyAndParseWebhook(ctx context.Context, payload []byte, sigHeader string) (*payment.WebhookEvent, error) {
-	if g.webhookSecret == "" || sigHeader == "" {
+	if g.webhookSecret == "" {
+		return nil, payment.ErrMissingCredentials
+	}
+	if sigHeader == "" {
 		return nil, payment.ErrInvalidSignature
 	}
 	if err := verifySignature(payload, sigHeader, g.webhookSecret); err != nil {
@@ -347,8 +387,14 @@ func (g *Gateway) VerifyPaymentCallback(ctx context.Context, orderID, paymentID,
 	if sessionID == "" {
 		return errors.New("stripe: session_id or payment_id required for callback verification")
 	}
-	if g.secretKey == "" || strings.HasPrefix(g.secretKey, "dummy-") || strings.HasPrefix(g.secretKey, "sk_test_placeholder") {
-		return nil
+	if g.Mode() == "simulation" {
+		return payment.ErrSimulationOnly
+	}
+	if g.secretKey == "" {
+		return payment.ErrMissingCredentials
+	}
+	if strings.HasPrefix(g.secretKey, "dummy-") || strings.HasPrefix(g.secretKey, "sk_test_placeholder") {
+		return payment.ErrInvalidCredentials
 	}
 
 	reqURL := fmt.Sprintf("%s/v1/checkout/sessions/%s", strings.TrimRight(g.apiURL, "/"), sessionID)
@@ -386,8 +432,14 @@ func (g *Gateway) CancelSubscription(ctx context.Context, subID string) error {
 	if subID == "" {
 		return errors.New("stripe: subscription ID required")
 	}
-	if g.secretKey == "" || strings.HasPrefix(g.secretKey, "dummy-") {
+	if g.Mode() == "simulation" {
 		return nil
+	}
+	if g.secretKey == "" {
+		return payment.ErrMissingCredentials
+	}
+	if strings.HasPrefix(g.secretKey, "dummy-") || strings.HasPrefix(g.secretKey, "sk_test_placeholder") {
+		return payment.ErrInvalidCredentials
 	}
 
 	reqURL := fmt.Sprintf("%s/v1/subscriptions/%s", strings.TrimRight(g.apiURL, "/"), subID)
@@ -409,7 +461,6 @@ func (g *Gateway) CancelSubscription(ctx context.Context, subID string) error {
 	}
 	return nil
 }
-
 
 // verifySignature checks Stripe webhook signature format: t=<timestamp>,v1=<sig>.
 func verifySignature(payload []byte, header, secret string) error {

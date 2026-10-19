@@ -4,33 +4,39 @@ import assert from "node:assert/strict";
 // Helper functions mirroring the component logic for test assertion
 function resolveProviderValidationState(
   status: string,
-  health?: { status: string; status_reason?: string; last_error?: string }
-): "Provider connected" | "Credential invalid" | "Provider unreachable" | "Model discovery unavailable" | "Disabled" {
+  health?: { status: string; status_reason?: string; last_error?: string },
+  modelCount: number = 0
+): "Connected and models discovered" | "Connected but discovery unavailable" | "Credential invalid" | "Provider unreachable" | "Disabled" {
   if (status === "disabled") return "Disabled";
-  if (!health) return "Provider connected";
-
-  if (health.status === "unhealthy" || health.status === "error") {
-    const err = `${health.status_reason || ""} ${health.last_error || ""}`.toLowerCase();
-    if (
-      err.includes("credential") ||
-      err.includes("auth") ||
-      err.includes("401") ||
-      err.includes("403") ||
-      err.includes("key")
-    ) {
-      return "Credential invalid";
-    }
-    if (err.includes("discovery") || err.includes("model")) {
-      return "Model discovery unavailable";
-    }
-    return "Provider unreachable";
+  if (!health || health.status === "healthy" || health.status === "ok") {
+    return modelCount > 0 ? "Connected and models discovered" : "Connected but discovery unavailable";
   }
 
-  return "Provider connected";
+  const err = `${health.status_reason || ""} ${health.last_error || ""}`.toLowerCase();
+  if (
+    err.includes("credential") ||
+    err.includes("auth") ||
+    err.includes("401") ||
+    err.includes("403") ||
+    err.includes("key") ||
+    err.includes("revoked")
+  ) {
+    return "Credential invalid";
+  }
+  if (err.includes("discovery") || err.includes("model")) {
+    return "Connected but discovery unavailable";
+  }
+  return "Provider unreachable";
 }
 
-function resolveModelAuthorizationState(isActive: boolean): "Model authorized and ready" | "Model discovered but unauthorized" {
-  return isActive ? "Model authorized and ready" : "Model discovered but unauthorized";
+function resolveModelAuthorizationState(
+  isActive: boolean,
+  status?: string
+): "Model authorized and ready" | "Model discovered but not authorized" | "Model no longer available" {
+  if (status === "inactive" || status === "unavailable" || (!isActive && status !== "active")) {
+    return "Model no longer available";
+  }
+  return isActive ? "Model authorized and ready" : "Model discovered but not authorized";
 }
 
 function calculatePlanQuotaLimit(planCode?: string): number {
@@ -44,9 +50,14 @@ function calculateQuotaPercentage(consumed: number, limit: number): number {
   return Math.min(100, Math.round((consumed / limit) * 100));
 }
 
-test("Provider Validation Status: maps healthy provider to 'Provider connected'", () => {
-  const state = resolveProviderValidationState("active", { status: "healthy" });
-  assert.equal(state, "Provider connected");
+test("Provider Validation Status: maps healthy provider with models to 'Connected and models discovered'", () => {
+  const state = resolveProviderValidationState("active", { status: "healthy" }, 5);
+  assert.equal(state, "Connected and models discovered");
+});
+
+test("Provider Validation Status: maps healthy provider without models to 'Connected but discovery unavailable'", () => {
+  const state = resolveProviderValidationState("active", { status: "healthy" }, 0);
+  assert.equal(state, "Connected but discovery unavailable");
 });
 
 test("Provider Validation Status: maps 401 authentication rejection to 'Credential invalid'", () => {
@@ -65,12 +76,12 @@ test("Provider Validation Status: maps network timeout to 'Provider unreachable'
   assert.equal(state, "Provider unreachable");
 });
 
-test("Provider Validation Status: maps catalog failure to 'Model discovery unavailable'", () => {
+test("Provider Validation Status: maps catalog failure to 'Connected but discovery unavailable'", () => {
   const state = resolveProviderValidationState("active", {
     status: "unhealthy",
     status_reason: "model discovery endpoint returned error 502",
   });
-  assert.equal(state, "Model discovery unavailable");
+  assert.equal(state, "Connected but discovery unavailable");
 });
 
 test("Provider Validation Status: disabled account returns 'Disabled'", () => {
@@ -78,9 +89,11 @@ test("Provider Validation Status: disabled account returns 'Disabled'", () => {
   assert.equal(state, "Disabled");
 });
 
-test("Model Authorization: distinguishes authorized ready models from unauthorized models", () => {
-  assert.equal(resolveModelAuthorizationState(true), "Model authorized and ready");
-  assert.equal(resolveModelAuthorizationState(false), "Model discovered but unauthorized");
+test("Model Authorization: distinguishes authorized ready, discovered but not authorized, and no longer available models", () => {
+  assert.equal(resolveModelAuthorizationState(true, "active"), "Model authorized and ready");
+  assert.equal(resolveModelAuthorizationState(false, "active"), "Model discovered but not authorized");
+  assert.equal(resolveModelAuthorizationState(true, "inactive"), "Model no longer available");
+  assert.equal(resolveModelAuthorizationState(false, "unavailable"), "Model no longer available");
 });
 
 test("Billing Quotas: returns exact tier request limits", () => {

@@ -424,6 +424,116 @@ func TestProviderLifecycle_Gemini_Streaming(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
+// Hugging Face Adapter & Lifecycle Verification
+// -----------------------------------------------------------------------------
+
+func TestProviderLifecycle_HuggingFace_NonStreaming(t *testing.T) {
+	var receivedAuthHeader string
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedAuthHeader = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		resp := map[string]any{
+			"id":     "hf-chatcmpl-test-01",
+			"object": "chat.completion",
+			"model":  "meta-llama/Llama-3.3-70B-Instruct",
+			"choices": []any{
+				map[string]any{
+					"index": 0,
+					"message": map[string]any{
+						"role":    "assistant",
+						"content": "Hello from Hugging Face provider",
+					},
+					"finish_reason": "stop",
+				},
+			},
+			"usage": map[string]any{
+				"prompt_tokens":     18,
+				"completion_tokens": 28,
+				"total_tokens":      46,
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer mockServer.Close()
+
+	gw, telemetry, _ := setupMockGateway(t, mockServer.URL, domain.ProviderKindHuggingFace, "meta-llama/Llama-3.3-70B-Instruct")
+
+	reqBody := `{"model":"meta-llama/Llama-3.3-70B-Instruct","messages":[{"role":"user","content":"ping"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(reqBody))
+	req.Header.Set("Authorization", "Bearer aigw_test_key_abc")
+	req.Header.Set("X-Request-Id", "req-hf-e2e-1")
+
+	rec := httptest.NewRecorder()
+	gw.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected HTTP 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+	if receivedAuthHeader != "Bearer mock-provider-secret-key-999" {
+		t.Fatalf("expected Authorization Bearer header, got %q", receivedAuthHeader)
+	}
+	if len(telemetry.usage) != 1 {
+		t.Fatalf("expected 1 telemetry record, got %d", len(telemetry.usage))
+	}
+	u := telemetry.usage[0]
+	if u.InputTokens != 18 || u.OutputTokens != 28 {
+		t.Errorf("expected 18/28 tokens, got %d/%d", u.InputTokens, u.OutputTokens)
+	}
+	if u.ProviderMeta["provider"] != domain.ProviderKindHuggingFace {
+		t.Errorf("expected provider huggingface, got %v", u.ProviderMeta["provider"])
+	}
+}
+
+func TestProviderLifecycle_HuggingFace_Streaming(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+
+		chunks := []string{
+			`data: {"id":"hf-c-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant","content":"hf chunk 1"}}]}`,
+			`data: {"id":"hf-c-2","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":" hf chunk 2"}}]}`,
+			`data: {"id":"hf-c-3","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":16,"completion_tokens":24,"total_tokens":40}}`,
+			`data: [DONE]`,
+		}
+		for _, c := range chunks {
+			_, _ = fmt.Fprintf(w, "%s\n\n", c)
+			flusher.Flush()
+			time.Sleep(5 * time.Millisecond)
+		}
+	}))
+	defer mockServer.Close()
+
+	gw, telemetry, _ := setupMockGateway(t, mockServer.URL, domain.ProviderKindHuggingFace, "meta-llama/Llama-3.3-70B-Instruct")
+
+	reqBody := `{"model":"meta-llama/Llama-3.3-70B-Instruct","stream":true,"messages":[{"role":"user","content":"stream"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(reqBody))
+	req.Header.Set("Authorization", "Bearer aigw_test_key_abc")
+	req.Header.Set("X-Request-Id", "req-hf-stream-1")
+
+	rec := httptest.NewRecorder()
+	gw.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected HTTP 200, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "hf chunk 1") || !strings.Contains(rec.Body.String(), "[DONE]") {
+		t.Fatalf("stream body missing expected SSE tokens: %s", rec.Body.String())
+	}
+	if len(telemetry.usage) != 1 {
+		t.Fatalf("expected 1 telemetry record, got %d", len(telemetry.usage))
+	}
+	u := telemetry.usage[0]
+	if u.InputTokens != 16 || u.OutputTokens != 24 {
+		t.Errorf("expected 16/24 tokens, got %d/%d", u.InputTokens, u.OutputTokens)
+	}
+	if u.TimeToFirstTokenMs == nil {
+		t.Errorf("expected TimeToFirstTokenMs to be recorded for HF streaming request")
+	}
+}
+
+// -----------------------------------------------------------------------------
 // Provider Errors, Rate Limits, and Timeouts
 // -----------------------------------------------------------------------------
 
@@ -657,6 +767,7 @@ func TestProviderLifecycle_LiveCredentialsCheck(t *testing.T) {
 		{"OpenAI", "OPENAI_API_KEY"},
 		{"Anthropic", "ANTHROPIC_API_KEY"},
 		{"Gemini", "GEMINI_API_KEY"},
+		{"Hugging Face", "HUGGINGFACE_API_KEY"},
 	}
 
 	for _, p := range providers {

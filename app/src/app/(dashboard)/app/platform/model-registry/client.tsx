@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useState, useTransition, useMemo } from "react";
-import { RefreshCw, ExternalLink, Search, Sparkles, Database, CheckCircle2, AlertTriangle, ShieldCheck } from "lucide-react";
+import { RefreshCw, ExternalLink, Search, Sparkles, Database, CheckCircle2, AlertTriangle, ShieldCheck, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -234,17 +234,25 @@ export function ModelRegistryClient({ initialRows }: { initialRows: ModelRow[] }
       header: "Status & Authorization",
       primary: "model_slug",
       sort: "is_active",
-      render: (row) => (
-        row.is_active ? (
+      render: (row) => {
+        const isUnavailable = row.status === "inactive" || row.status === "unavailable" || (!row.is_active && row.status !== "active");
+        if (isUnavailable) {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-muted text-muted-foreground border border-border">
+              <XCircle className="size-3" /> Model no longer available
+            </span>
+          );
+        }
+        return row.is_active ? (
           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
             <CheckCircle2 className="size-3" /> Model authorized and ready
           </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-600 border border-amber-500/30">
-            <AlertTriangle className="size-3" /> Model discovered but unauthorized
+            <AlertTriangle className="size-3" /> Model discovered but not authorized
           </span>
-        )
-      ),
+        );
+      },
     },
     {
       key: "updated_at",

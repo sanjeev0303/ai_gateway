@@ -259,6 +259,7 @@ func TestPhaseJ_CompleteEndToEndLocalVerification(t *testing.T) {
 	}
 
 	billingSvc := billing.NewService(billing.ServiceDeps{
+		Mode:          "simulation",
 		Plans:         &fakeBillingPlans{plans: []domain.Plan{{ID: localPlanID, Code: "pro"}, {ID: localPlanID, Code: "enterprise"}}},
 		Subscriptions: subsRepo,
 		Invoices:      invsRepo,
@@ -330,8 +331,6 @@ func TestPhaseJ_CompleteEndToEndLocalVerification(t *testing.T) {
 		}
 	})
 
-
-
 	// Step 7: Dual-Gateway Payment Checkout & Webhooks
 	t.Run("Stripe & Razorpay dual checkout and authentic webhooks", func(t *testing.T) {
 		// Stripe Checkout Session creation
@@ -398,9 +397,15 @@ func TestPhaseJ_CompleteEndToEndLocalVerification(t *testing.T) {
 		}
 
 		// Replay duplicate event to verify idempotency (must return 200 without error)
-		reqWh2, _ := http.NewRequest(http.MethodPost, srv.URL+"/v1/billing/webhooks/stripe", bytes.NewReader(webhookPayload))
+		reqWh2, err := http.NewRequest(http.MethodPost, srv.URL+"/v1/billing/webhooks/stripe", bytes.NewReader(webhookPayload))
+		if err != nil {
+			t.Fatalf("failed to create replay request: %v", err)
+		}
 		reqWh2.Header.Set("Stripe-Signature", header)
-		respWh2, _ := http.DefaultClient.Do(reqWh2)
+		respWh2, err := http.DefaultClient.Do(reqWh2)
+		if err != nil {
+			t.Fatalf("webhook replay request failed: %v", err)
+		}
 		defer respWh2.Body.Close()
 		if respWh2.StatusCode != http.StatusOK {
 			t.Fatalf("expected 200 OK for idempotent duplicate webhook replay, got %d", respWh2.StatusCode)

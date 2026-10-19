@@ -15,12 +15,25 @@ var sensitiveKeyPatterns = []string{
 	"authorization",
 	"auth",
 	"token",
+	"access_token",
+	"refresh_token",
 	"password",
+	"postgres_password",
+	"redis_password",
 	"secret",
+	"secret_key",
+	"key_secret",
+	"client_secret",
+	"webhook_secret",
 	"api_key",
 	"apikey",
+	"provider_key",
 	"signing_key",
 	"hmac_key",
+	"private_key",
+	"master_key",
+	"stripe_secret",
+	"razorpay_secret",
 	"cookie",
 	"set-cookie",
 	"credential",
@@ -50,6 +63,14 @@ func RedactAttr(groups []string, a slog.Attr) slog.Attr {
 		lower := strings.ToLower(str)
 		if strings.HasPrefix(lower, "bearer ") {
 			return slog.String(a.Key, "Bearer <redacted>")
+		}
+		if strings.HasPrefix(lower, "sk_live_") || strings.HasPrefix(lower, "sk_test_") ||
+			strings.HasPrefix(lower, "whsec_") || strings.HasPrefix(lower, "rzp_test_") ||
+			strings.HasPrefix(lower, "rzp_live_") || strings.HasPrefix(lower, "hf_") {
+			return slog.String(a.Key, "<redacted>")
+		}
+		if strings.HasPrefix(lower, "postgres://") || strings.HasPrefix(lower, "postgresql://") {
+			return slog.String(a.Key, "<redacted-dsn>")
 		}
 	}
 	return a

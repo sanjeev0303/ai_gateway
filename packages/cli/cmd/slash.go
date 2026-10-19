@@ -13,27 +13,33 @@ import (
 
 // SessionState tracks session-level configuration and usage telemetry.
 type SessionState struct {
-	GatewayURL          string
-	APIKey              string
-	ProjectID           string
-	Provider            string
-	Model               string
-	Stream              bool
-	MaxTokens           int
-	SystemPrompt        string
-	Temperature         *float64
-	ReasoningEffort     string
-	SafetySettings      string
-	HFEndpoint          string
-	TotalInputTokens    int
-	TotalOutputTokens   int
-	TotalTokens         int
-	EstimatedCost       float64
-	Messages            []client.ChatMessage
-	Client              *client.GatewayClient
-	AuthorizedProviders []string
-	PermittedModels     []client.Model
-	Registry            *CommandRegistry
+	GatewayURL           string
+	APIKey               string
+	ProjectID            string
+	Provider             string
+	Model                string
+	Stream               bool
+	MaxTokens            int
+	SystemPrompt         string
+	Temperature          *float64
+	ReasoningEffort      string
+	SafetySettings       string
+	HFEndpoint           string
+	TotalInputTokens     int
+	TotalOutputTokens    int
+	TotalTokens          int
+	ReportedInputTokens  int
+	ReportedOutputTokens int
+	ReportedTotalTokens  int
+	EstimatedTokens      int
+	HasReportedUsage     bool
+	HasEstimatedUsage    bool
+	EstimatedCost        float64
+	Messages             []client.ChatMessage
+	Client               *client.GatewayClient
+	AuthorizedProviders  []string
+	PermittedModels      []client.Model
+	Registry             *CommandRegistry
 }
 
 // SyncPermittedScope queries the gateway to discover permitted models and providers for this credential.
@@ -74,6 +80,29 @@ func (s *SessionState) SyncPermittedScope(ctx context.Context) {
 				s.Model = m.ID
 				break
 			}
+		}
+	}
+}
+
+// RecordUsage updates cumulative session counters and tracks provider-reported vs locally estimated usage.
+func (s *SessionState) RecordUsage(meta *client.RequestMetadata) {
+	if meta == nil {
+		return
+	}
+	if meta.TotalTokens > 0 || meta.InputTokens > 0 || meta.OutputTokens > 0 {
+		s.TotalInputTokens += meta.InputTokens
+		s.TotalOutputTokens += meta.OutputTokens
+		s.TotalTokens += meta.TotalTokens
+		s.EstimatedCost += EstimateCost(meta.Model, meta.InputTokens, meta.OutputTokens)
+
+		if meta.UsageSource == "reported" || (!meta.IsEstimated && meta.UsageSource != "estimated") {
+			s.ReportedInputTokens += meta.InputTokens
+			s.ReportedOutputTokens += meta.OutputTokens
+			s.ReportedTotalTokens += meta.TotalTokens
+			s.HasReportedUsage = true
+		} else {
+			s.EstimatedTokens += meta.TotalTokens
+			s.HasEstimatedUsage = true
 		}
 	}
 }
@@ -276,6 +305,8 @@ func RunInteractiveSession(ctx context.Context, session *SessionState, in io.Rea
 			SystemPrompt:    session.SystemPrompt,
 			Temperature:     session.Temperature,
 			ReasoningEffort: session.ReasoningEffort,
+			SafetySettings:  session.SafetySettings,
+			HFEndpoint:      session.HFEndpoint,
 		}
 
 		reqCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
@@ -316,11 +347,8 @@ func RunInteractiveSession(ctx context.Context, session *SessionState, in io.Rea
 		}
 
 		if meta != nil {
-			session.TotalInputTokens += meta.InputTokens
-			session.TotalOutputTokens += meta.OutputTokens
-			session.TotalTokens += meta.TotalTokens
+			session.RecordUsage(meta)
 			callCost := EstimateCost(session.Model, meta.InputTokens, meta.OutputTokens)
-			session.EstimatedCost += callCost
 
 			fmt.Fprintln(out, "────────────────────────────────────────────────────")
 			fmt.Fprintf(out, "HTTP %d OK | %v | %d tokens (in: %d, out: %d) | est. $%.6f\n",

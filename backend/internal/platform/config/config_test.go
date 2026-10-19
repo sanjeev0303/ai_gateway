@@ -316,3 +316,181 @@ func TestRedacted(t *testing.T) {
 		t.Errorf("Redacted() on empty config should keep empty strings, got %+v", empty)
 	}
 }
+
+func TestBillingConfig_EffectiveMode(t *testing.T) {
+	tests := []struct {
+		name     string
+		enabled  bool
+		mode     string
+		expected string
+	}{
+		{"disabled when not enabled", false, "test", BillingModeDisabled},
+		{"disabled when mode disabled", true, "disabled", BillingModeDisabled},
+		{"simulation mode", true, "simulation", BillingModeSimulation},
+		{"simulated alias", true, "simulated", BillingModeSimulation},
+		{"test mode explicit", true, "test", BillingModeTest},
+		{"testing alias", true, "testing", BillingModeTest},
+		{"live mode explicit", true, "live", BillingModeLive},
+		{"production alias", true, "production", BillingModeLive},
+		{"default to test when mode empty and enabled", true, "", BillingModeTest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := BillingConfig{Enabled: tt.enabled, Mode: tt.mode}
+			if got := b.EffectiveMode(); got != tt.expected {
+				t.Errorf("EffectiveMode() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestBillingConfig_Validation(t *testing.T) {
+	clearEnv(t)
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	c.Billing.Enabled = true
+	c.Billing.Provider = "dual"
+	c.Billing.Mode = "invalid_mode"
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "BILLING_MODE") {
+		t.Errorf("expected BILLING_MODE validation error, got %v", err)
+	}
+
+	// Production cannot use simulation mode
+	c.Env = "production"
+	c.Billing.Mode = "simulation"
+	c.Auth.SessionCookieSecure = true
+	c.Auth.CSRFEnabled = true
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "cannot be simulation in production") {
+		t.Errorf("expected production simulation rejection, got %v", err)
+	}
+}
+
+func TestPhaseE_ConfigurationAndServiceWiring(t *testing.T) {
+	t.Run("redis credentials fallback to unified REDIS_PASSWORD", func(t *testing.T) {
+		clearEnv(t)
+		t.Setenv("REDIS_PASSWORD", "unified-redis-secret-999")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+		if cfg.Redis.Password != "unified-redis-secret-999" {
+			t.Errorf("expected Redis.Password = unified-redis-secret-999, got %q", cfg.Redis.Password)
+		}
+	})
+
+	t.Run("redis outage policy parsing and fail-closed determination", func(t *testing.T) {
+		clearEnv(t)
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+
+		// Default is degraded_local (fail-open)
+		cfg.Redis.Enabled = true
+		cfg.Redis.Password = "strong-pass"
+		if cfg.Redis.IsFailClosed() {
+			t.Errorf("default Redis outage policy should not be fail-closed")
+		}
+
+		// Explicit fail_closed via outage policy
+		cfg.Redis.OutagePolicy = "fail_closed"
+		if !cfg.Redis.IsFailClosed() {
+			t.Errorf("expected IsFailClosed() = true when OutagePolicy = fail_closed")
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("valid outage policy failed validation: %v", err)
+		}
+
+		// Invalid outage policy rejected
+		cfg.Redis.OutagePolicy = "invalid_policy"
+		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "REDIS_OUTAGE_POLICY") {
+			t.Errorf("expected invalid REDIS_OUTAGE_POLICY error, got %v", err)
+		}
+	})
+
+	t.Run("development security defaults require explicit opt-in", func(t *testing.T) {
+		clearEnv(t)
+		base, err := Load()
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+
+		// 1. Insecure session cookies require AllowInsecureDev
+		c1 := *base
+		c1.Env = "development"
+		c1.AllowInsecureDev = false
+		c1.Auth.SessionCookieSecure = false
+		if err := c1.Validate(); err == nil || !strings.Contains(err.Error(), "AUTH_SESSION_COOKIE_SECURE") {
+			t.Errorf("expected AUTH_SESSION_COOKIE_SECURE opt-in error, got %v", err)
+		}
+
+		// 2. Disabled CSRF requires AllowInsecureDev
+		c2 := *base
+		c2.Env = "development"
+		c2.AllowInsecureDev = false
+		c2.Auth.CSRFEnabled = false
+		if err := c2.Validate(); err == nil || !strings.Contains(err.Error(), "AUTH_CSRF_ENABLED") {
+			t.Errorf("expected AUTH_CSRF_ENABLED opt-in error, got %v", err)
+		}
+
+		// 3. Dev login requires AllowInsecureDev
+		c3 := *base
+		c3.Env = "development"
+		c3.AllowInsecureDev = false
+		c3.Auth.DevLoginEnabled = true
+		c3.Auth.HMACSigningKey = strings.Repeat("k", 32)
+		if err := c3.Validate(); err == nil || !strings.Contains(err.Error(), "AUTH_DEV_LOGIN_ENABLED") {
+			t.Errorf("expected AUTH_DEV_LOGIN_ENABLED opt-in error, got %v", err)
+		}
+
+		// 4. Opting in with AllowInsecureDev permits these conveniences
+		c4 := *base
+		c4.Env = "development"
+		c4.AllowInsecureDev = true
+		c4.Auth.SessionCookieSecure = false
+		c4.Auth.CSRFEnabled = false
+		c4.Auth.DevLoginEnabled = true
+		c4.Auth.HMACSigningKey = "change-me-change-me-change-me-change-me"
+		if err := c4.Validate(); err != nil {
+			t.Errorf("expected AllowInsecureDev=true to permit dev conveniences, got %v", err)
+		}
+	})
+
+	t.Run("billing placeholder keys rejected when required by mode", func(t *testing.T) {
+		clearEnv(t)
+		base, err := Load()
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+
+		// Dev mode without AllowInsecureDev rejects placeholder Stripe key
+		cDev := *base
+		cDev.Env = "development"
+		cDev.AllowInsecureDev = false
+		cDev.Billing.Enabled = true
+		cDev.Billing.Provider = "dual"
+		cDev.Billing.Mode = "test"
+		cDev.Billing.StripeSecretKey = "sk_test_placeholder_key"
+		if err := cDev.Validate(); err == nil || !strings.Contains(err.Error(), "BILLING_STRIPE_SECRET_KEY") {
+			t.Errorf("expected placeholder Stripe key error in dev, got %v", err)
+		}
+
+		// Production mode strictly rejects placeholder Stripe/Razorpay keys
+		cProd := *base
+		cProd.Env = "production"
+		cProd.Auth.SessionCookieSecure = true
+		cProd.Auth.CSRFEnabled = true
+		cProd.Auth.HMACSigningKey = strings.Repeat("s", 32)
+		cProd.Secrets.Key = strings.Repeat("k", 32)
+		cProd.Billing.Enabled = true
+		cProd.Billing.Provider = "dual"
+		cProd.Billing.Mode = "test"
+		cProd.Billing.StripeSecretKey = "sk_test_placeholder_key"
+		if err := cProd.Validate(); err == nil || !strings.Contains(err.Error(), "BILLING_STRIPE_SECRET_KEY") {
+			t.Errorf("expected production rejection of placeholder Stripe key, got %v", err)
+		}
+	})
+}

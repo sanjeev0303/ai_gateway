@@ -104,9 +104,22 @@ func TestListModels(t *testing.T) {
 		}
 	})
 
-	t.Run("hub error uses fallback models", func(t *testing.T) {
+	t.Run("hub error returns failure without fallbacks", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer ts.Close()
+
+		adapter := NewCustomProviderAdapter(ts.URL, ts.URL)
+		_, err := adapter.ListModels(context.Background(), "hf_token")
+		if err == nil {
+			t.Fatal("expected error on hub failure, got nil")
+		}
+	})
+
+	t.Run("hub empty list returns empty without fallbacks", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode([]HubModelItem{})
 		}))
 		defer ts.Close()
 
@@ -115,8 +128,34 @@ func TestListModels(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(models) == 0 {
-			t.Fatal("expected fallback models, got 0")
+		if len(models) != 0 {
+			t.Fatalf("expected 0 models, got %d", len(models))
+		}
+	})
+
+	t.Run("hub 401 returns ErrInvalidCredentials", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+		}))
+		defer ts.Close()
+
+		adapter := NewCustomProviderAdapter(ts.URL, ts.URL)
+		_, err := adapter.ListModels(context.Background(), "hf_token")
+		if !errors.Is(err, provider.ErrInvalidCredentials) {
+			t.Fatalf("expected ErrInvalidCredentials, got %v", err)
+		}
+	})
+
+	t.Run("hub 404 returns ErrDiscoveryUnavailable", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer ts.Close()
+
+		adapter := NewCustomProviderAdapter(ts.URL, ts.URL)
+		_, err := adapter.ListModels(context.Background(), "hf_token")
+		if !errors.Is(err, provider.ErrDiscoveryUnavailable) {
+			t.Fatalf("expected ErrDiscoveryUnavailable, got %v", err)
 		}
 	})
 }

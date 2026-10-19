@@ -80,12 +80,56 @@ Validates credentials, rates, and budgets, preserving streaming and inspecting r
 			}
 		}
 
+		temp, _ := cmd.Flags().GetFloat64("temperature")
+		if cmd.Flags().Changed("temperature") {
+			session.Temperature = &temp
+		}
+		systemPrompt, _ := cmd.Flags().GetString("system")
+		if systemPrompt != "" {
+			session.SystemPrompt = systemPrompt
+		}
+		reasoningEffort, _ := cmd.Flags().GetString("reasoning-effort")
+		if reasoningEffort != "" {
+			session.ReasoningEffort = reasoningEffort
+		}
+		safetyFlag, _ := cmd.Flags().GetString("safety")
+		if safetyFlag != "" {
+			if !strings.EqualFold(session.Provider, "gemini") {
+				return fmt.Errorf("safety settings are only supported for provider gemini (active provider is %s)", session.Provider)
+			}
+			val := strings.ToLower(safetyFlag)
+			switch val {
+			case "standard", "default", "block_medium_and_above":
+				session.SafetySettings = "BLOCK_MEDIUM_AND_ABOVE"
+			case "strict", "block_low_and_above":
+				session.SafetySettings = "BLOCK_LOW_AND_ABOVE"
+			case "permissive", "block_only_high":
+				session.SafetySettings = "BLOCK_ONLY_HIGH"
+			case "off", "none", "disabled", "block_none":
+				session.SafetySettings = "BLOCK_NONE"
+			default:
+				return fmt.Errorf("invalid safety preset %q: choose standard, strict, permissive, or off", safetyFlag)
+			}
+		}
+		endpointFlag, _ := cmd.Flags().GetString("endpoint")
+		if endpointFlag != "" {
+			if err := ValidateHFEndpoint(endpointFlag); err != nil {
+				return err
+			}
+			session.HFEndpoint = endpointFlag
+		}
+
 		payload := client.RequestPayload{
-			Model:     session.Model,
-			Prompt:    prompt,
-			Stream:    session.Stream,
-			MaxTokens: session.MaxTokens,
-			ProjectID: session.ProjectID,
+			Model:           session.Model,
+			Prompt:          prompt,
+			Stream:          session.Stream,
+			MaxTokens:       session.MaxTokens,
+			ProjectID:       session.ProjectID,
+			SystemPrompt:    session.SystemPrompt,
+			Temperature:     session.Temperature,
+			ReasoningEffort: session.ReasoningEffort,
+			SafetySettings:  session.SafetySettings,
+			HFEndpoint:      session.HFEndpoint,
 		}
 
 		reqCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
@@ -112,6 +156,7 @@ Validates credentials, rates, and budgets, preserving streaming and inspecting r
 		}
 
 		if meta != nil {
+			session.RecordUsage(meta)
 			callCost := EstimateCost(session.Model, meta.InputTokens, meta.OutputTokens)
 			fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 			fmt.Printf("Status:     HTTP %d OK\n", meta.StatusCode)
@@ -141,5 +186,10 @@ func init() {
 	requestCmd.Flags().Bool("stream", true, "Stream response tokens in real-time")
 	requestCmd.Flags().String("project-id", "", "Project scope override")
 	requestCmd.Flags().Int("max-tokens", 1024, "Maximum completion tokens")
+	requestCmd.Flags().Float64("temperature", 0.7, "Sampling temperature (0.0 - 2.0)")
+	requestCmd.Flags().String("system", "", "System prompt text")
+	requestCmd.Flags().String("reasoning-effort", "", "Reasoning effort for OpenAI reasoning models (low, medium, high)")
+	requestCmd.Flags().String("safety", "", "Safety threshold preset for Gemini (standard, strict, permissive, off)")
+	requestCmd.Flags().String("endpoint", "", "Dedicated Hugging Face inference endpoint URL")
 	requestCmd.Flags().BoolP("interactive", "i", false, "Start interactive REPL session with slash command support")
 }

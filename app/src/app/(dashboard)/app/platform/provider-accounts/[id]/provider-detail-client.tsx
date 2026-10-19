@@ -354,7 +354,14 @@ export function ProviderDetailClient({
         `Model catalog synced: ${res.total} models accessible (${res.models_created} new, ${res.models_updated} updated)`,
       );
     } catch (err: any) {
-      setValidationState("discovery_unavailable");
+      const errStr = `${err?.message || ""}`.toLowerCase();
+      if (errStr.includes("credential") || errStr.includes("auth") || errStr.includes("401") || errStr.includes("403") || errStr.includes("revoked")) {
+        setValidationState("credential_invalid");
+      } else if (errStr.includes("timeout") || errStr.includes("unreachable") || errStr.includes("connection refused")) {
+        setValidationState("provider_unreachable");
+      } else {
+        setValidationState("discovery_unavailable");
+      }
       toast.error(err?.message || "Failed to discover models");
     } finally {
       setSyncLoading(false);
@@ -527,13 +534,15 @@ export function ProviderDetailClient({
                 <CheckCircle2 className="size-5 text-emerald-500 shrink-0 mt-0.5 sm:mt-0" />
                 <div>
                   <div className="text-sm font-semibold flex items-center gap-2">
-                    <span>Provider connected</span>
-                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-xs">
-                      Ready
+                    <span>{modelsForProvider.length > 0 ? "Connected and models discovered" : "Connected but discovery unavailable"}</span>
+                    <Badge variant="outline" className={modelsForProvider.length > 0 ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-xs" : "bg-amber-500/10 text-amber-600 border-amber-500/30 text-xs"}>
+                      {modelsForProvider.length > 0 ? "Ready" : "Discovery Empty"}
                     </Badge>
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5">
-                    Connection verified against upstream API. Stored credentials valid and ready for inference routing.
+                    {modelsForProvider.length > 0
+                      ? "Connection verified against upstream API. Provider models discovered and stored credentials valid for inference routing."
+                      : "Connection verified against upstream API, but no models were returned by the discovery endpoint."}
                   </div>
                 </div>
               </>
@@ -575,13 +584,13 @@ export function ProviderDetailClient({
                 <AlertTriangle className="size-5 text-amber-500 shrink-0 mt-0.5 sm:mt-0" />
                 <div>
                   <div className="text-sm font-semibold flex items-center gap-2 text-amber-600">
-                    <span>Model discovery unavailable</span>
+                    <span>Connected but discovery unavailable</span>
                     <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-xs">
                       Catalog Stale
                     </Badge>
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5">
-                    Authentication verified, but upstream model catalog discovery endpoint failed to respond.
+                    Authentication verified, but upstream model catalog discovery endpoint failed to respond or is unsupported.
                   </div>
                 </div>
               </>
@@ -706,15 +715,28 @@ export function ProviderDetailClient({
                               {m.context_limit && m.context_limit > 0 ? `${(m.context_limit / 1000).toFixed(0)}k tokens` : "—"}
                             </td>
                             <td className="py-2.5 px-3">
-                              {isAuthorized ? (
-                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
-                                  <CheckCircle2 className="size-3" /> Model authorized and ready
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-600 border border-amber-500/30">
-                                  <AlertTriangle className="size-3" /> Model discovered but unauthorized
-                                </span>
-                              )}
+                              {(() => {
+                                const isUnavailable = m.status === "inactive" || m.status === "unavailable" || (!m.is_active && m.status !== "active");
+                                if (isUnavailable) {
+                                  return (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-muted text-muted-foreground border border-border">
+                                      <XCircle className="size-3" /> Model no longer available
+                                    </span>
+                                  );
+                                }
+                                if (isAuthorized) {
+                                  return (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+                                      <CheckCircle2 className="size-3" /> Model authorized and ready
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-600 border border-amber-500/30">
+                                    <AlertTriangle className="size-3" /> Model discovered but not authorized
+                                  </span>
+                                );
+                              })()}
                             </td>
                           </tr>
                         );

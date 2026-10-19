@@ -46,6 +46,24 @@ ensure_env_files() {
     else
         log_info "Preserved existing $BACKEND_ENV"
     fi
+
+    if [[ ! -f ".env" ]]; then
+        if [[ -f ".env.example" ]]; then
+            cp ".env.example" ".env"
+            log_ok "Created .env from template (preserved all defaults)"
+        fi
+    else
+        log_info "Preserved existing .env"
+    fi
+
+    if [[ ! -f "app/.env.local" ]]; then
+        if [[ -f "app/.env.example" ]]; then
+            cp "app/.env.example" "app/.env.local"
+            log_ok "Created app/.env.local from template (preserved all defaults)"
+        fi
+    else
+        log_info "Preserved existing app/.env.local"
+    fi
 }
 
 cmd_start() {
@@ -72,7 +90,8 @@ cmd_start() {
     for i in $(seq 1 "$retries"); do
         if curl -s -f http://localhost:8081/readyz >/dev/null 2>&1 && \
            curl -s -f http://localhost:8084/readyz >/dev/null 2>&1 && \
-           curl -s -f http://localhost:8082/readyz >/dev/null 2>&1; then
+           curl -s -f http://localhost:8082/readyz >/dev/null 2>&1 && \
+           curl -s -f http://localhost:3000/ >/dev/null 2>&1; then
             ready=true
             break
         fi
@@ -147,10 +166,45 @@ cmd_status() {
     check_endpoint "Control Plane" "http://localhost:8081" "ai-gateway-control-api-1" "http://localhost:8081/readyz"
     check_endpoint "Data Plane (v2)" "http://localhost:8084" "ai-gateway-gateway-v2-1" "http://localhost:8084/readyz"
     check_endpoint "Worker Service" "http://localhost:8082" "ai-gateway-worker-1" "http://localhost:8082/readyz"
-    check_endpoint "Web Dashboard" "http://localhost:3000" "ai-gateway-app-1" ""
-    check_endpoint "PostgreSQL (16)" "localhost:5432" "ai-gateway-postgres-1" ""
-    check_endpoint "Redis (7)" "localhost:6379" "ai-gateway-redis-1" ""
-    check_endpoint "NATS JetStream" "localhost:4222 / :8222" "ai-gateway-nats-1" ""
+    check_endpoint "Web Dashboard" "http://localhost:3000" "ai-gateway-app-1" "http://localhost:3000/"
+    
+    # Infrastructure services
+    local pg_ready="DOWN"
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "ai-gateway-postgres-1"; then
+        if docker exec ai-gateway-postgres-1 pg_isready -U gateway -d ai_gateway >/dev/null 2>&1; then
+            pg_ready="READY (5432)"
+        else
+            pg_ready="DEGRADED"
+        fi
+        printf "%-18s | %-24s | %-12s | %-12s\n" "PostgreSQL (16)" "localhost:5432" "RUNNING" "$pg_ready"
+    else
+        printf "%-18s | %-24s | %-12s | %-12s\n" "PostgreSQL (16)" "localhost:5432" "STOPPED" "DOWN"
+    fi
+
+    local redis_ready="DOWN"
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "ai-gateway-redis-1"; then
+        local rpass="${AIGW_REDIS_PASSWORD:-${REDIS_PASSWORD:-change-me}}"
+        if docker exec -e REDISCLI_AUTH="$rpass" ai-gateway-redis-1 redis-cli ping >/dev/null 2>&1; then
+            redis_ready="READY (PONG)"
+        else
+            redis_ready="DEGRADED"
+        fi
+        printf "%-18s | %-24s | %-12s | %-12s\n" "Redis (7)" "localhost:6379" "RUNNING" "$redis_ready"
+    else
+        printf "%-18s | %-24s | %-12s | %-12s\n" "Redis (7)" "localhost:6379" "STOPPED" "DOWN"
+    fi
+
+    local nats_ready="DOWN"
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "ai-gateway-nats-1"; then
+        if curl -s -f http://localhost:8222/healthz >/dev/null 2>&1; then
+            nats_ready="READY (8222)"
+        else
+            nats_ready="DEGRADED"
+        fi
+        printf "%-18s | %-24s | %-12s | %-12s\n" "NATS JetStream" "localhost:4222 / :8222" "RUNNING" "$nats_ready"
+    else
+        printf "%-18s | %-24s | %-12s | %-12s\n" "NATS JetStream" "localhost:4222 / :8222" "STOPPED" "DOWN"
+    fi
 
     echo "=========================================================================="
     echo ""

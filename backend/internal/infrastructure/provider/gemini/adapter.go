@@ -67,7 +67,14 @@ func (a *ProviderAdapter) ListModels(ctx context.Context, apiKey string) ([]prov
 	if err != nil {
 		return nil, err
 	}
-	return client.ListModels(ctx, apiKey)
+	models, err := client.ListModels(ctx, apiKey)
+	if err != nil {
+		if errors.Is(err, ErrInvalidAPIKey) {
+			return nil, fmt.Errorf("%w: %w", ErrInvalidAPIKey, provider.ErrInvalidCredentials)
+		}
+		return nil, err
+	}
+	return models, nil
 }
 
 // ---- Extended API for gateway integration ------------------------------------

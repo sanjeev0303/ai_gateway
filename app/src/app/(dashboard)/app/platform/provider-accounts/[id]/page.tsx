@@ -21,7 +21,7 @@ export default async function ProviderAccountDetailPage({
       api.providers.listCredentials(),
       api.providers.health().catch(() => ({ items: [] })),
       api.models.list().catch(() => ({ items: [] })),
-      api.usage.byProvider({ from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }).catch(() => ({ items: [] })),
+      api.usage.byProvider().catch(() => ({ items: [] })),
     ]);
 
     return (

@@ -36,6 +36,9 @@ var (
 
 	// ErrUnknownProvider indicates the provider kind is not registered.
 	ErrUnknownProvider = errors.New("provider: unknown provider")
+
+	// ErrDiscoveryUnavailable indicates model discovery endpoint is unsupported or unavailable.
+	ErrDiscoveryUnavailable = errors.New("provider: model discovery unavailable")
 )
 
 // Provider talks to one upstream LLM provider (Anthropic, OpenAI, Gemini, …).
@@ -57,17 +60,17 @@ type Provider interface {
 type Capability string
 
 const (
-	CapabilityTextGeneration   Capability = "text_generation"
-	CapabilityStreaming        Capability = "streaming"
-	CapabilitySystemPrompt     Capability = "system_prompt"
-	CapabilityChatHistory      Capability = "chat_history"
-	CapabilityToolCalling      Capability = "tool_calling"
-	CapabilityStructuredJSON   Capability = "structured_json"
-	CapabilityMultimodal       Capability = "multimodal"
-	CapabilityEmbeddings       Capability = "embeddings"
-	CapabilityReasoning        Capability = "reasoning"
-	CapabilityThinking         Capability = "thinking"
-	CapabilitySafetySettings   Capability = "safety_settings"
+	CapabilityTextGeneration Capability = "text_generation"
+	CapabilityStreaming      Capability = "streaming"
+	CapabilitySystemPrompt   Capability = "system_prompt"
+	CapabilityChatHistory    Capability = "chat_history"
+	CapabilityToolCalling    Capability = "tool_calling"
+	CapabilityStructuredJSON Capability = "structured_json"
+	CapabilityMultimodal     Capability = "multimodal"
+	CapabilityEmbeddings     Capability = "embeddings"
+	CapabilityReasoning      Capability = "reasoning"
+	CapabilityThinking       Capability = "thinking"
+	CapabilitySafetySettings Capability = "safety_settings"
 )
 
 // ModelCapabilities encapsulates verified capabilities for a specific model.

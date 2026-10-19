@@ -112,6 +112,18 @@ check_config() {
             echo "Initialized deploy/compose/.env from template (no existing file was modified)."
         fi
     fi
+    if [[ ! -f ".env" ]]; then
+        if [[ -f ".env.example" ]]; then
+            cp ".env.example" ".env"
+            echo "Initialized .env from template (no existing file was modified)."
+        fi
+    fi
+    if [[ ! -f "app/.env.local" ]]; then
+        if [[ -f "app/.env.example" ]]; then
+            cp "app/.env.example" "app/.env.local"
+            echo "Initialized app/.env.local from template (no existing file was modified)."
+        fi
+    fi
     export AIGW_DATABASE_URL="${AIGW_DATABASE_URL:-postgres://gateway:gateway@localhost:5432/ai_gateway?sslmode=disable}"
     
     # Run Go config validation binary

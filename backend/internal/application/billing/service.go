@@ -19,6 +19,7 @@ import (
 
 // ServiceDeps are the repositories and payment gateways a billing service requires.
 type ServiceDeps struct {
+	Mode            string
 	Plans           repositories.PlanRepository
 	Subscriptions   repositories.SubscriptionRepository
 	Invoices        repositories.InvoiceRepository
@@ -30,6 +31,7 @@ type ServiceDeps struct {
 
 // Service owns reads and mutations of billing state and checkout sessions.
 type Service struct {
+	mode            string
 	plans           repositories.PlanRepository
 	subscriptions   repositories.SubscriptionRepository
 	invoices        repositories.InvoiceRepository
@@ -45,7 +47,17 @@ func NewService(deps ServiceDeps) *Service {
 	if gateways == nil {
 		gateways = make(map[string]payment.PaymentGateway)
 	}
+	mode := deps.Mode
+	if mode == "" {
+		mode = "test"
+	}
+	for _, gw := range gateways {
+		if gw != nil {
+			gw.SetMode(mode)
+		}
+	}
 	return &Service{
+		mode:            mode,
 		plans:           deps.Plans,
 		subscriptions:   deps.Subscriptions,
 		invoices:        deps.Invoices,
@@ -53,6 +65,24 @@ func NewService(deps ServiceDeps) *Service {
 		billingEvents:   deps.BillingEvents,
 		audits:          deps.Audits,
 		paymentGateways: gateways,
+	}
+}
+
+// Mode returns the active billing mode.
+func (s *Service) Mode() string {
+	if s.mode == "" {
+		return "test"
+	}
+	return s.mode
+}
+
+// SetMode updates the active billing mode and propagates to payment gateways.
+func (s *Service) SetMode(m string) {
+	s.mode = m
+	for _, gw := range s.paymentGateways {
+		if gw != nil {
+			gw.SetMode(m)
+		}
 	}
 }
 
@@ -109,6 +139,9 @@ func (s *Service) ListInvoices(ctx context.Context, actor domain.Actor) ([]domai
 
 // UpdateSubscription changes the organization's plan to target planCode.
 func (s *Service) UpdateSubscription(ctx context.Context, actor domain.Actor, planCode string) (*domain.OrganizationPlan, error) {
+	if s.Mode() == "disabled" {
+		return nil, payment.ErrBillingDisabled
+	}
 	if !actor.Can(domain.PermissionBillingManage) && actor.Role != domain.RoleAdmin {
 		return nil, repositories.ErrForbidden
 	}
@@ -134,6 +167,9 @@ func (s *Service) UpdateSubscription(ctx context.Context, actor domain.Actor, pl
 
 // CancelSubscription marks the organization's active subscription to cancel at period end.
 func (s *Service) CancelSubscription(ctx context.Context, actor domain.Actor) (*domain.OrganizationPlan, error) {
+	if s.Mode() == "disabled" {
+		return nil, payment.ErrBillingDisabled
+	}
 	if !actor.Can(domain.PermissionBillingManage) && actor.Role != domain.RoleAdmin {
 		return nil, repositories.ErrForbidden
 	}
@@ -145,6 +181,9 @@ func (s *Service) CancelSubscription(ctx context.Context, actor domain.Actor) (*
 
 // CreateCheckoutSession initiates a payment session with the chosen provider (Stripe or Razorpay).
 func (s *Service) CreateCheckoutSession(ctx context.Context, actor domain.Actor, providerName, planCode, customerEmail, successURL, cancelURL string) (*payment.CheckoutSession, error) {
+	if s.Mode() == "disabled" {
+		return nil, payment.ErrBillingDisabled
+	}
 	if !actor.Can(domain.PermissionBillingManage) && actor.Role != domain.RoleAdmin {
 		return nil, repositories.ErrForbidden
 	}
@@ -198,6 +237,12 @@ func (s *Service) CreateCheckoutSession(ctx context.Context, actor domain.Actor,
 
 // VerifyPaymentCallback verifies an upstream client payment callback and reconciles billing state.
 func (s *Service) VerifyPaymentCallback(ctx context.Context, actor domain.Actor, providerName, orderID, paymentID, signature, planCode string) (*domain.OrganizationPlan, error) {
+	if s.Mode() == "disabled" {
+		return nil, payment.ErrBillingDisabled
+	}
+	if s.Mode() == "simulation" {
+		return nil, payment.ErrSimulationOnly
+	}
 	if !actor.Can(domain.PermissionBillingManage) && actor.Role != domain.RoleAdmin {
 		return nil, repositories.ErrForbidden
 	}
@@ -275,9 +320,11 @@ func (s *Service) VerifyPaymentCallback(ctx context.Context, actor domain.Actor,
 	return s.GetSubscription(ctx, actor)
 }
 
-
 // ProcessWebhook validates and handles an incoming payment processor webhook event.
 func (s *Service) ProcessWebhook(ctx context.Context, providerName string, payload []byte, signature string) (*payment.WebhookEvent, error) {
+	if s.Mode() == "disabled" {
+		return nil, payment.ErrBillingDisabled
+	}
 	providerName = strings.ToLower(strings.TrimSpace(providerName))
 	gw := s.paymentGateways[providerName]
 	if gw == nil {
@@ -312,6 +359,9 @@ func (s *Service) ProcessWebhook(ctx context.Context, providerName string, paylo
 		if errors.Is(err, repositories.ErrConflict) {
 			// Duplicate event arriving concurrently
 			return evt, nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("billing event persistence failed: %w", err)
 		}
 	}
 

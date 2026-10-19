@@ -23,8 +23,9 @@ func TestCreateCheckoutSession(t *testing.T) {
 
 	orgID := uuid.New()
 
-	t.Run("simulated fallback for test keys", func(t *testing.T) {
+	t.Run("explicit simulation mode", func(t *testing.T) {
 		gw := New("dummy-key", "whsec_test")
+		gw.SetMode("simulation")
 		params := payment.CheckoutParams{
 			OrganizationID: orgID,
 			PlanCode:       "pro",
@@ -39,11 +40,43 @@ func TestCreateCheckoutSession(t *testing.T) {
 		if sess.Provider != "stripe" {
 			t.Errorf("expected provider stripe, got %s", sess.Provider)
 		}
-		if !strings.HasPrefix(sess.SessionID, "cs_test_") {
-			t.Errorf("expected session ID to start with cs_test_, got %s", sess.SessionID)
+		if !sess.IsSimulated {
+			t.Errorf("expected IsSimulated to be true")
 		}
-		if !strings.Contains(sess.URL, "checkout.stripe.com") {
-			t.Errorf("expected URL to contain checkout.stripe.com, got %s", sess.URL)
+		if sess.Mode != "simulation" {
+			t.Errorf("expected Mode simulation, got %s", sess.Mode)
+		}
+		if !strings.HasPrefix(sess.SessionID, "cs_sim_") {
+			t.Errorf("expected session ID to start with cs_sim_, got %s", sess.SessionID)
+		}
+		if !strings.Contains(sess.URL, "checkout.stripe.com/simulate/") {
+			t.Errorf("expected URL to contain simulation path, got %s", sess.URL)
+		}
+	})
+
+	t.Run("test mode rejects dummy key with invalid credentials error", func(t *testing.T) {
+		gw := New("dummy-key", "whsec_test")
+		gw.SetMode("test")
+		params := payment.CheckoutParams{
+			OrganizationID: orgID,
+			PlanCode:       "pro",
+		}
+		_, err := gw.CreateCheckoutSession(context.Background(), params)
+		if !errors.Is(err, payment.ErrInvalidCredentials) {
+			t.Fatalf("expected ErrInvalidCredentials, got %v", err)
+		}
+	})
+
+	t.Run("test mode rejects empty key with missing credentials error", func(t *testing.T) {
+		gw := New("", "whsec_test")
+		gw.SetMode("test")
+		params := payment.CheckoutParams{
+			OrganizationID: orgID,
+			PlanCode:       "pro",
+		}
+		_, err := gw.CreateCheckoutSession(context.Background(), params)
+		if !errors.Is(err, payment.ErrMissingCredentials) {
+			t.Fatalf("expected ErrMissingCredentials, got %v", err)
 		}
 	})
 

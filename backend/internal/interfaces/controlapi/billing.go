@@ -52,6 +52,8 @@ type subscriptionDTO struct {
 	PaymentProvider        string  `json:"payment_provider,omitempty"`
 	ProviderCustomerID     *string `json:"provider_customer_id,omitempty"`
 	ProviderSubscriptionID *string `json:"provider_subscription_id,omitempty"`
+	BillingMode            string  `json:"billing_mode,omitempty"`
+	BillingEnabled         bool    `json:"billing_enabled"`
 }
 
 // invoiceLineDTO is the wire shape of one invoice itemisation row.
@@ -153,7 +155,6 @@ func toInvoiceDTO(inv domain.Invoice) invoiceDTO {
 	}
 }
 
-
 func (a *api) listBillingPlans(w http.ResponseWriter, r *http.Request) {
 	actor, _ := actorFrom(r.Context())
 
@@ -181,7 +182,10 @@ func (a *api) getBillingSubscription(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, r, repositories.ErrNotFound)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, toSubscriptionDTO(*subscription))
+	dto := toSubscriptionDTO(*subscription)
+	dto.BillingMode = a.billing.Mode()
+	dto.BillingEnabled = a.billing.Mode() != "disabled"
+	httpx.WriteJSON(w, http.StatusOK, dto)
 }
 
 type updateSubscriptionRequest struct {
@@ -201,20 +205,40 @@ func (a *api) updateBillingSubscription(w http.ResponseWriter, r *http.Request) 
 	}
 	subscription, err := a.billing.UpdateSubscription(r.Context(), actor, req.PlanCode)
 	if err != nil {
+		if errors.Is(err, payment.ErrBillingDisabled) {
+			httpx.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{
+				"error": "Billing is disabled",
+				"code":  "billing_disabled",
+			})
+			return
+		}
 		writeServiceError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, toSubscriptionDTO(*subscription))
+	dto := toSubscriptionDTO(*subscription)
+	dto.BillingMode = a.billing.Mode()
+	dto.BillingEnabled = a.billing.Mode() != "disabled"
+	httpx.WriteJSON(w, http.StatusOK, dto)
 }
 
 func (a *api) cancelBillingSubscription(w http.ResponseWriter, r *http.Request) {
 	actor, _ := actorFrom(r.Context())
 	subscription, err := a.billing.CancelSubscription(r.Context(), actor)
 	if err != nil {
+		if errors.Is(err, payment.ErrBillingDisabled) {
+			httpx.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{
+				"error": "Billing is disabled",
+				"code":  "billing_disabled",
+			})
+			return
+		}
 		writeServiceError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, toSubscriptionDTO(*subscription))
+	dto := toSubscriptionDTO(*subscription)
+	dto.BillingMode = a.billing.Mode()
+	dto.BillingEnabled = a.billing.Mode() != "disabled"
+	httpx.WriteJSON(w, http.StatusOK, dto)
 }
 
 func (a *api) getBillingUsage(w http.ResponseWriter, r *http.Request) {
@@ -274,6 +298,27 @@ func (a *api) createBillingCheckout(w http.ResponseWriter, r *http.Request) {
 	}
 	sess, err := a.billing.CreateCheckoutSession(r.Context(), actor, providerName, req.PlanCode, req.CustomerEmail, req.SuccessURL, req.CancelURL)
 	if err != nil {
+		if errors.Is(err, payment.ErrBillingDisabled) {
+			httpx.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{
+				"error": "Billing is disabled",
+				"code":  "billing_disabled",
+			})
+			return
+		}
+		if errors.Is(err, payment.ErrMissingCredentials) {
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "Payment provider credentials are missing",
+				"code":  "missing_credentials",
+			})
+			return
+		}
+		if errors.Is(err, payment.ErrInvalidCredentials) {
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "Payment provider credentials are invalid",
+				"code":  "invalid_credentials",
+			})
+			return
+		}
 		writeServiceError(w, r, err)
 		return
 	}
@@ -306,8 +351,39 @@ func (a *api) verifyBillingPayment(w http.ResponseWriter, r *http.Request) {
 	}
 	sub, err := a.billing.VerifyPaymentCallback(r.Context(), actor, providerName, req.OrderID, req.PaymentID, req.Signature, req.PlanCode)
 	if err != nil {
+		if errors.Is(err, payment.ErrBillingDisabled) {
+			httpx.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{
+				"error": "Billing is disabled",
+				"code":  "billing_disabled",
+			})
+			return
+		}
+		if errors.Is(err, payment.ErrSimulationOnly) {
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "Cannot grant paid entitlements in simulation mode",
+				"code":  "simulation_mode",
+			})
+			return
+		}
 		if errors.Is(err, payment.ErrInvalidSignature) {
-			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid payment signature"})
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "Invalid payment signature",
+				"code":  "invalid_signature",
+			})
+			return
+		}
+		if errors.Is(err, payment.ErrMissingCredentials) {
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "Payment provider credentials are missing",
+				"code":  "missing_credentials",
+			})
+			return
+		}
+		if errors.Is(err, payment.ErrInvalidCredentials) {
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "Payment provider credentials are invalid",
+				"code":  "invalid_credentials",
+			})
 			return
 		}
 		writeServiceError(w, r, err)
@@ -317,7 +393,10 @@ func (a *api) verifyBillingPayment(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, r, repositories.ErrNotFound)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, toSubscriptionDTO(*sub))
+	dto := toSubscriptionDTO(*sub)
+	dto.BillingMode = a.billing.Mode()
+	dto.BillingEnabled = a.billing.Mode() != "disabled"
+	httpx.WriteJSON(w, http.StatusOK, dto)
 }
 
 func (a *api) handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
@@ -329,6 +408,27 @@ func (a *api) handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 	sig := r.Header.Get("Stripe-Signature")
 	_, err = a.billing.ProcessWebhook(r.Context(), "stripe", body, sig)
 	if err != nil {
+		if errors.Is(err, payment.ErrBillingDisabled) {
+			httpx.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{
+				"error": "Billing is disabled",
+				"code":  "billing_disabled",
+			})
+			return
+		}
+		if errors.Is(err, payment.ErrInvalidSignature) {
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "Invalid webhook signature",
+				"code":  "invalid_signature",
+			})
+			return
+		}
+		if errors.Is(err, payment.ErrMissingCredentials) {
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "Missing webhook credentials",
+				"code":  "missing_credentials",
+			})
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -344,9 +444,29 @@ func (a *api) handleRazorpayWebhook(w http.ResponseWriter, r *http.Request) {
 	sig := r.Header.Get("X-Razorpay-Signature")
 	_, err = a.billing.ProcessWebhook(r.Context(), "razorpay", body, sig)
 	if err != nil {
+		if errors.Is(err, payment.ErrBillingDisabled) {
+			httpx.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{
+				"error": "Billing is disabled",
+				"code":  "billing_disabled",
+			})
+			return
+		}
+		if errors.Is(err, payment.ErrInvalidSignature) {
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "Invalid webhook signature",
+				"code":  "invalid_signature",
+			})
+			return
+		}
+		if errors.Is(err, payment.ErrMissingCredentials) {
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "Missing webhook credentials",
+				"code":  "missing_credentials",
+			})
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"received": true})
 }
-
