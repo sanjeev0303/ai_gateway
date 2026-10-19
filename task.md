@@ -2,6 +2,14 @@
 
 Updated after each completed prompt.
 
+## COMPLETED TASK: Complete Local Startup & Provider Integration
+- [x] Verify local startup reproducibility, dependency & lockfile consistency, env validation, migration ordering
+- [x] Verify Redis, NATS, PostgreSQL connectivity, lifecycle commands, and startup failure diagnostics
+- [x] Inspect and test Gemini, OpenAI, Anthropic, Hugging Face provider adapters
+- [x] Verify model discovery, streaming/non-streaming inference, token extraction, error mapping, and correlation IDs
+- [x] Ensure live smoke tests are safely env-gated and zero secrets are hardcoded
+- [x] Update readiness documentation and task tracker
+
 ## COMPLETED TASK: Establish Reproducible Baseline & Update Readiness Documents
 - [x] Inspect README.md, Makefile, scripts, go.mod, package manifests, Docker Compose, migrations, tests
 - [x] Record exact toolchain versions, command execution logs, and environment limitations

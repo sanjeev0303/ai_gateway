@@ -6,8 +6,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestValidateCredentials tests credential validation.
@@ -379,5 +381,27 @@ func TestListModelsMetadata(t *testing.T) {
 	}
 	if m.ContextLimit != 1048576 {
 		t.Errorf("unexpected context limit: %d", m.ContextLimit)
+	}
+}
+
+// TestGemini_LiveSmokeTest executes a live smoke test against Gemini only if GEMINI_API_KEY is configured.
+func TestGemini_LiveSmokeTest(t *testing.T) {
+	apiKey := os.Getenv("GEMINI_API_KEY")
+	if apiKey == "" {
+		t.Skip("skipping live Gemini smoke test: GEMINI_API_KEY not set")
+	}
+	adapter := NewProviderAdapter()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := adapter.ValidateCredentials(ctx, apiKey); err != nil {
+		t.Fatalf("live Gemini credential validation failed: %v", err)
+	}
+	models, err := adapter.ListModels(ctx, apiKey)
+	if err != nil {
+		t.Fatalf("live Gemini ListModels failed: %v", err)
+	}
+	if len(models) == 0 {
+		t.Fatalf("live Gemini ListModels returned 0 models")
 	}
 }

@@ -20,6 +20,8 @@ The Sentinel AI Gateway supports four primary LLM upstream providers with stream
 | **Zero-Fallback Guarantee** | Fails closed on upstream error | Fails closed on upstream error | Fails closed on upstream error | Fails closed on upstream error |
 | **Provider-Specific Options** | Preserves `max_tokens` (mandatory) | Preserves `reasoning_effort` (o1/o3) | Preserves `safety_settings` bounds | Preserves custom dedicated HTTPS endpoints |
 | **Token Extraction** | Exact `input_tokens`, `output_tokens` | Exact prompt, completion, reasoning | Exact `promptTokenCount`, `candidatesTokenCount` | Exact usage or marked estimate |
+| **Error Translation** | Maps 401/403/429/500/503/504 | Maps 401/403/429/500/503/504 | Maps 400/401/403/429/500/503 | Maps 401/403/429/500/503 |
+| **Live Smoke Test** | `TestAnthropic_LiveSmokeTest` | `TestOpenAI_LiveSmokeTest` | `TestGemini_LiveSmokeTest` | `TestHuggingFace_LiveSmokeTest` |
 
 ---
 
@@ -32,7 +34,21 @@ Custom inference endpoints passed via `/endpoint` or request options are strictl
 
 ---
 
-## 4. Test Verification Evidence
-- `go test -v ./internal/infrastructure/provider/...`: All unit, contract, and adapter integration tests pass.
+## 4. Operational & Resilience Verification
+
+1. **Timeouts and Cancellation**:
+   - `AIGW_PROVIDER_REQUEST_TIMEOUT` bounds long-running queries; client context cancellation immediately terminates upstream connections and releases reserved budget allocations.
+2. **Correlation & Telemetry**:
+   - Every request is tagged with an invariant `X-Request-Id` and `organization_id` foreign key.
+   - Usage events are emitted to the persistent event bus and ingested into `llm_requests` with exact token metrics.
+3. **Safe Smoke Testing**:
+   - Unit tests use deterministic mock HTTP servers (`httptest.Server`).
+   - Live upstream smoke tests are gated by `os.Getenv("*_API_KEY")` and cleanly `t.Skip` without errors when credentials are absent.
+   - Zero hardcoded secrets exist in source code, logs, test fixtures, or committed templates.
+
+---
+
+## 5. Test Verification Evidence
+- `go test -v ./internal/infrastructure/provider/...`: All unit, contract, live-gated smoke tests, and adapter integration tests pass.
 - `TestPhaseJ_GatewayInferenceRoutingAndGovernance`: E2E verification of all 4 providers in Gateway V2 data plane.
 - `TestPhaseG_CLI_EndToEndScenario`: E2E verification of CLI interaction with multi-provider credentials.

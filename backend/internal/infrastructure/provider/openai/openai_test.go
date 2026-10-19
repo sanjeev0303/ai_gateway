@@ -6,8 +6,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestValidateCredentials tests credential validation.
@@ -336,5 +338,27 @@ func TestListModelsMetadata(t *testing.T) {
 	}
 	if m.DisplayName != "" {
 		t.Errorf("expected empty display name for OpenAI, got %q", m.DisplayName)
+	}
+}
+
+// TestOpenAI_LiveSmokeTest executes a live smoke test against OpenAI only if OPENAI_API_KEY is configured.
+func TestOpenAI_LiveSmokeTest(t *testing.T) {
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		t.Skip("skipping live OpenAI smoke test: OPENAI_API_KEY not set")
+	}
+	adapter := NewProviderAdapter()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := adapter.ValidateCredentials(ctx, apiKey); err != nil {
+		t.Fatalf("live OpenAI credential validation failed: %v", err)
+	}
+	models, err := adapter.ListModels(ctx, apiKey)
+	if err != nil {
+		t.Fatalf("live OpenAI ListModels failed: %v", err)
+	}
+	if len(models) == 0 {
+		t.Fatalf("live OpenAI ListModels returned 0 models")
 	}
 }

@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
+	"time"
 
 	"ai-governance-saas/backend/internal/ports/provider"
 )
@@ -294,5 +296,27 @@ func TestCountTokens(t *testing.T) {
 	}
 	if res.TotalTokens <= 0 {
 		t.Errorf("expected positive token count, got %d", res.TotalTokens)
+	}
+}
+
+// TestHuggingFace_LiveSmokeTest executes a live smoke test against Hugging Face only if HUGGINGFACE_API_KEY is configured.
+func TestHuggingFace_LiveSmokeTest(t *testing.T) {
+	apiKey := os.Getenv("HUGGINGFACE_API_KEY")
+	if apiKey == "" {
+		t.Skip("skipping live Hugging Face smoke test: HUGGINGFACE_API_KEY not set")
+	}
+	adapter := NewProviderAdapter()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := adapter.ValidateCredentials(ctx, apiKey); err != nil {
+		t.Fatalf("live Hugging Face credential validation failed: %v", err)
+	}
+	models, err := adapter.ListModels(ctx, apiKey)
+	if err != nil {
+		t.Fatalf("live Hugging Face ListModels failed: %v", err)
+	}
+	if len(models) == 0 {
+		t.Fatalf("live Hugging Face ListModels returned 0 models")
 	}
 }

@@ -6,8 +6,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestValidateCredentials tests credential validation.
@@ -350,5 +352,27 @@ func TestListModelsMetadata(t *testing.T) {
 	}
 	if m.DisplayName != "Claude Sonnet 4.5" {
 		t.Errorf("unexpected display name: %q", m.DisplayName)
+	}
+}
+
+// TestAnthropic_LiveSmokeTest executes a live smoke test against Anthropic only if ANTHROPIC_API_KEY is configured.
+func TestAnthropic_LiveSmokeTest(t *testing.T) {
+	apiKey := os.Getenv("ANTHROPIC_API_KEY")
+	if apiKey == "" {
+		t.Skip("skipping live Anthropic smoke test: ANTHROPIC_API_KEY not set")
+	}
+	adapter := NewProviderAdapter()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := adapter.ValidateCredentials(ctx, apiKey); err != nil {
+		t.Fatalf("live Anthropic credential validation failed: %v", err)
+	}
+	models, err := adapter.ListModels(ctx, apiKey)
+	if err != nil {
+		t.Fatalf("live Anthropic ListModels failed: %v", err)
+	}
+	if len(models) == 0 {
+		t.Fatalf("live Anthropic ListModels returned 0 models")
 	}
 }
