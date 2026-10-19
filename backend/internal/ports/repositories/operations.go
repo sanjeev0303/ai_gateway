@@ -112,6 +112,15 @@ type InvoiceRepository interface {
 	RecordPayment(ctx context.Context, orgID uuid.UUID, paymentProvider, paymentID string, amountMicros int64) error
 }
 
+// CheckoutRepository manages trusted server-side checkout sessions.
+type CheckoutRepository interface {
+	Create(ctx context.Context, orgID uuid.UUID, input domain.NewCheckout) (domain.Checkout, error)
+	Get(ctx context.Context, orgID uuid.UUID, checkoutSessionID string) (domain.Checkout, error)
+	GetByOrderID(ctx context.Context, orgID uuid.UUID, orderID string) (domain.Checkout, error)
+	UpdateStatus(ctx context.Context, orgID uuid.UUID, checkoutSessionID, status, paymentID string) error
+	ExpirePending(ctx context.Context, olderThan time.Time) (int64, error)
+}
+
 // PricingModelRepository manages per-organization model price catalogs.
 type PricingModelRepository interface {
 	Upsert(ctx context.Context, orgID uuid.UUID, input domain.NewPricingModel) (domain.PricingModel, error)

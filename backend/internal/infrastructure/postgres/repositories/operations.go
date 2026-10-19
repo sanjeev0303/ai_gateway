@@ -1099,37 +1099,39 @@ func (r *subscriptionRepo) ActiveWithPlan(ctx context.Context, orgID uuid.UUID) 
 			periodStart, periodEnd     *time.Time
 			cancelAtPeriodEnd          bool
 		)
-		err := r.store.Pool().QueryRow(ctx, `
-			SELECT s.status, s.current_period_start, s.current_period_end, s.cancel_at_period_end,
-			       p.code, p.name, s.payment_provider, s.provider_customer_id, s.provider_subscription_id
-			FROM subscriptions s
-			JOIN plans p ON p.id = s.plan_id
-			WHERE s.organization_id = $1 AND s.status IN ('active', 'trialing')
-			ORDER BY s.created_at DESC
-			LIMIT 1
-		`, orgID).Scan(&status, &periodStart, &periodEnd, &cancelAtPeriodEnd, &planCode, &planName, &paymentProvider, &custID, &subID)
-		if err != nil {
-			return err
-		}
-		plan = domain.OrganizationPlan{
-			PlanCode:               planCode,
-			PlanName:               planName,
-			Status:                 status,
-			CurrentPeriodStart:     periodStart,
-			CurrentPeriodEnd:       periodEnd,
-			CancelAtPeriodEnd:      cancelAtPeriodEnd,
-			PaymentProvider:        paymentProvider,
-			ProviderCustomerID:     custID,
-			ProviderSubscriptionID: subID,
-		}
-		return nil
+		return r.store.WithTenantTxRaw(ctx, orgID, func(tx pgx.Tx) error {
+			err := tx.QueryRow(ctx, `
+				SELECT s.status, s.current_period_start, s.current_period_end, s.cancel_at_period_end,
+				       p.code, p.name, s.payment_provider, s.provider_customer_id, s.provider_subscription_id
+				FROM subscriptions s
+				JOIN plans p ON p.id = s.plan_id
+				WHERE s.organization_id = $1 AND s.status IN ('active', 'trialing')
+				ORDER BY s.created_at DESC
+				LIMIT 1
+			`, orgID).Scan(&status, &periodStart, &periodEnd, &cancelAtPeriodEnd, &planCode, &planName, &paymentProvider, &custID, &subID)
+			if err != nil {
+				return err
+			}
+			plan = domain.OrganizationPlan{
+				PlanCode:               planCode,
+				PlanName:               planName,
+				Status:                 status,
+				CurrentPeriodStart:     periodStart,
+				CurrentPeriodEnd:       periodEnd,
+				CancelAtPeriodEnd:      cancelAtPeriodEnd,
+				PaymentProvider:        paymentProvider,
+				ProviderCustomerID:     custID,
+				ProviderSubscriptionID: subID,
+			}
+			return nil
+		})
 	})
 	return plan, mapNotFound(err)
 }
 
 func (r *subscriptionRepo) SetPlan(ctx context.Context, orgID, planID uuid.UUID) error {
-	return r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
-		tag, err := r.store.Pool().Exec(ctx, `
+	return r.store.WithTenantTxRaw(ctx, orgID, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `
 			UPDATE subscriptions
 			SET plan_id = $1, status = 'active', cancel_at_period_end = false, updated_at = now()
 			WHERE organization_id = $2 AND status IN ('active', 'trialing')
@@ -1140,14 +1142,10 @@ func (r *subscriptionRepo) SetPlan(ctx context.Context, orgID, planID uuid.UUID)
 		if tag.RowsAffected() == 0 {
 			now := time.Now().UTC()
 			end := now.AddDate(0, 1, 0)
-			_, err = q.CreateSubscription(ctx, db.CreateSubscriptionParams{
-				OrganizationID:     orgID,
-				PlanID:             planID,
-				Status:             "active",
-				CurrentPeriodStart: &now,
-				CurrentPeriodEnd:   &end,
-				CancelAtPeriodEnd:  false,
-			})
+			_, err = tx.Exec(ctx, `
+				INSERT INTO subscriptions (organization_id, plan_id, status, current_period_start, current_period_end, cancel_at_period_end)
+				VALUES ($1, $2, 'active', $3, $4, false)
+			`, orgID, planID, now, end)
 			return err
 		}
 		return nil
@@ -1155,8 +1153,8 @@ func (r *subscriptionRepo) SetPlan(ctx context.Context, orgID, planID uuid.UUID)
 }
 
 func (r *subscriptionRepo) Cancel(ctx context.Context, orgID uuid.UUID) error {
-	return r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
-		_, err := r.store.Pool().Exec(ctx, `
+	return r.store.WithTenantTxRaw(ctx, orgID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `
 			UPDATE subscriptions
 			SET cancel_at_period_end = true, updated_at = now()
 			WHERE organization_id = $1 AND status IN ('active', 'trialing')
@@ -1166,13 +1164,19 @@ func (r *subscriptionRepo) Cancel(ctx context.Context, orgID uuid.UUID) error {
 }
 
 func (r *subscriptionRepo) UpdatePaymentDetails(ctx context.Context, orgID uuid.UUID, provider, subID, custID, status string) error {
-	return r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
-		_, err := r.store.Pool().Exec(ctx, `
+	return r.store.WithTenantTxRaw(ctx, orgID, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `
 			UPDATE subscriptions
 			SET payment_provider = $1, provider_subscription_id = $2, provider_customer_id = $3, status = $4, updated_at = now()
 			WHERE organization_id = $5 AND status IN ('active', 'trialing', 'past_due', 'canceled', 'incomplete')
 		`, provider, subID, custID, status, orgID)
-		return err
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ports.ErrNotFound
+		}
+		return nil
 	})
 }
 
@@ -1296,8 +1300,18 @@ func (r *invoiceRepo) Get(ctx context.Context, orgID, id uuid.UUID) (domain.Invo
 }
 
 func (r *invoiceRepo) RecordPayment(ctx context.Context, orgID uuid.UUID, paymentProvider, paymentID string, amountMicros int64) error {
-	return r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
-		tag, err := r.store.Pool().Exec(ctx, `
+	return r.store.WithTenantTxRaw(ctx, orgID, func(tx pgx.Tx) error {
+		// 1. Idempotency check: if invoice with paymentID already exists, return immediately
+		var existingID uuid.UUID
+		err := tx.QueryRow(ctx, `
+			SELECT id FROM invoices WHERE organization_id = $1 AND payment_id = $2 LIMIT 1
+		`, orgID, paymentID).Scan(&existingID)
+		if err == nil {
+			return nil // Already recorded idempotently
+		}
+
+		// 2. Try to update an existing open invoice
+		tag, err := tx.Exec(ctx, `
 			UPDATE invoices
 			SET status = 'paid', payment_provider = $1, payment_id = $2, paid_at = now(), updated_at = now()
 			WHERE organization_id = $3 AND status = 'open'
@@ -1306,18 +1320,20 @@ func (r *invoiceRepo) RecordPayment(ctx context.Context, orgID uuid.UUID, paymen
 			return err
 		}
 		if tag.RowsAffected() == 0 {
+			// 3. Otherwise create a new settled invoice
 			now := time.Now().UTC()
-			invNumber := fmt.Sprintf("INV-%d", now.Unix())
+			periodStart := now.AddDate(0, 0, -30)
+			invNumber := fmt.Sprintf("INV-%d", now.UnixNano())
 			var invID uuid.UUID
-			err = r.store.Pool().QueryRow(ctx, `
+			err = tx.QueryRow(ctx, `
 				INSERT INTO invoices (organization_id, number, status, currency, total_micros, period_start, period_end, issued_at, payment_provider, payment_id, paid_at)
-				VALUES ($1, $2, 'paid', 'usd', $3, $4 - interval '30 days', $4, $4, $5, $6, $4)
+				VALUES ($1, $2, 'paid', 'usd', $3, $4, $5, $5, $6, $7, $5)
 				RETURNING id
-			`, orgID, invNumber, amountMicros, now, paymentProvider, paymentID).Scan(&invID)
+			`, orgID, invNumber, amountMicros, periodStart, now, paymentProvider, paymentID).Scan(&invID)
 			if err != nil {
 				return err
 			}
-			_, err = r.store.Pool().Exec(ctx, `
+			_, err = tx.Exec(ctx, `
 				INSERT INTO invoice_lines (organization_id, invoice_id, description, quantity, unit_micros, amount_micros)
 				VALUES ($1, $2, 'Subscription payment', 1, $3, $3)
 			`, orgID, invID, amountMicros)
@@ -1325,6 +1341,139 @@ func (r *invoiceRepo) RecordPayment(ctx context.Context, orgID uuid.UUID, paymen
 		}
 		return nil
 	})
+}
+
+type checkoutRepo struct {
+	store *postgres.Store
+}
+
+// NewCheckoutRepository returns a CheckoutRepository backed by the store.
+func NewCheckoutRepository(store *postgres.Store) ports.CheckoutRepository {
+	return &checkoutRepo{store: store}
+}
+
+func (r *checkoutRepo) Create(ctx context.Context, orgID uuid.UUID, input domain.NewCheckout) (domain.Checkout, error) {
+	var c domain.Checkout
+	err := r.store.WithTenantTxRaw(ctx, orgID, func(tx pgx.Tx) error {
+		var (
+			id          uuid.UUID
+			createdAt   time.Time
+			updatedAt   time.Time
+			completedAt *time.Time
+			expiresAt   time.Time
+			status      string
+			paymentID   string
+			meta        []byte
+		)
+		err := tx.QueryRow(ctx, `
+			INSERT INTO billing_checkouts (
+				organization_id, checkout_session_id, provider, plan_code, plan_id,
+				status, amount_micros, currency, customer_email, customer_id, order_id,
+				metadata, expires_at
+			)
+			VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7, $8, $9, $10, $11, $12)
+			RETURNING id, status, payment_id, metadata, expires_at, completed_at, created_at, updated_at
+		`, orgID, input.CheckoutSessionID, input.Provider, input.PlanCode, input.PlanID,
+			input.AmountMicros, input.Currency, input.CustomerEmail, input.CustomerID, input.OrderID,
+			jsonObject(input.Metadata), input.ExpiresAt).Scan(&id, &status, &paymentID, &meta, &expiresAt, &completedAt, &createdAt, &updatedAt)
+		if err != nil {
+			return err
+		}
+		c = domain.Checkout{
+			ID:                id,
+			OrganizationID:    orgID,
+			CheckoutSessionID: input.CheckoutSessionID,
+			Provider:          input.Provider,
+			PlanCode:          input.PlanCode,
+			PlanID:            input.PlanID,
+			Status:            status,
+			AmountMicros:      input.AmountMicros,
+			Currency:          input.Currency,
+			CustomerEmail:     input.CustomerEmail,
+			CustomerID:        input.CustomerID,
+			OrderID:           input.OrderID,
+			PaymentID:         paymentID,
+			Metadata:          meta,
+			ExpiresAt:         expiresAt,
+			CompletedAt:       completedAt,
+			CreatedAt:         createdAt,
+			UpdatedAt:         updatedAt,
+		}
+		return nil
+	})
+	return c, mapConflict(err)
+}
+
+func (r *checkoutRepo) Get(ctx context.Context, orgID uuid.UUID, checkoutSessionID string) (domain.Checkout, error) {
+	var c domain.Checkout
+	err := r.store.WithTenantTxRaw(ctx, orgID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			SELECT id, organization_id, checkout_session_id, provider, plan_code, plan_id,
+			       status, amount_micros, currency, customer_email, customer_id, order_id,
+			       payment_id, metadata, expires_at, completed_at, created_at, updated_at
+			FROM billing_checkouts
+			WHERE organization_id = $1 AND checkout_session_id = $2
+		`, orgID, checkoutSessionID).Scan(
+			&c.ID, &c.OrganizationID, &c.CheckoutSessionID, &c.Provider, &c.PlanCode, &c.PlanID,
+			&c.Status, &c.AmountMicros, &c.Currency, &c.CustomerEmail, &c.CustomerID, &c.OrderID,
+			&c.PaymentID, &c.Metadata, &c.ExpiresAt, &c.CompletedAt, &c.CreatedAt, &c.UpdatedAt,
+		)
+	})
+	return c, mapNotFound(err)
+}
+
+func (r *checkoutRepo) GetByOrderID(ctx context.Context, orgID uuid.UUID, orderID string) (domain.Checkout, error) {
+	var c domain.Checkout
+	err := r.store.WithTenantTxRaw(ctx, orgID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			SELECT id, organization_id, checkout_session_id, provider, plan_code, plan_id,
+			       status, amount_micros, currency, customer_email, customer_id, order_id,
+			       payment_id, metadata, expires_at, completed_at, created_at, updated_at
+			FROM billing_checkouts
+			WHERE organization_id = $1 AND (order_id = $2 OR checkout_session_id = $2)
+			ORDER BY created_at DESC
+			LIMIT 1
+		`, orgID, orderID).Scan(
+			&c.ID, &c.OrganizationID, &c.CheckoutSessionID, &c.Provider, &c.PlanCode, &c.PlanID,
+			&c.Status, &c.AmountMicros, &c.Currency, &c.CustomerEmail, &c.CustomerID, &c.OrderID,
+			&c.PaymentID, &c.Metadata, &c.ExpiresAt, &c.CompletedAt, &c.CreatedAt, &c.UpdatedAt,
+		)
+	})
+	return c, mapNotFound(err)
+}
+
+func (r *checkoutRepo) UpdateStatus(ctx context.Context, orgID uuid.UUID, checkoutSessionID, status, paymentID string) error {
+	return r.store.WithTenantTxRaw(ctx, orgID, func(tx pgx.Tx) error {
+		var completedAt any = nil
+		if status == "completed" {
+			completedAt = time.Now().UTC()
+		}
+		tag, err := tx.Exec(ctx, `
+			UPDATE billing_checkouts
+			SET status = $1, payment_id = CASE WHEN $2 != '' THEN $2 ELSE payment_id END,
+			    completed_at = COALESCE($3, completed_at), updated_at = now()
+			WHERE organization_id = $4 AND checkout_session_id = $5
+		`, status, paymentID, completedAt, orgID, checkoutSessionID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ports.ErrNotFound
+		}
+		return nil
+	})
+}
+
+func (r *checkoutRepo) ExpirePending(ctx context.Context, olderThan time.Time) (int64, error) {
+	tag, err := r.store.Pool().Exec(ctx, `
+		UPDATE billing_checkouts
+		SET status = 'expired', updated_at = now()
+		WHERE status = 'pending' AND expires_at < $1
+	`, olderThan)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
 }
 
 type pricingModelRepo struct {
@@ -1910,14 +2059,18 @@ func toIdempotencyKey(row db.IdempotencyKey) domain.IdempotencyKey {
 }
 
 func toPlan(row db.Plan) domain.Plan {
+	priceMicros, currency := domain.GetPlanPrice(row.Code)
 	return domain.Plan{
-		ID:          row.ID,
-		Code:        row.Code,
-		Name:        row.Name,
-		Description: row.Description,
-		Status:      row.Status,
-		CreatedAt:   row.CreatedAt,
-		UpdatedAt:   row.UpdatedAt,
+		ID:              row.ID,
+		Code:            row.Code,
+		Name:            row.Name,
+		Description:     row.Description,
+		Status:          row.Status,
+		PriceMicros:     priceMicros,
+		Currency:        currency,
+		BillingInterval: "month",
+		CreatedAt:       row.CreatedAt,
+		UpdatedAt:       row.UpdatedAt,
 	}
 }
 

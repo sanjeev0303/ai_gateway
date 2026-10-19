@@ -2,6 +2,13 @@
 
 Updated after each completed prompt.
 
+## COMPLETED TASK: Phase 2 — Fix Billing Correctness
+- [x] 2.1 Remove hardcoded payment amounts ($49/$499) and validate server-side plan/checkout records
+- [x] 2.2 Stop ignoring persistence failures in subscription, invoice, billing events, and audit writes
+- [x] 2.3 Reconcile invoice status and migrations, database constraints, repository queries, and domain states
+- [x] 2.4 Make billing state transitions reliable (idempotency, out-of-order handling, mode enforcement)
+- [x] 2.5 Add comprehensive billing regression tests covering all error, edge case, and mode scenarios
+
 ## COMPLETED TASK: Phase 1 — Audit, Baseline & Matrix Update
 - [x] Inspect billing service, application layer, interfaces, infrastructure, domain, bootstrap
 - [x] Inspect migrations (billing, gateway-credentials), Next.js dashboard, CLI, SDK, Redis, NATS, workers

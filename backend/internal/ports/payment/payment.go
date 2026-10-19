@@ -5,6 +5,7 @@ package payment
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -18,6 +19,12 @@ var (
 	ErrUnsupportedProvider = errors.New("payment: unsupported payment provider")
 	ErrPlanNotFound        = errors.New("payment: plan not found")
 	ErrCustomerNotFound    = errors.New("payment: customer not found")
+	ErrCheckoutNotFound    = errors.New("payment: checkout session not found")
+	ErrCheckoutExpired     = errors.New("payment: checkout session has expired")
+	ErrCheckoutCancelled   = errors.New("payment: checkout session was cancelled")
+	ErrAmountMismatch      = errors.New("payment: payment amount mismatch")
+	ErrCurrencyMismatch    = errors.New("payment: payment currency mismatch")
+	ErrPlanMismatch        = errors.New("payment: plan code does not match checkout session")
 )
 
 // CheckoutParams defines the inputs required to initiate a checkout session.
@@ -78,4 +85,28 @@ type PaymentGateway interface {
 	VerifyPaymentCallback(ctx context.Context, orderID, paymentID, signature string) error
 	// CancelSubscription terminates or schedules cancellation of an upstream subscription.
 	CancelSubscription(ctx context.Context, subID string) error
+}
+
+// MicrosToMinorUnits converts integer micro-dollars ($1 = 1,000,000 micros)
+// to currency minor units (e.g., cents, paise).
+func MicrosToMinorUnits(amountMicros int64, currency string) int64 {
+	switch strings.ToLower(strings.TrimSpace(currency)) {
+	case "jpy", "krw", "vnd":
+		return amountMicros / 1_000_000
+	default:
+		// Standard 2-decimal currencies (USD, EUR, GBP, INR)
+		return amountMicros / 10_000
+	}
+}
+
+// MinorUnitsToMicros converts currency minor units (e.g., cents, paise)
+// to integer micro-dollars ($1 = 1,000,000 micros).
+func MinorUnitsToMicros(minorUnits int64, currency string) int64 {
+	switch strings.ToLower(strings.TrimSpace(currency)) {
+	case "jpy", "krw", "vnd":
+		return minorUnits * 1_000_000
+	default:
+		// Standard 2-decimal currencies
+		return minorUnits * 10_000
+	}
 }

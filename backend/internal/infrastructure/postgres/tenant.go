@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"ai-governance-saas/backend/internal/infrastructure/postgres/sqlc"
 )
@@ -27,6 +28,28 @@ func (s *Store) WithTenantTx(ctx context.Context, orgID uuid.UUID, fn func(q *db
 	}
 
 	if err := fn(db.New(tx)); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+	return nil
+}
+
+// WithTenantTxRaw runs fn inside a transaction that binds the tenant context to the session
+// and exposes the raw pgx.Tx for operations requiring direct SQL on tenant tables.
+func (s *Store) WithTenantTxRaw(ctx context.Context, orgID uuid.UUID, fn func(tx pgx.Tx) error) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if _, err := tx.Exec(ctx, "SELECT set_config('app.org_id', $1, true)", orgID.String()); err != nil {
+		return fmt.Errorf("bind tenant context: %w", err)
+	}
+
+	if err := fn(tx); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

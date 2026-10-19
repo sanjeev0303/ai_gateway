@@ -36,9 +36,19 @@ const (
 
 // Invoice statuses, mirroring the CHECK in invoices.
 const (
-	InvoiceStatusOpen = "open"
-	InvoiceStatusVoid = "void"
-	InvoiceStatusPaid = "paid"
+	InvoiceStatusDraft         = "draft"
+	InvoiceStatusOpen          = "open"
+	InvoiceStatusVoid          = "void"
+	InvoiceStatusPaid          = "paid"
+	InvoiceStatusUncollectible = "uncollectible"
+)
+
+// Checkout session statuses.
+const (
+	CheckoutStatusPending   = "pending"
+	CheckoutStatusCompleted = "completed"
+	CheckoutStatusExpired   = "expired"
+	CheckoutStatusCancelled = "cancelled"
 )
 
 // Alert types, severities and statuses, mirroring the CHECKs in alerts.
@@ -76,13 +86,65 @@ const (
 
 // Plan is a sellable subscription tier.
 type Plan struct {
-	ID          uuid.UUID
-	Code        string
-	Name        string
-	Description string
-	Status      string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID              uuid.UUID
+	Code            string
+	Name            string
+	Description     string
+	Status          string
+	PriceMicros     int64
+	Currency        string
+	BillingInterval string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+// GetPlanPrice returns the authoritative price and currency for standard plans.
+func GetPlanPrice(planCode string) (int64, string) {
+	switch planCode {
+	case "enterprise":
+		return 499_000_000, "usd" // $499.00
+	case "pro":
+		return 49_000_000, "usd" // $49.00
+	default:
+		return 0, "usd" // Free
+	}
+}
+
+// Checkout tracks trusted server-side checkout state.
+type Checkout struct {
+	ID                uuid.UUID
+	OrganizationID    uuid.UUID
+	CheckoutSessionID string
+	Provider          string
+	PlanCode          string
+	PlanID            *uuid.UUID
+	Status            string // "pending", "completed", "expired", "cancelled"
+	AmountMicros      int64
+	Currency          string
+	CustomerEmail     string
+	CustomerID        string
+	OrderID           string
+	PaymentID         string
+	Metadata          []byte
+	ExpiresAt         time.Time
+	CompletedAt       *time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+// NewCheckout is the input for initiating a tracked checkout session.
+type NewCheckout struct {
+	CheckoutSessionID string
+	Provider          string
+	PlanCode          string
+	PlanID            *uuid.UUID
+	AmountMicros      int64
+	Currency          string
+	CustomerEmail     string
+	CustomerID        string
+	OrderID           string
+	Metadata          []byte
+	ExpiresAt         time.Time
 }
 
 // Subscription links an organization to a plan with billing period dates.
@@ -255,9 +317,12 @@ type Alert struct {
 // NewPlan carries the caller-supplied fields for creating a plan. Status is
 // defaulted by the database to 'active'.
 type NewPlan struct {
-	Code        string
-	Name        string
-	Description string
+	Code            string
+	Name            string
+	Description     string
+	PriceMicros     int64
+	Currency        string
+	BillingInterval string
 }
 
 // NewSubscription carries the caller-supplied fields for subscribing an

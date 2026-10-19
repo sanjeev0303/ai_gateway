@@ -1738,4 +1738,111 @@ func TestRLSEnforcesTenantScope(t *testing.T) {
 	}
 }
 
+func TestInvoiceRepository(t *testing.T) {
+	repo := repos.NewInvoiceRepository(testStore)
+	orgID, _, _ := newTenant(t)
+	otherOrg, _, _ := newTenant(t)
+
+	paymentID := "pay_test_" + uuid.NewString()
+	amountMicros := int64(49_000_000)
+
+	// Record payment
+	err := repo.RecordPayment(testCtx, orgID, "stripe", paymentID, amountMicros)
+	requireNoErr(t, err)
+
+	// Idempotent retry: duplicate call with same paymentID must succeed without duplicate insertion
+	err = repo.RecordPayment(testCtx, orgID, "stripe", paymentID, amountMicros)
+	requireNoErr(t, err)
+
+	invoices, err := repo.List(testCtx, orgID)
+	requireNoErr(t, err)
+	if len(invoices) != 1 {
+		t.Fatalf("expected 1 invoice, got %d", len(invoices))
+	}
+	inv := invoices[0]
+	if inv.Status != "paid" {
+		t.Errorf("expected paid status, got %s", inv.Status)
+	}
+	if inv.PaymentID == nil || *inv.PaymentID != paymentID {
+		t.Errorf("expected paymentID %s, got %v", paymentID, inv.PaymentID)
+	}
+	if inv.TotalMicros != amountMicros {
+		t.Errorf("expected %d micros, got %d", amountMicros, inv.TotalMicros)
+	}
+
+	got, err := repo.Get(testCtx, orgID, inv.ID)
+	requireNoErr(t, err)
+	if got.ID != inv.ID {
+		t.Fatalf("Get mismatch: expected %s, got %s", inv.ID, got.ID)
+	}
+
+	// Cross-tenant isolation
+	requireNotFound(t, func() error { _, err := repo.Get(testCtx, otherOrg, inv.ID); return err }())
+	otherInvoices, err := repo.List(testCtx, otherOrg)
+	requireNoErr(t, err)
+	if len(otherInvoices) != 0 {
+		t.Fatalf("expected 0 invoices for other org, got %d", len(otherInvoices))
+	}
+}
+
+func TestCheckoutRepository(t *testing.T) {
+	repo := repos.NewCheckoutRepository(testStore)
+	orgID, _, _ := newTenant(t)
+	otherOrg, _, _ := newTenant(t)
+
+	sessionID := "cs_test_" + uuid.NewString()
+	orderID := "order_" + uuid.NewString()
+	amountMicros := int64(49_000_000)
+
+	checkout, err := repo.Create(testCtx, orgID, domain.NewCheckout{
+		CheckoutSessionID: sessionID,
+		Provider:          "stripe",
+		PlanCode:          "pro",
+		AmountMicros:      amountMicros,
+		Currency:          "usd",
+		CustomerEmail:     "billing@example.test",
+		OrderID:           orderID,
+		ExpiresAt:         time.Now().UTC().Add(24 * time.Hour),
+	})
+	requireNoErr(t, err)
+	if checkout.Status != domain.CheckoutStatusPending {
+		t.Fatalf("expected pending status, got %s", checkout.Status)
+	}
+	if checkout.AmountMicros != amountMicros {
+		t.Fatalf("expected %d micros, got %d", amountMicros, checkout.AmountMicros)
+	}
+
+	// Get by session ID
+	got, err := repo.Get(testCtx, orgID, sessionID)
+	requireNoErr(t, err)
+	if got.CheckoutSessionID != sessionID {
+		t.Fatalf("expected session ID %s, got %s", sessionID, got.CheckoutSessionID)
+	}
+
+	// Get by order ID
+	gotOrder, err := repo.GetByOrderID(testCtx, orgID, orderID)
+	requireNoErr(t, err)
+	if gotOrder.CheckoutSessionID != sessionID {
+		t.Fatalf("expected session ID %s, got %s", sessionID, gotOrder.CheckoutSessionID)
+	}
+
+	// Update status to completed
+	paymentID := "pi_test_" + uuid.NewString()
+	err = repo.UpdateStatus(testCtx, orgID, sessionID, domain.CheckoutStatusCompleted, paymentID)
+	requireNoErr(t, err)
+
+	updated, err := repo.Get(testCtx, orgID, sessionID)
+	requireNoErr(t, err)
+	if updated.Status != domain.CheckoutStatusCompleted {
+		t.Fatalf("expected completed status, got %s", updated.Status)
+	}
+	if updated.PaymentID != paymentID {
+		t.Fatalf("expected payment ID %s, got %s", paymentID, updated.PaymentID)
+	}
+
+	// Cross-tenant isolation
+	requireNotFound(t, func() error { _, err := repo.Get(testCtx, otherOrg, sessionID); return err }())
+	requireNotFound(t, func() error { _, err := repo.GetByOrderID(testCtx, otherOrg, orderID); return err }())
+}
+
 func ptr[T any](v T) *T { return &v }

@@ -459,6 +459,7 @@ func RunControlAPI(ctx context.Context) error {
 			Plans:         repositories.NewPlanRepository(store),
 			Subscriptions: repositories.NewSubscriptionRepository(store),
 			Invoices:      repositories.NewInvoiceRepository(store),
+			Checkouts:     repositories.NewCheckoutRepository(store),
 			Rollups:       repositories.NewUsageRollupRepository(store),
 			BillingEvents: repositories.NewBillingEventRepository(store),
 			Audits:        repositories.NewAuditLogRepository(store),

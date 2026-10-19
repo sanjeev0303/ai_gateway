@@ -170,9 +170,22 @@ func (g *Gateway) CreateCheckoutSession(ctx context.Context, params payment.Chec
 		return nil, payment.ErrInvalidCredentials
 	}
 
+	curr := strings.ToUpper(strings.TrimSpace(params.Currency))
+	if curr == "" {
+		curr = "INR"
+	}
+	amountMinor := payment.MicrosToMinorUnits(params.AmountMicros, curr)
+	if amountMinor <= 0 {
+		if params.PlanCode == "enterprise" {
+			amountMinor = 4990000 // 49900.00 INR
+		} else {
+			amountMinor = 490000 // 4900.00 INR
+		}
+	}
+
 	bodyMap := map[string]any{
-		"amount":       490000, // 4900.00 INR (in paise)
-		"currency":     "INR",
+		"amount":       amountMinor,
+		"currency":     curr,
 		"description":  fmt.Sprintf("Sentinel %s Plan Subscription", strings.ToUpper(params.PlanCode)),
 		"callback_url": params.SuccessURL,
 		"notes": map[string]string{

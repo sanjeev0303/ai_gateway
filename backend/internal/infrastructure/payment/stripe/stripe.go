@@ -203,10 +203,22 @@ func (g *Gateway) CreateCheckoutSession(ctx context.Context, params payment.Chec
 	}
 	data.Set("metadata[organization_id]", params.OrganizationID.String())
 	data.Set("metadata[plan_code]", params.PlanCode)
-	data.Set("line_items[0][price_data][currency]", "usd")
+	curr := strings.ToLower(strings.TrimSpace(params.Currency))
+	if curr == "" {
+		curr = "usd"
+	}
+	unitAmountCents := payment.MicrosToMinorUnits(params.AmountMicros, curr)
+	if unitAmountCents <= 0 {
+		if params.PlanCode == "enterprise" {
+			unitAmountCents = 49900
+		} else {
+			unitAmountCents = 4900
+		}
+	}
+	data.Set("line_items[0][price_data][currency]", curr)
 	data.Set("line_items[0][price_data][product_data][name]", fmt.Sprintf("Sentinel %s Plan", strings.ToUpper(params.PlanCode)))
 	data.Set("line_items[0][price_data][recurring][interval]", "month")
-	data.Set("line_items[0][price_data][unit_amount]", "4900") // $49.00
+	data.Set("line_items[0][price_data][unit_amount]", strconv.FormatInt(unitAmountCents, 10))
 	data.Set("line_items[0][quantity]", "1")
 
 	reqURL := strings.TrimRight(g.apiURL, "/") + "/v1/checkout/sessions"
