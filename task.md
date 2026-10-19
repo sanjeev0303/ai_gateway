@@ -2,6 +2,15 @@
 
 Updated after each completed prompt.
 
+## COMPLETED TASK: Phase 1 — Audit, Baseline & Matrix Update
+- [x] Inspect billing service, application layer, interfaces, infrastructure, domain, bootstrap
+- [x] Inspect migrations (billing, gateway-credentials), Next.js dashboard, CLI, SDK, Redis, NATS, workers
+- [x] Update `docs/architecture/completeness-matrix.md`
+- [x] Update `docs/local-readiness/current-baseline.md`
+- [x] Update `docs/local-readiness/final-completion-plan.md`
+- [x] Update `docs/local-readiness/feature-verification-matrix.md`
+- [x] Verify test execution evidence across all packages and layers
+
 ## COMPLETED TASK: Full Verification, Defect Fixing, and Final Completion Reports (Phases 11-13)
 - [x] Run full repository verification suite and underlying checks (formatting, boundaries, vet, unit, integration, race, contracts, frontend, build)
 - [x] Verify Workflows A through H (Org/Provider setup, inference, governance, tenant isolation, usage reconciliation, recovery, billing, regression)
