@@ -2,6 +2,13 @@
 
 Updated after each completed prompt.
 
+## COMPLETED TASK: Establish Reproducible Baseline & Update Readiness Documents
+- [x] Inspect README.md, Makefile, scripts, go.mod, package manifests, Docker Compose, migrations, tests
+- [x] Record exact toolchain versions, command execution logs, and environment limitations
+- [x] Update `docs/local-readiness/current-baseline.md` with verified execution evidence
+- [x] Update `docs/local-readiness/final-completion-plan.md` with explicit validation matrix
+- [x] Verify clean git working tree and production readiness
+
 ## COMPLETED TASK: Architectural Integrity and Defect Audit
 - [x] Verify architectural boundary preservation (`scripts/check-boundaries.sh`)
 - [x] Verify Go backend, CLI, SDK, and contracts stability
