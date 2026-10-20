@@ -15,7 +15,7 @@ import (
 const createPlan = `-- name: CreatePlan :one
 INSERT INTO plans (code, name, description, status)
 VALUES ($1, $2, $3, $4)
-RETURNING id, code, name, description, status, created_at, updated_at
+RETURNING id, code, name, description, status, created_at, updated_at, price_micros, currency, billing_interval
 `
 
 type CreatePlanParams struct {
@@ -41,6 +41,9 @@ func (q *Queries) CreatePlan(ctx context.Context, arg CreatePlanParams) (Plan, e
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PriceMicros,
+		&i.Currency,
+		&i.BillingInterval,
 	)
 	return i, err
 }
@@ -303,7 +306,7 @@ func (q *Queries) ListInvoices(ctx context.Context, organizationID uuid.UUID) ([
 }
 
 const listPlans = `-- name: ListPlans :many
-SELECT id, code, name, description, status, created_at, updated_at FROM plans
+SELECT id, code, name, description, status, created_at, updated_at, price_micros, currency, billing_interval FROM plans
 ORDER BY created_at
 `
 
@@ -324,6 +327,9 @@ func (q *Queries) ListPlans(ctx context.Context) ([]Plan, error) {
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PriceMicros,
+			&i.Currency,
+			&i.BillingInterval,
 		); err != nil {
 			return nil, err
 		}

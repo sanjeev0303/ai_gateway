@@ -217,6 +217,27 @@ type AuthRefreshToken struct {
 	LastUsedAt *time.Time `json:"last_used_at"`
 }
 
+type BillingCheckout struct {
+	ID                uuid.UUID  `json:"id"`
+	OrganizationID    uuid.UUID  `json:"organization_id"`
+	CheckoutSessionID string     `json:"checkout_session_id"`
+	Provider          string     `json:"provider"`
+	PlanCode          string     `json:"plan_code"`
+	PlanID            *uuid.UUID `json:"plan_id"`
+	Status            string     `json:"status"`
+	AmountMicros      int64      `json:"amount_micros"`
+	Currency          string     `json:"currency"`
+	CustomerEmail     string     `json:"customer_email"`
+	CustomerID        string     `json:"customer_id"`
+	OrderID           string     `json:"order_id"`
+	PaymentID         string     `json:"payment_id"`
+	Metadata          []byte     `json:"metadata"`
+	ExpiresAt         time.Time  `json:"expires_at"`
+	CompletedAt       *time.Time `json:"completed_at"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+}
+
 type BillingEvent struct {
 	ID             uuid.UUID `json:"id"`
 	OrganizationID uuid.UUID `json:"organization_id"`
@@ -460,13 +481,16 @@ type OrganizationMember struct {
 }
 
 type Plan struct {
-	ID          uuid.UUID `json:"id"`
-	Code        string    `json:"code"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Status      string    `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID              uuid.UUID `json:"id"`
+	Code            string    `json:"code"`
+	Name            string    `json:"name"`
+	Description     string    `json:"description"`
+	Status          string    `json:"status"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	PriceMicros     int64     `json:"price_micros"`
+	Currency        string    `json:"currency"`
+	BillingInterval string    `json:"billing_interval"`
 }
 
 type Policy struct {
@@ -505,14 +529,16 @@ type PricingModel struct {
 }
 
 type PricingVersion struct {
-	ID                    uuid.UUID `json:"id"`
-	PricingModelID        uuid.UUID `json:"pricing_model_id"`
-	OrganizationID        uuid.UUID `json:"organization_id"`
-	Version               int32     `json:"version"`
-	InputUnitPriceMicros  int64     `json:"input_unit_price_micros"`
-	OutputUnitPriceMicros int64     `json:"output_unit_price_micros"`
-	EffectiveFrom         time.Time `json:"effective_from"`
-	CreatedAt             time.Time `json:"created_at"`
+	ID                             uuid.UUID  `json:"id"`
+	PricingModelID                 uuid.UUID  `json:"pricing_model_id"`
+	OrganizationID                 uuid.UUID  `json:"organization_id"`
+	Version                        int32      `json:"version"`
+	InputUnitPriceMicros           int64      `json:"input_unit_price_micros"`
+	OutputUnitPriceMicros          int64      `json:"output_unit_price_micros"`
+	EffectiveFrom                  time.Time  `json:"effective_from"`
+	CreatedAt                      time.Time  `json:"created_at"`
+	CacheReadInputTokenPriceMicros int64      `json:"cache_read_input_token_price_micros"`
+	EffectiveTo                    *time.Time `json:"effective_to"`
 }
 
 type Project struct {

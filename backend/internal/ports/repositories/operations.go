@@ -124,12 +124,18 @@ type CheckoutRepository interface {
 // PricingModelRepository manages per-organization model price catalogs.
 type PricingModelRepository interface {
 	Upsert(ctx context.Context, orgID uuid.UUID, input domain.NewPricingModel) (domain.PricingModel, error)
+	Get(ctx context.Context, orgID, id uuid.UUID) (domain.PricingModel, error)
+	GetBySlug(ctx context.Context, orgID uuid.UUID, modelSlug string) (domain.PricingModel, error)
 	List(ctx context.Context, orgID uuid.UUID) ([]domain.PricingModel, error)
 }
 
 // PricingVersionRepository manages versioned price sheets.
 type PricingVersionRepository interface {
 	Create(ctx context.Context, orgID uuid.UUID, input domain.NewPricingVersion) (domain.PricingVersion, error)
+	Get(ctx context.Context, orgID, id uuid.UUID) (domain.PricingVersion, error)
+	GetByVersion(ctx context.Context, orgID, pricingModelID uuid.UUID, version int32) (domain.PricingVersion, error)
+	GetLatest(ctx context.Context, orgID, pricingModelID uuid.UUID) (domain.PricingVersion, error)
+	GetEffective(ctx context.Context, orgID, pricingModelID uuid.UUID, at time.Time) (domain.PricingVersion, error)
 	List(ctx context.Context, orgID, pricingModelID uuid.UUID) ([]domain.PricingVersion, error)
 }
 

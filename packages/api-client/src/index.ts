@@ -42,6 +42,8 @@ import type { SearchModule } from "./search";
 import { createSearchModule } from "./search";
 import type { GuardrailsModule } from "./guardrails";
 import { createGuardrailsModule } from "./guardrails";
+import type { PricingModule } from "./pricing";
+import { createPricingModule } from "./pricing";
 
 export * from "./errors";
 export { createTransport, paginate } from "./client";
@@ -78,6 +80,7 @@ export * from "./security-events";
 export * from "./service-accounts";
 export * from "./teams";
 export * from "./usage";
+export * from "./pricing";
 export * from "./search";
 
 /**
@@ -104,6 +107,7 @@ export interface ApiClient extends Transport {
   readonly conversations: ConversationsModule;
   readonly auditLogs: AuditLogsModule;
   readonly billing: BillingModule;
+  readonly pricing: PricingModule;
   readonly securityEvents: SecurityEventsModule;
   readonly alerts: AlertsModule;
   readonly activity: ActivityModule;
@@ -132,6 +136,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     conversations: createConversationsModule(transport),
     auditLogs: createAuditLogsModule(transport),
     billing: createBillingModule(transport),
+    pricing: createPricingModule(transport),
     securityEvents: createSecurityEventsModule(transport),
     alerts: createAlertsModule(transport),
     activity: createActivityModule(transport),

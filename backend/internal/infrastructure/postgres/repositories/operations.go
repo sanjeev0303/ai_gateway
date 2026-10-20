@@ -523,6 +523,11 @@ func (r *usageRollupRepo) Recompute(ctx context.Context, orgID uuid.UUID, from, 
 				})
 			},
 			func(c context.Context) error {
+				return q.MarkUnpricedLLMRequests(c, db.MarkUnpricedLLMRequestsParams{
+					OrganizationID: orgID, FromTs: monthFrom, ToTs: monthTo,
+				})
+			},
+			func(c context.Context) error {
 				return q.DeleteUsageHourlyInWindow(c, db.DeleteUsageHourlyInWindowParams{
 					OrganizationID: orgID, FromTs: hourFrom, ToTs: hourTo,
 				})
@@ -1506,6 +1511,38 @@ func (r *pricingModelRepo) Upsert(ctx context.Context, orgID uuid.UUID, input do
 	return pricingModel, err
 }
 
+func (r *pricingModelRepo) Get(ctx context.Context, orgID, id uuid.UUID) (domain.PricingModel, error) {
+	var pricingModel domain.PricingModel
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.GetPricingModel(ctx, db.GetPricingModelParams{
+			OrganizationID: orgID,
+			ID:             id,
+		})
+		if err != nil {
+			return err
+		}
+		pricingModel = toPricingModel(row)
+		return nil
+	})
+	return pricingModel, mapNotFound(err)
+}
+
+func (r *pricingModelRepo) GetBySlug(ctx context.Context, orgID uuid.UUID, modelSlug string) (domain.PricingModel, error) {
+	var pricingModel domain.PricingModel
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.GetPricingModelBySlug(ctx, db.GetPricingModelBySlugParams{
+			OrganizationID: orgID,
+			ModelSlug:      modelSlug,
+		})
+		if err != nil {
+			return err
+		}
+		pricingModel = toPricingModel(row)
+		return nil
+	})
+	return pricingModel, mapNotFound(err)
+}
+
 func (r *pricingModelRepo) List(ctx context.Context, orgID uuid.UUID) ([]domain.PricingModel, error) {
 	var pricingModels []domain.PricingModel
 	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
@@ -1536,12 +1573,14 @@ func (r *pricingVersionRepo) Create(ctx context.Context, orgID uuid.UUID, input 
 	var pricingVersion domain.PricingVersion
 	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
 		row, err := q.CreatePricingVersion(ctx, db.CreatePricingVersionParams{
-			PricingModelID:        input.PricingModelID,
-			OrganizationID:        orgID,
-			Version:               input.Version,
-			InputUnitPriceMicros:  input.InputUnitPriceMicros,
-			OutputUnitPriceMicros: input.OutputUnitPriceMicros,
-			EffectiveFrom:         input.EffectiveFrom,
+			PricingModelID:                 input.PricingModelID,
+			OrganizationID:                 orgID,
+			Version:                        input.Version,
+			InputUnitPriceMicros:           input.InputUnitPriceMicros,
+			OutputUnitPriceMicros:          input.OutputUnitPriceMicros,
+			CacheReadInputTokenPriceMicros: input.CacheReadInputTokenPriceMicros,
+			EffectiveFrom:                  input.EffectiveFrom,
+			EffectiveTo:                    input.EffectiveTo,
 		})
 		if err != nil {
 			return err
@@ -1549,7 +1588,73 @@ func (r *pricingVersionRepo) Create(ctx context.Context, orgID uuid.UUID, input 
 		pricingVersion = toPricingVersion(row)
 		return nil
 	})
-	return pricingVersion, err
+	return pricingVersion, mapConflict(err)
+}
+
+func (r *pricingVersionRepo) Get(ctx context.Context, orgID, id uuid.UUID) (domain.PricingVersion, error) {
+	var pricingVersion domain.PricingVersion
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.GetPricingVersion(ctx, db.GetPricingVersionParams{
+			OrganizationID: orgID,
+			ID:             id,
+		})
+		if err != nil {
+			return err
+		}
+		pricingVersion = toPricingVersion(row)
+		return nil
+	})
+	return pricingVersion, mapNotFound(err)
+}
+
+func (r *pricingVersionRepo) GetByVersion(ctx context.Context, orgID, pricingModelID uuid.UUID, version int32) (domain.PricingVersion, error) {
+	var pricingVersion domain.PricingVersion
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.GetPricingVersionByNumber(ctx, db.GetPricingVersionByNumberParams{
+			OrganizationID: orgID,
+			PricingModelID: pricingModelID,
+			Version:        version,
+		})
+		if err != nil {
+			return err
+		}
+		pricingVersion = toPricingVersion(row)
+		return nil
+	})
+	return pricingVersion, mapNotFound(err)
+}
+
+func (r *pricingVersionRepo) GetLatest(ctx context.Context, orgID, pricingModelID uuid.UUID) (domain.PricingVersion, error) {
+	var pricingVersion domain.PricingVersion
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.GetLatestPricingVersion(ctx, db.GetLatestPricingVersionParams{
+			OrganizationID: orgID,
+			PricingModelID: pricingModelID,
+		})
+		if err != nil {
+			return err
+		}
+		pricingVersion = toPricingVersion(row)
+		return nil
+	})
+	return pricingVersion, mapNotFound(err)
+}
+
+func (r *pricingVersionRepo) GetEffective(ctx context.Context, orgID, pricingModelID uuid.UUID, at time.Time) (domain.PricingVersion, error) {
+	var pricingVersion domain.PricingVersion
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		row, err := q.GetEffectivePricingVersion(ctx, db.GetEffectivePricingVersionParams{
+			OrganizationID: orgID,
+			PricingModelID: pricingModelID,
+			EffectiveFrom:  at,
+		})
+		if err != nil {
+			return err
+		}
+		pricingVersion = toPricingVersion(row)
+		return nil
+	})
+	return pricingVersion, mapNotFound(err)
 }
 
 func (r *pricingVersionRepo) List(ctx context.Context, orgID, pricingModelID uuid.UUID) ([]domain.PricingVersion, error) {
@@ -2153,14 +2258,16 @@ func toPricingModel(row db.PricingModel) domain.PricingModel {
 
 func toPricingVersion(row db.PricingVersion) domain.PricingVersion {
 	return domain.PricingVersion{
-		ID:                    row.ID,
-		PricingModelID:        row.PricingModelID,
-		OrganizationID:        row.OrganizationID,
-		Version:               row.Version,
-		InputUnitPriceMicros:  row.InputUnitPriceMicros,
-		OutputUnitPriceMicros: row.OutputUnitPriceMicros,
-		EffectiveFrom:         row.EffectiveFrom,
-		CreatedAt:             row.CreatedAt,
+		ID:                             row.ID,
+		PricingModelID:                 row.PricingModelID,
+		OrganizationID:                 row.OrganizationID,
+		Version:                        row.Version,
+		InputUnitPriceMicros:           row.InputUnitPriceMicros,
+		OutputUnitPriceMicros:          row.OutputUnitPriceMicros,
+		CacheReadInputTokenPriceMicros: row.CacheReadInputTokenPriceMicros,
+		EffectiveFrom:                  row.EffectiveFrom,
+		EffectiveTo:                    row.EffectiveTo,
+		CreatedAt:                      row.CreatedAt,
 	}
 }
 

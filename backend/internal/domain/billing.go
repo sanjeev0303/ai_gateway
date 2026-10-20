@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -290,14 +292,16 @@ type PricingModel struct {
 
 // PricingVersion is one versioned price sheet within a pricing model.
 type PricingVersion struct {
-	ID                    uuid.UUID
-	PricingModelID        uuid.UUID
-	OrganizationID        uuid.UUID
-	Version               int32
-	InputUnitPriceMicros  int64
-	OutputUnitPriceMicros int64
-	EffectiveFrom         time.Time
-	CreatedAt             time.Time
+	ID                             uuid.UUID  `json:"id"`
+	PricingModelID                 uuid.UUID  `json:"pricing_model_id"`
+	OrganizationID                 uuid.UUID  `json:"organization_id"`
+	Version                        int32      `json:"version"`
+	InputUnitPriceMicros           int64      `json:"input_unit_price_micros"`
+	OutputUnitPriceMicros          int64      `json:"output_unit_price_micros"`
+	CacheReadInputTokenPriceMicros int64      `json:"cache_read_input_token_price_micros"`
+	EffectiveFrom                  time.Time  `json:"effective_from"`
+	EffectiveTo                    *time.Time `json:"effective_to,omitempty"`
+	CreatedAt                      time.Time  `json:"created_at"`
 }
 
 // Alert is a configured notification rule.
@@ -356,12 +360,74 @@ type NewPricingModel struct {
 // NewPricingVersion carries the caller-supplied fields for creating a pricing
 // version within a pricing model.
 type NewPricingVersion struct {
-	PricingModelID        uuid.UUID
-	Version               int32
-	InputUnitPriceMicros  int64
-	OutputUnitPriceMicros int64
-	EffectiveFrom         time.Time
+	PricingModelID                 uuid.UUID
+	Version                        int32
+	InputUnitPriceMicros           int64
+	OutputUnitPriceMicros          int64
+	CacheReadInputTokenPriceMicros int64
+	EffectiveFrom                  time.Time
+	EffectiveTo                    *time.Time
 }
+
+// Pricing errors.
+var (
+	ErrNegativePrice              = errors.New("pricing: prices must be non-negative")
+	ErrInvalidCurrency            = errors.New("pricing: currency must be a valid 3-letter ISO code")
+	ErrUnsupportedTokenCategory   = errors.New("pricing: provider or model does not support prompt caching")
+	ErrInvalidEffectiveWindow     = errors.New("pricing: effective_to must be strictly after effective_from")
+	ErrPricingNotFound            = errors.New("pricing: pricing model or version not found")
+	ErrPricingUnavailable         = errors.New("pricing: model pricing is unavailable")
+	ErrInvalidTokenCount          = errors.New("pricing: token counts cannot be negative")
+	ErrInvalidProviderKind        = errors.New("pricing: provider kind must be openai, anthropic, gemini, azure_openai, or custom")
+)
+
+// ValidProviderKind reports whether kind is one of the supported provider kinds.
+func ValidProviderKind(kind string) bool {
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "openai", "anthropic", "gemini", "azure_openai", "custom":
+		return true
+	default:
+		return false
+	}
+}
+
+// ModelSupportsCachedTokens reports whether a provider and model slug support prompt/context caching.
+func ModelSupportsCachedTokens(providerKind, modelSlug string) bool {
+	provider := strings.ToLower(strings.TrimSpace(providerKind))
+	model := strings.ToLower(strings.TrimSpace(modelSlug))
+	switch provider {
+	case "anthropic":
+		return strings.HasPrefix(model, "claude-3")
+	case "openai":
+		return strings.HasPrefix(model, "gpt-4o") || strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "gpt-4.5")
+	case "gemini":
+		return strings.Contains(model, "1.5") || strings.Contains(model, "2.0")
+	case "custom":
+		return strings.Contains(model, "cache")
+	default:
+		return false
+	}
+}
+
+// CalculateCost computes total request cost in micros given pricing parameters and token counts.
+func CalculateCost(pv PricingVersion, promptTokens, completionTokens, cachedInputTokens int64) (int64, error) {
+	if promptTokens < 0 || completionTokens < 0 || cachedInputTokens < 0 {
+		return 0, ErrInvalidTokenCount
+	}
+	var inputCost int64
+	if pv.CacheReadInputTokenPriceMicros > 0 && cachedInputTokens > 0 {
+		nonCached := promptTokens - cachedInputTokens
+		if nonCached < 0 {
+			nonCached = 0
+		}
+		inputCost = (nonCached * pv.InputUnitPriceMicros) + (cachedInputTokens * pv.CacheReadInputTokenPriceMicros)
+	} else {
+		inputCost = promptTokens * pv.InputUnitPriceMicros
+	}
+	outputCost := completionTokens * pv.OutputUnitPriceMicros
+	return inputCost + outputCost, nil
+}
+
 
 // NewAlert carries the caller-supplied fields for creating an alert. Status
 // is defaulted by the database to 'active'; severity is an operational

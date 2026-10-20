@@ -20,6 +20,7 @@ import (
 	"ai-governance-saas/backend/internal/application/guardrails"
 	"ai-governance-saas/backend/internal/application/identity"
 	"ai-governance-saas/backend/internal/application/policy"
+	"ai-governance-saas/backend/internal/application/pricing"
 	"ai-governance-saas/backend/internal/application/provider"
 	"ai-governance-saas/backend/internal/application/securityevent"
 	"ai-governance-saas/backend/internal/application/usage"
@@ -45,6 +46,7 @@ type api struct {
 	securityEvents *securityevent.Service
 	billing        *billing.Service
 	budget         *budget.Service
+	pricing        *pricing.Service
 	policy         *policy.Service
 	guardrails     *guardrails.Service
 	guardrailsEval *guardrails.Evaluator
@@ -68,6 +70,7 @@ func newAPI(deps Deps) *api {
 		securityEvents:      deps.SecurityEvents,
 		billing:             deps.Billing,
 		budget:              deps.Budget,
+		pricing:             deps.Pricing,
 		policy:              deps.Policy,
 		guardrails:          deps.Guardrails,
 		guardrailsEval:      deps.GuardrailsEval,
@@ -507,6 +510,22 @@ func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
 		appErr = perrors.New(perrors.KindConflict, "conflict", repositories.ErrConflict.Error())
 	case errors.Is(err, repositories.ErrForbidden):
 		appErr = perrors.New(perrors.KindPermissionDenied, "permission_denied", repositories.ErrForbidden.Error())
+	case errors.Is(err, domain.ErrNegativePrice):
+		appErr = perrors.New(perrors.KindInvalidArgument, "negative_price", domain.ErrNegativePrice.Error())
+	case errors.Is(err, domain.ErrInvalidCurrency):
+		appErr = perrors.New(perrors.KindInvalidArgument, "invalid_currency", domain.ErrInvalidCurrency.Error())
+	case errors.Is(err, domain.ErrUnsupportedTokenCategory):
+		appErr = perrors.New(perrors.KindInvalidArgument, "unsupported_token_category", domain.ErrUnsupportedTokenCategory.Error())
+	case errors.Is(err, domain.ErrInvalidEffectiveWindow):
+		appErr = perrors.New(perrors.KindInvalidArgument, "invalid_effective_window", domain.ErrInvalidEffectiveWindow.Error())
+	case errors.Is(err, domain.ErrPricingNotFound):
+		appErr = perrors.New(perrors.KindNotFound, "pricing_not_found", domain.ErrPricingNotFound.Error())
+	case errors.Is(err, domain.ErrPricingUnavailable):
+		appErr = perrors.New(perrors.KindUnavailable, "pricing_unavailable", domain.ErrPricingUnavailable.Error())
+	case errors.Is(err, domain.ErrInvalidTokenCount):
+		appErr = perrors.New(perrors.KindInvalidArgument, "invalid_token_count", domain.ErrInvalidTokenCount.Error())
+	case errors.Is(err, domain.ErrInvalidProviderKind):
+		appErr = perrors.New(perrors.KindInvalidArgument, "invalid_provider_kind", domain.ErrInvalidProviderKind.Error())
 	case errors.As(err, &appErr):
 		// Contextual errors (decodeJSON, pathUUID, parseOptionalUUID) already
 		// carry their own kind and wire code; pass them through unchanged.

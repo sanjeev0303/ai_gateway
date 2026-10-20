@@ -19,6 +19,7 @@ import (
 	"ai-governance-saas/backend/internal/application/guardrails"
 	"ai-governance-saas/backend/internal/application/identity"
 	"ai-governance-saas/backend/internal/application/policy"
+	"ai-governance-saas/backend/internal/application/pricing"
 	"ai-governance-saas/backend/internal/application/provider"
 	"ai-governance-saas/backend/internal/application/securityevent"
 	"ai-governance-saas/backend/internal/application/usage"
@@ -41,6 +42,7 @@ type Deps struct {
 	SecurityEvents  *securityevent.Service
 	Billing         *billing.Service
 	Budget          *budget.Service
+	Pricing         *pricing.Service
 	Policy          *policy.Service
 	Guardrails      *guardrails.Service
 	GuardrailsEval  *guardrails.Evaluator
@@ -85,6 +87,9 @@ func NewHandler(log *slog.Logger, mw *httpx.Middleware, reg *health.Registry, de
 		}
 		if deps.Billing != nil {
 			registerBillingRoutes(mux, deps)
+		}
+		if deps.Pricing != nil {
+			registerPricingRoutes(mux, deps)
 		}
 		if deps.Guardrails != nil {
 			registerGuardrailRoutes(mux, deps)

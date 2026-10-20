@@ -1466,6 +1466,203 @@ func TestPricingModelAndVersionRepositories(t *testing.T) {
 	}
 }
 
+func TestPricingManagementRepositoryExtensions(t *testing.T) {
+	modelRepo := repos.NewPricingModelRepository(testStore)
+	versionRepo := repos.NewPricingVersionRepository(testStore)
+	orgID, _, _ := newTenant(t)
+
+	// Test Get and GetBySlug
+	pm, err := modelRepo.Upsert(testCtx, orgID, domain.NewPricingModel{
+		ModelSlug:    "claude-3-5-sonnet",
+		ProviderKind: "anthropic",
+		DisplayName:  "Claude 3.5 Sonnet",
+		Currency:     "USD",
+	})
+	requireNoErr(t, err)
+
+	gotByID, err := modelRepo.Get(testCtx, orgID, pm.ID)
+	requireNoErr(t, err)
+	if gotByID.ModelSlug != "claude-3-5-sonnet" {
+		t.Fatalf("expected claude-3-5-sonnet, got %s", gotByID.ModelSlug)
+	}
+
+	gotBySlug, err := modelRepo.GetBySlug(testCtx, orgID, "claude-3-5-sonnet")
+	requireNoErr(t, err)
+	if gotBySlug.ID != pm.ID {
+		t.Fatalf("expected ID %v, got %v", pm.ID, gotBySlug.ID)
+	}
+
+	// Test version with cacheReadInputTokenPriceMicros and effectiveTo
+	effFrom1 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	effTo1 := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	v1, err := versionRepo.Create(testCtx, orgID, domain.NewPricingVersion{
+		PricingModelID:                 pm.ID,
+		Version:                        1,
+		InputUnitPriceMicros:           3000,
+		OutputUnitPriceMicros:          15000,
+		CacheReadInputTokenPriceMicros: 300,
+		EffectiveFrom:                  effFrom1,
+		EffectiveTo:                    &effTo1,
+	})
+	requireNoErr(t, err)
+	if v1.CacheReadInputTokenPriceMicros != 300 || v1.EffectiveTo == nil || !v1.EffectiveTo.Equal(effTo1) {
+		t.Fatalf("unexpected v1 fields: %+v", v1)
+	}
+
+	// Test GetPricingVersion
+	gotV1, err := versionRepo.Get(testCtx, orgID, v1.ID)
+	requireNoErr(t, err)
+	if gotV1.Version != 1 || gotV1.CacheReadInputTokenPriceMicros != 300 {
+		t.Fatalf("unexpected gotV1: %+v", gotV1)
+	}
+
+	// Test GetByVersion
+	gotV1ByNum, err := versionRepo.GetByVersion(testCtx, orgID, pm.ID, 1)
+	requireNoErr(t, err)
+	if gotV1ByNum.ID != v1.ID {
+		t.Fatalf("expected v1 ID %v, got %v", v1.ID, gotV1ByNum.ID)
+	}
+
+	// Add v2
+	effFrom2 := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	v2, err := versionRepo.Create(testCtx, orgID, domain.NewPricingVersion{
+		PricingModelID:                 pm.ID,
+		Version:                        2,
+		InputUnitPriceMicros:           2500,
+		OutputUnitPriceMicros:          12500,
+		CacheReadInputTokenPriceMicros: 250,
+		EffectiveFrom:                  effFrom2,
+	})
+	requireNoErr(t, err)
+	if v2.Version != 2 {
+		t.Fatalf("expected v2 version 2, got %d", v2.Version)
+	}
+
+	// Test GetLatest
+	latest, err := versionRepo.GetLatest(testCtx, orgID, pm.ID)
+	requireNoErr(t, err)
+	if latest.Version != 2 {
+		t.Fatalf("expected latest version 2, got %d", latest.Version)
+	}
+
+	// Test GetEffective (march should get v1, july should get v2)
+	march := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	effMarch, err := versionRepo.GetEffective(testCtx, orgID, pm.ID, march)
+	requireNoErr(t, err)
+	if effMarch.Version != 1 {
+		t.Fatalf("expected effective version 1 in March, got %d", effMarch.Version)
+	}
+
+	july := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	effJuly, err := versionRepo.GetEffective(testCtx, orgID, pm.ID, july)
+	requireNoErr(t, err)
+	if effJuly.Version != 2 {
+		t.Fatalf("expected effective version 2 in July, got %d", effJuly.Version)
+	}
+
+	// Test DB check constraints: negative price should fail
+	_, err = versionRepo.Create(testCtx, orgID, domain.NewPricingVersion{
+		PricingModelID:        pm.ID,
+		Version:               3,
+		InputUnitPriceMicros:  -50,
+		OutputUnitPriceMicros: 100,
+		EffectiveFrom:         time.Now().UTC(),
+	})
+	if err == nil {
+		t.Fatal("expected DB constraint error for negative input price, got nil")
+	}
+
+	// Test DB check constraints: effective_to <= effective_from should fail
+	badEffTo := effFrom1.Add(-time.Hour)
+	_, err = versionRepo.Create(testCtx, orgID, domain.NewPricingVersion{
+		PricingModelID:        pm.ID,
+		Version:               4,
+		InputUnitPriceMicros:  100,
+		OutputUnitPriceMicros: 100,
+		EffectiveFrom:         effFrom1,
+		EffectiveTo:           &badEffTo,
+	})
+	if err == nil {
+		t.Fatal("expected DB constraint error for effective_to <= effective_from, got nil")
+	}
+}
+
+func TestUsageRollupCachedTokensAndUnpricedStatus(t *testing.T) {
+	llm := repos.NewLlmRequestRepository(testStore)
+	models := repos.NewPricingModelRepository(testStore)
+	versions := repos.NewPricingVersionRepository(testStore)
+	rollups := repos.NewUsageRollupRepository(testStore)
+	orgID, _, projectID := newTenant(t)
+
+	now := time.Now().UTC()
+	pm, err := models.Upsert(testCtx, orgID, domain.NewPricingModel{
+		ModelSlug: "claude-3-5-sonnet", ProviderKind: "anthropic", DisplayName: "Claude 3.5 Sonnet",
+	})
+	requireNoErr(t, err)
+
+	_, err = versions.Create(testCtx, orgID, domain.NewPricingVersion{
+		PricingModelID:                 pm.ID,
+		Version:                        1,
+		InputUnitPriceMicros:           3,
+		OutputUnitPriceMicros:          15,
+		CacheReadInputTokenPriceMicros: 1,
+		EffectiveFrom:                  now.Add(-2 * time.Hour),
+	})
+	requireNoErr(t, err)
+
+	// Record request with cached tokens
+	_, err = llm.Record(testCtx, orgID, domain.NewLlmRequest{
+		ProjectID:         &projectID,
+		RequestID:         "req-with-cache",
+		ProviderKind:      "anthropic",
+		Model:             "claude-3-5-sonnet",
+		Status:            domain.LlmRequestStatusSucceeded,
+		PromptTokens:      100,
+		CompletionTokens:  50,
+		CachedInputTokens: 40,
+		TotalTokens:       150,
+	})
+	requireNoErr(t, err)
+
+	// Record request with unknown unpriced model
+	_, err = llm.Record(testCtx, orgID, domain.NewLlmRequest{
+		ProjectID:    &projectID,
+		RequestID:    "req-unpriced",
+		ProviderKind: "anthropic",
+		Model:        "mystery-unpriced-model",
+		Status:       domain.LlmRequestStatusSucceeded,
+		PromptTokens: 100,
+		CompletionTokens: 50,
+		TotalTokens:  150,
+	})
+	requireNoErr(t, err)
+
+	from, to := now.Add(-3*time.Hour), now.Add(time.Hour)
+	requireNoErr(t, rollups.Recompute(testCtx, orgID, from, to))
+
+	// Verify req-with-cache: (60 * 3) + (40 * 1) + (50 * 15) = 180 + 40 + 750 = 970 micros
+	var cachedCost int64
+	var cachedStatus string
+	err = testStore.Pool().QueryRow(testCtx,
+		`SELECT cost_micros, cost_status FROM llm_requests WHERE organization_id = $1 AND request_id = $2`,
+		orgID, "req-with-cache").Scan(&cachedCost, &cachedStatus)
+	requireNoErr(t, err)
+	if cachedCost != 970 || cachedStatus != "calculated" {
+		t.Fatalf("req-with-cache: cost=%d (want 970), status=%s (want calculated)", cachedCost, cachedStatus)
+	}
+
+	// Verify req-unpriced: cost_status must be 'unavailable' explicitly
+	var unpricedCost int64
+	var unpricedStatus string
+	err = testStore.Pool().QueryRow(testCtx,
+		`SELECT cost_micros, cost_status FROM llm_requests WHERE organization_id = $1 AND request_id = $2`,
+		orgID, "req-unpriced").Scan(&unpricedCost, &unpricedStatus)
+	requireNoErr(t, err)
+	if unpricedCost != 0 || unpricedStatus != "unavailable" {
+		t.Fatalf("req-unpriced: cost=%d (want 0), status=%s (want unavailable)", unpricedCost, unpricedStatus)
+	}
+}
+
 func TestProviderHealthRepository(t *testing.T) {
 	repo := repos.NewProviderHealthRepository(testStore)
 	checkedAt := time.Date(2026, 9, 26, 10, 0, 0, 0, time.UTC)

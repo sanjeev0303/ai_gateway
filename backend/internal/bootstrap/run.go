@@ -25,6 +25,7 @@ import (
 	"ai-governance-saas/backend/internal/application/guardrails"
 	"ai-governance-saas/backend/internal/application/identity"
 	"ai-governance-saas/backend/internal/application/policy"
+	"ai-governance-saas/backend/internal/application/pricing"
 	"ai-governance-saas/backend/internal/application/provider"
 	"ai-governance-saas/backend/internal/application/securityevent"
 	"ai-governance-saas/backend/internal/application/usage"
@@ -491,6 +492,12 @@ func RunControlAPI(ctx context.Context) error {
 			Invalidator: redisInvalidator,
 		})
 
+		pricingSvc := pricing.NewService(pricing.ServiceDeps{
+			PricingModels:   repositories.NewPricingModelRepository(store),
+			PricingVersions: repositories.NewPricingVersionRepository(store),
+			Audits:          repositories.NewAuditLogRepository(store),
+		})
+
 		deps = controlapi.Deps{
 			Log:                 log,
 			Identity:            svc,
@@ -502,8 +509,9 @@ func RunControlAPI(ctx context.Context) error {
 			Alerts:              alertSvc,
 			SecurityEvents:      securityEventSvc,
 			Billing:             billingSvc,
-			Policy:              policySvc,
 			Budget:              budgetSvc,
+			Pricing:             pricingSvc,
+			Policy:              policySvc,
 			Guardrails:          guardrailsSvc,
 			GuardrailsEval:      guardrailsEval,
 			DevLoginEnabled:     cfg.Auth.DevLoginEnabled,

@@ -16,18 +16,24 @@ const backfillLLMRequestCost = `-- name: BackfillLLMRequestCost :exec
 WITH resolvable AS (
     SELECT r.id,
            p.version AS pricing_version,
-           r.prompt_tokens::bigint * p.input_unit_price_micros
-         + r.completion_tokens::bigint * p.output_unit_price_micros AS cost
+           (CASE
+               WHEN p.cache_read_input_token_price_micros > 0 AND r.cached_input_tokens > 0 THEN
+                   GREATEST(0, r.prompt_tokens - r.cached_input_tokens)::bigint * p.input_unit_price_micros
+                   + r.cached_input_tokens::bigint * p.cache_read_input_token_price_micros
+               ELSE
+                   r.prompt_tokens::bigint * p.input_unit_price_micros
+           END) + r.completion_tokens::bigint * p.output_unit_price_micros AS cost
     FROM llm_requests r
     JOIN pricing_models pm
       ON pm.organization_id = r.organization_id
      AND pm.model_slug = r.model
     CROSS JOIN LATERAL (
-        SELECT v.version, v.input_unit_price_micros, v.output_unit_price_micros
+        SELECT v.version, v.input_unit_price_micros, v.output_unit_price_micros, v.cache_read_input_token_price_micros
         FROM pricing_versions v
         WHERE v.pricing_model_id = pm.id
           AND v.organization_id = r.organization_id
           AND v.effective_from <= r.created_at
+          AND (v.effective_to IS NULL OR v.effective_to > r.created_at)
         ORDER BY v.effective_from DESC, v.version DESC
         LIMIT 1
     ) p
@@ -1331,6 +1337,37 @@ func (q *Queries) ListUsageEventsByRequest(ctx context.Context, arg ListUsageEve
 		return nil, err
 	}
 	return items, nil
+}
+
+const markUnpricedLLMRequests = `-- name: MarkUnpricedLLMRequests :exec
+UPDATE llm_requests r
+SET cost_status = 'unavailable',
+    cost_micros = 0,
+    pricing_version = NULL
+WHERE r.organization_id = $1
+  AND r.created_at >= $2
+  AND r.created_at < $3
+  AND r.cost_micros = 0
+  AND r.cost_status NOT IN ('free')
+  AND NOT EXISTS (
+      SELECT 1 FROM pricing_models pm
+      JOIN pricing_versions v ON v.pricing_model_id = pm.id AND v.organization_id = r.organization_id
+      WHERE pm.organization_id = r.organization_id
+        AND pm.model_slug = r.model
+        AND v.effective_from <= r.created_at
+        AND (v.effective_to IS NULL OR v.effective_to > r.created_at)
+  )
+`
+
+type MarkUnpricedLLMRequestsParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	FromTs         time.Time `json:"from_ts"`
+	ToTs           time.Time `json:"to_ts"`
+}
+
+func (q *Queries) MarkUnpricedLLMRequests(ctx context.Context, arg MarkUnpricedLLMRequestsParams) error {
+	_, err := q.db.Exec(ctx, markUnpricedLLMRequests, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	return err
 }
 
 const purgeExpiredLlmRequests = `-- name: PurgeExpiredLlmRequests :execrows

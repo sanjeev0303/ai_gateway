@@ -13,18 +13,24 @@ import (
 )
 
 const createPricingVersion = `-- name: CreatePricingVersion :one
-INSERT INTO pricing_versions (pricing_model_id, organization_id, version, input_unit_price_micros, output_unit_price_micros, effective_from)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, pricing_model_id, organization_id, version, input_unit_price_micros, output_unit_price_micros, effective_from, created_at
+INSERT INTO pricing_versions (
+    pricing_model_id, organization_id, version,
+    input_unit_price_micros, output_unit_price_micros, cache_read_input_token_price_micros,
+    effective_from, effective_to
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, pricing_model_id, organization_id, version, input_unit_price_micros, output_unit_price_micros, effective_from, created_at, cache_read_input_token_price_micros, effective_to
 `
 
 type CreatePricingVersionParams struct {
-	PricingModelID        uuid.UUID `json:"pricing_model_id"`
-	OrganizationID        uuid.UUID `json:"organization_id"`
-	Version               int32     `json:"version"`
-	InputUnitPriceMicros  int64     `json:"input_unit_price_micros"`
-	OutputUnitPriceMicros int64     `json:"output_unit_price_micros"`
-	EffectiveFrom         time.Time `json:"effective_from"`
+	PricingModelID                 uuid.UUID  `json:"pricing_model_id"`
+	OrganizationID                 uuid.UUID  `json:"organization_id"`
+	Version                        int32      `json:"version"`
+	InputUnitPriceMicros           int64      `json:"input_unit_price_micros"`
+	OutputUnitPriceMicros          int64      `json:"output_unit_price_micros"`
+	CacheReadInputTokenPriceMicros int64      `json:"cache_read_input_token_price_micros"`
+	EffectiveFrom                  time.Time  `json:"effective_from"`
+	EffectiveTo                    *time.Time `json:"effective_to"`
 }
 
 func (q *Queries) CreatePricingVersion(ctx context.Context, arg CreatePricingVersionParams) (PricingVersion, error) {
@@ -34,7 +40,9 @@ func (q *Queries) CreatePricingVersion(ctx context.Context, arg CreatePricingVer
 		arg.Version,
 		arg.InputUnitPriceMicros,
 		arg.OutputUnitPriceMicros,
+		arg.CacheReadInputTokenPriceMicros,
 		arg.EffectiveFrom,
+		arg.EffectiveTo,
 	)
 	var i PricingVersion
 	err := row.Scan(
@@ -46,6 +54,182 @@ func (q *Queries) CreatePricingVersion(ctx context.Context, arg CreatePricingVer
 		&i.OutputUnitPriceMicros,
 		&i.EffectiveFrom,
 		&i.CreatedAt,
+		&i.CacheReadInputTokenPriceMicros,
+		&i.EffectiveTo,
+	)
+	return i, err
+}
+
+const getEffectivePricingVersion = `-- name: GetEffectivePricingVersion :one
+SELECT id, pricing_model_id, organization_id, version, input_unit_price_micros, output_unit_price_micros, effective_from, created_at, cache_read_input_token_price_micros, effective_to FROM pricing_versions
+WHERE organization_id = $1 AND pricing_model_id = $2
+  AND effective_from <= $3
+  AND (effective_to IS NULL OR effective_to > $3)
+ORDER BY effective_from DESC, version DESC
+LIMIT 1
+`
+
+type GetEffectivePricingVersionParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	PricingModelID uuid.UUID `json:"pricing_model_id"`
+	EffectiveFrom  time.Time `json:"effective_from"`
+}
+
+func (q *Queries) GetEffectivePricingVersion(ctx context.Context, arg GetEffectivePricingVersionParams) (PricingVersion, error) {
+	row := q.db.QueryRow(ctx, getEffectivePricingVersion, arg.OrganizationID, arg.PricingModelID, arg.EffectiveFrom)
+	var i PricingVersion
+	err := row.Scan(
+		&i.ID,
+		&i.PricingModelID,
+		&i.OrganizationID,
+		&i.Version,
+		&i.InputUnitPriceMicros,
+		&i.OutputUnitPriceMicros,
+		&i.EffectiveFrom,
+		&i.CreatedAt,
+		&i.CacheReadInputTokenPriceMicros,
+		&i.EffectiveTo,
+	)
+	return i, err
+}
+
+const getLatestPricingVersion = `-- name: GetLatestPricingVersion :one
+SELECT id, pricing_model_id, organization_id, version, input_unit_price_micros, output_unit_price_micros, effective_from, created_at, cache_read_input_token_price_micros, effective_to FROM pricing_versions
+WHERE organization_id = $1 AND pricing_model_id = $2
+ORDER BY version DESC
+LIMIT 1
+`
+
+type GetLatestPricingVersionParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	PricingModelID uuid.UUID `json:"pricing_model_id"`
+}
+
+func (q *Queries) GetLatestPricingVersion(ctx context.Context, arg GetLatestPricingVersionParams) (PricingVersion, error) {
+	row := q.db.QueryRow(ctx, getLatestPricingVersion, arg.OrganizationID, arg.PricingModelID)
+	var i PricingVersion
+	err := row.Scan(
+		&i.ID,
+		&i.PricingModelID,
+		&i.OrganizationID,
+		&i.Version,
+		&i.InputUnitPriceMicros,
+		&i.OutputUnitPriceMicros,
+		&i.EffectiveFrom,
+		&i.CreatedAt,
+		&i.CacheReadInputTokenPriceMicros,
+		&i.EffectiveTo,
+	)
+	return i, err
+}
+
+const getPricingModel = `-- name: GetPricingModel :one
+SELECT id, organization_id, model_slug, provider_kind, display_name, currency, status, created_at, updated_at FROM pricing_models
+WHERE organization_id = $1 AND id = $2
+`
+
+type GetPricingModelParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ID             uuid.UUID `json:"id"`
+}
+
+func (q *Queries) GetPricingModel(ctx context.Context, arg GetPricingModelParams) (PricingModel, error) {
+	row := q.db.QueryRow(ctx, getPricingModel, arg.OrganizationID, arg.ID)
+	var i PricingModel
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.ModelSlug,
+		&i.ProviderKind,
+		&i.DisplayName,
+		&i.Currency,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getPricingModelBySlug = `-- name: GetPricingModelBySlug :one
+SELECT id, organization_id, model_slug, provider_kind, display_name, currency, status, created_at, updated_at FROM pricing_models
+WHERE organization_id = $1 AND model_slug = $2
+`
+
+type GetPricingModelBySlugParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ModelSlug      string    `json:"model_slug"`
+}
+
+func (q *Queries) GetPricingModelBySlug(ctx context.Context, arg GetPricingModelBySlugParams) (PricingModel, error) {
+	row := q.db.QueryRow(ctx, getPricingModelBySlug, arg.OrganizationID, arg.ModelSlug)
+	var i PricingModel
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.ModelSlug,
+		&i.ProviderKind,
+		&i.DisplayName,
+		&i.Currency,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getPricingVersion = `-- name: GetPricingVersion :one
+SELECT id, pricing_model_id, organization_id, version, input_unit_price_micros, output_unit_price_micros, effective_from, created_at, cache_read_input_token_price_micros, effective_to FROM pricing_versions
+WHERE organization_id = $1 AND id = $2
+`
+
+type GetPricingVersionParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ID             uuid.UUID `json:"id"`
+}
+
+func (q *Queries) GetPricingVersion(ctx context.Context, arg GetPricingVersionParams) (PricingVersion, error) {
+	row := q.db.QueryRow(ctx, getPricingVersion, arg.OrganizationID, arg.ID)
+	var i PricingVersion
+	err := row.Scan(
+		&i.ID,
+		&i.PricingModelID,
+		&i.OrganizationID,
+		&i.Version,
+		&i.InputUnitPriceMicros,
+		&i.OutputUnitPriceMicros,
+		&i.EffectiveFrom,
+		&i.CreatedAt,
+		&i.CacheReadInputTokenPriceMicros,
+		&i.EffectiveTo,
+	)
+	return i, err
+}
+
+const getPricingVersionByNumber = `-- name: GetPricingVersionByNumber :one
+SELECT id, pricing_model_id, organization_id, version, input_unit_price_micros, output_unit_price_micros, effective_from, created_at, cache_read_input_token_price_micros, effective_to FROM pricing_versions
+WHERE organization_id = $1 AND pricing_model_id = $2 AND version = $3
+`
+
+type GetPricingVersionByNumberParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	PricingModelID uuid.UUID `json:"pricing_model_id"`
+	Version        int32     `json:"version"`
+}
+
+func (q *Queries) GetPricingVersionByNumber(ctx context.Context, arg GetPricingVersionByNumberParams) (PricingVersion, error) {
+	row := q.db.QueryRow(ctx, getPricingVersionByNumber, arg.OrganizationID, arg.PricingModelID, arg.Version)
+	var i PricingVersion
+	err := row.Scan(
+		&i.ID,
+		&i.PricingModelID,
+		&i.OrganizationID,
+		&i.Version,
+		&i.InputUnitPriceMicros,
+		&i.OutputUnitPriceMicros,
+		&i.EffectiveFrom,
+		&i.CreatedAt,
+		&i.CacheReadInputTokenPriceMicros,
+		&i.EffectiveTo,
 	)
 	return i, err
 }
@@ -87,9 +271,9 @@ func (q *Queries) ListPricingModels(ctx context.Context, organizationID uuid.UUI
 }
 
 const listPricingVersions = `-- name: ListPricingVersions :many
-SELECT id, pricing_model_id, organization_id, version, input_unit_price_micros, output_unit_price_micros, effective_from, created_at FROM pricing_versions
+SELECT id, pricing_model_id, organization_id, version, input_unit_price_micros, output_unit_price_micros, effective_from, created_at, cache_read_input_token_price_micros, effective_to FROM pricing_versions
 WHERE organization_id = $1 AND pricing_model_id = $2
-ORDER BY effective_from DESC
+ORDER BY effective_from DESC, version DESC
 `
 
 type ListPricingVersionsParams struct {
@@ -115,6 +299,8 @@ func (q *Queries) ListPricingVersions(ctx context.Context, arg ListPricingVersio
 			&i.OutputUnitPriceMicros,
 			&i.EffectiveFrom,
 			&i.CreatedAt,
+			&i.CacheReadInputTokenPriceMicros,
+			&i.EffectiveTo,
 		); err != nil {
 			return nil, err
 		}
@@ -131,7 +317,8 @@ INSERT INTO pricing_models (organization_id, model_slug, provider_kind, display_
 VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (organization_id, model_slug) DO UPDATE SET
     display_name = EXCLUDED.display_name,
-    status       = EXCLUDED.status
+    status       = EXCLUDED.status,
+    updated_at   = now()
 RETURNING id, organization_id, model_slug, provider_kind, display_name, currency, status, created_at, updated_at
 `
 

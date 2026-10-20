@@ -43,18 +43,24 @@ ORDER BY created_at;
 WITH resolvable AS (
     SELECT r.id,
            p.version AS pricing_version,
-           r.prompt_tokens::bigint * p.input_unit_price_micros
-         + r.completion_tokens::bigint * p.output_unit_price_micros AS cost
+           (CASE
+               WHEN p.cache_read_input_token_price_micros > 0 AND r.cached_input_tokens > 0 THEN
+                   GREATEST(0, r.prompt_tokens - r.cached_input_tokens)::bigint * p.input_unit_price_micros
+                   + r.cached_input_tokens::bigint * p.cache_read_input_token_price_micros
+               ELSE
+                   r.prompt_tokens::bigint * p.input_unit_price_micros
+           END) + r.completion_tokens::bigint * p.output_unit_price_micros AS cost
     FROM llm_requests r
     JOIN pricing_models pm
       ON pm.organization_id = r.organization_id
      AND pm.model_slug = r.model
     CROSS JOIN LATERAL (
-        SELECT v.version, v.input_unit_price_micros, v.output_unit_price_micros
+        SELECT v.version, v.input_unit_price_micros, v.output_unit_price_micros, v.cache_read_input_token_price_micros
         FROM pricing_versions v
         WHERE v.pricing_model_id = pm.id
           AND v.organization_id = r.organization_id
           AND v.effective_from <= r.created_at
+          AND (v.effective_to IS NULL OR v.effective_to > r.created_at)
         ORDER BY v.effective_from DESC, v.version DESC
         LIMIT 1
     ) p
@@ -69,6 +75,25 @@ SET cost_micros = resolvable.cost,
 FROM resolvable
 WHERE r.id = resolvable.id
   AND (r.cost_micros IS DISTINCT FROM resolvable.cost OR r.cost_status IS DISTINCT FROM 'calculated');
+
+-- name: MarkUnpricedLLMRequests :exec
+UPDATE llm_requests r
+SET cost_status = 'unavailable',
+    cost_micros = 0,
+    pricing_version = NULL
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND r.created_at >= sqlc.arg(from_ts)
+  AND r.created_at < sqlc.arg(to_ts)
+  AND r.cost_micros = 0
+  AND r.cost_status NOT IN ('free')
+  AND NOT EXISTS (
+      SELECT 1 FROM pricing_models pm
+      JOIN pricing_versions v ON v.pricing_model_id = pm.id AND v.organization_id = r.organization_id
+      WHERE pm.organization_id = r.organization_id
+        AND pm.model_slug = r.model
+        AND v.effective_from <= r.created_at
+        AND (v.effective_to IS NULL OR v.effective_to > r.created_at)
+  );
 
 -- name: DeleteUsageHourlyInWindow :exec
 DELETE FROM usage_hourly
