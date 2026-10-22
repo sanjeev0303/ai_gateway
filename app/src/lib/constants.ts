@@ -30,11 +30,11 @@ export const APP_DESCRIPTION =
 
 /** Marketing navigation, rendered by the (marketing) header. */
 export const MARKETING_NAV = [
-  { label: "Product", href: "/product" },
-  { label: "Solutions", href: "/solutions" },
-  { label: "Pricing", href: "/pricing" },
-  { label: "Resources", href: "/resources" },
-  { label: "Company", href: "/company" },
+  { label: "Product", href: "/#product" },
+  { label: "Solutions", href: "/#solutions" },
+  { label: "Pricing", href: "/#pricing" },
+  { label: "Resources", href: "/#integration" },
+  { label: "Company", href: "/#trust" },
 ] as const;
 
 export interface NavChild {
@@ -193,6 +193,11 @@ export const DASHBOARD_NAV: NavSection[] = [
         label: "Model registry",
         href: "/app/platform/model-registry",
         description: "Enabled models",
+      },
+      {
+        label: "Pricing management",
+        href: "/app/platform/pricing",
+        description: "Token rates and price sheets",
       },
     ],
   },

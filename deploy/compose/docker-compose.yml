@@ -92,6 +92,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-ai_gateway}
     ports:
       - "5432:5432"
+    restart: unless-stopped
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -107,6 +108,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-change-me}
     ports:
       - "6379:6379"
+    restart: unless-stopped
     volumes:
       - redisdata:/data
     healthcheck:
@@ -121,6 +123,7 @@ services:
     ports:
       - "4222:4222" # client
       - "8222:8222" # monitoring /healthz
+    restart: unless-stopped
     volumes:
       - natsdata:/data
     healthcheck:
@@ -186,6 +189,7 @@ services:
       AIGW_OBSERVABILITY_SERVICE_NAME: gateway-v2
     ports:
       - "8084:8080"
+    restart: unless-stopped
     volumes:
       - secrets:/data
     depends_on:
@@ -213,6 +217,7 @@ services:
       AIGW_OBSERVABILITY_SERVICE_NAME: control-api
     ports:
       - "8081:8080"
+    restart: unless-stopped
     volumes:
       - secrets:/data
     depends_on:
@@ -240,6 +245,7 @@ services:
       AIGW_OBSERVABILITY_SERVICE_NAME: worker
     ports:
       - "8082:8080"
+    restart: unless-stopped
     volumes:
       - secrets:/data
     depends_on:
@@ -271,6 +277,8 @@ services:
       PORT: "3000"
       # Runtime proxy target: service name + internal port, not localhost.
       CONTROL_API_URL: http://control-api:8080
+      AIGW_AUTH_SESSION_COOKIE_NAME: ${AIGW_AUTH_SESSION_COOKIE_NAME:-session}
+      AIGW_AUTH_SESSION_COOKIE_SECURE: ${AIGW_AUTH_SESSION_COOKIE_SECURE:-false}
     ports:
       - "3000:3000"
     depends_on:

@@ -25,14 +25,14 @@ export function PageShell({
 }: PageShellProps) {
   return (
     <div className={cn("flex min-w-0 flex-col gap-6", className)}>
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 space-y-1">
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border/30 pb-5">
+        <div className="min-w-0 space-y-1.5">
           {eyebrow}
-          <h1 className="truncate text-2xl font-semibold tracking-tight">
+          <h1 className="truncate text-2xl font-bold tracking-tight text-foreground animate-in fade-in slide-in-from-bottom-1 duration-300">
             {title}
           </h1>
           {description && (
-            <p className="max-w-2xl text-sm text-muted-foreground">
+            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
               {description}
             </p>
           )}

@@ -1,58 +1,158 @@
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+"use client";
 
+import Link from "next/link";
+import { motion } from "motion/react";
+import { fadeUp, staggerContainer } from "@/lib/motion";
 import { DashboardPreview } from "@/components/landing/dashboard-preview";
 import { Container } from "@/components/landing/section";
-import { Button } from "@/components/ui/button";
 import { HERO } from "@/lib/landing-data";
+
+const STATS = [
+  { label: "Provider kinds", value: "5+" },
+  { label: "Policy decisions", value: "Per request" },
+  { label: "Overhead", value: "<1ms" },
+] as const;
 
 export function Hero() {
   return (
-    <section className="border-b bg-gradient-to-b from-muted/50 to-background">
-      <Container className="grid gap-12 py-20 sm:py-24 lg:grid-cols-12 lg:items-center lg:gap-10 lg:py-28">
-        <div className="lg:col-span-6">
-          <span className="inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs font-medium">
-            <span className="size-1.5 rounded-full bg-primary motion-safe:animate-pulse" aria-hidden />
-            {HERO.eyebrow}
-          </span>
+    <section
+      className="relative overflow-hidden grain"
+      style={{ background: "var(--canvas)" }}
+    >
+      {/* Vertical rule-of-thirds line — decorative */}
+      <div className="thirds-line" aria-hidden />
 
-          <h1 className="mt-6 text-4xl font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
-            {HERO.headline}
-          </h1>
+      {/* Warm canvas-to-lavender ambient wash */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 60% 50% at 72% 50%, rgba(230,224,240,0.35) 0%, transparent 70%)",
+        }}
+        aria-hidden
+      />
 
-          <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground text-pretty">
-            {HERO.subhead}
-          </p>
+      <Container className="relative z-10 pt-24 pb-0 sm:pt-28 lg:pt-32">
+        {/* Z-pattern: left text, right visual, headline overlaps */}
+        <div className="grid gap-0 lg:grid-cols-12 lg:items-end">
 
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Button asChild size="lg" className="h-11 px-5">
-              <Link href={HERO.primary.href}>
+          {/* Left: editorial text block */}
+          <motion.div
+            variants={staggerContainer(0.1)}
+            initial="hidden"
+            animate="visible"
+            className="lg:col-span-6 pb-16 lg:pb-24 pr-0 lg:pr-8"
+          >
+            {/* Eyebrow: monospaced label */}
+            <motion.p
+              variants={fadeUp}
+              className="font-mono text-xs tracking-label text-[#6F4E37] uppercase mb-8"
+              style={{ fontFamily: "var(--font-fira-code)", letterSpacing: "0.14em" }}
+            >
+              {HERO.eyebrow}
+            </motion.p>
+
+            {/* Display headline — editorial serif, tight tracking */}
+            <motion.h1
+              variants={fadeUp}
+              className="font-display text-[clamp(3rem,6.5vw,5.5rem)] font-semibold text-[#1C1412] tracking-display leading-[0.92]"
+              style={{
+                fontFamily: "var(--font-cormorant)",
+                letterSpacing: "-0.04em",
+                lineHeight: "0.92",
+              }}
+            >
+              See every AI
+              <br />
+              <span style={{ color: "#6F4E37" }}>request</span>
+              <br />
+              your company
+              <br />
+              makes.
+            </motion.h1>
+
+            {/* Body — DM Sans, generous leading */}
+            <motion.p
+              variants={fadeUp}
+              className="mt-8 text-base sm:text-lg leading-relaxed text-[#4A3A30] max-w-[46ch] tracking-tight-body"
+              style={{ letterSpacing: "-0.01em" }}
+            >
+              {HERO.subhead}
+            </motion.p>
+
+            {/* CTA row */}
+            <motion.div variants={fadeUp} className="mt-10 flex flex-wrap items-center gap-4">
+              <Link
+                href={HERO.primary.href}
+                id="hero-cta-primary"
+                className="inline-flex items-center justify-center h-12 px-7 text-sm font-semibold text-[#F5F3F0] rounded-none transition-colors duration-200"
+                style={{ background: "#6F4E37" }}
+                onMouseEnter={e => (e.currentTarget.style.background = "#4A3224")}
+                onMouseLeave={e => (e.currentTarget.style.background = "#6F4E37")}
+              >
                 {HERO.primary.label}
-                <ArrowRight data-icon="inline-end" aria-hidden />
               </Link>
-            </Button>
-            <Button asChild size="lg" variant="outline" className="h-11 px-5">
-              <Link href={HERO.secondary.href}>{HERO.secondary.label}</Link>
-            </Button>
-          </div>
+              <Link
+                href={HERO.secondary.href}
+                id="hero-cta-secondary"
+                className="inline-flex items-center h-12 px-6 text-sm font-medium text-[#6F4E37] border border-[rgba(111,78,55,0.30)] transition-colors duration-200"
+                style={{ background: "transparent" }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = "#6F4E37")}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = "rgba(111,78,55,0.30)")}
+              >
+                {HERO.secondary.label}
+              </Link>
+            </motion.div>
 
-          <p className="mt-4 text-sm text-muted-foreground">{HERO.microcopy}</p>
+            {/* Microcopy */}
+            <motion.p variants={fadeUp} className="mt-5 text-xs text-[#7A6458]" style={{ fontFamily: "var(--font-fira-code)" }}>
+              {HERO.microcopy}
+            </motion.p>
+          </motion.div>
 
-          <dl className="mt-10 grid grid-cols-1 gap-6 border-t pt-8 sm:grid-cols-3">
-            {HERO.stats.map((stat) => (
-              <div key={stat.label}>
-                <dt className="text-xs text-muted-foreground">{stat.label}</dt>
-                <dd className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">
-                  {stat.value}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          {/* Right: dashboard visual — overlaps the bottom */}
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.9, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="lg:col-span-6 relative"
+          >
+            {/* Headline overlap into visual */}
+            <div
+              className="absolute -top-8 left-6 z-20 hidden lg:block pointer-events-none select-none"
+              aria-hidden
+            >
+              <p
+                className="font-display text-[clamp(4rem,8vw,7rem)] font-semibold leading-none"
+                style={{
+                  fontFamily: "var(--font-cormorant)",
+                  color: "rgba(111,78,55,0.06)",
+                  letterSpacing: "-0.05em",
+                  userSelect: "none",
+                }}
+              >
+                Govern
+              </p>
+            </div>
+
+            <DashboardPreview className="translate-y-6 lg:translate-y-10" />
+          </motion.div>
         </div>
 
-        <div className="lg:col-span-6">
-          <DashboardPreview />
-        </div>
+        {/* Stats row — spans full width below split */}
+        <motion.dl
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.8, delay: 0.55 }}
+          className="border-t border-[rgba(111,78,55,0.12)] mt-12 py-7 grid grid-cols-3 gap-4 stat-block"
+        >
+          {STATS.map((stat) => (
+            <div key={stat.label}>
+              <dd>{stat.value}</dd>
+              <dt className="mt-2">{stat.label}</dt>
+            </div>
+          ))}
+        </motion.dl>
       </Container>
     </section>
   );

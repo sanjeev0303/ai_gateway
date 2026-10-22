@@ -83,6 +83,14 @@ export default function SignInPage() {
             </p>
           ) : null}
 
+          <div className="mt-4 rounded-md border border-border/60 bg-muted/30 p-2.5 text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">Demo credentials:</span>
+            <div className="mt-1 flex flex-col gap-0.5 font-mono text-[11px]">
+              <div>Email: <span className="text-foreground">admin@acme.example</span></div>
+              <div>Password: <span className="text-foreground">SentinelPassword123!</span></div>
+            </div>
+          </div>
+
           <p className="mt-4 text-sm text-muted-foreground">
             Don&apos;t have an account?{" "}
             <Link href="/signup" className="underline-offset-4 hover:underline">

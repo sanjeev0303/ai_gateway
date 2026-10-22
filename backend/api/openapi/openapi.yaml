@@ -1503,6 +1503,194 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/pricing:
+    get:
+      tags:
+      - pricing
+      operationId: listPricingModels
+      summary: List all pricing models for the organization
+      description: Returns every configured pricing model alongside its latest version. Requires billing.read or providers.read permission.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricingModelListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+    post:
+      tags:
+      - pricing
+      operationId: createPricingModel
+      summary: Create or upsert a pricing model
+      description: Creates or updates a pricing model entry. Requires billing.manage permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePricingModelRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricingModel'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/pricing/{idOrSlug}:
+    parameters:
+    - name: idOrSlug
+      in: path
+      required: true
+      description: Model ID (UUID) or model slug
+      schema:
+        type: string
+    get:
+      tags:
+      - pricing
+      operationId: getPricingModel
+      summary: Get pricing model and complete version history
+      description: Returns model details and all historical pricing versions. Requires billing.read or providers.read permission.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricingModelDetail'
+        '404':
+          description: Pricing model not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/pricing/{idOrSlug}/versions:
+    parameters:
+    - name: idOrSlug
+      in: path
+      required: true
+      description: Model ID (UUID) or model slug
+      schema:
+        type: string
+    post:
+      tags:
+      - pricing
+      operationId: createPricingVersion
+      summary: Append a new versioned price sheet
+      description: Appends a new immutable pricing version with input, output, and optional cached token rates. Requires billing.manage permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePricingVersionRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricingVersion'
+        '400':
+          description: Invalid price or unsupported token category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Model not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/pricing/{idOrSlug}/versions/{version}:
+    parameters:
+    - name: idOrSlug
+      in: path
+      required: true
+      description: Model ID (UUID) or model slug
+      schema:
+        type: string
+    - name: version
+      in: path
+      required: true
+      description: Positive version number
+      schema:
+        type: integer
+    get:
+      tags:
+      - pricing
+      operationId: getPricingVersion
+      summary: Get a specific historical pricing version
+      description: Retrieves a single pricing version. Requires billing.read or providers.read permission.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricingVersion'
+        '404':
+          description: Version not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/pricing/calculate-cost:
+    post:
+      tags:
+      - pricing
+      operationId: calculateCost
+      summary: Calculate token cost for a model
+      description: Computes total micro-dollar cost for prompt, completion, and cached input tokens using specified or effective pricing version.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CalculateCostRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalculateCostResponse'
+        '400':
+          description: Invalid token counts or parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Pricing unavailable for model
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
   /v1/policies:
     get:
       tags:
@@ -2882,3 +3070,183 @@ components:
           format: double
         enabled:
           type: boolean
+    PricingVersion:
+      type: object
+      required:
+      - id
+      - pricing_model_id
+      - version
+      - input_unit_price_micros
+      - output_unit_price_micros
+      - cache_read_input_token_price_micros
+      - effective_from
+      - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        pricing_model_id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        input_unit_price_micros:
+          type: integer
+          format: int64
+        output_unit_price_micros:
+          type: integer
+          format: int64
+        cache_read_input_token_price_micros:
+          type: integer
+          format: int64
+        effective_from:
+          type: string
+          format: date-time
+        effective_to:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    PricingModel:
+      type: object
+      required:
+      - id
+      - model_slug
+      - provider_kind
+      - display_name
+      - currency
+      - status
+      - created_at
+      - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        model_slug:
+          type: string
+        provider_kind:
+          type: string
+        display_name:
+          type: string
+        currency:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        latest_version:
+          $ref: '#/components/schemas/PricingVersion'
+    PricingModelListResponse:
+      type: object
+      required:
+      - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PricingModel'
+    PricingModelDetail:
+      type: object
+      required:
+      - model
+      - versions
+      properties:
+        model:
+          $ref: '#/components/schemas/PricingModel'
+        versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PricingVersion'
+    CreatePricingModelRequest:
+      type: object
+      required:
+      - model_slug
+      - provider_kind
+      - currency
+      properties:
+        model_slug:
+          type: string
+        provider_kind:
+          type: string
+        display_name:
+          type: string
+        currency:
+          type: string
+    CreatePricingVersionRequest:
+      type: object
+      required:
+      - input_unit_price_micros
+      - output_unit_price_micros
+      properties:
+        input_unit_price_micros:
+          type: integer
+          format: int64
+        output_unit_price_micros:
+          type: integer
+          format: int64
+        cache_read_input_token_price_micros:
+          type: integer
+          format: int64
+        effective_from:
+          type: string
+          format: date-time
+        effective_to:
+          type: string
+          format: date-time
+    CalculateCostRequest:
+      type: object
+      required:
+      - model_slug
+      - prompt_tokens
+      - completion_tokens
+      properties:
+        model_slug:
+          type: string
+        provider_kind:
+          type: string
+        prompt_tokens:
+          type: integer
+          format: int64
+        completion_tokens:
+          type: integer
+          format: int64
+        cached_input_tokens:
+          type: integer
+          format: int64
+        version:
+          type: integer
+        effective_at:
+          type: string
+          format: date-time
+    CalculateCostResponse:
+      type: object
+      required:
+      - cost_micros
+      - currency
+      - pricing_version
+      - prompt_tokens
+      - completion_tokens
+      - cached_input_tokens
+      properties:
+        cost_micros:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        pricing_version:
+          $ref: '#/components/schemas/PricingVersion'
+        prompt_tokens:
+          type: integer
+          format: int64
+        completion_tokens:
+          type: integer
+          format: int64
+        cached_input_tokens:
+          type: integer
+          format: int64

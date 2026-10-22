@@ -1241,6 +1241,121 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/pricing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all pricing models for the organization
+         * @description Returns every configured pricing model alongside its latest version. Requires billing.read or providers.read permission.
+         */
+        get: operations["listPricingModels"];
+        put?: never;
+        /**
+         * Create or upsert a pricing model
+         * @description Creates or updates a pricing model entry. Requires billing.manage permission.
+         */
+        post: operations["createPricingModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pricing/{idOrSlug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Model ID (UUID) or model slug */
+                idOrSlug: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Get pricing model and complete version history
+         * @description Returns model details and all historical pricing versions. Requires billing.read or providers.read permission.
+         */
+        get: operations["getPricingModel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pricing/{idOrSlug}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Model ID (UUID) or model slug */
+                idOrSlug: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Append a new versioned price sheet
+         * @description Appends a new immutable pricing version with input, output, and optional cached token rates. Requires billing.manage permission.
+         */
+        post: operations["createPricingVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pricing/{idOrSlug}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Model ID (UUID) or model slug */
+                idOrSlug: string;
+                /** @description Positive version number */
+                version: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * Get a specific historical pricing version
+         * @description Retrieves a single pricing version. Requires billing.read or providers.read permission.
+         */
+        get: operations["getPricingVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pricing/calculate-cost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Calculate token cost for a model
+         * @description Computes total micro-dollar cost for prompt, completion, and cached input tokens using specified or effective pricing version.
+         */
+        post: operations["calculateCost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/policies": {
         parameters: {
             query?: never;
@@ -1908,6 +2023,89 @@ export interface components {
             /** Format: double */
             alert_threshold?: number;
             enabled?: boolean;
+        };
+        PricingVersion: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            pricing_model_id: string;
+            version: number;
+            /** Format: int64 */
+            input_unit_price_micros: number;
+            /** Format: int64 */
+            output_unit_price_micros: number;
+            /** Format: int64 */
+            cache_read_input_token_price_micros: number;
+            /** Format: date-time */
+            effective_from: string;
+            /** Format: date-time */
+            effective_to?: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        PricingModel: {
+            /** Format: uuid */
+            id: string;
+            model_slug: string;
+            provider_kind: string;
+            display_name: string;
+            currency: string;
+            status: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            latest_version?: components["schemas"]["PricingVersion"];
+        };
+        PricingModelListResponse: {
+            data: components["schemas"]["PricingModel"][];
+        };
+        PricingModelDetail: {
+            model: components["schemas"]["PricingModel"];
+            versions: components["schemas"]["PricingVersion"][];
+        };
+        CreatePricingModelRequest: {
+            model_slug: string;
+            provider_kind: string;
+            display_name?: string;
+            currency: string;
+        };
+        CreatePricingVersionRequest: {
+            /** Format: int64 */
+            input_unit_price_micros: number;
+            /** Format: int64 */
+            output_unit_price_micros: number;
+            /** Format: int64 */
+            cache_read_input_token_price_micros?: number;
+            /** Format: date-time */
+            effective_from?: string;
+            /** Format: date-time */
+            effective_to?: string;
+        };
+        CalculateCostRequest: {
+            model_slug: string;
+            provider_kind?: string;
+            /** Format: int64 */
+            prompt_tokens: number;
+            /** Format: int64 */
+            completion_tokens: number;
+            /** Format: int64 */
+            cached_input_tokens?: number;
+            version?: number;
+            /** Format: date-time */
+            effective_at?: string;
+        };
+        CalculateCostResponse: {
+            /** Format: int64 */
+            cost_micros: number;
+            currency: string;
+            pricing_version: components["schemas"]["PricingVersion"];
+            /** Format: int64 */
+            prompt_tokens: number;
+            /** Format: int64 */
+            completion_tokens: number;
+            /** Format: int64 */
+            cached_input_tokens: number;
         };
     };
     responses: never;
@@ -4036,6 +4234,239 @@ export interface operations {
             };
             /** @description The caller's role does not grant billing.read. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listPricingModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PricingModelListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    createPricingModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePricingModelRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PricingModel"];
+                };
+            };
+            /** @description Invalid request parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getPricingModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Model ID (UUID) or model slug */
+                idOrSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PricingModelDetail"];
+                };
+            };
+            /** @description Pricing model not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    createPricingVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Model ID (UUID) or model slug */
+                idOrSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePricingVersionRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PricingVersion"];
+                };
+            };
+            /** @description Invalid price or unsupported token category */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Model not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getPricingVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Model ID (UUID) or model slug */
+                idOrSlug: string;
+                /** @description Positive version number */
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PricingVersion"];
+                };
+            };
+            /** @description Version not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    calculateCost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalculateCostRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalculateCostResponse"];
+                };
+            };
+            /** @description Invalid token counts or parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Pricing unavailable for model */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

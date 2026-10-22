@@ -525,13 +525,13 @@ function ModernKpiCard({
   accentClass = "text-blue-400",
 }: ModernKpiCardProps) {
   return (
-    <div className="flex flex-col justify-between p-4 rounded-xl border border-border/70 bg-card/75 hover:border-border transition-all duration-150 shadow-2xs group relative overflow-hidden">
+    <div className="flex flex-col justify-between p-4 rounded-2xl border border-border/50 bg-card/80 hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-200 shadow-xs group relative overflow-hidden">
       <div>
         <div className="flex items-center justify-between gap-2 mb-2">
-          <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors truncate">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors truncate">
             {label}
           </span>
-          <div className={cn("size-6 rounded-md bg-muted/40 flex items-center justify-center", accentClass)}>
+          <div className={cn("size-7 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20", accentClass)}>
             <Icon className="size-3.5" />
           </div>
         </div>

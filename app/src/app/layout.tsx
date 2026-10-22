@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { ThemeProvider } from "@/components/providers/theme-provider";
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://sentinel.acme.example"),
-  title: "Sentinel",
+  title: "Sentinel — AI Gateway & Governance",
   description:
     "AI governance console: observe model traffic, enforce policy, and prove compliance across every project.",
   applicationName: "Sentinel",
@@ -24,7 +26,6 @@ export const metadata: Metadata = {
     images: ["/og.png"],
   },
   icons: {
-    // `icon` omitted on purpose: src/app/favicon.ico is auto-detected already.
     apple: "/sentinel-mark.png",
   },
 };
@@ -37,7 +38,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
-        {children}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+        </ThemeProvider>
         <Toaster />
       </body>
     </html>

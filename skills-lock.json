@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "fixing-motion-performance": {
+      "source": "ibelick/ui-skills",
+      "sourceType": "github",
+      "skillPath": "skills/fixing-motion-performance/SKILL.md",
+      "computedHash": "426dcf33f23419643f2aab71e2253e1a5b5684a808fabb8a4ad135e489ed7a0f"
+    },
     "frontend-design": {
       "source": "anthropics/skills",
       "sourceType": "github",
@@ -42,6 +48,18 @@
       "sourceType": "github",
       "skillPath": ".agents/skills/impeccable/SKILL.md",
       "computedHash": "f7c4e03bef91154273d2dc3b62aff829cf4ab1b1f16e6b98c8c6a31be4405318"
+    },
+    "motion": {
+      "source": "motiondivision/ai-kit",
+      "sourceType": "github",
+      "skillPath": "plugins/motion/skills/motion/SKILL.md",
+      "computedHash": "20371126b9f4ac9ad5fa895b56add1e18cf22ee57dcc5d80a4937a33ba16dedf"
+    },
+    "motion-graphics": {
+      "source": "heygen-com/hyperframes",
+      "sourceType": "github",
+      "skillPath": "skills/motion-graphics/SKILL.md",
+      "computedHash": "1e222908adda01c8eed92dec934363973b6207ff15716a67653435f671f97241"
     },
     "ponytail": {
       "source": "dietrichgebert/ponytail",

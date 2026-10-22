@@ -2,9 +2,9 @@
 
 ## 1. Environment & Toolchains Baseline
 
-- **Evaluation Date**: 2026-10-19
+- **Evaluation Date**: 2026-10-21
 - **Final Verdict**: **`READY WITH DOCUMENTED LIMITATIONS`**
-- **Repository Checkout**: Commit `ef8bea0` on branch `main`
+- **Repository Checkout**: Commit `be6710f` on branch `main`
 - **Host System**: Linux fedora (x86_64, 12 cores, 15.3 GiB RAM)
 - **Toolchains & Versions**:
   - **Go**: `go version go1.25.10 X:nodwarf5 linux/amd64` (exceeds declared minimum `go 1.25.7` in `backend/go.mod`)
@@ -44,9 +44,9 @@
 
 ### 2.4 Database Schema Migrations
 - **Directory**: `backend/internal/infrastructure/postgres/migrations/`
-- **Total Migrations**: 36 sequential Goose forward migrations (`00001_identity.sql` through `00036_gateway_credentials_scope.sql`).
-- **Features Governed**: Multi-tenant identity, projects, teams, credentials, policies, conversations, usage accounting, pricing tiers, audit logs, billing, alerts, Row-Level Security (RLS), models metadata, security events, budgets, guardrails, and gateway credential scopes.
-- **Verification**: All 36 migrations execute sequentially against embedded PostgreSQL during hermetic integration tests without collisions. Migrations fail visibly with clear connection diagnostics when the database is unreachable (`TestMigrate_FailsVisiblyOnUnreachableDatabase`).
+- **Total Migrations**: 38 sequential Goose forward migrations (`00001_identity.sql` through `00038_pricing_management.sql`).
+- **Features Governed**: Multi-tenant identity, projects, teams, credentials, policies, conversations, usage accounting, pricing tiers, audit logs, billing, alerts, Row-Level Security (RLS), models metadata, security events, budgets, guardrails, gateway credential scopes, invoice status reconciliation, and model pricing management.
+- **Verification**: All 38 migrations execute sequentially against embedded PostgreSQL during hermetic integration tests without collisions. Migrations fail visibly with clear connection diagnostics when the database is unreachable (`TestMigrate_FailsVisiblyOnUnreachableDatabase`).
 
 ---
 
@@ -56,7 +56,7 @@
 | :--- | :--- | :---: | :---: | :--- |
 | **Architectural Boundaries** | `bash scripts/check-boundaries.sh` | 0 | **PASS** | 0 layer dependency violations across domain, ports, application, infrastructure, interfaces, platform |
 | **Go Static Analysis** | `(cd backend && go vet ./...) && (cd packages/cli && go vet ./...)` | 0 | **PASS** | 0 vet defects in backend or CLI |
-| **Go Backend Unit & Integration** | `cd backend && go test -count=1 ./...` | 0 | **PASS** | All 26 packages pass (repositories, providers, identity, billing, gateway-v2, worker) |
+| **Go Backend Unit & Integration** | `cd backend && go test -count=1 ./...` | 0 | **PASS** | All 27 packages pass (repositories, providers, identity, billing, pricing, gateway-v2, worker) |
 | **Race Detector Suite** | `cd backend && go test -race -count=1 ./internal/interfaces/...` | 0 | **PASS** | 0 data races in `controlapi`, `gatewayv2`, and `worker` |
 | **CLI Test Suite** | `cd packages/cli && go test -v ./...` | 0 | **PASS** | 23/23 tests pass; 1 live cloud test cleanly skipped via env gate |
 | **TypeScript SDK Suite** | `npm test --workspace=@ai-governance/api-client` | 0 | **PASS** | 15/15 tests pass (SSE parsing, retries, error mapping, cancellation) |

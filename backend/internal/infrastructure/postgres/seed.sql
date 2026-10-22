@@ -28,9 +28,9 @@ UPDATE users SET email = 'previous_bob@acme.example' WHERE lower(email) = 'bob@a
 
 INSERT INTO users (id, email, display_name, status, password_hash)
 VALUES
-    ('22222222-2222-4222-8222-222222222222', 'admin@acme.example', '[Synthetic Seed] Acme Admin', 'active', '$pbkdf2-sha256$600000$MTIzNDU2Nzg5MDEyMzQ1Ng$/d//SBWUawB2F9x5Je9ya9p1Fyb/rA3zccmZusD1LWk'),
-    ('22222222-2222-4222-8222-333333333333', 'alice@acme.example', '[Synthetic Seed] Alice Engineer', 'active', '$pbkdf2-sha256$600000$MTIzNDU2Nzg5MDEyMzQ1Ng$/d//SBWUawB2F9x5Je9ya9p1Fyb/rA3zccmZusD1LWk'),
-    ('22222222-2222-4222-8222-444444444444', 'bob@acme.example', '[Synthetic Seed] Bob Researcher', 'active', '$pbkdf2-sha256$600000$MTIzNDU2Nzg5MDEyMzQ1Ng$/d//SBWUawB2F9x5Je9ya9p1Fyb/rA3zccmZusD1LWk')
+    ('22222222-2222-4222-8222-222222222222', 'admin@acme.example', '[Synthetic Seed] Acme Admin', 'active', '$pbkdf2-sha256$600000$NSL/lwBUMSToLJ2CBT/tSQ$C8XlR8+u3SAK1HRtoQm54/VY7OQqQ1IHyIeBYElmqFE'),
+    ('22222222-2222-4222-8222-333333333333', 'alice@acme.example', '[Synthetic Seed] Alice Engineer', 'active', '$pbkdf2-sha256$600000$NSL/lwBUMSToLJ2CBT/tSQ$C8XlR8+u3SAK1HRtoQm54/VY7OQqQ1IHyIeBYElmqFE'),
+    ('22222222-2222-4222-8222-444444444444', 'bob@acme.example', '[Synthetic Seed] Bob Researcher', 'active', '$pbkdf2-sha256$600000$NSL/lwBUMSToLJ2CBT/tSQ$C8XlR8+u3SAK1HRtoQm54/VY7OQqQ1IHyIeBYElmqFE')
 ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, display_name = EXCLUDED.display_name, status = EXCLUDED.status, password_hash = EXCLUDED.password_hash;
 
 INSERT INTO organization_members (organization_id, user_id, role)

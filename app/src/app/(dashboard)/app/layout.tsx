@@ -1,5 +1,4 @@
-import { SidebarNav } from "@/components/dashboard/sidebar";
-import { Topbar } from "@/components/dashboard/topbar";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { SessionProvider } from "@/lib/session-context";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { requireDashboardSession } from "@/lib/session";
@@ -33,16 +32,7 @@ export default async function DashboardLayout({
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <SessionProvider session={session}>
-        <div className="flex h-screen overflow-hidden">
-          <aside className="hidden w-60 shrink-0 border-r border-sidebar-border bg-sidebar lg:block">
-            <SidebarNav />
-          </aside>
-
-          <div className="flex min-w-0 flex-1 flex-col">
-            <Topbar />
-            <main className="min-h-0 flex-1 overflow-y-auto page-scrollbar">{children}</main>
-          </div>
-        </div>
+        <DashboardShell>{children}</DashboardShell>
       </SessionProvider>
     </ThemeProvider>
   );

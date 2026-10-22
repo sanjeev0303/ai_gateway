@@ -1,0 +1,35 @@
+<svg width="1440" height="900" viewBox="0 0 1440 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="hero-glow-1" cx="0%" cy="0%" r="100%">
+      <stop offset="0%" stop-color="#2563eb" stop-opacity="0.22" />
+      <stop offset="60%" stop-color="#1e40af" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="hero-glow-2" cx="100%" cy="50%" r="100%">
+      <stop offset="0%" stop-color="#0d9488" stop-opacity="0.18" />
+      <stop offset="50%" stop-color="#0891b2" stop-opacity="0.06" />
+      <stop offset="100%" stop-color="#0284c7" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="hero-center-spot" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.12" />
+      <stop offset="100%" stop-color="#1e1b4b" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="wave-grad-1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563eb" stop-opacity="0.15" />
+      <stop offset="50%" stop-color="#0d9488" stop-opacity="0.1" />
+      <stop offset="100%" stop-color="#6366f1" stop-opacity="0.05" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1440" height="900" fill="transparent" />
+  
+  <!-- Ambient glows -->
+  <circle cx="360" cy="240" r="450" fill="url(#hero-glow-1)" />
+  <circle cx="1180" cy="400" r="480" fill="url(#hero-glow-2)" />
+  <ellipse cx="720" cy="380" rx="550" ry="320" fill="url(#hero-center-spot)" />
+
+  <!-- Flowing organic lines -->
+  <path d="M-100 420 C 300 280, 600 520, 1000 340 C 1200 250, 1400 380, 1540 320" stroke="url(#wave-grad-1)" stroke-width="1.5" stroke-dasharray="6 8" fill="none" />
+  <path d="M-80 480 C 320 340, 620 580, 1020 400 C 1220 310, 1420 440, 1560 380" stroke="url(#wave-grad-1)" stroke-width="1" stroke-opacity="0.6" fill="none" />
+  <path d="M-60 540 C 340 400, 640 640, 1040 460 C 1240 370, 1440 500, 1580 440" stroke="url(#wave-grad-1)" stroke-width="0.75" stroke-opacity="0.4" fill="none" />
+</svg>

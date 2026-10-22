@@ -101,6 +101,18 @@ export const CHART_COLORS = [
   "var(--color-chart-5)",
 ] as const;
 
+export const CHART_COLOR_FALLBACKS = [
+  "#3b82f6", // Cool Blue
+  "#0d9488", // Deep Teal
+  "#8b5cf6", // Purple
+  "#f59e0b", // Amber
+  "#ef4444", // Rose
+] as const;
+
 export function chartColor(index: number): string {
   return CHART_COLORS[index % CHART_COLORS.length]!;
+}
+
+export function chartFallbackColor(index: number): string {
+  return CHART_COLOR_FALLBACKS[index % CHART_COLOR_FALLBACKS.length]!;
 }

@@ -12,5 +12,6 @@ export { PricingTeaser } from "./pricing-teaser";
 export { Problem } from "./problem";
 export { ProviderStrip } from "./provider-strip";
 export { RequestInspector } from "./request-inspector";
+export { ScrollReveal } from "./scroll-reveal";
 export { Trust } from "./trust";
 export { UseCases } from "./use-cases";

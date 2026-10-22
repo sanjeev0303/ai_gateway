@@ -8,13 +8,13 @@ some path, missing elsewhere · `schema-only` — types/migrations exist, no
 working behavior · `absent` — not started
 
 **Verified Baseline:**
-- Go backend: 26/26 packages pass (`go test -count=1 ./...`); zero data races in `controlapi`, `gatewayv2`, and `worker`.
+- Go backend: 27/27 packages pass (`go test -count=1 ./...`); zero data races in `controlapi`, `gatewayv2`, and `worker`.
 - Static analysis: `go vet ./...` clean across `backend` and `packages/cli`; architectural boundaries verified (0 violations).
-- Database: 36 Goose forward migrations apply sequentially on PostgreSQL without collision.
+- Database: 38 Goose forward migrations apply sequentially on PostgreSQL without collision.
 - Sentinel CLI: 23/23 tests pass (`packages/cli`).
 - TypeScript SDK: 15/15 tests pass (`packages/api-client`).
 - TypeScript Contracts: `tsc --noEmit` clean (`packages/contracts`).
-- Next.js Web App: 34/34 tests pass, 0 TypeScript errors, 49/49 static and dynamic routes compile successfully.
+- Next.js Web App: 38/38 tests pass, 0 TypeScript errors, 50/50 static and dynamic routes compile successfully.
 
 ---
 
@@ -36,7 +36,7 @@ working behavior · `absent` — not started
 
 | Area | State | Evidence |
 |---|---|---|
-| Migrations | `done` | 36 Goose SQL files in `internal/infrastructure/postgres/migrations/` |
+| Migrations | `done` | 38 Goose SQL files in `internal/infrastructure/postgres/migrations/` |
 | sqlc query layer | `done` | `internal/infrastructure/postgres/sqlc` |
 | Repository ports separated from PG | `done` | `internal/ports/repositories` |
 | Tenant scoping & RLS | `done` | `organization_id` on all scoped tables; PostgreSQL RLS policies in `00012_rls.sql` |

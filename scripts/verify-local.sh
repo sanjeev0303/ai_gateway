@@ -148,10 +148,22 @@ check_deps() {
 run_check "2/15" "Local Tooling Dependencies" "check_deps"
 
 # 3. Run database migrations
-run_check "3/15" "Database Schema Migrations" "(cd backend && export AIGW_DATABASE_URL=\"${AIGW_DATABASE_URL:-postgres://gateway:gateway@localhost:5432/ai_gateway?sslmode=disable}\" && go run ./cmd/migrate)"
+check_db_migrations() {
+    if ! docker ps >/dev/null 2>&1 && ! (command -v pg_isready >/dev/null 2>&1 && pg_isready -h localhost -p 5432 >/dev/null 2>&1); then
+        echo "Local PostgreSQL service is inactive (Docker daemon or local Postgres not running). Run 'make dev-start' when Docker is available." >&2
+        return 1
+    fi
+    (cd backend && export AIGW_DATABASE_URL="${AIGW_DATABASE_URL:-postgres://gateway:gateway@localhost:5432/ai_gateway?sslmode=disable}" && go run ./cmd/migrate)
+}
+run_check "3/15" "Database Schema Migrations" "check_db_migrations" "blocked"
 
 # 4. Verify functional service readiness (/readyz and query checks)
 check_service_readiness() {
+    if ! docker ps >/dev/null 2>&1; then
+        echo "Docker daemon is inactive or containers are not running. Run 'make dev-start' when Docker daemon is available." >&2
+        return 1
+    fi
+
     # Check PostgreSQL
     if docker ps --format '{{.Names}}' | grep -q 'ai-gateway-postgres-1'; then
         docker exec ai-gateway-postgres-1 pg_isready -U gateway -d ai_gateway >/dev/null 2>&1 || {
@@ -204,7 +216,7 @@ check_service_readiness() {
 
     return 0
 }
-run_check "4/15" "Full-Stack Functional Readiness" "check_service_readiness"
+run_check "4/15" "Full-Stack Functional Readiness" "check_service_readiness" "blocked"
 
 # 5. Run backend formatting and static analysis
 run_check "5/15" "Backend Static Analysis (go vet)" "(cd backend && go vet ./...)"

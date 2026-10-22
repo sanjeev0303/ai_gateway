@@ -2,10 +2,26 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, LifeBuoy, Settings } from "lucide-react";
+import {
+  Building2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  LifeBuoy,
+  Plus,
+  Settings,
+} from "lucide-react";
 
 import { Logo } from "@/components/logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { DASHBOARD_NAV } from "@/lib/constants";
 import { initials } from "@/lib/format";
 import { useSession } from "@/lib/session-context";
@@ -14,17 +30,18 @@ import { cn } from "@/lib/utils";
 interface SidebarNavProps {
   /** Called after a link is chosen, so the mobile sheet can close itself. */
   onNavigate?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 const isActive = (pathname: string, href: string): boolean =>
   pathname === href || pathname.startsWith(`${href}/`);
 
-/**
- * The full navigation tree, reused by the desktop aside and the mobile sheet.
- * Childless sections render as a single link; sections with children render a
- * plain heading so the active state never lights up twice.
- */
-export function SidebarNav({ onNavigate }: SidebarNavProps) {
+export function SidebarNav({
+  onNavigate,
+  collapsed = false,
+  onToggleCollapse,
+}: SidebarNavProps) {
   const pathname = usePathname();
   const session = useSession();
   if (session.status !== "authenticated") return null;
@@ -32,27 +49,78 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-14 shrink-0 items-center border-b border-sidebar-border px-4">
+      {/* Header / Logo */}
+      <div
+        className={cn(
+          "flex h-14 shrink-0 items-center border-b border-sidebar-border px-4",
+          collapsed ? "justify-center px-2" : "justify-between",
+        )}
+      >
         <Link
           href="/app/overview"
           onClick={onNavigate}
           className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          title="Sentinel AI Gateway"
         >
-          <Logo className="text-sidebar-foreground" />
+          <Logo markOnly={collapsed} className="text-sidebar-foreground" />
         </Link>
       </div>
 
-      <div className="shrink-0 border-b border-sidebar-border px-3 py-3">
-        <p className="px-2.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
-          Organization
-        </p>
-        <p className="truncate px-2.5 pt-0.5 text-sm font-medium text-sidebar-foreground">
-          {organization.name}
-        </p>
+      {/* Organization Switcher */}
+      <div
+        className={cn(
+          "shrink-0 border-b border-sidebar-border py-2.5",
+          collapsed ? "px-2 text-center" : "px-3",
+        )}
+      >
+        {collapsed ? (
+          <div className="flex justify-center">
+            <span
+              className="flex size-8 items-center justify-center rounded-lg bg-white/10 font-mono text-xs font-bold text-sidebar-foreground"
+              title={`Organization: ${organization.name}`}
+            >
+              {organization.name.slice(0, 2).toUpperCase()}
+            </span>
+          </div>
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+              >
+                <div className="min-w-0 pr-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
+                    Workspace
+                  </p>
+                  <p className="truncate text-sm font-semibold text-sidebar-foreground">
+                    {organization.name}
+                  </p>
+                </div>
+                <ChevronDown className="size-4 shrink-0 text-sidebar-muted" aria-hidden />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56 glass">
+              <DropdownMenuLabel className="text-xs">Organizations</DropdownMenuLabel>
+              <DropdownMenuItem className="text-xs font-medium">
+                <Building2 className="mr-2 size-3.5" aria-hidden />
+                {organization.name}
+                <span className="ml-auto text-[10px] text-emerald-500 font-semibold">Active</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild className="text-xs">
+                <Link href="/app/organization/settings">
+                  <Plus className="mr-2 size-3.5" aria-hidden /> Manage Workspaces
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto sidebar-scrollbar px-3 py-4">
-        <ul className="space-y-5">
+      {/* Navigation Tree */}
+      <nav className="min-h-0 flex-1 overflow-y-auto sidebar-scrollbar px-2.5 py-4">
+        <ul className="space-y-4">
           {DASHBOARD_NAV.map((section) => {
             const Icon = section.icon;
 
@@ -63,16 +131,18 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
                   <Link
                     href={section.href}
                     onClick={onNavigate}
+                    title={collapsed ? section.title : undefined}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
+                      "flex items-center rounded-xl transition-all duration-200",
+                      collapsed ? "justify-center size-10 mx-auto" : "gap-3 px-3 py-2 text-sm font-medium",
                       active
-                        ? "bg-sidebar-active text-sidebar-accent-foreground"
+                        ? "bg-sidebar-active text-sidebar-accent-foreground shadow-xs border-l-2 border-primary"
                         : "text-sidebar-muted hover:bg-white/5 hover:text-sidebar-foreground",
                     )}
                   >
                     <Icon className="size-4 shrink-0" aria-hidden />
-                    {section.title}
+                    {!collapsed && <span>{section.title}</span>}
                   </Link>
                 </li>
               );
@@ -80,66 +150,136 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
 
             return (
               <li key={section.title}>
-                <div className="flex items-center gap-2.5 px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
-                  <Icon className="size-3.5 shrink-0" aria-hidden />
-                  {section.title}
-                </div>
-                <ul className="space-y-0.5 border-l border-sidebar-border pl-3">
-                  {section.children.map((child) => {
-                    const active = pathname === child.href;
-                    return (
-                      <li key={child.href}>
+                {!collapsed ? (
+                  <>
+                    <div className="flex items-center gap-2 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-sidebar-muted">
+                      <Icon className="size-3.5 shrink-0 opacity-70" aria-hidden />
+                      {section.title}
+                    </div>
+                    <ul className="space-y-0.5 border-l border-sidebar-border/50 ml-4 pl-2.5">
+                      {section.children.map((child) => {
+                        const active = pathname === child.href;
+                        return (
+                          <li key={child.href}>
+                            <Link
+                              href={child.href}
+                              onClick={onNavigate}
+                              aria-current={active ? "page" : undefined}
+                              className={cn(
+                                "block truncate rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
+                                active
+                                  ? "bg-sidebar-active text-sidebar-accent-foreground font-semibold shadow-xs"
+                                  : "text-sidebar-muted hover:bg-white/5 hover:text-sidebar-foreground",
+                              )}
+                            >
+                              {child.label}
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                ) : (
+                  <div className="space-y-1">
+                    {section.children.map((child) => {
+                      const active = pathname === child.href;
+                      return (
                         <Link
+                          key={child.href}
                           href={child.href}
                           onClick={onNavigate}
+                          title={`${section.title}: ${child.label}`}
                           aria-current={active ? "page" : undefined}
                           className={cn(
-                            "block truncate rounded-md px-2.5 py-1.5 text-[13px] transition-colors",
+                            "flex items-center justify-center size-9 mx-auto rounded-lg transition-colors",
                             active
-                              ? "bg-sidebar-active font-medium text-sidebar-accent-foreground"
+                              ? "bg-sidebar-active text-sidebar-accent-foreground shadow-xs"
                               : "text-sidebar-muted hover:bg-white/5 hover:text-sidebar-foreground",
                           )}
                         >
-                          {child.label}
+                          <Icon className="size-4 shrink-0" aria-hidden />
                         </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
+                      );
+                    })}
+                  </div>
+                )}
               </li>
             );
           })}
         </ul>
       </nav>
 
-      <div className="shrink-0 space-y-1 border-t border-sidebar-border px-3 py-3">
+      {/* Footer / Utilities & Collapse Toggle */}
+      <div className="shrink-0 space-y-1 border-t border-sidebar-border px-2.5 py-3">
         <Link
           href="/app/organization/settings"
           onClick={onNavigate}
-          className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] text-sidebar-muted transition-colors hover:bg-white/5 hover:text-sidebar-foreground"
+          title={collapsed ? "Settings" : undefined}
+          className={cn(
+            "flex items-center rounded-lg text-xs font-medium text-sidebar-muted transition-colors hover:bg-white/5 hover:text-sidebar-foreground",
+            collapsed ? "justify-center size-9 mx-auto" : "gap-2.5 px-2.5 py-1.5",
+          )}
         >
           <Settings className="size-4 shrink-0" aria-hidden />
-          Settings
+          {!collapsed && <span>Settings</span>}
         </Link>
+
         <Link
           href="/app/developer/quick-start"
           onClick={onNavigate}
-          className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] text-sidebar-muted transition-colors hover:bg-white/5 hover:text-sidebar-foreground"
+          title={collapsed ? "Help & Documentation" : undefined}
+          className={cn(
+            "flex items-center rounded-lg text-xs font-medium text-sidebar-muted transition-colors hover:bg-white/5 hover:text-sidebar-foreground",
+            collapsed ? "justify-center size-9 mx-auto" : "gap-2.5 px-2.5 py-1.5",
+          )}
         >
           <LifeBuoy className="size-4 shrink-0" aria-hidden />
-          Help
+          {!collapsed && <span>Docs &amp; Help</span>}
         </Link>
-        <div className="mt-2 flex items-center gap-2.5 rounded-md px-2.5 py-1.5">
-          <Avatar className="size-7">
-            <AvatarFallback className="text-[11px]">
+
+        {/* User preview */}
+        <div
+          className={cn(
+            "mt-2 flex items-center rounded-lg",
+            collapsed ? "justify-center p-1" : "gap-2.5 px-2.5 py-1.5",
+          )}
+        >
+          <Avatar className="size-7 ring-1 ring-white/20">
+            <AvatarFallback className="bg-primary/20 text-sidebar-foreground text-[10px] font-bold">
               {initials(user.name)}
             </AvatarFallback>
           </Avatar>
-          <span className="min-w-0 flex-1 truncate text-[13px] text-sidebar-foreground">
-            {user.name}
-          </span>
-          <ChevronDown className="size-3.5 shrink-0 text-sidebar-muted" aria-hidden />
+          {!collapsed && (
+            <span className="min-w-0 flex-1 truncate text-xs font-medium text-sidebar-foreground">
+              {user.name}
+            </span>
+          )}
         </div>
+
+        {/* Desktop Collapse Toggle */}
+        {onToggleCollapse && (
+          <div className="pt-1 hidden lg:block">
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className={cn(
+                "flex w-full items-center justify-center rounded-lg py-1.5 text-xs text-sidebar-muted hover:bg-white/5 hover:text-sidebar-foreground transition-colors",
+                collapsed ? "px-1" : "gap-2 px-2.5",
+              )}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {collapsed ? (
+                <ChevronRight className="size-4" aria-hidden />
+              ) : (
+                <>
+                  <ChevronLeft className="size-4" aria-hidden />
+                  <span className="text-[11px]">Collapse</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

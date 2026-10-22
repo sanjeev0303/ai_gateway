@@ -1,6 +1,107 @@
- -# Implementation Task Tracker
+# Code Quality Lint Fixes & GitHub Push — Task Tracker
+
+## Status: COMPLETE
+- [x] Fix arbitrary Tailwind utility warnings across dashboard, landing, and nav components
+- [x] Run test suite and TypeScript verification
+- [x] Stage all changes and commit with conventional commit message
+- [x] Push commit to origin main
+
+---
+
+# Navbar Section Smooth Scroll & Dashboard Scroll Fix — Task Tracker
+
+## Status: COMPLETE
+- [x] Fix dashboard overflow scrolling by scoping Lenis smooth scroll to marketing layout only
+- [x] Expose Lenis smooth scroll provider context with scrollTo helper
+- [x] Add anchor IDs and scroll margins to landing page sections
+- [x] Update MarketingNav to intercept anchor clicks and trigger smooth scrolling
+- [x] Verify scrolling to sections on clicking navbar items
+
+---
+
+# Docker Logs Analysis & Login Error Fix — Task Tracker
+- [ ] Inspect container status and Docker logs for client (`app`) and API (`control-api`, `postgres`)
+- [ ] Start full Docker Compose environment with latest built images
+- [ ] Test authentication flow (dev-login / sign-in) against running backend
+- [ ] Identify root cause of login error (DNS/network, auth cookie, CORS, or session verification)
+- [ ] Apply fix and verify end-to-end login in Docker
+- [ ] Verify clean logs across client and backend containers
+
+---
+
+# Docker Images Rebuild — Task Tracker
+
+## Status: COMPLETE
+- [x] Rebuild backend Docker image (`ai-gateway-backend:dev`)
+- [x] Rebuild web Docker image (`ai-gateway-web:dev`)
+- [x] Verify image build output and tags
+
+---
+
+# Sentinel Redesign — Task Tracker
+
+## Status: COMPLETE — Phases A, B, C, D, E, F executed and verified
+
+### Phase A — Design System Foundation
+- [x] Expand `globals.css` with glass/neu/motion tokens + utility classes
+- [x] Create `src/lib/motion.ts` animation variant definitions
+
+### Phase B — Landing Page (Glassmorphic)
+- [x] `marketing/nav.tsx` — scroll-aware glass, theme toggle, mobile sheet
+- [x] `landing/hero.tsx` — atmospheric bg, staggered entrance
+- [x] `landing/dashboard-preview.tsx` — layered glass panels
+- [x] `landing/section.tsx` — GlassSection & Eyebrow badge
+- [x] `landing/gateway-flow.tsx` — animated connectors, scroll reveals
+- [x] `landing/architecture.tsx` — animated SVG flow diagram
+- [x] `landing/pillars.tsx` — glass cards, hover lift
+- [x] `landing/final-cta.tsx` — glassmorphic CTA
+- [x] `marketing/footer.tsx` — structured footer with system status
+- [x] `public/hero-bg.svg`, `public/section-divider.svg`, `public/arch-bg.svg`
+- [x] Polished `code-tabs.tsx`, `comparison.tsx`, `pricing-teaser.tsx`, `trust.tsx`, `use-cases.tsx`, `attribution.tsx`, `problem.tsx`, `provider-strip.tsx`
+
+### Phase C — Dashboard Shell (Neumorphic)
+- [x] `(dashboard)/app/layout.tsx` & `dashboard-shell.tsx` — sidebar collapse state & context
+- [x] `dashboard/sidebar.tsx` — collapse toggle, org switcher dropdown, neumorphic active items
+- [x] `dashboard/topbar.tsx` — route breadcrumbs, refined avatar ring, date picker
+- [x] `dashboard/stat-card.tsx` — neumorphic prop & container styling
+- [x] `dashboard/page-shell.tsx` — layout padding & animated header
+
+### Phase D — Dashboard States & Charts
+- [x] `dashboard/states.tsx` — enhanced empty/error states
+- [x] `charts/utils.ts` — theme-aware colors and fallbacks
+- [x] `overview/page.tsx` — ModernKpiCard neumorphic elevation
+
+### Phase E — Motion Integration
+- [x] `npm install motion`
+- [x] `src/components/ui/motion-wrapper.tsx`
+- [x] `src/components/landing/scroll-reveal.tsx`
+- [x] Wire hero, section, pillar, architecture, flow, cta animations
+
+### Phase F — Accessibility & Performance
+- [x] `prefers-reduced-motion` global CSS and `useReducedMotion` JS hook
+- [x] `npm run typecheck` passed (0 errors)
+- [x] `npm run lint` passed (0 errors)
+- [x] `npm test` passed (38/38 tests)
+- [x] `npm run build` passed (all 50 routes generated successfully)
+
+---
+
+# Previous Task Tracker
 
 Updated after each completed prompt.
+
+## IN PROGRESS: Resolve Remaining Audit Gaps Across Baseline, Contracts, Dashboard, and Verification
+- [ ] 1. Establish actual repository baseline, audit findings, and update `docs/local-readiness/current-baseline.md` and `docs/local-readiness/remaining-gaps-plan.md`
+- [ ] 2. Update `backend/api/openapi/openapi.yaml` with complete `/v1/pricing` endpoints, parameter schemas, and responses
+- [ ] 3. Regenerate and typecheck TypeScript contracts (`packages/contracts/src/generated.ts`)
+- [ ] 4. Implement Dashboard Pricing Management UI (`/app/platform/pricing`), sidebar navigation, API client hooks, and tests
+- [ ] 5. Run full test suites across Go backend, CLI, SDK, Contracts, and Next.js frontend
+- [ ] 6. Update `docs/architecture/completeness-matrix.md` and `task.md` with final verification evidence
+
+## COMPLETED TASK: Install Motion AI Kit Skill and Configure MCP Server
+- [x] Install official `motion` skill to `.agents/skills/motion` via `motiondivision/ai-kit`
+- [x] Configure hosted Motion MCP server (`https://mcp.motion.dev`) in `mcp_config.json`
+- [x] Verify installed motion skill structure, guides, and tooling availability
 
 ## COMPLETED TASK: Push Pricing Management Implementation to GitHub
 - [x] Stage all modified and untracked pricing and billing changes

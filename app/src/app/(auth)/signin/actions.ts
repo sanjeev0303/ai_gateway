@@ -46,7 +46,11 @@ async function forwardCookies(response: Response): Promise<void> {
           options.httpOnly = true;
           break;
         case "secure":
-          options.secure = true;
+          // In development environments running over HTTP, do not set the secure flag
+          // unless explicitly configured via AIGW_AUTH_SESSION_COOKIE_SECURE === "true".
+          if (process.env.AIGW_AUTH_SESSION_COOKIE_SECURE === "true") {
+            options.secure = true;
+          }
           break;
         case "samesite":
           options.sameSite = value?.toLowerCase() as "strict" | "lax" | "none";
@@ -93,25 +97,38 @@ async function authenticate(
   redirect("/app/overview");
 }
 
-export async function signIn(_state: AuthState, formData: FormData): Promise<AuthState> {
+export async function signIn(_state: AuthState, formData?: FormData): Promise<AuthState> {
+  const email = String(formData?.get?.("email") ?? "").trim();
+  const password = String(formData?.get?.("password") ?? "");
+  if (!email || !password) {
+    return { error: "Please enter both email and password." };
+  }
   return authenticate(
     "/v1/auth/signin",
     {
-      email: String(formData.get("email") ?? ""),
-      password: String(formData.get("password") ?? ""),
+      email,
+      password,
     },
     "Sign-in failed.",
   );
 }
 
-export async function signUp(_state: AuthState, formData: FormData): Promise<AuthState> {
+export async function signUp(_state: AuthState, formData?: FormData): Promise<AuthState> {
+  const email = String(formData?.get?.("email") ?? "").trim();
+  const displayName = String(formData?.get?.("display_name") ?? "").trim();
+  const orgName = String(formData?.get?.("organization_name") ?? "").trim();
+  const password = String(formData?.get?.("password") ?? "");
+
+  if (!email || !password) {
+    return { error: "Please provide an email and password." };
+  }
   return authenticate(
     "/v1/auth/signup",
     {
-      email: String(formData.get("email") ?? ""),
-      display_name: String(formData.get("display_name") ?? ""),
-      organization_name: String(formData.get("organization_name") ?? ""),
-      password: String(formData.get("password") ?? ""),
+      email,
+      display_name: displayName || email.split("@")[0] || "User",
+      organization_name: orgName || "Default Organization",
+      password,
     },
     "Sign-up failed.",
   );
@@ -123,9 +140,10 @@ export async function signUp(_state: AuthState, formData: FormData): Promise<Aut
  */
 export async function devSignIn(
   _state: AuthState,
-  formData: FormData,
+  formData?: FormData,
 ): Promise<AuthState> {
-  const email = String(formData.get("email") ?? "");
+  const rawEmail = String(formData?.get?.("email") ?? "").trim();
+  const email = rawEmail || "developer@localhost";
   return authenticate(
     "/v1/auth/dev-login",
     {
