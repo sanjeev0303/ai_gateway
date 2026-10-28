@@ -76,7 +76,7 @@ export function CodeTabs() {
                 ))}
               </ul>
 
-              <p className="mt-8 text-[10px] text-[#7A6458]" style={{ fontFamily: "var(--font-fira-code)" }}>
+              <p className="mt-8 text-xs text-[#7A6458]" style={{ fontFamily: "var(--font-fira-code)" }}>
                 {CODE_TABS.note}
               </p>
             </ScrollReveal>
@@ -122,7 +122,7 @@ export function CodeTabs() {
                 <button
                   type="button"
                   onClick={copy}
-                  className="text-[10px] font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[#6F4E37] px-3 py-1.5 border border-[rgba(229,228,226,0.12)] text-[rgba(229,228,226,0.50)]"
+                  className="text-xs font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-[#6F4E37] px-3.5 py-1.5 border border-[rgba(229,228,226,0.12)] text-[rgba(229,228,226,0.70)] hover:text-[#E5E4E2]"
                   style={{ fontFamily: "var(--font-fira-code)" }}
                 >
                   {copied ? "Copied" : "Copy"}

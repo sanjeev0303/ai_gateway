@@ -25,7 +25,15 @@ import {
 import { toast } from "sonner";
 import { createControlCredentialAction, revokeControlCredentialAction } from "./actions";
 
-export function IssueCredentialDialog() {
+export function IssueCredentialDialog({
+  triggerLabel = "Issue Control Key",
+  triggerVariant = "default",
+  triggerClassName = "",
+}: {
+  triggerLabel?: string;
+  triggerVariant?: "default" | "outline" | "secondary" | "ghost" | "link";
+  triggerClassName?: string;
+} = {}) {
   const [open, setOpen] = React.useState(false);
   const [name, setName] = React.useState("");
   const [scope, setScope] = React.useState("control_plane");
@@ -71,8 +79,8 @@ export function IssueCredentialDialog() {
     <>
       <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : handleClose())}>
         <DialogTrigger asChild>
-          <Button size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" /> Issue Control Key
+          <Button size="sm" variant={triggerVariant} className={`gap-1.5 ${triggerClassName}`}>
+            <Plus className="h-4 w-4" /> {triggerLabel}
           </Button>
         </DialogTrigger>
         <DialogContent className="max-w-md">

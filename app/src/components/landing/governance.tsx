@@ -105,7 +105,7 @@ export function Governance() {
                 className="sm:border-r sm:border-[rgba(229,228,226,0.08)] last:border-r-0 sm:pr-8 sm:pl-8 first:pl-0"
               >
                 <dt
-                  className="text-[10px] uppercase"
+                  className="text-xs font-medium uppercase"
                   style={{
                     fontFamily: "var(--font-fira-code)",
                     letterSpacing: "0.12em",

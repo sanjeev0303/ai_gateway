@@ -947,14 +947,17 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 			usage.ProviderMeta = map[string]any{"provider": upstreamProvider, "tokens_reported": false, "estimated": true}
 		}
 
-		// Consistent initial cost calculation in micro-dollars ($0.01/1k input = 10 micros/token, $0.03/1k output = 30 micros/token).
-		// Exact cost is backfilled during rollup using the organization's versioned price sheet.
-		cost := (float64(usage.InputTokens) / 1000.0 * 0.01) + (float64(usage.OutputTokens) / 1000.0 * 0.03)
-		costMicros := int64(math.Round(cost * 1000000.0))
-		if costMicros <= 0 && (usage.InputTokens > 0 || usage.OutputTokens > 0) {
-			costMicros = int64(usage.InputTokens*10 + usage.OutputTokens*30)
+		upstreamModel := result.Context.InspectorHints.Model
+
+		var cachedTokensCount int64
+		if observed != nil && observed.CacheReadTokens > 0 {
+			cachedTokensCount = int64(observed.CacheReadTokens)
+		} else if usage.CacheReadTokens > 0 {
+			cachedTokensCount = int64(usage.CacheReadTokens)
 		}
+		costMicros := domain.ResolveAndCalculateModelCost(upstreamProvider, upstreamModel, int64(usage.InputTokens), int64(usage.OutputTokens), cachedTokensCount)
 		usage.CostMicros = costMicros
+		cost := float64(costMicros) / 1_000_000.0
 
 		allowedDecision := domain.PolicyDecisionAllowed
 		usage.PolicyDecision = &allowedDecision
@@ -1111,6 +1114,11 @@ func (g *Gateway) Shutdown(gracePeriod time.Duration) error {
 	// Close telemetry
 	if err := g.telemetry.Close(); err != nil {
 		g.logger.Error("telemetry close error", "error", err)
+	}
+
+	// Close guardrails event persister
+	if g.guardrails != nil {
+		g.guardrails.Close()
 	}
 
 	g.logger.Info("gateway shutdown complete")

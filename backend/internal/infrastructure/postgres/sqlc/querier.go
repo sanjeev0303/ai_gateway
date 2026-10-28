@@ -6,6 +6,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	uuid "github.com/google/uuid"
 )
@@ -168,7 +169,10 @@ type Querier interface {
 	PurgeExpiredAuditLogs(ctx context.Context, arg PurgeExpiredAuditLogsParams) (int64, error)
 	PurgeExpiredBillingEvents(ctx context.Context, arg PurgeExpiredBillingEventsParams) (int64, error)
 	PurgeExpiredConversations(ctx context.Context, arg PurgeExpiredConversationsParams) (int64, error)
+	PurgeExpiredIdempotencyKeys(ctx context.Context, arg PurgeExpiredIdempotencyKeysParams) (int64, error)
+	PurgeExpiredInvitations(ctx context.Context, arg PurgeExpiredInvitationsParams) (int64, error)
 	PurgeExpiredLlmRequests(ctx context.Context, arg PurgeExpiredLlmRequestsParams) (int64, error)
+	PurgeExpiredRefreshTokens(ctx context.Context, expiresAt time.Time) (int64, error)
 	PurgeExpiredUsageEvents(ctx context.Context, arg PurgeExpiredUsageEventsParams) (int64, error)
 	RecomputeUsageDaily(ctx context.Context, arg RecomputeUsageDailyParams) error
 	RecomputeUsageHourly(ctx context.Context, arg RecomputeUsageHourlyParams) error

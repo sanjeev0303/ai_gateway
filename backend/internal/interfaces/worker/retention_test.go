@@ -57,6 +57,45 @@ func (m *mockRetentionUsageRepo) PurgeExpired(ctx context.Context, orgID uuid.UU
 	return m.deletedCount, nil
 }
 
+type mockRetentionIdempotencyRepo struct {
+	repositories.IdempotencyRepository
+	purgedCalls   int
+	lastOlderThan time.Time
+	deletedCount  int64
+}
+
+func (m *mockRetentionIdempotencyRepo) PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error) {
+	m.purgedCalls++
+	m.lastOlderThan = olderThan
+	return m.deletedCount, nil
+}
+
+type mockRetentionRefreshTokensRepo struct {
+	repositories.RefreshTokenRepository
+	purgedCalls   int
+	lastOlderThan time.Time
+	deletedCount  int64
+}
+
+func (m *mockRetentionRefreshTokensRepo) PurgeExpired(ctx context.Context, olderThan time.Time) (int64, error) {
+	m.purgedCalls++
+	m.lastOlderThan = olderThan
+	return m.deletedCount, nil
+}
+
+type mockRetentionInvitationsRepo struct {
+	repositories.InvitationRepository
+	purgedCalls   int
+	lastOlderThan time.Time
+	deletedCount  int64
+}
+
+func (m *mockRetentionInvitationsRepo) PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error) {
+	m.purgedCalls++
+	m.lastOlderThan = olderThan
+	return m.deletedCount, nil
+}
+
 func TestRetentionWorker_RunOnce(t *testing.T) {
 	ctx := context.Background()
 	orgID := uuid.New()
@@ -75,11 +114,17 @@ func TestRetentionWorker_RunOnce(t *testing.T) {
 
 	convRepo := &mockRetentionConvRepo{deletedCount: 15}
 	usageRepo := &mockRetentionUsageRepo{deletedCount: 42}
+	idempotencyRepo := &mockRetentionIdempotencyRepo{deletedCount: 7}
+	refreshRepo := &mockRetentionRefreshTokensRepo{deletedCount: 3}
+	invitationsRepo := &mockRetentionInvitationsRepo{deletedCount: 2}
 
 	job := worker.NewRetentionJob(worker.RetentionDeps{
 		Orgs:          orgRepo,
 		Conversations: convRepo,
 		UsageEvents:   usageRepo,
+		Idempotency:   idempotencyRepo,
+		RefreshTokens: refreshRepo,
+		Invitations:   invitationsRepo,
 	})
 
 	before := time.Now().UTC()
@@ -103,4 +148,15 @@ func TestRetentionWorker_RunOnce(t *testing.T) {
 	if usageRepo.lastOlderThan.Sub(expectedUsageCutoff).Abs() > 2*time.Second {
 		t.Fatalf("unexpected usage cutoff: got %v, want near %v", usageRepo.lastOlderThan, expectedUsageCutoff)
 	}
+
+	if idempotencyRepo.purgedCalls != 1 {
+		t.Fatalf("expected 1 idempotency purge call, got %d", idempotencyRepo.purgedCalls)
+	}
+	if refreshRepo.purgedCalls != 1 {
+		t.Fatalf("expected 1 refresh token purge call, got %d", refreshRepo.purgedCalls)
+	}
+	if invitationsRepo.purgedCalls != 1 {
+		t.Fatalf("expected 1 invitations purge call, got %d", invitationsRepo.purgedCalls)
+	}
 }
+

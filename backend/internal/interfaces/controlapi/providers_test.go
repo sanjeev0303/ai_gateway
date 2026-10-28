@@ -396,6 +396,17 @@ func TestRotateProviderCredentialBlankSecret(t *testing.T) {
 func TestListModels(t *testing.T) {
 	srv, st := newTestServer(t)
 
+	st.providerAccounts.list = func(_ context.Context, orgID uuid.UUID) ([]domain.ProviderAccount, error) {
+		return []domain.ProviderAccount{
+			{ID: testProvAcct, ProviderKind: domain.ProviderKindAnthropic, Status: domain.ProviderStatusActive},
+		}, nil
+	}
+	st.providerCredentials.listByAccount = func(_ context.Context, orgID, accountID uuid.UUID) ([]domain.ProviderCredential, error) {
+		return []domain.ProviderCredential{
+			{ID: testProvCred, Status: domain.ProviderCredentialStatusActive},
+		}, nil
+	}
+
 	st.providerModels.list = func(_ context.Context) ([]domain.Model, error) {
 		return []domain.Model{testModel}, nil
 	}
@@ -416,6 +427,18 @@ func TestListModels(t *testing.T) {
 // resolver emits as ModelHandle.ModelID (application/provider.QualifiedModelID).
 func TestListModelsContractQualifiedID(t *testing.T) {
 	srv, st := newTestServer(t)
+
+	st.providerAccounts.list = func(_ context.Context, orgID uuid.UUID) ([]domain.ProviderAccount, error) {
+		return []domain.ProviderAccount{
+			{ID: testProvAcct, ProviderKind: domain.ProviderKindAnthropic, Status: domain.ProviderStatusActive},
+			{ID: uuid.New(), ProviderKind: domain.ProviderKindOpenAI, Status: domain.ProviderStatusActive},
+		}, nil
+	}
+	st.providerCredentials.listByAccount = func(_ context.Context, orgID, accountID uuid.UUID) ([]domain.ProviderCredential, error) {
+		return []domain.ProviderCredential{
+			{ID: uuid.New(), Status: domain.ProviderCredentialStatusActive},
+		}, nil
+	}
 
 	st.providerModels.list = func(_ context.Context) ([]domain.Model, error) {
 		return []domain.Model{
@@ -494,6 +517,14 @@ func TestProviderOnboardingEndToEnd(t *testing.T) {
 		requireEqual(t, orgID, testOrgID)
 		requireEqual(t, id, testProvAcct)
 		return testProviderAccount, nil
+	}
+	st.providerAccounts.list = func(_ context.Context, orgID uuid.UUID) ([]domain.ProviderAccount, error) {
+		requireEqual(t, orgID, testOrgID)
+		return []domain.ProviderAccount{testProviderAccount}, nil
+	}
+	st.providerCredentials.listByAccount = func(_ context.Context, orgID, accountID uuid.UUID) ([]domain.ProviderCredential, error) {
+		requireEqual(t, orgID, testOrgID)
+		return []domain.ProviderCredential{testProviderCredential}, nil
 	}
 
 	var stored domain.NewProviderCredential

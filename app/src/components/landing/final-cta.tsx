@@ -28,7 +28,7 @@ export function FinalCta() {
           <div className="lg:col-span-7">
             <ScrollReveal>
               <p
-                className="font-mono text-[10px] uppercase text-[rgba(230,224,240,0.45)] mb-6"
+                className="font-mono text-xs uppercase text-[rgba(230,224,240,0.65)] font-semibold mb-6"
                 style={{ fontFamily: "var(--font-fira-code)", letterSpacing: "0.14em" }}
               >
                 Ready to get started

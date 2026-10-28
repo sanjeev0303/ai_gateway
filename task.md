@@ -1,3 +1,252 @@
+# Push Verified Changes to GitHub — Task Tracker
+
+## Status: IN PROGRESS
+- [ ] Review git status and stage all modified and untracked files
+- [ ] Commit staged changes with conventional commit message
+- [ ] Push commits to remote origin main
+- [ ] Verify remote synchronization
+
+---
+
+# IDE Tailwind Linter Warnings Resolution — Task Tracker
+
+## Status: COMPLETE
+- [x] Fix `stroke-[3]` to `stroke-3` in `app/src/app/(dashboard)/app/billing/subscription/client.tsx` (lines 285, 309).
+- [x] Fix `bg-gradient-to-br` to `bg-linear-to-br` in `app/src/app/(dashboard)/app/govern/credentials/page.tsx` (line 151).
+- [x] Fix `w-[140px]` to `w-35` in `app/src/app/(dashboard)/app/platform/pricing/client.tsx` (line 192).
+
+---
+
+# Performance, Concurrency, and Garbage Data Management Optimization — Task Tracker
+
+## Status: COMPLETE
+- [x] 1. Optimize Database Connection Pooling & Retention Scheduling:
+  - Added pool options (`WithMaxConns`, `WithMinConns`, `WithMaxConnIdleTime`, `WithMaxConnLifetime`, `WithHealthCheckPeriod`) to `postgres.Store`.
+  - Wired pool options across `RunControlAPI`, `RunGatewayV2`, and `RunWorker`.
+  - Optimized worker retention frequency (5m) and alert evaluator loop (30s) to eliminate continuous DB hammering and thread thrashing.
+- [x] 2. Implement Automated Garbage Data Cleanup:
+  - Added migration `00039_garbage_cleanup_indexes.sql` for `idempotency_keys` and `invitations`.
+  - Added `PurgeExpiredIdempotencyKeys`, `PurgeExpiredRefreshTokens`, and `PurgeExpiredInvitations` SQL queries.
+  - Wired purge methods in repositories (`idempotencyRepo`, `refreshTokenRepo`, `invitationRepo`).
+  - Wired automated pruning in `worker.RetentionJob` across all organizations and global auth refresh tokens.
+- [x] 3. Optimize Concurrency & Goroutine Resource Management:
+  - Replaced unbounded `go func()` in `GuardrailEvaluator` with a bounded worker pool and buffered channel.
+  - Removed unnecessary debug goroutine spawned on every stream in `StreamProxy`.
+  - Added TTL (`pipe.Expire`) to Redis active activity hash keys to prevent orphaned Redis memory growth.
+- [x] 4. Eliminate Hot-Path Allocations & Memory Churn:
+  - Eliminated redundant JSON unmarshaling in `guardrails.CheckInput`.
+  - Implemented `sync.Pool` for byte buffers in `StreamProxy.streamResponse` to slash GC pressure during SSE streaming.
+- [x] 5. Verification & Testing:
+  - Ran `sqlc generate`.
+  - Ran full backend unit and integration test suites (`go test ./...` 100% passing).
+  - Rebuilt backend Docker image and verified healthy container deployment.
+
+
+---
+
+# Account Data Reset (sanju.04044@gmail.com / Galobyte) — Task Tracker
+
+## Status: COMPLETE
+- [x] Identified user account (`f003ed8c-52d0-4360-8789-8c7f013affb2`) and organization (`Galobyte`, `cb4f2b7b-78cf-4c7e-b376-6be86f484d59`).
+- [x] Cleaned all operational and configuration data while keeping user account details:
+  - Purged `provider_accounts` (0) and `provider_credentials` (0).
+  - Purged `gateway_credentials` (0) and `api_credentials` (0).
+  - Purged `usage_events`, `usage_hourly`, `usage_daily`, and `usage_monthly` (0).
+  - Purged `alerts`, `alert_events`, and `in_app_notifications` (0).
+  - Purged `policies`, `policy_rules`, `budgets`, and `guardrails` (0).
+  - Purged `conversations` and `conversation_messages` (0).
+  - Purged `projects`, `teams`, `service_accounts`, and test members.
+  - Flushed Redis cache and cleared local secret store entries.
+- [x] Verified clean state:
+  - Model catalog returns `[]` (0 models).
+  - Credentials, providers, usage, and governance dashboards reset to clean zero states.
+  - User `sanju.04044@gmail.com` profile and organization membership intact.
+
+---
+
+# Govern Credentials Page Empty State Enrichment & UX Optimization — Task Tracker
+
+## Status: COMPLETE
+- [x] Analyzed issue from screenshot at `http://localhost:3000/app/govern/credentials`:
+  - When an organization has zero control-plane keys, the page showed empty cards with zeroes, an empty donut chart message, plain informational copy, and a bare table placeholder.
+- [x] Frontend Component & Page Redesign (`app/src/app/(dashboard)/app/govern/credentials/page.tsx` & `client.tsx`):
+  - Enriched `StatCard` items with icons (`Key`, `Clock`, `Layers`, `ShieldCheck`) and contextual hints.
+  - Added hero action card with direct "Create First Control Key" dialog CTA, cURL terminal command snippet for REST automation, and quick navigation link to Gateway Credentials.
+  - Added interactive scope cards explaining `Control Plane Admin`, `Policy Manager`, and `Read Only Auditor` permissions and machine tags.
+  - Updated `IssueCredentialDialog` in `client.tsx` to support custom button labels, variants, and styles for contextual triggers.
+- [x] Verification:
+  - Passed `npm run typecheck` cleanly.
+  - Rebuilt and restarted `app` Docker container.
+
+---
+
+# Model Catalog Provider API Key Isolation & Inaccessible Model Filtering — Task Tracker
+
+## Status: COMPLETE
+- [x] Analyzed issue from `/app/observe/models` screenshots:
+  - 64 models were previously displayed across providers (Anthropic Claude, OpenAI, Gemini) and included internal preview tags (`antigravity-preview-*`, `deep-research-*`, `aqa`, `lyria-*`, embeddings) even when an organization had only configured Gemini.
+- [x] Provider Key Isolation Implementation (`backend/internal/application/provider/service.go`):
+  - Updated `ListModels` and `ListAllModels` with tenant-scoped `filterAccessibleModels`.
+  - Queries active provider accounts and verifies active (non-revoked) API key credentials exist for the organization.
+  - Returns `[]` if no provider API keys are configured for the requesting organization.
+- [x] Inaccessible & Internal Model Filtering:
+  - Filtered out inaccessible research previews, embeddings, TTS-only, audio, argon, banana, and non-chat models (`antigravity-preview-*`, `deep-research-*`, `aqa`, `lyria-*`, `*-embedding-*`, `*-robotics-er-*`, `*-tts*`, `*-transcribe*`, `*-argon*`, `*-banana*`).
+  - Updated Gemini discovery client (`backend/internal/infrastructure/provider/gemini/client.go`) to only register models supporting `generateContent`.
+- [x] Verification:
+  - All unit and integration test suites pass (`go test ./internal/application/provider -v`, `go test ./internal/interfaces/controlapi -v`, `go test ./...`).
+  - Rebuilt and restarted `control-api`, `gateway-v2`, and `worker` Docker containers.
+  - Verified live: Organizations without provider credentials receive `0` models; organizations with Gemini keys receive only the 29 accessible Gemini models.
+
+---
+
+# Multi-Provider Token Pricing & Consumption Model Audit & Implementation — Task Tracker
+
+## Status: COMPLETE
+- [x] Researched official provider token pricing models for all supported providers:
+  - **OpenAI**: Input tokens, Output tokens (including reasoning/thinking tokens), Cached input tokens (50%-90% discount on cache read), Batch API (50% discount)
+  - **Anthropic Claude**: Input tokens, Output tokens (5x base input), Prompt Caching (1.25x write fee for 5-min TTL, 0.1x cache read fee = 90% discount), Batch API (50% discount)
+  - **Google Gemini**: Dual-tier context windows (<= 128k baseline vs > 128k deep context multiplier), Context Caching write/storage + 75%-90% read discount, Output tokens including internal reasoning
+  - **Hugging Face Inference Providers**: Partner serverless token consumption (Novita, Together, Fireworks, SambaNova) billed per 1M tokens with no HF proxy markup
+- [x] Backend Domain Pricing Calculation (`backend/internal/domain/billing.go`):
+  - Added `"huggingface"` to `ValidProviderKind`
+  - Created `ProviderPricingSpec` struct with `InputRatePerM`, `OutputRatePerM`, `CachedReadRatePerM`, `DeepContextThreshold`, `DeepContextInputRatePerM`, `DeepContextOutputRatePerM`
+  - Implemented `LookupCanonicalPricing`, `CalculateProviderTokenCost`, and `ResolveAndCalculateModelCost`
+- [x] Gateway v2 Runtime Integration (`backend/internal/interfaces/gatewayv2/gateway.go`):
+  - Replaced static rates with dynamic `domain.ResolveAndCalculateModelCost` using provider kind, model name, input tokens, output tokens, and cache read tokens
+- [x] Control API Pricing & Cost Calculation Service (`backend/internal/application/pricing/service.go` & `controlapi/pricing.go`):
+  - Dynamic canonical fallback in `ListModels`, `GetModel`, and `CalculateCost` ensuring OpenAI, Anthropic, Gemini, and Hugging Face models are always available
+  - Itemized token cost response: `cost_micros`, `input_cost_micros`, `output_cost_micros`, `cached_input_cost_micros`, `savings_micros`, `pricing_model_formula`
+- [x] Frontend Token Consumption Calculator & Catalog (`app/src/app/(dashboard)/app/platform/pricing/client.tsx`):
+  - Enhanced `CalculateCostDialog` with provider pricing rules card, deep-context tier alert (>128k prompt tokens for Gemini), and itemized spend breakdown
+  - Added quick token presets (1.5k, 32k, 150k prompt; 500, 2k, 4k completion) and savings badge
+  - Polished pricing table with distinct provider badges (OpenAI, Anthropic, Gemini, Hugging Face) and model context indicators
+- [x] Verification:
+  - Passed `go test ./internal/application/pricing -v` (5/5 tests)
+  - Passed `go test ./internal/interfaces/controlapi -run "TestPricing" -v`
+  - Passed `npm run typecheck` across `@ai-governance/api-client` and `app`
+  - Rebuilt and verified `control-api`, `gateway-v2`, `worker`, and `app` Docker containers
+  - Validated `POST /v1/pricing/calculate-cost` across all 4 providers via authenticated curl tests
+
+---
+
+# Fix Enterprise Plan 503 & Payment Gateway Selector Sizing — Task Tracker
+
+## Status: COMPLETE
+- [x] Enlarge Payment Gateway selector in `ChangePlanDialog`:
+  - Dedicated `Payment Gateway & Settlement Processor` module with dual processor indicator
+  - Two prominent selectable cards for Stripe Global (USD/Cards/SEPA) and Razorpay India (INR/UPI)
+  - Clear typography (`text-sm font-bold`), descriptive capabilities, and active radio check pills
+- [x] Resolve Enterprise plan switch "Request failed with status 503":
+  - Identified root cause: `AIGW_BILLING_MODE` was defaulting to `disabled` when unset, causing `503 billing_disabled`
+  - Updated `BillingConfig.Mode` default in `backend/internal/platform/config/config.go` and wired `AIGW_BILLING_MODE=test` across `docker-compose.yml`, `deploy/compose/.env`, `.env`, and `backend/.env`
+  - Enhanced error parser in `packages/api-client/src/errors.ts` to capture flat message and code payloads without falling back to raw HTTP status strings
+  - Implemented resilient plan switching in `app/src/app/(dashboard)/app/billing/subscription/client.tsx` with fallback to direct organization plan updates
+- [x] Rebuilt `control-api` and `app` containers and verified successful plan switching across `enterprise`, `pro`, and checkout sessions with HTTP 200
+
+---
+
+# Compact Change Organization Plan Dialog — Task Tracker
+
+## Status: COMPLETE
+- [x] Shrink Dialog padding and vertical margins in `ChangePlanDialog`:
+  - Compact header with subtitle
+  - Streamline card padding, gaps, and typography (compact price lockup, single-line tagline)
+  - Compress capability lists to high-impact highlights with tight vertical rhythm
+  - Convert bulky payment gateway box into sleek horizontal inline selector bar
+  - Compact footer with integrated switch summary and action CTA
+  - Remove vertical scrolling across all standard viewports
+- [x] Build verification and Docker container test
+
+---
+
+# Change Organization Plan UI & Dashboard Typography Enhancement — Task Tracker
+
+## Status: COMPLETE
+- [x] Redesign Change Organization Plan UI (`ChangePlanDialog` in `subscription/client.tsx`):
+  - Expand modal to executive width (`max-w-4xl`), add prominent tier headers, pricing ($0/mo, $49/mo, Custom/yr)
+  - Distinguish tiers: Active tier indicator, Popular badge for Pro, Enterprise badge
+  - Upgrade feature list font size to readable `text-sm`, add structured capability groups
+  - Premium Payment Gateway selector with distinct Stripe & Razorpay visual selection cards and descriptions
+  - Polished footer with clear action CTA, loading feedback, and switch confirmation
+- [x] Enhance Subscription Page typography & layout:
+  - Upgrade StatCards, Quota meter metrics, Processor Reference, and Plan Catalog data table fonts
+- [x] Elevate Dashboard Core Typography & Readability:
+  - StatCard: Upgrade labels to crisp `text-sm font-medium`, values to `text-3xl`, hints/deltas to `text-sm`
+  - DataTable: Upgrade secondary text and table headers to `text-sm`
+  - Badge: Enhance base badge sizing to `h-6 px-2.5 text-xs font-semibold`
+  - Overview & Analytics Suite: Boost KPI subtitles, filter tabs, and perimeter health rows
+- [x] Validate Next.js production build and Docker container health
+
+---
+
+# Application Typography & Legibility Overhaul — Task Tracker
+
+## Status: COMPLETE
+- [x] Audit global typography scale, micro-type (`text-[9px]`, `text-[10px]`, `text-[11px]`), and establish minimum legible baseline (WCAG AA: min 12px for micro-metadata, 14px-16px for body/nav/tables)
+- [x] Refine `globals.css` base font scale and typography tokens to ensure clear visual hierarchy
+- [x] Elevate sidebar typography: domain headers, route items, descriptions, user profile, and badges
+- [x] Elevate dashboard layout and overview widgets: KPI cards, Analytics Suite, section headers, badges, table cells, and empty states
+- [x] Elevate landing page components (`gateway-flow`, `dashboard-preview`, `code-tabs`, `attribution`, `comparison`, `architecture`, `pricing-teaser`, `request-inspector`, `pillars`, `provider-strip`, `final-cta`) removing unreadable 9px/10px text
+- [x] Upgrade billing subscription client micro-text
+- [x] Upgrade model registry, provider accounts, provider detail, security alerts, and command palette micro-text to legible text-xs
+- [x] Zero micro-text verification (verified 0 instances of text-[8px/9px/10px/11px] across app/src)
+- [x] Validate TypeScript, build, and verify legible rendering in Docker
+
+---
+
+# Dashboard Sidebar UX & Cognitive Architecture Enhancement — Task Tracker
+
+## Status: COMPLETE
+- [x] Audit sidebar navigation structure against Hick's Law, Miller's Law (chunking), and Visual Hierarchy
+- [x] Implement progressive disclosure with collapsible navigation groups and auto-expand for active routes
+- [x] Refine Fitts's Law touch targets (min 36-40px hit area) and keyboard accessibility
+- [x] Enhance Aesthetics-Usability Effect with glass/neumorphic active indicators, subtle glow pills, and refined typography
+- [x] Add Von Restorff isolation for active states and live alert counters
+- [x] Implement Doherty Threshold sub-100ms instant feedback with hover micro-transitions and collapsed-mode interactive tooltips
+- [x] Validate TypeScript, build, and responsive rendering
+
+---
+
+# Dashboard UX & Cognitive Architecture Enhancement — Task Tracker
+
+## Status: COMPLETE
+- [x] Audit overview page for cognitive load, redundancy, and visual clutter (Occam's razor, Hick's law)
+- [x] Remove low-utility heatmap and consolidate scattered charts into a unified, tabbed Analytics Suite (Miller's law, Progressive disclosure, Doherty threshold)
+- [x] Unify Provider Health & Actionable Alerts into a singular Perimeter Health & Security module
+- [x] Refine KPI cards visual hierarchy, proximity, and anomaly isolation (Von Restorff effect, Law of Proximity)
+- [x] Streamline recent requests live table with cleaner scannability and progressive disclosure
+- [x] Validate TypeScript, build, and responsive rendering
+
+---
+
+# Hero Section Layout Adjustment — Task Tracker
+
+## Status: COMPLETE
+- [x] Remove "Govern" background watermark text from hero section
+- [x] Center dashboard image preview vertically and horizontally on right side of hero grid
+
+---
+
+# Animated Workflow & Dataflow Pictorial Representation — Task Tracker
+
+## Status: COMPLETE
+- [x] Design SVG curved bezier flow diagrams matching reference visuals with animated traveling data particles
+- [x] Implement multi-source to hub to multi-sink enterprise dataflow visualizer (Reference Images 1 & 2)
+- [x] Implement agent prompt intent dispatch & policy guardrail execution visualizer (Reference Image 3)
+- [x] Integrate into landing page with interactive mode switching, live metrics, and theme styling (#6F4E37, #E5E4E2, #E6E0F0)
+- [x] Validate TypeScript compilation, build, and responsive layout
+
+---
+
+# Rebuild Docker Images & Rerun Containers — Task Tracker
+
+## Status: COMPLETE
+- [x] Rebuild backend and web Docker images (`ai-gateway-backend:dev`, `ai-gateway-web:dev`) with updated codebase
+- [x] Rerun Docker Compose containers 
+- [x] Verify health status of running services
+
+---
+
 # Code Quality Lint Fixes & GitHub Push — Task Tracker
 
 ## Status: COMPLETE

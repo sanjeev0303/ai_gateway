@@ -77,14 +77,14 @@ export function Architecture() {
                       style={{ background: "#6F4E37" }}
                     />
                     <span
-                      className="text-[10px] uppercase text-[#7A6458]"
+                      className="text-xs font-semibold uppercase text-[#7A6458]"
                       style={{ fontFamily: "var(--font-fira-code)", letterSpacing: "0.12em" }}
                     >
                       Flow Architecture
                     </span>
                   </div>
                   <span
-                    className="text-[10px] text-[#6F4E37] border border-[rgba(111,78,55,0.25)] px-2.5 py-1"
+                    className="text-xs font-medium text-[#6F4E37] border border-[rgba(111,78,55,0.25)] px-2.5 py-1"
                     style={{ fontFamily: "var(--font-fira-code)" }}
                   >
                     Sub-millisecond overhead
@@ -106,7 +106,7 @@ export function Architecture() {
                         }}
                       >
                         <p
-                          className="text-xs font-semibold"
+                          className="text-sm font-semibold"
                           style={{
                             fontFamily: "var(--font-fira-code)",
                             color: node.highlight ? "#6F4E37" : "#1C1412",
@@ -115,7 +115,7 @@ export function Architecture() {
                           {node.label}
                         </p>
                         <p
-                          className="text-[10px] mt-1"
+                          className="text-xs mt-1 font-medium"
                           style={{ color: "rgba(74,58,48,0.70)" }}
                         >
                           {node.sub}

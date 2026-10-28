@@ -78,12 +78,17 @@ type calculateCostRequest struct {
 }
 
 type calculateCostResponse struct {
-	CostMicros        int64             `json:"cost_micros"`
-	Currency          string            `json:"currency"`
-	PricingVersion    pricingVersionDTO `json:"pricing_version"`
-	PromptTokens      int64             `json:"prompt_tokens"`
-	CompletionTokens  int64             `json:"completion_tokens"`
-	CachedInputTokens int64             `json:"cached_input_tokens"`
+	CostMicros            int64             `json:"cost_micros"`
+	InputCostMicros       int64             `json:"input_cost_micros"`
+	OutputCostMicros      int64             `json:"output_cost_micros"`
+	CachedInputCostMicros int64             `json:"cached_input_cost_micros"`
+	SavingsMicros         int64             `json:"savings_micros"`
+	PricingModelFormula   string            `json:"pricing_model_formula,omitempty"`
+	Currency              string            `json:"currency"`
+	PricingVersion        pricingVersionDTO `json:"pricing_version"`
+	PromptTokens          int64             `json:"prompt_tokens"`
+	CompletionTokens      int64             `json:"completion_tokens"`
+	CachedInputTokens     int64             `json:"cached_input_tokens"`
 }
 
 func toPricingVersionDTO(pv domain.PricingVersion) pricingVersionDTO {
@@ -271,12 +276,17 @@ func (a *api) calculatePricingCost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := calculateCostResponse{
-		CostMicros:        result.CostMicros,
-		Currency:          result.Currency,
-		PricingVersion:    toPricingVersionDTO(result.PricingVersion),
-		PromptTokens:      result.PromptTokens,
-		CompletionTokens:  result.CompletionTokens,
-		CachedInputTokens: result.CachedInputTokens,
+		CostMicros:            result.CostMicros,
+		InputCostMicros:       result.InputCostMicros,
+		OutputCostMicros:      result.OutputCostMicros,
+		CachedInputCostMicros: result.CachedInputCostMicros,
+		SavingsMicros:         result.SavingsMicros,
+		PricingModelFormula:   result.PricingModelFormula,
+		Currency:              result.Currency,
+		PricingVersion:        toPricingVersionDTO(result.PricingVersion),
+		PromptTokens:          result.PromptTokens,
+		CompletionTokens:      result.CompletionTokens,
+		CachedInputTokens:     result.CachedInputTokens,
 	}
 	httpx.WriteJSON(w, http.StatusOK, resp)
 }

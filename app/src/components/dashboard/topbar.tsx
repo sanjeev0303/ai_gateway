@@ -47,15 +47,15 @@ function ThemeToggle() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-36 glass">
         <DropdownMenuLabel className="text-xs">Theme</DropdownMenuLabel>
-        <DropdownMenuItem onClick={() => setTheme("light")} className="text-xs">
-          <Sun className="mr-2 size-3.5" aria-hidden /> Light
+        <DropdownMenuItem onClick={() => setTheme("light")} className="text-sm">
+          <Sun className="mr-2 size-4" aria-hidden /> Light
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")} className="text-xs">
-          <Moon className="mr-2 size-3.5" aria-hidden /> Dark
+        <DropdownMenuItem onClick={() => setTheme("dark")} className="text-sm">
+          <Moon className="mr-2 size-4" aria-hidden /> Dark
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")} className="text-xs">
-          <Monitor className="mr-2 size-3.5" aria-hidden /> System
-          {theme === "system" && <span className="ml-auto text-[10px] text-muted-foreground">active</span>}
+        <DropdownMenuItem onClick={() => setTheme("system")} className="text-sm">
+          <Monitor className="mr-2 size-4" aria-hidden /> System
+          {theme === "system" && <span className="ml-auto text-xs text-muted-foreground">active</span>}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -83,11 +83,11 @@ export function Topbar() {
       <MobileNav />
 
       {/* Breadcrumb path */}
-      <nav aria-label="Breadcrumb" className="hidden sm:flex items-center gap-1.5 text-xs">
+      <nav aria-label="Breadcrumb" className="hidden sm:flex items-center gap-2 text-sm">
         <span className="font-semibold text-foreground/80">{organization.name}</span>
         {breadcrumbs.map((crumb, idx) => (
           <React.Fragment key={crumb}>
-            <ChevronRight className="size-3 text-muted-foreground/60" aria-hidden />
+            <ChevronRight className="size-3.5 text-muted-foreground/60" aria-hidden />
             <span
               className={
                 idx === breadcrumbs.length - 1
@@ -115,12 +115,12 @@ export function Topbar() {
         <CommandPaletteTrigger />
 
         <Select value={range} onValueChange={setRange}>
-          <SelectTrigger className="h-8 w-24 text-xs rounded-lg border-border/60" aria-label="Date range">
+          <SelectTrigger className="h-9 w-28 text-sm rounded-lg border-border/60" aria-label="Date range">
             <SelectValue placeholder="Range" />
           </SelectTrigger>
           <SelectContent className="glass">
             {DATE_RANGES.map((option) => (
-              <SelectItem key={option} value={option} className="text-xs">
+              <SelectItem key={option} value={option} className="text-sm">
                 {option}
               </SelectItem>
             ))}

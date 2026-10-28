@@ -92,7 +92,7 @@ export function AreaChart({
             y={y.map(tick)}
             textAnchor="end"
             dominantBaseline="middle"
-            className="fill-muted-foreground text-[10px]"
+            className="fill-muted-foreground text-xs font-mono"
           >
             {formatValue(tick)}
           </text>
@@ -156,7 +156,7 @@ export function AreaChart({
             x={x.map(index)}
             y={baseline + 18}
             textAnchor="middle"
-            className="fill-muted-foreground text-[10px]"
+            className="fill-muted-foreground text-xs font-mono"
           >
             {(series[0]!.data[index]?.date ?? "").slice(5)}
           </text>

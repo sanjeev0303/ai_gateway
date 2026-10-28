@@ -87,7 +87,7 @@ export function DonutChart({
             x={size / 2}
             y={size / 2 + 16}
             textAnchor="middle"
-            className="fill-muted-foreground text-[11px]"
+            className="fill-muted-foreground text-xs font-medium"
           >
             {centerLabel}
           </text>

@@ -122,7 +122,7 @@ export function SyncModelsDialog() {
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="e.g. sk-..."
             />
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Probes live catalog directly. The key is verified in-flight and not persisted. Local test key <code className="bg-muted px-1 py-0.5 rounded">sk-dummy-{providerKind}-key</code> works immediately.
             </p>
           </div>
@@ -200,17 +200,17 @@ export function ModelRegistryClient({ initialRows }: { initialRows: ModelRow[] }
       render: (row) => (
         <div className="flex flex-wrap gap-1">
           {row.supports_streaming && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-600">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-500/10 text-blue-600">
               Stream
             </span>
           )}
           {row.supports_tools && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-600">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-500/10 text-purple-600">
               Tools
             </span>
           )}
           {row.supports_reasoning && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-600">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-500/10 text-amber-600">
               Reason
             </span>
           )}
@@ -238,17 +238,17 @@ export function ModelRegistryClient({ initialRows }: { initialRows: ModelRow[] }
         const isUnavailable = row.status === "inactive" || row.status === "unavailable" || (!row.is_active && row.status !== "active");
         if (isUnavailable) {
           return (
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-muted text-muted-foreground border border-border">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border">
               <XCircle className="size-3" /> Model no longer available
             </span>
           );
         }
         return row.is_active ? (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
             <CheckCircle2 className="size-3" /> Model authorized and ready
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-600 border border-amber-500/30">
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-600 border border-amber-500/30">
             <AlertTriangle className="size-3" /> Model discovered but not authorized
           </span>
         );

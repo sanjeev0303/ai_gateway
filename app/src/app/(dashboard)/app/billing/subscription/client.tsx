@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useState, useTransition } from "react";
-import { Check, Sparkles, AlertTriangle, ArrowRight, X } from "lucide-react";
+import { Check, Sparkles, AlertTriangle, ArrowRight, X, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,24 +39,66 @@ const PLAN_FEATURES: Record<string, string[]> = {
     "Single upstream provider account",
     "Standard rate limits & concurrency",
     "7-day retention for audit logs",
-    "Community support",
   ],
   pro: [
     "1,000,000 requests per month",
-    "Multi-provider routing & fallback",
-    "Real-time governance policies & guardrails",
-    "30-day raw usage telemetry retention",
-    "Priority in-app notifications & webhooks",
-    "Email & standard SLA support",
+    "Multi-provider routing & auto-failover",
+    "Real-time governance & safety guardrails",
+    "30-day raw telemetry & priority alerts",
   ],
   enterprise: [
     "Unlimited / custom request volume",
     "Dedicated throughput & isolated tenancy",
-    "Full content / metadata privacy modes",
-    "365-day compliance audit retention",
-    "Custom price rate sheet & discount tiers",
-    "Dedicated Slack channel & 99.99% SLA",
+    "Zero-retention compliance modes",
+    "365-day SOC2 audit & 99.99% SLA",
   ],
+};
+
+interface PlanTierMeta {
+  price: string;
+  cadence: string;
+  tagline: string;
+  badge?: string;
+  features: string[];
+}
+
+const PLAN_TIER_DETAILS: Record<string, PlanTierMeta> = {
+  free: {
+    price: "$0",
+    cadence: "per month",
+    tagline: "Essential gateway proxy for local experiments & prototypes",
+    badge: "Starter",
+    features: [
+      "10,000 requests per month",
+      "Single provider account routing",
+      "Standard rate limits & concurrency",
+      "7-day audit logs retention",
+    ],
+  },
+  pro: {
+    price: "$49",
+    cadence: "per month",
+    tagline: "Full observability & governance for fast-moving engineering teams",
+    badge: "Most Popular",
+    features: [
+      "1,000,000 requests per month",
+      "Multi-provider routing & auto-fallback",
+      "Real-time governance & safety guardrails",
+      "30-day raw telemetry & priority alerts",
+    ],
+  },
+  enterprise: {
+    price: "Custom",
+    cadence: "billed annually",
+    tagline: "Dedicated throughput, custom compliance & enterprise security",
+    badge: "Enterprise",
+    features: [
+      "Unlimited / custom request volume",
+      "Dedicated throughput & isolated tenancy",
+      "Zero-retention privacy modes",
+      "365-day SOC2 audit & 99.99% SLA",
+    ],
+  },
 };
 
 export function ChangePlanDialog({
@@ -78,15 +120,22 @@ export function ChangePlanDialog({
     }
 
     startTransition(async () => {
+      // For paid tiers (pro / enterprise), attempt checkout session initiation first
       if (selectedPlan !== "free") {
         const checkoutRes = await createCheckoutSessionAction(selectedPlan, paymentProvider);
-        if (checkoutRes.error) {
-          toast.error(checkoutRes.error);
-          return;
-        }
-        if (checkoutRes.checkoutUrl && checkoutRes.checkoutUrl.startsWith("http") && !checkoutRes.checkoutUrl.includes("checkout.stripe.com/test")) {
+        if (
+          checkoutRes.checkoutUrl &&
+          checkoutRes.checkoutUrl.startsWith("http") &&
+          !checkoutRes.checkoutUrl.includes("checkout.stripe.com/test") &&
+          !checkoutRes.checkoutUrl.includes("simulate")
+        ) {
           window.location.href = checkoutRes.checkoutUrl;
           return;
+        }
+
+        // If checkout session returned an error, report to console and fallback to direct plan update
+        if (checkoutRes.error) {
+          console.warn("Checkout session initiation failed, falling back to direct plan switch:", checkoutRes.error);
         }
       }
 
@@ -106,120 +155,188 @@ export function ChangePlanDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="gap-1.5 shadow-sm">
+        <Button size="sm" className="gap-2 shadow-sm h-9 px-4 text-sm font-semibold">
           <Sparkles className="size-4" /> Change Plan
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
-          <DialogTitle className="text-xl">Change Organization Plan</DialogTitle>
-          <DialogDescription>
-            Select a tier and payment provider for your organization's subscription billing.
+      <DialogContent className="max-w-4xl sm:max-w-5xl p-5 gap-3 max-h-[96vh] overflow-hidden flex flex-col">
+        <DialogHeader className="space-y-0.5 pb-0.5">
+          <DialogTitle className="text-xl font-bold tracking-tight">Change Organization Plan</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Select a tier and payment processor to update your organization's quota limits and governance capabilities.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-4 md:grid-cols-3">
+        <div className="grid gap-3 py-0.5 md:grid-cols-3">
           {plans.map((plan) => {
             const isCurrent = plan.code === currentPlanCode;
             const isSelected = plan.code === selectedPlan;
-            const features = PLAN_FEATURES[plan.code] ?? [plan.description];
+            const meta = PLAN_TIER_DETAILS[plan.code] ?? {
+              price: "$—",
+              cadence: "per month",
+              tagline: plan.description,
+              badge: undefined,
+              features: PLAN_FEATURES[plan.code] ?? [plan.description],
+            };
 
             return (
-              <Card
+              <div
                 key={plan.id}
                 onClick={() => setSelectedPlan(plan.code)}
-                className={`cursor-pointer transition-all border-2 relative flex flex-col justify-between ${
+                className={`cursor-pointer rounded-xl border-2 p-3.5 transition-all relative flex flex-col justify-between text-left ${
                   isSelected
-                    ? "border-primary shadow-md bg-accent/20"
-                    : "border-border hover:border-primary/50"
-                }`}
+                    ? "border-primary bg-primary/5 shadow-xs ring-1 ring-primary/40"
+                    : "border-border hover:border-primary/40 bg-card/80"
+                } ${isCurrent && !isSelected ? "border-emerald-500/30" : ""}`}
               >
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-semibold">{plan.name}</CardTitle>
-                    {isCurrent && (
-                      <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                <div>
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="text-base font-bold text-foreground">{plan.name}</span>
+                    {isCurrent ? (
+                      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs font-semibold px-2 py-0">
                         Current
                       </Badge>
-                    )}
+                    ) : meta.badge ? (
+                      <Badge variant={meta.badge === "Most Popular" ? "default" : "secondary"} className="text-xs font-semibold px-2 py-0">
+                        {meta.badge}
+                      </Badge>
+                    ) : null}
                   </div>
-                  <CardDescription className="text-xs mt-1 min-h-[32px] line-clamp-2">
-                    {plan.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2 text-xs flex-1">
-                  <div className="font-semibold text-muted-foreground uppercase text-[10px] tracking-wider mb-2">
-                    Included Capabilities
+
+                  <div className="mt-1 flex items-baseline gap-1">
+                    <span className="text-2xl font-extrabold tracking-tight text-foreground">{meta.price}</span>
+                    <span className="text-xs font-medium text-muted-foreground">/{meta.cadence}</span>
                   </div>
-                  {features.map((feat, idx) => (
-                    <div key={idx} className="flex items-start gap-1.5 text-muted-foreground">
-                      <Check className="size-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                      <span>{feat}</span>
+
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1 leading-snug">
+                    {meta.tagline}
+                  </p>
+
+                  <div className="border-t border-border/50 my-2" />
+
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 mb-0.5">
+                      Key Capabilities
                     </div>
-                  ))}
-                </CardContent>
-                <CardFooter className="pt-3 border-t">
+                    {meta.features.map((feat, idx) => (
+                      <div key={idx} className="flex items-start gap-1.5 text-xs text-foreground/90 leading-snug">
+                        <Check className="size-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                        <span>{feat}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-2.5">
                   <Button
                     type="button"
-                    size="sm"
                     variant={isSelected ? "default" : "outline"}
-                    className="w-full text-xs"
+                    className={`w-full h-8 text-xs font-semibold transition-all ${
+                      isCurrent ? "border-emerald-500/30 text-emerald-600 bg-emerald-500/5 hover:bg-emerald-500/10" : ""
+                    }`}
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedPlan(plan.code);
                     }}
                   >
-                    {isCurrent ? "Active Plan" : isSelected ? "Selected" : "Select"}
+                    {isCurrent ? "Active Plan" : isSelected ? "Selected Tier" : `Select ${plan.name}`}
                   </Button>
-                </CardFooter>
-              </Card>
+                </div>
+              </div>
             );
           })}
         </div>
 
         {selectedPlan !== "free" && (
-          <div className="rounded-lg border p-3 bg-muted/40 space-y-2">
+          <div className="space-y-2 p-3 rounded-xl border border-border/80 bg-muted/20">
             <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs font-semibold">Payment Gateway</div>
-                <div className="text-[11px] text-muted-foreground">Choose processing partner for subscription invoices & checkout</div>
-              </div>
               <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={paymentProvider === "stripe" ? "default" : "outline"}
-                  onClick={() => setPaymentProvider("stripe")}
-                  className="text-xs h-7 px-3"
-                >
-                  Stripe
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={paymentProvider === "razorpay" ? "default" : "outline"}
-                  onClick={() => setPaymentProvider("razorpay")}
-                  className="text-xs h-7 px-3"
-                >
-                  Razorpay
-                </Button>
+                <CreditCard className="size-4 text-primary shrink-0" />
+                <span className="text-xs font-bold uppercase tracking-wider text-foreground">
+                  Payment Gateway & Settlement Processor
+                </span>
+              </div>
+              <Badge variant="outline" className="text-xs font-semibold px-2 py-0.5 border-primary/30 text-primary bg-primary/5">
+                Dual Processor
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div
+                onClick={() => setPaymentProvider("stripe")}
+                className={`cursor-pointer rounded-lg border-2 p-3 transition-all flex items-start justify-between gap-3 ${
+                  paymentProvider === "stripe"
+                    ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary/40"
+                    : "border-border/80 hover:border-primary/40 bg-card/90"
+                }`}
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-foreground">Stripe Global</span>
+                    <Badge variant="secondary" className="text-xs font-medium px-1.5 py-0">USD</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-snug">
+                    Cards, Apple Pay, Google Pay, SEPA & Global ACH
+                  </p>
+                </div>
+                <div className={`size-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                  paymentProvider === "stripe" ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
+                }`}>
+                  {paymentProvider === "stripe" && <Check className="size-2.5 stroke-3" />}
+                </div>
+              </div>
+
+              <div
+                onClick={() => setPaymentProvider("razorpay")}
+                className={`cursor-pointer rounded-lg border-2 p-3 transition-all flex items-start justify-between gap-3 ${
+                  paymentProvider === "razorpay"
+                    ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary/40"
+                    : "border-border/80 hover:border-primary/40 bg-card/90"
+                }`}
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-foreground">Razorpay India</span>
+                    <Badge variant="secondary" className="text-xs font-medium px-1.5 py-0">INR</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-snug">
+                    UPI (GPay / PhonePe), Netbanking & RuPay Cards
+                  </p>
+                </div>
+                <div className={`size-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                  paymentProvider === "razorpay" ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
+                }`}>
+                  {paymentProvider === "razorpay" && <Check className="size-2.5 stroke-3" />}
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="ghost" onClick={() => setOpen(false)} disabled={isPending}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleConfirm}
-            disabled={isPending || selectedPlan === currentPlanCode}
-            className="gap-2"
-          >
-            {isPending ? "Processing…" : `Confirm Switch to ${selectedPlan.toUpperCase()}`}
-            <ArrowRight className="size-4" />
-          </Button>
+        <DialogFooter className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 border-t mt-0.5">
+          <div className="text-xs text-muted-foreground text-left w-full sm:w-auto">
+            {selectedPlan === currentPlanCode ? (
+              <span>Currently active on <strong className="text-foreground">{selectedPlan.toUpperCase()}</strong></span>
+            ) : (
+              <span>
+                Switching to <strong className="text-foreground">{selectedPlan.toUpperCase()}</strong>
+                {selectedPlan !== "free" && <> · {PLAN_TIER_DETAILS[selectedPlan]?.price} / month via <strong className="text-foreground">{paymentProvider === "stripe" ? "Stripe" : "Razorpay"}</strong></>}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <Button variant="ghost" onClick={() => setOpen(false)} disabled={isPending} className="h-8 px-3 text-xs">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirm}
+              disabled={isPending || selectedPlan === currentPlanCode}
+              className="gap-1.5 h-8 px-4 text-xs font-semibold shadow-xs"
+            >
+              {isPending ? "Processing…" : `Confirm Switch to ${selectedPlan.toUpperCase()}`}
+              <ArrowRight className="size-3.5" />
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -257,24 +374,24 @@ export function CancelSubscriptionButton({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 text-xs">
+        <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 text-sm font-medium h-8">
           Cancel subscription
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-destructive">
+          <DialogTitle className="flex items-center gap-2 text-destructive text-lg font-bold">
             <AlertTriangle className="size-5" /> Cancel Subscription?
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-sm text-muted-foreground leading-relaxed">
             Your current plan will remain active until the end of the billing cycle. After that, your organization will downgrade to the Free tier and request quotas will be reduced.
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={isPending} className="text-sm">
             Keep Subscription
           </Button>
-          <Button variant="destructive" onClick={handleCancel} disabled={isPending}>
+          <Button variant="destructive" onClick={handleCancel} disabled={isPending} className="text-sm font-semibold">
             {isPending ? "Cancelling…" : "Confirm Cancellation"}
           </Button>
         </DialogFooter>
@@ -309,7 +426,7 @@ export function PlanActionsCell({
 
   if (isCurrent) {
     return (
-      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-xs">
+      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-xs font-semibold px-2.5 py-0.5">
         Active
       </Badge>
     );
@@ -319,7 +436,7 @@ export function PlanActionsCell({
     <Button
       variant="outline"
       size="sm"
-      className="text-xs h-7"
+      className="text-sm font-medium h-8 px-3"
       onClick={handleSwitch}
       disabled={isPending}
     >

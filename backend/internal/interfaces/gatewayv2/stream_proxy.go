@@ -131,17 +131,8 @@ func (s *StreamProxyImpl) Forward(ctx context.Context, w http.ResponseWriter, r 
 	}()
 
 	// Client-disconnect cancellation needs no extra watcher: streamCtx derives
-	// from the request context, which net/http already cancels when the client
-	// goes away. The previous http.CloseNotifier assertion panicked outright on
-	// any writer that is not HTTP/1, including wrapped and test writers.
-	clientGone := ctx.Done()
-	go func() {
-		select {
-		case <-clientGone:
-			s.logger.Debug("client disconnected, cancelling upstream", "stream_id", streamID)
-		case <-streamCtx.Done():
-		}
-	}()
+	// from the request context, which net/http already cancels when the client goes away.
+
 
 	// Build upstream request
 	upstreamReq, err := s.buildUpstreamRequest(streamCtx, r, upstreamURL, upstreamHeaders)
@@ -246,6 +237,14 @@ func (s *StreamProxyImpl) buildUpstreamRequest(ctx context.Context, r *http.Requ
 	return outReq, nil
 }
 
+// streamBufferPool pools reusable byte buffers to avoid heap allocation churn during high-volume streaming.
+var streamBufferPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, 32*1024)
+		return &b
+	},
+}
+
 // streamResponse copies the upstream response to the client with flushing,
 // reporting the usage the observer saw. Usage is reported on every exit path:
 // a client that disconnects after the final usage frame was still billed.
@@ -255,7 +254,15 @@ func (s *StreamProxyImpl) streamResponse(ctx context.Context, w http.ResponseWri
 		s.logger.Warn("ResponseWriter does not support flushing")
 	}
 
-	buf := make([]byte, s.readBufferSize)
+	bufPtr := streamBufferPool.Get().(*[]byte)
+	defer streamBufferPool.Put(bufPtr)
+	buf := *bufPtr
+	if len(buf) < s.readBufferSize {
+		buf = make([]byte, s.readBufferSize)
+	} else {
+		buf = buf[:s.readBufferSize]
+	}
+
 	for {
 		select {
 		case <-ctx.Done():

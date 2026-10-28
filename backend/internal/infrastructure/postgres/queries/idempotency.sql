@@ -7,3 +7,7 @@ RETURNING *;
 -- name: GetIdempotencyKey :one
 SELECT * FROM idempotency_keys
 WHERE organization_id = $1 AND scope_key = $2 AND idempotency_key = $3;
+
+-- name: PurgeExpiredIdempotencyKeys :execrows
+DELETE FROM idempotency_keys
+WHERE organization_id = $1 AND expires_at < $2;

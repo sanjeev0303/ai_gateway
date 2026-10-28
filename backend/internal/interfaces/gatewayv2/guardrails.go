@@ -2,8 +2,8 @@ package gatewayv2
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
+	"sync"
 	"time"
 
 	"ai-governance-saas/backend/internal/application/guardrails"
@@ -14,15 +14,57 @@ import (
 )
 
 type GuardrailEvaluator struct {
-	repo repositories.GuardrailsRepository
-	eval *guardrails.Evaluator
+	repo       repositories.GuardrailsRepository
+	eval       *guardrails.Evaluator
+	events     chan domain.GuardrailEvent
+	stopSignal chan struct{}
+	closeOnce  sync.Once
 }
 
 func NewGuardrailEvaluator(repo repositories.GuardrailsRepository) *GuardrailEvaluator {
-	return &GuardrailEvaluator{
-		repo: repo,
-		eval: guardrails.NewEvaluator(),
+	g := &GuardrailEvaluator{
+		repo:       repo,
+		eval:       guardrails.NewEvaluator(),
+		events:     make(chan domain.GuardrailEvent, 1024),
+		stopSignal: make(chan struct{}),
 	}
+	if repo != nil {
+		for i := 0; i < 2; i++ {
+			go g.worker()
+		}
+	}
+	return g
+}
+
+func (g *GuardrailEvaluator) worker() {
+	for {
+		select {
+		case <-g.stopSignal:
+			for {
+				select {
+				case ev := <-g.events:
+					g.persist(ev)
+				default:
+					return
+				}
+			}
+		case ev := <-g.events:
+			g.persist(ev)
+		}
+	}
+}
+
+func (g *GuardrailEvaluator) persist(ev domain.GuardrailEvent) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = g.repo.CreateEvent(ctx, ev)
+}
+
+// Close gracefully stops the background event persisters.
+func (g *GuardrailEvaluator) Close() {
+	g.closeOnce.Do(func() {
+		close(g.stopSignal)
+	})
 }
 
 type GuardrailEvalResult struct {
@@ -79,31 +121,30 @@ func (g *GuardrailEvaluator) CheckInput(ctx context.Context, payload []byte, org
 		return &GuardrailEvalResult{Triggered: false}
 	}
 
-	var tokenCount int
-	var asMap map[string]any
-	if err := json.Unmarshal(payload, &asMap); err == nil {
-		tokenCount = len(payload) / 4
-	} else {
-		tokenCount = len(payload) / 4
+	// Lightweight token approximation (4 characters per token heuristic) without JSON parse overhead
+	tokenCount := len(payload) / 4
+	if tokenCount < 1 && len(payload) > 0 {
+		tokenCount = 1
 	}
 
 	res := g.eval.Evaluate(ctx, string(payload), tokenCount, allGuardrails)
 	if res != nil {
-		go func() {
-			eventCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			defer cancel()
-			_ = g.repo.CreateEvent(eventCtx, domain.GuardrailEvent{
-				ID:              uuid.New().String(),
-				OrganizationID:  orgID,
-				GuardrailID:     res.GuardrailID,
-				RequestID:       reqID,
-				Direction:       domain.GuardrailEventDirectionInput,
-				Detector:        res.Detector,
-				Action:          res.Action,
-				MatchedCategory: res.MatchedCategory,
-				Timestamp:       time.Now(),
-			})
-		}()
+		ev := domain.GuardrailEvent{
+			ID:              uuid.New().String(),
+			OrganizationID:  orgID,
+			GuardrailID:     res.GuardrailID,
+			RequestID:       reqID,
+			Direction:       domain.GuardrailEventDirectionInput,
+			Detector:        res.Detector,
+			Action:          res.Action,
+			MatchedCategory: res.MatchedCategory,
+			Timestamp:       time.Now(),
+		}
+		select {
+		case g.events <- ev:
+		default:
+			slog.Warn("guardrail event queue full, dropping event", "request_id", reqID)
+		}
 
 		return &GuardrailEvalResult{
 			Triggered:       true,
@@ -116,3 +157,4 @@ func (g *GuardrailEvaluator) CheckInput(ctx context.Context, payload []byte, org
 
 	return &GuardrailEvalResult{Triggered: false}
 }
+

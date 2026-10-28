@@ -53,8 +53,8 @@ function DeltaBadge({ delta }: { delta: StatDelta }) {
   }
 
   return (
-    <span className={cn("inline-flex items-center gap-1 text-xs font-medium", tone)}>
-      <Icon className="size-3.5" aria-hidden />
+    <span className={cn("inline-flex items-center gap-1 text-sm font-semibold", tone)}>
+      <Icon className="size-4" aria-hidden />
       {formatDelta(delta.fraction)}
       {delta.label && (
         <span className="font-normal text-muted-foreground">{delta.label}</span>
@@ -78,21 +78,21 @@ export function StatCard({
 }: StatCardProps) {
   const body = (
     <CardContent className="flex items-start justify-between gap-4 p-5">
-      <div className="min-w-0 space-y-1.5">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="min-w-0 space-y-2">
+        <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground tracking-wide">
           {Icon && (
-            <span className="flex size-6 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <Icon className="size-3.5" aria-hidden />
+            <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Icon className="size-4" aria-hidden />
             </span>
           )}
           <span className="truncate">{label}</span>
         </div>
-        <p suppressHydrationWarning className={cn("text-2xl font-bold tracking-tight tabular-nums", TONE_TEXT[tone])}>
+        <p suppressHydrationWarning className={cn("text-3xl font-bold tracking-tight tabular-nums", TONE_TEXT[tone])}>
           {value}
         </p>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5">
           {delta && <DeltaBadge delta={delta} />}
-          {hint && <span suppressHydrationWarning className="text-xs text-muted-foreground">{hint}</span>}
+          {hint && <span suppressHydrationWarning className="text-sm text-muted-foreground">{hint}</span>}
         </div>
       </div>
       {sparkline && sparkline.length > 1 && (

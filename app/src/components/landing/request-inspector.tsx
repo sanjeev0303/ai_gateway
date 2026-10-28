@@ -74,12 +74,12 @@ export function RequestInspector() {
                       )}
                     >
                       <span
-                        className="block text-[10px] font-medium mb-0.5"
+                        className="block text-xs font-semibold mb-0.5"
                         style={{ fontFamily: "var(--font-fira-code)" }}
                       >
                         {sample.id}
                       </span>
-                      <span className="block text-xs font-semibold truncate" style={{ letterSpacing: "-0.02em" }}>
+                      <span className="block text-sm font-semibold truncate" style={{ letterSpacing: "-0.02em" }}>
                         {sample.model}
                       </span>
                     </button>
@@ -99,16 +99,16 @@ export function RequestInspector() {
                 {/* Header */}
                 <div className="flex items-start justify-between gap-4 pb-5 border-b border-[rgba(111,78,55,0.10)] mb-5">
                   <div>
-                    <p className="text-lg font-semibold text-[#1C1412]" style={{ fontFamily: "var(--font-cormorant)", letterSpacing: "-0.03em" }}>
+                    <p className="text-xl font-semibold text-[#1C1412]" style={{ fontFamily: "var(--font-cormorant)", letterSpacing: "-0.03em" }}>
                       {active.model}
                     </p>
-                    <p className="text-xs text-[#7A6458] mt-0.5" style={{ fontFamily: "var(--font-fira-code)" }}>
+                    <p className="text-sm font-medium text-[#7A6458] mt-0.5" style={{ fontFamily: "var(--font-fira-code)" }}>
                       via {active.provider}
                     </p>
                   </div>
                   <span
                     className={cn(
-                      "text-[10px] font-semibold px-2 py-1 border",
+                      "text-xs font-semibold px-2.5 py-1 border",
                       active.outcome === "Error"
                         ? "border-[#B54B2A] text-[#B54B2A] bg-[rgba(181,75,42,0.06)]"
                         : "border-[#4A7A5A] text-[#4A7A5A] bg-[rgba(74,122,90,0.06)]"
@@ -131,12 +131,12 @@ export function RequestInspector() {
                   ].map(({ label, value }) => (
                     <div
                       key={label}
-                      className="grid grid-cols-[120px_1fr] gap-4 py-2.5 border-b border-[rgba(111,78,55,0.07)] last:border-b-0"
+                      className="grid grid-cols-[130px_1fr] gap-4 py-2.5 border-b border-[rgba(111,78,55,0.07)] last:border-b-0"
                     >
-                      <dt className="text-xs text-[#7A6458]" style={{ fontFamily: "var(--font-fira-code)" }}>
+                      <dt className="text-sm font-medium text-[#7A6458]" style={{ fontFamily: "var(--font-fira-code)" }}>
                         {label}
                       </dt>
-                      <dd className="text-sm font-semibold text-[#1C1412] tabular-nums" style={{ letterSpacing: "-0.01em" }}>
+                      <dd className="text-base font-semibold text-[#1C1412] tabular-nums" style={{ letterSpacing: "-0.01em" }}>
                         {value}
                       </dd>
                     </div>
@@ -148,15 +148,15 @@ export function RequestInspector() {
                   className="mt-5 p-4 border-l-2 border-[#6F4E37]"
                   style={{ background: "rgba(111,78,55,0.04)" }}
                 >
-                  <p className="text-[10px] uppercase tracking-label text-[#6F4E37] mb-1" style={{ fontFamily: "var(--font-fira-code)", letterSpacing: "0.12em" }}>
+                  <p className="text-xs font-semibold uppercase tracking-label text-[#6F4E37] mb-1" style={{ fontFamily: "var(--font-fira-code)", letterSpacing: "0.12em" }}>
                     Evaluation trace
                   </p>
-                  <p className="text-xs leading-relaxed text-[#4A3A30]">{active.detail}</p>
+                  <p className="text-sm leading-relaxed text-[#4A3A30]">{active.detail}</p>
                 </div>
               </div>
             </div>
 
-            <p className="mt-4 text-xs text-[#7A6458]" style={{ fontFamily: "var(--font-fira-code)" }}>
+            <p className="mt-4 text-sm font-medium text-[#7A6458]" style={{ fontFamily: "var(--font-fira-code)" }}>
               {REQUEST_INSPECTOR.note}
             </p>
           </ScrollReveal>

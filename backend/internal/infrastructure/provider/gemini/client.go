@@ -112,8 +112,37 @@ func (c *Client) ListModels(ctx context.Context, apiKey string) ([]provider.Mode
 	}
 	models := make([]provider.Model, 0, len(body.Models))
 	for _, m := range body.Models {
+		slug := strings.TrimPrefix(m.Name, "models/")
+		slugLower := strings.ToLower(slug)
+
+		// Filter out internal research previews, embeddings, and unsupported models
+		if strings.HasPrefix(slugLower, "antigravity-preview-") ||
+			strings.HasPrefix(slugLower, "deep-research-") ||
+			slugLower == "aqa" ||
+			strings.HasPrefix(slugLower, "lyria-") ||
+			strings.Contains(slugLower, "embedding") ||
+			strings.Contains(slugLower, "robotics-er") ||
+			strings.Contains(slugLower, "tts") ||
+			strings.Contains(slugLower, "transcribe") ||
+			strings.Contains(slugLower, "argon") ||
+			strings.Contains(slugLower, "banana") {
+			continue
+		}
+
+		// Ensure model supports text generation
+		hasGenerateContent := false
+		for _, method := range m.SupportedGenerationMethods {
+			if strings.EqualFold(method, "generateContent") {
+				hasGenerateContent = true
+				break
+			}
+		}
+		if len(m.SupportedGenerationMethods) > 0 && !hasGenerateContent {
+			continue
+		}
+
 		models = append(models, provider.Model{
-			ID:           strings.TrimPrefix(m.Name, "models/"),
+			ID:           slug,
 			Provider:     domain.ProviderKindGemini,
 			DisplayName:  m.DisplayName,
 			Capabilities: m.SupportedGenerationMethods,

@@ -46,7 +46,7 @@ function ThemeToggle() {
         align="end"
         className="w-32 rounded-none border-[rgba(111,78,55,0.16)] bg-canvas"
       >
-        <DropdownMenuLabel className="text-[10px] text-[#7A6458]" style={{ fontFamily: "var(--font-fira-code)" }}>
+        <DropdownMenuLabel className="text-xs font-medium text-[#7A6458]" style={{ fontFamily: "var(--font-fira-code)" }}>
           Theme
         </DropdownMenuLabel>
         <DropdownMenuItem onClick={() => setTheme("light")} className="text-xs text-[#4A3A30]">
@@ -57,7 +57,7 @@ function ThemeToggle() {
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => setTheme("system")} className="text-xs text-[#4A3A30]">
           <Monitor className="mr-2 size-3.5" aria-hidden /> System
-          {theme === "system" && <span className="ml-auto text-[10px] text-[#7A6458]">active</span>}
+          {theme === "system" && <span className="ml-auto text-xs text-[#7A6458]">active</span>}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

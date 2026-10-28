@@ -15,6 +15,9 @@ type RetentionDeps struct {
 	LlmRequests   repositories.LlmRequestRepository
 	AuditLogs     repositories.AuditLogRepository
 	BillingEvents repositories.BillingEventRepository
+	Idempotency   repositories.IdempotencyRepository
+	RefreshTokens repositories.RefreshTokenRepository
+	Invitations   repositories.InvitationRepository
 	Log           *slog.Logger
 }
 
@@ -25,6 +28,9 @@ type RetentionJob struct {
 	llmRequests   repositories.LlmRequestRepository
 	auditLogs     repositories.AuditLogRepository
 	billingEvents repositories.BillingEventRepository
+	idempotency   repositories.IdempotencyRepository
+	refreshTokens repositories.RefreshTokenRepository
+	invitations   repositories.InvitationRepository
 	log           *slog.Logger
 }
 
@@ -39,6 +45,9 @@ func NewRetentionJob(deps RetentionDeps) *RetentionJob {
 		llmRequests:   deps.LlmRequests,
 		auditLogs:     deps.AuditLogs,
 		billingEvents: deps.BillingEvents,
+		idempotency:   deps.Idempotency,
+		refreshTokens: deps.RefreshTokens,
+		invitations:   deps.Invitations,
 		log:           deps.Log,
 	}
 }
@@ -142,7 +151,39 @@ func (j *RetentionJob) RunOnce(ctx context.Context) error {
 				j.log.InfoContext(ctx, "retention: pruned expired billing events", "org_id", orgID, "count", deleted)
 			}
 		}
+
+		// 5. Ephemeral garbage collection for expired idempotency keys
+		if j.idempotency != nil {
+			deleted, err := j.idempotency.PurgeExpired(ctx, orgID, now)
+			if err != nil {
+				j.log.ErrorContext(ctx, "retention: idempotency key purge failed", "org_id", orgID, "error", err)
+			} else if deleted > 0 {
+				j.log.InfoContext(ctx, "retention: pruned expired idempotency keys", "org_id", orgID, "count", deleted)
+			}
+		}
+
+		// 6. Ephemeral garbage collection for expired/settled invitations (older than 30d)
+		if j.invitations != nil {
+			deleted, err := j.invitations.PurgeExpired(ctx, orgID, now)
+			if err != nil {
+				j.log.ErrorContext(ctx, "retention: invitation purge failed", "org_id", orgID, "error", err)
+			} else if deleted > 0 {
+				j.log.InfoContext(ctx, "retention: pruned expired invitations", "org_id", orgID, "count", deleted)
+			}
+		}
+	}
+
+	// 7. Global garbage collection for expired or revoked refresh tokens (older than 7d)
+	if j.refreshTokens != nil {
+		cutoff := now.Add(-7 * 24 * time.Hour)
+		deleted, err := j.refreshTokens.PurgeExpired(ctx, cutoff)
+		if err != nil {
+			j.log.ErrorContext(ctx, "retention: refresh token purge failed", "error", err)
+		} else if deleted > 0 {
+			j.log.InfoContext(ctx, "retention: pruned expired refresh tokens", "count", deleted)
+		}
 	}
 
 	return nil
 }
+

@@ -235,11 +235,11 @@ export function CreateProviderAccountButton() {
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-sm">{prov.name}</span>
-                          <Badge variant="outline" className="text-[10px] px-1 py-0">
+                          <Badge variant="outline" className="text-xs px-1.5 py-0.5">
                             {prov.badge}
                           </Badge>
                         </div>
-                        <div className="text-[11px] text-muted-foreground mt-1 line-clamp-1">
+                        <div className="text-xs text-muted-foreground mt-1 line-clamp-1">
                           {prov.models}
                         </div>
                       </div>
@@ -286,7 +286,7 @@ export function CreateProviderAccountButton() {
                       variant="ghost"
                       size="sm"
                       onClick={() => setShowSecret(!showSecret)}
-                      className="h-6 text-[11px] text-muted-foreground px-2"
+                      className="h-6 text-xs text-muted-foreground px-2"
                     >
                       {showSecret ? <EyeOff className="size-3 mr-1" /> : <Eye className="size-3 mr-1" />}
                       {showSecret ? "Hide" : "Show"}
@@ -300,7 +300,7 @@ export function CreateProviderAccountButton() {
                     placeholder={selectedProvider.placeholderKey}
                     className="font-mono text-xs"
                   />
-                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-1">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
                     <ShieldCheck className="size-3.5 text-emerald-500 shrink-0" />
                     <span>
                       Encrypted with AES-256 before persistence. Never logged or echoed in plaintext.

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"math"
 	"strings"
 	"time"
 
@@ -378,13 +379,13 @@ var (
 	ErrPricingNotFound            = errors.New("pricing: pricing model or version not found")
 	ErrPricingUnavailable         = errors.New("pricing: model pricing is unavailable")
 	ErrInvalidTokenCount          = errors.New("pricing: token counts cannot be negative")
-	ErrInvalidProviderKind        = errors.New("pricing: provider kind must be openai, anthropic, gemini, azure_openai, or custom")
+	ErrInvalidProviderKind        = errors.New("pricing: provider kind must be openai, anthropic, gemini, huggingface, azure_openai, or custom")
 )
 
 // ValidProviderKind reports whether kind is one of the supported provider kinds.
 func ValidProviderKind(kind string) bool {
 	switch strings.ToLower(strings.TrimSpace(kind)) {
-	case "openai", "anthropic", "gemini", "azure_openai", "custom":
+	case "openai", "anthropic", "gemini", "huggingface", "azure_openai", "custom":
 		return true
 	default:
 		return false
@@ -401,12 +402,196 @@ func ModelSupportsCachedTokens(providerKind, modelSlug string) bool {
 	case "openai":
 		return strings.HasPrefix(model, "gpt-4o") || strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "gpt-4.5")
 	case "gemini":
-		return strings.Contains(model, "1.5") || strings.Contains(model, "2.0")
+		return strings.Contains(model, "1.5") || strings.Contains(model, "2.0") || strings.Contains(model, "2.5") || strings.Contains(model, "flash") || strings.Contains(model, "pro")
 	case "custom":
 		return strings.Contains(model, "cache")
 	default:
 		return false
 	}
+}
+
+// ProviderPricingSpec defines the pricing parameters for an individual provider model.
+type ProviderPricingSpec struct {
+	ProviderKind              string  `json:"provider_kind"`
+	ModelSlug                 string  `json:"model_slug"`
+	DisplayName               string  `json:"display_name"`
+	InputRatePerM             float64 `json:"input_rate_per_m"`
+	OutputRatePerM            float64 `json:"output_rate_per_m"`
+	CachedReadRatePerM        float64 `json:"cached_read_rate_per_m"`
+	SupportsCaching           bool    `json:"supports_caching"`
+	DeepContextThreshold      int64   `json:"deep_context_threshold"`
+	DeepContextInputRatePerM  float64 `json:"deep_context_input_rate_per_m"`
+	DeepContextOutputRatePerM float64 `json:"deep_context_output_rate_per_m"`
+}
+
+// LookupCanonicalPricing returns the authoritative provider pricing specification for a model.
+func LookupCanonicalPricing(providerKind, modelSlug string) (ProviderPricingSpec, bool) {
+	provider := strings.ToLower(strings.TrimSpace(providerKind))
+	slug := strings.ToLower(strings.TrimSpace(modelSlug))
+
+	// 1. Anthropic models
+	if provider == "anthropic" || strings.Contains(slug, "claude") {
+		if strings.Contains(slug, "haiku") {
+			return ProviderPricingSpec{
+				ProviderKind: "anthropic", ModelSlug: modelSlug, DisplayName: "Claude 3.5 Haiku",
+				InputRatePerM: 0.80, OutputRatePerM: 4.00, CachedReadRatePerM: 0.08, SupportsCaching: true,
+			}, true
+		}
+		if strings.Contains(slug, "opus") {
+			return ProviderPricingSpec{
+				ProviderKind: "anthropic", ModelSlug: modelSlug, DisplayName: "Claude 3 Opus",
+				InputRatePerM: 15.00, OutputRatePerM: 75.00, CachedReadRatePerM: 1.50, SupportsCaching: true,
+			}, true
+		}
+		// Default Sonnet
+		return ProviderPricingSpec{
+			ProviderKind: "anthropic", ModelSlug: modelSlug, DisplayName: "Claude 3.5 Sonnet",
+			InputRatePerM: 3.00, OutputRatePerM: 15.00, CachedReadRatePerM: 0.30, SupportsCaching: true,
+		}, true
+	}
+
+	// 2. OpenAI models
+	if provider == "openai" || strings.HasPrefix(slug, "gpt-") || strings.HasPrefix(slug, "o1") || strings.HasPrefix(slug, "o3") {
+		if strings.Contains(slug, "mini") && strings.HasPrefix(slug, "gpt") {
+			return ProviderPricingSpec{
+				ProviderKind: "openai", ModelSlug: modelSlug, DisplayName: "GPT-4o Mini",
+				InputRatePerM: 0.15, OutputRatePerM: 0.60, CachedReadRatePerM: 0.075, SupportsCaching: true,
+			}, true
+		}
+		if strings.Contains(slug, "o1-mini") {
+			return ProviderPricingSpec{
+				ProviderKind: "openai", ModelSlug: modelSlug, DisplayName: "o1-mini",
+				InputRatePerM: 3.00, OutputRatePerM: 12.00, CachedReadRatePerM: 1.50, SupportsCaching: true,
+			}, true
+		}
+		if strings.HasPrefix(slug, "o1") {
+			return ProviderPricingSpec{
+				ProviderKind: "openai", ModelSlug: modelSlug, DisplayName: "o1",
+				InputRatePerM: 15.00, OutputRatePerM: 60.00, CachedReadRatePerM: 7.50, SupportsCaching: true,
+			}, true
+		}
+		if strings.Contains(slug, "o3-mini") {
+			return ProviderPricingSpec{
+				ProviderKind: "openai", ModelSlug: modelSlug, DisplayName: "o3-mini",
+				InputRatePerM: 1.10, OutputRatePerM: 4.40, CachedReadRatePerM: 0.55, SupportsCaching: true,
+			}, true
+		}
+		// Default GPT-4o
+		return ProviderPricingSpec{
+			ProviderKind: "openai", ModelSlug: modelSlug, DisplayName: "GPT-4o",
+			InputRatePerM: 2.50, OutputRatePerM: 10.00, CachedReadRatePerM: 1.25, SupportsCaching: true,
+		}, true
+	}
+
+	// 3. Google Gemini models
+	if provider == "gemini" || strings.Contains(slug, "gemini") || strings.Contains(slug, "gemma") {
+		if strings.Contains(slug, "pro") {
+			return ProviderPricingSpec{
+				ProviderKind: "gemini", ModelSlug: modelSlug, DisplayName: "Gemini 2.5 Pro",
+				InputRatePerM: 1.25, OutputRatePerM: 5.00, CachedReadRatePerM: 0.3125, SupportsCaching: true,
+				DeepContextThreshold: 128000, DeepContextInputRatePerM: 2.50, DeepContextOutputRatePerM: 10.00,
+			}, true
+		}
+		if strings.Contains(slug, "flash-lite") {
+			return ProviderPricingSpec{
+				ProviderKind: "gemini", ModelSlug: modelSlug, DisplayName: "Gemini Flash-Lite",
+				InputRatePerM: 0.0375, OutputRatePerM: 0.15, CachedReadRatePerM: 0.01, SupportsCaching: true,
+				DeepContextThreshold: 128000, DeepContextInputRatePerM: 0.075, DeepContextOutputRatePerM: 0.30,
+			}, true
+		}
+		// Default Flash
+		return ProviderPricingSpec{
+			ProviderKind: "gemini", ModelSlug: modelSlug, DisplayName: "Gemini 2.5 Flash",
+			InputRatePerM: 0.075, OutputRatePerM: 0.30, CachedReadRatePerM: 0.01875, SupportsCaching: true,
+			DeepContextThreshold: 128000, DeepContextInputRatePerM: 0.15, DeepContextOutputRatePerM: 0.60,
+		}, true
+	}
+
+	// 4. Hugging Face models
+	if provider == "huggingface" || strings.Contains(slug, "/") {
+		if strings.Contains(slug, "deepseek") {
+			return ProviderPricingSpec{
+				ProviderKind: "huggingface", ModelSlug: modelSlug, DisplayName: "DeepSeek R1 Distill",
+				InputRatePerM: 0.15, OutputRatePerM: 0.60, CachedReadRatePerM: 0.15, SupportsCaching: false,
+			}, true
+		}
+		if strings.Contains(slug, "mistral") {
+			return ProviderPricingSpec{
+				ProviderKind: "huggingface", ModelSlug: modelSlug, DisplayName: "Mistral 7B Instruct",
+				InputRatePerM: 0.05, OutputRatePerM: 0.05, CachedReadRatePerM: 0.05, SupportsCaching: false,
+			}, true
+		}
+		if strings.Contains(slug, "qwen") {
+			return ProviderPricingSpec{
+				ProviderKind: "huggingface", ModelSlug: modelSlug, DisplayName: "Qwen 2.5 72B",
+				InputRatePerM: 0.40, OutputRatePerM: 0.40, CachedReadRatePerM: 0.40, SupportsCaching: false,
+			}, true
+		}
+		// Default Llama 3.3 70B
+		return ProviderPricingSpec{
+			ProviderKind: "huggingface", ModelSlug: modelSlug, DisplayName: "Llama 3.3 70B Instruct",
+			InputRatePerM: 0.40, OutputRatePerM: 0.40, CachedReadRatePerM: 0.40, SupportsCaching: false,
+		}, true
+	}
+
+	return ProviderPricingSpec{}, false
+}
+
+// CalculateProviderTokenCost calculates the exact cost in micro-dollars based on provider-specific pricing rules.
+func CalculateProviderTokenCost(spec ProviderPricingSpec, promptTokens, completionTokens, cachedInputTokens int64) int64 {
+	if promptTokens < 0 {
+		promptTokens = 0
+	}
+	if completionTokens < 0 {
+		completionTokens = 0
+	}
+	if cachedInputTokens < 0 {
+		cachedInputTokens = 0
+	}
+
+	inputRate := spec.InputRatePerM
+	outputRate := spec.OutputRatePerM
+
+	// Handle deep context threshold (e.g. Gemini 128k boundary)
+	if spec.DeepContextThreshold > 0 && promptTokens > spec.DeepContextThreshold {
+		if spec.DeepContextInputRatePerM > 0 {
+			inputRate = spec.DeepContextInputRatePerM
+		}
+		if spec.DeepContextOutputRatePerM > 0 {
+			outputRate = spec.DeepContextOutputRatePerM
+		}
+	}
+
+	nonCachedTokens := promptTokens
+	cachedCost := 0.0
+	if spec.SupportsCaching && cachedInputTokens > 0 {
+		if cachedInputTokens > promptTokens {
+			cachedInputTokens = promptTokens
+		}
+		nonCachedTokens = promptTokens - cachedInputTokens
+		cachedCost = float64(cachedInputTokens) * spec.CachedReadRatePerM
+	}
+
+	inputCost := float64(nonCachedTokens) * inputRate
+	outputCost := float64(completionTokens) * outputRate
+	totalMicros := int64(math.Round(inputCost + cachedCost + outputCost))
+	if totalMicros <= 0 && (promptTokens > 0 || completionTokens > 0) {
+		totalMicros = 1
+	}
+	return totalMicros
+}
+
+// ResolveAndCalculateModelCost resolves provider-specific rates and computes request cost in micro-dollars.
+func ResolveAndCalculateModelCost(providerKind, modelSlug string, promptTokens, completionTokens, cachedInputTokens int64) int64 {
+	if spec, ok := LookupCanonicalPricing(providerKind, modelSlug); ok {
+		return CalculateProviderTokenCost(spec, promptTokens, completionTokens, cachedInputTokens)
+	}
+	// Fallback to standard industry average (10 micros input, 30 micros output)
+	total := promptTokens*10 + completionTokens*30
+	if total <= 0 && (promptTokens > 0 || completionTokens > 0) {
+		return 1
+	}
+	return total
 }
 
 // CalculateCost computes total request cost in micros given pricing parameters and token counts.

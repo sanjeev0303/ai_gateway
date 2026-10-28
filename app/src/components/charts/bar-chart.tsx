@@ -69,7 +69,7 @@ export function BarChart({
               y={rowTop + rowHeight / 2}
               textAnchor="end"
               dominantBaseline="middle"
-              className="fill-foreground text-[11px]"
+              className="fill-foreground text-xs font-medium"
             >
               {truncate(datum.label)}
             </text>
@@ -108,7 +108,7 @@ export function BarChart({
               x={PADDING.left + plotWidth + 8}
               y={rowTop + rowHeight / 2}
               dominantBaseline="middle"
-              className="fill-muted-foreground text-[11px]"
+              className="fill-muted-foreground text-xs font-mono"
             >
               {formatValue(datum.value)}
             </text>

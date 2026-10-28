@@ -67,7 +67,10 @@ type RefreshTokenRepository interface {
 	// RevokeAllForUser signs the user out everywhere. It is the response to
 	// confirmed reuse and the primitive behind "log out all devices".
 	RevokeAllForUser(ctx context.Context, userID uuid.UUID) error
+	// PurgeExpired deletes expired and long-revoked refresh tokens.
+	PurgeExpired(ctx context.Context, olderThan time.Time) (int64, error)
 }
+
 
 // OrgMemberRepository manages organization_members rows. The join table is
 // FORCE RLS; Add/Remove/List all run inside the tenant context.

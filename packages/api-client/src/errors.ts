@@ -19,16 +19,52 @@ export interface ApiErrorDetail {
 /** Pulls the error detail out of a decoded body, or null when it is not one. */
 export function parseErrorEnvelope(body: unknown): ApiErrorDetail | null {
   if (typeof body !== "object" || body === null) return null;
-  const error = (body as { error?: unknown }).error;
-  if (typeof error !== "object" || error === null) return null;
-  const detail = error as Partial<ApiErrorDetail>;
-  if (typeof detail.code !== "string" || typeof detail.message !== "string") return null;
-  return {
-    code: detail.code,
-    message: detail.message,
-    ...(typeof detail.request_id === "string" ? { request_id: detail.request_id } : {}),
-    ...(detail.details !== undefined ? { details: detail.details } : {}),
-  };
+  const raw = body as Record<string, unknown>;
+  const error = raw.error;
+
+  // Handle flat string error format, e.g. { error: "Billing is disabled", code: "billing_disabled" }
+  if (typeof error === "string" && error.trim().length > 0) {
+    const code = typeof raw.code === "string" ? raw.code : "error";
+    const requestId = typeof raw.request_id === "string" ? raw.request_id : undefined;
+    return {
+      code,
+      message: error,
+      ...(requestId ? { request_id: requestId } : {}),
+    };
+  }
+
+  // Handle object error envelope, e.g. { error: { code, message, request_id } }
+  if (typeof error === "object" && error !== null) {
+    const detail = error as Partial<ApiErrorDetail>;
+    if (typeof detail.code === "string" && typeof detail.message === "string") {
+      return {
+        code: detail.code,
+        message: detail.message,
+        ...(typeof detail.request_id === "string" ? { request_id: detail.request_id } : {}),
+        ...(detail.details !== undefined ? { details: detail.details } : {}),
+      };
+    }
+    if (typeof detail.message === "string") {
+      return {
+        code: typeof detail.code === "string" ? detail.code : "error",
+        message: detail.message,
+        ...(typeof detail.request_id === "string" ? { request_id: detail.request_id } : {}),
+      };
+    }
+  }
+
+  // Handle flat message, e.g. { message: "...", code: "..." }
+  if (typeof raw.message === "string" && raw.message.trim().length > 0) {
+    const code = typeof raw.code === "string" ? raw.code : "error";
+    const requestId = typeof raw.request_id === "string" ? raw.request_id : undefined;
+    return {
+      code,
+      message: raw.message,
+      ...(requestId ? { request_id: requestId } : {}),
+    };
+  }
+
+  return null;
 }
 
 /** Coarse code for failures that never reached an error envelope. */

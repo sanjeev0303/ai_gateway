@@ -47,12 +47,12 @@ export function PricingTeaser() {
                   <ScrollReveal delay={index * 0.08}>
                     <div className="py-5 flex items-start gap-5">
                       <span
-                        className="font-mono text-[10px] text-[#7A6458] shrink-0 pt-0.5"
+                        className="font-mono text-xs text-[#7A6458] font-semibold shrink-0 pt-0.5"
                         style={{ fontFamily: "var(--font-fira-code)" }}
                       >
                         {String(index + 1).padStart(2, "0")}
                       </span>
-                      <span className="text-sm font-medium text-[#1C1412]" style={{ letterSpacing: "-0.01em" }}>
+                      <span className="text-base font-medium text-[#1C1412]" style={{ letterSpacing: "-0.01em" }}>
                         {point}
                       </span>
                     </div>
@@ -64,7 +64,7 @@ export function PricingTeaser() {
             {/* Deployment options */}
             <ScrollReveal delay={0.25} className="mt-14">
               <p
-                className="font-mono text-[10px] uppercase tracking-label text-[#7A6458] mb-5"
+                className="font-mono text-xs uppercase tracking-label text-[#7A6458] font-semibold mb-5"
                 style={{ fontFamily: "var(--font-fira-code)", letterSpacing: "0.14em" }}
               >
                 Deployment options
@@ -75,10 +75,10 @@ export function PricingTeaser() {
                     key={opt.label}
                     className="p-5 border-r border-[rgba(111,78,55,0.10)] last:border-r-0"
                   >
-                    <p className="text-sm font-semibold text-[#1C1412]" style={{ letterSpacing: "-0.02em" }}>
+                    <p className="text-base font-semibold text-[#1C1412]" style={{ letterSpacing: "-0.02em" }}>
                       {opt.label}
                     </p>
-                    <p className="mt-1 text-xs text-[#7A6458]">{opt.sub}</p>
+                    <p className="mt-1 text-sm text-[#7A6458]">{opt.sub}</p>
                   </div>
                 ))}
               </div>
@@ -93,7 +93,7 @@ export function PricingTeaser() {
                 style={{ background: "rgba(111,78,55,0.04)" }}
               >
                 <p
-                  className="text-[10px] uppercase text-[#6F4E37]"
+                  className="text-xs uppercase text-[#6F4E37] font-semibold"
                   style={{ fontFamily: "var(--font-fira-code)", letterSpacing: "0.14em" }}
                 >
                   Predictable enterprise tiering
@@ -104,7 +104,7 @@ export function PricingTeaser() {
                 >
                   Ready to deploy Sentinel?
                 </h3>
-                <p className="mt-3 text-sm leading-relaxed text-[#4A3A30]">{body}</p>
+                <p className="mt-3 text-base leading-relaxed text-[#4A3A30]">{body}</p>
 
                 <div className="mt-8 flex flex-col gap-3">
                   <Link

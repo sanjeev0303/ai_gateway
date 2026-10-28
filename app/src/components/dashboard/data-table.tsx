@@ -217,7 +217,7 @@ export function DataTable<T>({
                       type="button"
                       onClick={() => toggleSort(column)}
                       className={cn(
-                        "inline-flex items-center gap-1 rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        "inline-flex items-center gap-1.5 rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-sm font-semibold",
                         active && "text-foreground",
                         column.align === "right" && "flex-row-reverse",
                       )}
@@ -310,7 +310,7 @@ export function DataTable<T>({
                             </span>
                           )}
                           {secondaryText && secondaryText !== "—" && (
-                            <span className="block truncate text-xs text-muted-foreground">
+                            <span className="block truncate text-sm text-muted-foreground/90">
                               {secondaryText}
                             </span>
                           )}

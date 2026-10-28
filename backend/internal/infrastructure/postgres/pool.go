@@ -27,15 +27,77 @@ type Store struct {
 	pool *pgxpool.Pool
 }
 
-// NewStore parses the connection string, builds the pool, and verifies the
-// connection with a ping before returning.
-func NewStore(ctx context.Context, databaseURL string) (*Store, error) {
+// PoolOption configures connection pool parameters.
+type PoolOption func(*pgxpool.Config)
+
+// WithMaxConns sets the maximum connection pool size.
+func WithMaxConns(n int32) PoolOption {
+	return func(c *pgxpool.Config) {
+		if n > 0 {
+			c.MaxConns = n
+		}
+	}
+}
+
+// WithMinConns sets the minimum number of idle connections kept alive.
+func WithMinConns(n int32) PoolOption {
+	return func(c *pgxpool.Config) {
+		if n >= 0 {
+			c.MinConns = n
+		}
+	}
+}
+
+// WithMaxConnLifetime sets the maximum duration a connection may be reused.
+func WithMaxConnLifetime(d time.Duration) PoolOption {
+	return func(c *pgxpool.Config) {
+		if d > 0 {
+			c.MaxConnLifetime = d
+		}
+	}
+}
+
+// WithMaxConnIdleTime sets the maximum duration an idle connection is retained.
+func WithMaxConnIdleTime(d time.Duration) PoolOption {
+	return func(c *pgxpool.Config) {
+		if d > 0 {
+			c.MaxConnIdleTime = d
+		}
+	}
+}
+
+// WithHealthCheckPeriod sets the interval between background connection liveness checks.
+func WithHealthCheckPeriod(d time.Duration) PoolOption {
+	return func(c *pgxpool.Config) {
+		if d > 0 {
+			c.HealthCheckPeriod = d
+		}
+	}
+}
+
+// NewStore parses the connection string, builds the pool with resource-conscious defaults,
+// applies any caller-specified options, and verifies the connection with a ping before returning.
+func NewStore(ctx context.Context, databaseURL string, opts ...PoolOption) (*Store, error) {
 	cfg, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse database url: %w", err)
 	}
+
+	// Resource-optimized connection pooling defaults:
+	// - MaxConns bounds maximum concurrent active DB handles
+	// - MinConns maintains warm connections ready for low-latency dispatch
+	// - MaxConnIdleTime aggressively reclaims idle socket buffers and Postgres backend memory
+	// - HealthCheckPeriod detects severed network sockets proactively
 	cfg.MaxConns = 20
+	cfg.MinConns = 2
 	cfg.MaxConnLifetime = 30 * time.Minute
+	cfg.MaxConnIdleTime = 5 * time.Minute
+	cfg.HealthCheckPeriod = 1 * time.Minute
+
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
 	cfg.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
 		return registerCustomTypes(ctx, conn)
 	}

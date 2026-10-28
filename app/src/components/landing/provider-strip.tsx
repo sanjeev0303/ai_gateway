@@ -45,7 +45,7 @@ export function ProviderStrip() {
 
       <div className="py-6">
         <p
-          className="text-center font-mono text-[10px] tracking-label text-[#7A6458] uppercase mb-5"
+          className="text-center font-mono text-xs tracking-label text-[#7A6458] font-semibold uppercase mb-5"
           style={{ fontFamily: "var(--font-fira-code)", letterSpacing: "0.14em" }}
         >
           One gateway in front of every major provider
@@ -61,7 +61,7 @@ export function ProviderStrip() {
             {PROVIDERS.map((provider, i) => (
               <li key={`${provider}-${i}`} className="flex items-center">
                 <span
-                  className="whitespace-nowrap px-6 text-sm font-medium text-[#4A3A30]"
+                  className="whitespace-nowrap px-6 text-base font-medium text-[#4A3A30]"
                   style={{ fontFamily: "var(--font-dm-sans)", letterSpacing: "-0.02em" }}
                 >
                   {provider}

@@ -991,6 +991,23 @@ func (r *idempotencyRepo) Get(ctx context.Context, orgID uuid.UUID, scopeKey, ke
 	return idempotencyKey, mapNotFound(err)
 }
 
+func (r *idempotencyRepo) PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error) {
+	var count int64
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		n, err := q.PurgeExpiredIdempotencyKeys(ctx, db.PurgeExpiredIdempotencyKeysParams{
+			OrganizationID: orgID,
+			ExpiresAt:      olderThan,
+		})
+		if err != nil {
+			return err
+		}
+		count = n
+		return nil
+	})
+	return count, err
+}
+
+
 type planRepo struct {
 	store *postgres.Store
 }

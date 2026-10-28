@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -114,6 +115,24 @@ func (r *invitationRepo) Revoke(ctx context.Context, orgID, id uuid.UUID) (domai
 	})
 	return invitation, mapNotFound(err)
 }
+
+func (r *invitationRepo) PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error) {
+	var count int64
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		n, err := q.PurgeExpiredInvitations(ctx, db.PurgeExpiredInvitationsParams{
+			OrganizationID: orgID,
+			ExpiresAt:      olderThan,
+			CreatedAt:      olderThan,
+		})
+		if err != nil {
+			return err
+		}
+		count = n
+		return nil
+	})
+	return count, err
+}
+
 
 func toInvitation(i db.Invitation) domain.Invitation {
 	return domain.Invitation{

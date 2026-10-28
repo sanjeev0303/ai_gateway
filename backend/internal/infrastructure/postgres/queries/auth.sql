@@ -36,3 +36,8 @@ WHERE token_hash = $1 AND revoked_at IS NULL;
 UPDATE auth_refresh_tokens
 SET revoked_at = now()
 WHERE user_id = $1 AND revoked_at IS NULL;
+
+-- name: PurgeExpiredRefreshTokens :execrows
+DELETE FROM auth_refresh_tokens
+WHERE expires_at < $1 OR (revoked_at IS NOT NULL AND revoked_at < $1);
+

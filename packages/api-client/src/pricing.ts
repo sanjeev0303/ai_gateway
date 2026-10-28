@@ -56,6 +56,11 @@ export interface CalculateCostParams {
 
 export interface CalculateCostResponse {
   cost_micros: number;
+  input_cost_micros?: number;
+  output_cost_micros?: number;
+  cached_input_cost_micros?: number;
+  savings_micros?: number;
+  pricing_model_formula?: string;
   currency: string;
   pricing_version: PricingVersion;
   prompt_tokens: number;

@@ -92,14 +92,18 @@ func TestAuditorCanReadCredentials(t *testing.T) {
 	auditor := userActor(domain.RoleAuditor)
 	st.credentials.list = func(_ context.Context, orgID uuid.UUID) ([]domain.ProviderCredential, error) {
 		requireEqual(t, orgID, testOrgID)
-		return []domain.ProviderCredential{{ID: testCredID}}, nil
+		return []domain.ProviderCredential{{ID: testCredID, Status: domain.ProviderCredentialStatusActive}}, nil
+	}
+	st.credentials.listByAccount = func(_ context.Context, orgID, accountID uuid.UUID) ([]domain.ProviderCredential, error) {
+		requireEqual(t, orgID, testOrgID)
+		return []domain.ProviderCredential{{ID: testCredID, Status: domain.ProviderCredentialStatusActive}}, nil
 	}
 	st.accounts.list = func(_ context.Context, orgID uuid.UUID) ([]domain.ProviderAccount, error) {
 		requireEqual(t, orgID, testOrgID)
-		return []domain.ProviderAccount{{ID: testAccountID}}, nil
+		return []domain.ProviderAccount{{ID: testAccountID, ProviderKind: domain.ProviderKindAnthropic, Status: domain.ProviderStatusActive}}, nil
 	}
 	st.models.list = func(_ context.Context) ([]domain.Model, error) {
-		return []domain.Model{{ID: uuid.New(), ModelSlug: "claude-sonnet-4-5"}}, nil
+		return []domain.Model{{ID: uuid.New(), ProviderKind: domain.ProviderKindAnthropic, ModelSlug: "claude-sonnet-4-5"}}, nil
 	}
 	creds, err := svc.ListCredentials(ctx, auditor)
 	requireNoErr(t, err)
@@ -487,15 +491,33 @@ func TestRevokeCredentialMissingPassesThrough(t *testing.T) {
 func TestListModels(t *testing.T) {
 	ctx := context.Background()
 	svc, st := newTestService()
-	st.models.list = func(_ context.Context) ([]domain.Model, error) {
-		return []domain.Model{
-			{ModelSlug: "claude-opus-4-1", DisplayName: "Claude Opus 4.1"},
-			{ModelSlug: "claude-sonnet-4-5", DisplayName: "Claude Sonnet 4.5"},
+
+	st.accounts.list = func(_ context.Context, orgID uuid.UUID) ([]domain.ProviderAccount, error) {
+		requireEqual(t, orgID, testOrgID)
+		return []domain.ProviderAccount{
+			{ID: testAccountID, ProviderKind: domain.ProviderKindAnthropic, Status: domain.ProviderStatusActive},
 		}, nil
 	}
+	st.credentials.listByAccount = func(_ context.Context, orgID, accountID uuid.UUID) ([]domain.ProviderCredential, error) {
+		requireEqual(t, orgID, testOrgID)
+		return []domain.ProviderCredential{
+			{ID: testCredID, Status: domain.ProviderCredentialStatusActive},
+		}, nil
+	}
+	st.models.list = func(_ context.Context) ([]domain.Model, error) {
+		return []domain.Model{
+			{ProviderKind: domain.ProviderKindAnthropic, ModelSlug: "claude-opus-4-1", DisplayName: "Claude Opus 4.1"},
+			{ProviderKind: domain.ProviderKindAnthropic, ModelSlug: "claude-sonnet-4-5", DisplayName: "Claude Sonnet 4.5"},
+			{ProviderKind: domain.ProviderKindOpenAI, ModelSlug: "gpt-4o", DisplayName: "GPT-4o"},
+		}, nil
+	}
+
 	models, err := svc.ListModels(ctx, userActor(domain.RoleOwner))
 	requireNoErr(t, err)
+	// OpenAI model must be filtered out because only Anthropic is added with credentials
 	requireEqual(t, len(models), 2)
+	requireEqual(t, models[0].ModelSlug, "claude-opus-4-1")
+	requireEqual(t, models[1].ModelSlug, "claude-sonnet-4-5")
 }
 
 func TestCheckHealth(t *testing.T) {

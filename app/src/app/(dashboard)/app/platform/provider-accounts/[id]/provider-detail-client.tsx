@@ -690,22 +690,22 @@ export function ProviderDetailClient({
                           <tr key={m.id || m.model_slug} className="hover:bg-muted/30">
                             <td className="py-2.5 px-3">
                               <div className="font-semibold text-foreground">{m.display_name}</div>
-                              <code className="text-[11px] text-muted-foreground font-mono">{m.model_slug}</code>
+                              <code className="text-xs text-muted-foreground font-mono">{m.model_slug}</code>
                             </td>
                             <td className="py-2.5 px-3">
                               <div className="flex flex-wrap gap-1">
                                 {m.supports_streaming && (
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-600">
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-500/10 text-blue-600">
                                     Stream
                                   </span>
                                 )}
                                 {m.supports_tools && (
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-600">
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-500/10 text-purple-600">
                                     Tools
                                   </span>
                                 )}
                                 {m.supports_reasoning && (
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-600">
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-500/10 text-amber-600">
                                     Reasoning
                                   </span>
                                 )}
@@ -719,20 +719,20 @@ export function ProviderDetailClient({
                                 const isUnavailable = m.status === "inactive" || m.status === "unavailable" || (!m.is_active && m.status !== "active");
                                 if (isUnavailable) {
                                   return (
-                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-muted text-muted-foreground border border-border">
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border">
                                       <XCircle className="size-3" /> Model no longer available
                                     </span>
                                   );
                                 }
                                 if (isAuthorized) {
                                   return (
-                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
                                       <CheckCircle2 className="size-3" /> Model authorized and ready
                                     </span>
                                   );
                                 }
                                 return (
-                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-600 border border-amber-500/30">
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-600 border border-amber-500/30">
                                     <AlertTriangle className="size-3" /> Model discovered but not authorized
                                   </span>
                                 );

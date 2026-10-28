@@ -137,7 +137,7 @@ export function IncidentsClient({
                             ? "default"
                             : "outline"
                         }
-                        className="text-[11px] uppercase"
+                        className="text-xs uppercase"
                       >
                         {e.severity}
                       </Badge>
@@ -149,7 +149,7 @@ export function IncidentsClient({
                             ? "outline"
                             : "secondary"
                         }
-                        className="text-[11px] uppercase font-mono"
+                        className="text-xs uppercase font-mono"
                       >
                         {e.status}
                       </Badge>
@@ -165,7 +165,7 @@ export function IncidentsClient({
                     </div>
 
                     {e.context && Object.keys(e.context).length > 0 && (
-                      <div className="text-[11px] bg-muted/50 p-2 rounded max-w-xl font-mono text-muted-foreground overflow-x-auto">
+                      <div className="text-xs bg-muted/50 p-2 rounded max-w-xl font-mono text-muted-foreground overflow-x-auto">
                         {JSON.stringify(e.context)}
                       </div>
                     )}
@@ -239,7 +239,7 @@ export function IncidentsClient({
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-sm">{n.title}</span>
-                      <Badge variant="outline" className="text-[10px] uppercase">
+                      <Badge variant="outline" className="text-xs uppercase">
                         {n.severity}
                       </Badge>
                       {!n.read && (
@@ -247,7 +247,7 @@ export function IncidentsClient({
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">{n.message}</p>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {formatRelative(n.created_at, new Date())}
                     </span>
                   </div>

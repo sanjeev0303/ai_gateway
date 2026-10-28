@@ -312,6 +312,20 @@ func (r *refreshTokenRepo) RevokeAllForUser(ctx context.Context, userID uuid.UUI
 	})
 }
 
+func (r *refreshTokenRepo) PurgeExpired(ctx context.Context, olderThan time.Time) (int64, error) {
+	var count int64
+	err := r.store.WithTx(ctx, func(q *db.Queries) error {
+		n, err := q.PurgeExpiredRefreshTokens(ctx, olderThan)
+		if err != nil {
+			return err
+		}
+		count = n
+		return nil
+	})
+	return count, err
+}
+
+
 type orgMemberRepo struct {
 	store *postgres.Store
 }

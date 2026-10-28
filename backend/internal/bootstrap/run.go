@@ -127,7 +127,11 @@ func RunGatewayV2(ctx context.Context) error {
 
 	var deps gatewayv2.Deps
 	if cfg.Database.Enabled {
-		store, err := postgres.NewStore(ctx, cfg.Database.URL)
+		store, err := postgres.NewStore(ctx, cfg.Database.URL,
+			postgres.WithMaxConns(int32(cfg.Database.MaxOpenConns)),
+			postgres.WithMinConns(int32(cfg.Database.MaxIdleConns)),
+			postgres.WithMaxConnLifetime(cfg.Database.ConnMaxLifetime),
+		)
 		if err != nil {
 			return fmt.Errorf("gateway-v2: connect database: %w", err)
 		}
@@ -307,7 +311,11 @@ func RunControlAPI(ctx context.Context) error {
 		if cfg.Auth.HMACSigningKey == "" {
 			return fmt.Errorf("control-api: DATABASE_ENABLED=true requires AUTH_HMAC_SIGNING_KEY")
 		}
-		store, err := postgres.NewStore(ctx, cfg.Database.URL)
+		store, err := postgres.NewStore(ctx, cfg.Database.URL,
+			postgres.WithMaxConns(int32(cfg.Database.MaxOpenConns)),
+			postgres.WithMinConns(int32(cfg.Database.MaxIdleConns)),
+			postgres.WithMaxConnLifetime(cfg.Database.ConnMaxLifetime),
+		)
 		if err != nil {
 			return fmt.Errorf("control-api: connect database: %w", err)
 		}
@@ -555,7 +563,11 @@ func RunWorker(ctx context.Context) error {
 	var jobs sync.WaitGroup
 	reg := health.NewRegistry()
 	if cfg.Database.Enabled {
-		store, err := postgres.NewStore(ctx, cfg.Database.URL)
+		store, err := postgres.NewStore(ctx, cfg.Database.URL,
+			postgres.WithMaxConns(int32(cfg.Database.MaxOpenConns)),
+			postgres.WithMinConns(int32(cfg.Database.MaxIdleConns)),
+			postgres.WithMaxConnLifetime(cfg.Database.ConnMaxLifetime),
+		)
 		if err != nil {
 			return fmt.Errorf("worker: connect database: %w", err)
 		}
@@ -587,12 +599,15 @@ func RunWorker(ctx context.Context) error {
 			LlmRequests:   repositories.NewLlmRequestRepository(store),
 			AuditLogs:     repositories.NewAuditLogRepository(store),
 			BillingEvents: repositories.NewBillingEventRepository(store),
+			Idempotency:   repositories.NewIdempotencyRepository(store),
+			RefreshTokens: repositories.NewRefreshTokenRepository(store),
+			Invitations:   repositories.NewInvitationRepository(store),
 			Log:           log,
 		})
 		jobs.Add(1)
 		go func() {
 			defer jobs.Done()
-			worker.RunRetention(ctx, retentionJob, 10*time.Second)
+			worker.RunRetention(ctx, retentionJob, 5*time.Minute)
 		}()
 
 		workerAlertRepo := repositories.NewAlertRepository(store)
@@ -619,7 +634,7 @@ func RunWorker(ctx context.Context) error {
 			if orgIDs, err := repositories.NewOrganizationRepository(store).ListAllIDs(ctx); err == nil {
 				evaluator.EvaluateAll(ctx, orgIDs)
 			}
-			ticker := time.NewTicker(5 * time.Second)
+			ticker := time.NewTicker(30 * time.Second)
 			defer ticker.Stop()
 			for {
 				select {

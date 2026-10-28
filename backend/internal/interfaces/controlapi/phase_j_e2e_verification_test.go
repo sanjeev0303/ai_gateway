@@ -206,6 +206,18 @@ func TestPhaseJ_CompleteEndToEndLocalVerification(t *testing.T) {
 		}
 		return []domain.ProviderCredential{credAnthropic, credOpenAI, credGemini, credHuggingFace}, nil
 	}
+	st.providerCredentials.listByAccount = func(_ context.Context, oid, accountID uuid.UUID) ([]domain.ProviderCredential, error) {
+		if oid != orgID {
+			return nil, nil
+		}
+		var matched []domain.ProviderCredential
+		for _, c := range []domain.ProviderCredential{credAnthropic, credOpenAI, credGemini, credHuggingFace} {
+			if c.ProviderAccountID == accountID {
+				matched = append(matched, c)
+			}
+		}
+		return matched, nil
+	}
 
 	// 3. Model Catalog: independent model discovery for all 4 providers
 	discoveredModels := []domain.Model{

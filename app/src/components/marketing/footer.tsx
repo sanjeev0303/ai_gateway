@@ -84,7 +84,7 @@ export function MarketingFooter() {
                 aria-hidden
               />
               <span
-                className="text-[10px] font-medium"
+                className="text-xs font-medium"
                 style={{ color: "#5C8A6E", fontFamily: "var(--font-fira-code)" }}
               >
                 All Systems Operational
@@ -96,7 +96,7 @@ export function MarketingFooter() {
           {COLUMNS.map((column) => (
             <div key={column.heading}>
               <h2
-                className="text-[10px] font-semibold uppercase mb-5"
+                className="text-xs font-semibold uppercase mb-5"
                 style={{
                   fontFamily: "var(--font-fira-code)",
                   letterSpacing: "0.12em",

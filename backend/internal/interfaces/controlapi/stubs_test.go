@@ -459,7 +459,7 @@ func (s *stubProviderAccounts) Get(ctx context.Context, orgID, id uuid.UUID) (do
 
 func (s *stubProviderAccounts) List(ctx context.Context, orgID uuid.UUID) ([]domain.ProviderAccount, error) {
 	if s.list == nil {
-		notConfigured("stubProviderAccounts.List")
+		return nil, nil
 	}
 	return s.list(ctx, orgID)
 }
@@ -510,7 +510,7 @@ func (s *stubProviderCredentials) List(ctx context.Context, orgID uuid.UUID) ([]
 
 func (s *stubProviderCredentials) ListByAccount(ctx context.Context, orgID, accountID uuid.UUID) ([]domain.ProviderCredential, error) {
 	if s.listByAccount == nil {
-		notConfigured("stubProviderCredentials.ListByAccount")
+		return nil, nil
 	}
 	return s.listByAccount(ctx, orgID, accountID)
 }

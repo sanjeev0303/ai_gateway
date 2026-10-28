@@ -202,7 +202,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                     <div className="flex flex-col items-center justify-center py-12 text-sm text-muted-foreground">
                       <Search className="size-8 mb-2 opacity-50" />
                       <p>Start typing to search...</p>
-                      <p className="text-xs mt-1">Press <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">⌘K</kbd> to open</p>
+                      <p className="text-xs mt-1">Press <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">⌘K</kbd> to open</p>
                     </div>
                   ) : (
                     results.map((result, index) => (

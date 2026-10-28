@@ -26,3 +26,7 @@ UPDATE invitations
 SET status = 'revoked'
 WHERE organization_id = $1 AND id = $2
 RETURNING *;
+
+-- name: PurgeExpiredInvitations :execrows
+DELETE FROM invitations
+WHERE organization_id = $1 AND (expires_at < $2 OR (status IN ('accepted', 'revoked') AND created_at < $3));

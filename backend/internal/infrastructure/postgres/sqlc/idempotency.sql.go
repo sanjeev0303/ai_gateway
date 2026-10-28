@@ -69,3 +69,21 @@ func (q *Queries) GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyPa
 	)
 	return i, err
 }
+
+const purgeExpiredIdempotencyKeys = `-- name: PurgeExpiredIdempotencyKeys :execrows
+DELETE FROM idempotency_keys
+WHERE organization_id = $1 AND expires_at < $2
+`
+
+type PurgeExpiredIdempotencyKeysParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ExpiresAt      time.Time `json:"expires_at"`
+}
+
+func (q *Queries) PurgeExpiredIdempotencyKeys(ctx context.Context, arg PurgeExpiredIdempotencyKeysParams) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeExpiredIdempotencyKeys, arg.OrganizationID, arg.ExpiresAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}

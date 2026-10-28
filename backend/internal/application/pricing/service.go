@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -43,12 +45,17 @@ type CalculateCostRequest struct {
 
 // CalculateCostResult contains calculated cost details.
 type CalculateCostResult struct {
-	CostMicros        int64                 `json:"cost_micros"`
-	Currency          string                `json:"currency"`
-	PricingVersion    domain.PricingVersion `json:"pricing_version"`
-	PromptTokens      int64                 `json:"prompt_tokens"`
-	CompletionTokens  int64                 `json:"completion_tokens"`
-	CachedInputTokens int64                 `json:"cached_input_tokens"`
+	CostMicros            int64                 `json:"cost_micros"`
+	InputCostMicros       int64                 `json:"input_cost_micros"`
+	OutputCostMicros      int64                 `json:"output_cost_micros"`
+	CachedInputCostMicros int64                 `json:"cached_input_cost_micros"`
+	SavingsMicros         int64                 `json:"savings_micros"`
+	PricingModelFormula   string                `json:"pricing_model_formula,omitempty"`
+	Currency              string                `json:"currency"`
+	PricingVersion        domain.PricingVersion `json:"pricing_version"`
+	PromptTokens          int64                 `json:"prompt_tokens"`
+	CompletionTokens      int64                 `json:"completion_tokens"`
+	CachedInputTokens     int64                 `json:"cached_input_tokens"`
 }
 
 // ServiceDeps contains the repositories needed by the pricing service.
@@ -130,6 +137,55 @@ func (s *Service) ListModels(ctx context.Context, actor domain.Actor) ([]Pricing
 		results = append(results, item)
 	}
 
+	if len(results) == 0 {
+		canonicalSpecs := []domain.ProviderPricingSpec{
+			{ProviderKind: "openai", ModelSlug: "gpt-4o", DisplayName: "GPT-4o", InputRatePerM: 2.50, OutputRatePerM: 10.00, CachedReadRatePerM: 1.25, SupportsCaching: true},
+			{ProviderKind: "openai", ModelSlug: "gpt-4o-mini", DisplayName: "GPT-4o Mini", InputRatePerM: 0.15, OutputRatePerM: 0.60, CachedReadRatePerM: 0.075, SupportsCaching: true},
+			{ProviderKind: "openai", ModelSlug: "o1", DisplayName: "o1", InputRatePerM: 15.00, OutputRatePerM: 60.00, CachedReadRatePerM: 7.50, SupportsCaching: true},
+			{ProviderKind: "anthropic", ModelSlug: "claude-3-5-sonnet", DisplayName: "Claude 3.5 Sonnet", InputRatePerM: 3.00, OutputRatePerM: 15.00, CachedReadRatePerM: 0.30, SupportsCaching: true},
+			{ProviderKind: "anthropic", ModelSlug: "claude-3-5-haiku", DisplayName: "Claude 3.5 Haiku", InputRatePerM: 0.80, OutputRatePerM: 4.00, CachedReadRatePerM: 0.08, SupportsCaching: true},
+			{ProviderKind: "anthropic", ModelSlug: "claude-3-opus", DisplayName: "Claude 3 Opus", InputRatePerM: 15.00, OutputRatePerM: 75.00, CachedReadRatePerM: 1.50, SupportsCaching: true},
+			{ProviderKind: "gemini", ModelSlug: "gemini-2.5-flash", DisplayName: "Gemini 2.5 Flash", InputRatePerM: 0.075, OutputRatePerM: 0.30, CachedReadRatePerM: 0.01875, SupportsCaching: true},
+			{ProviderKind: "gemini", ModelSlug: "gemini-2.5-pro", DisplayName: "Gemini 2.5 Pro", InputRatePerM: 1.25, OutputRatePerM: 5.00, CachedReadRatePerM: 0.3125, SupportsCaching: true},
+			{ProviderKind: "gemini", ModelSlug: "gemini-1.5-flash", DisplayName: "Gemini 1.5 Flash", InputRatePerM: 0.075, OutputRatePerM: 0.30, CachedReadRatePerM: 0.01875, SupportsCaching: true},
+			{ProviderKind: "gemini", ModelSlug: "gemini-1.5-pro", DisplayName: "Gemini 1.5 Pro", InputRatePerM: 1.25, OutputRatePerM: 5.00, CachedReadRatePerM: 0.3125, SupportsCaching: true},
+			{ProviderKind: "huggingface", ModelSlug: "meta-llama/Llama-3.3-70B-Instruct", DisplayName: "Llama 3.3 70B Instruct", InputRatePerM: 0.40, OutputRatePerM: 0.40, CachedReadRatePerM: 0.40, SupportsCaching: false},
+			{ProviderKind: "huggingface", ModelSlug: "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B", DisplayName: "DeepSeek R1 Distill", InputRatePerM: 0.15, OutputRatePerM: 0.60, CachedReadRatePerM: 0.15, SupportsCaching: false},
+			{ProviderKind: "huggingface", ModelSlug: "mistralai/Mistral-7B-Instruct-v0.3", DisplayName: "Mistral 7B Instruct", InputRatePerM: 0.05, OutputRatePerM: 0.05, CachedReadRatePerM: 0.05, SupportsCaching: false},
+			{ProviderKind: "huggingface", ModelSlug: "Qwen/Qwen2.5-72B-Instruct", DisplayName: "Qwen 2.5 72B", InputRatePerM: 0.40, OutputRatePerM: 0.40, CachedReadRatePerM: 0.40, SupportsCaching: false},
+		}
+		now := time.Now().UTC()
+		for _, sp := range canonicalSpecs {
+			mid := uuid.NewSHA1(uuid.NameSpaceOID, []byte(sp.ModelSlug))
+			vid := uuid.NewSHA1(uuid.NameSpaceOID, []byte(sp.ModelSlug+"-v1"))
+			v := domain.PricingVersion{
+				ID:                             vid,
+				PricingModelID:                 mid,
+				OrganizationID:                 actor.OrganizationID,
+				Version:                        1,
+				InputUnitPriceMicros:           int64(math.Round(sp.InputRatePerM)),
+				OutputUnitPriceMicros:          int64(math.Round(sp.OutputRatePerM)),
+				CacheReadInputTokenPriceMicros: int64(math.Round(sp.CachedReadRatePerM)),
+				EffectiveFrom:                  now.Add(-30 * 24 * time.Hour),
+				CreatedAt:                      now.Add(-30 * 24 * time.Hour),
+			}
+			results = append(results, PricingModelWithVersion{
+				Model: domain.PricingModel{
+					ID:             mid,
+					OrganizationID: actor.OrganizationID,
+					ModelSlug:      sp.ModelSlug,
+					ProviderKind:   sp.ProviderKind,
+					DisplayName:    sp.DisplayName,
+					Currency:       "usd",
+					Status:         "active",
+					CreatedAt:      now.Add(-30 * 24 * time.Hour),
+					UpdatedAt:      now.Add(-30 * 24 * time.Hour),
+				},
+				LatestVersion: &v,
+			})
+		}
+	}
+
 	return results, nil
 }
 
@@ -141,6 +197,35 @@ func (s *Service) GetModel(ctx context.Context, actor domain.Actor, idOrSlug str
 
 	model, err := s.resolveModel(ctx, actor.OrganizationID, idOrSlug)
 	if err != nil {
+		if errors.Is(err, repositories.ErrNotFound) {
+			if spec, ok := domain.LookupCanonicalPricing("", idOrSlug); ok {
+				now := time.Now().UTC()
+				mid := uuid.NewSHA1(uuid.NameSpaceOID, []byte(spec.ModelSlug))
+				vid := uuid.NewSHA1(uuid.NameSpaceOID, []byte(spec.ModelSlug+"-v1"))
+				v := domain.PricingVersion{
+					ID:                             vid,
+					PricingModelID:                 mid,
+					OrganizationID:                 actor.OrganizationID,
+					Version:                        1,
+					InputUnitPriceMicros:           int64(math.Round(spec.InputRatePerM)),
+					OutputUnitPriceMicros:          int64(math.Round(spec.OutputRatePerM)),
+					CacheReadInputTokenPriceMicros: int64(math.Round(spec.CachedReadRatePerM)),
+					EffectiveFrom:                  now.Add(-30 * 24 * time.Hour),
+					CreatedAt:                      now.Add(-30 * 24 * time.Hour),
+				}
+				return domain.PricingModel{
+					ID:             mid,
+					OrganizationID: actor.OrganizationID,
+					ModelSlug:      spec.ModelSlug,
+					ProviderKind:   spec.ProviderKind,
+					DisplayName:    spec.DisplayName,
+					Currency:       "usd",
+					Status:         "active",
+					CreatedAt:      now.Add(-30 * 24 * time.Hour),
+					UpdatedAt:      now.Add(-30 * 24 * time.Hour),
+				}, []domain.PricingVersion{v}, nil
+			}
+		}
 		return domain.PricingModel{}, nil, err
 	}
 
@@ -303,6 +388,56 @@ func (s *Service) CalculateCost(ctx context.Context, actor domain.Actor, req Cal
 	model, err := s.pricingModels.GetBySlug(ctx, actor.OrganizationID, slug)
 	if err != nil {
 		if errors.Is(err, repositories.ErrNotFound) {
+			if spec, ok := domain.LookupCanonicalPricing("", slug); ok {
+				if req.CachedInputTokens > 0 && !spec.SupportsCaching {
+					return CalculateCostResult{}, domain.ErrUnsupportedTokenCategory
+				}
+				inputRate := spec.InputRatePerM
+				outputRate := spec.OutputRatePerM
+				formula := fmt.Sprintf("%s standard token pricing: input=$%.2f/1M, output=$%.2f/1M", strings.ToUpper(spec.ProviderKind), inputRate, outputRate)
+				if spec.DeepContextThreshold > 0 && req.PromptTokens > spec.DeepContextThreshold {
+					if spec.DeepContextInputRatePerM > 0 {
+						inputRate = spec.DeepContextInputRatePerM
+					}
+					if spec.DeepContextOutputRatePerM > 0 {
+						outputRate = spec.DeepContextOutputRatePerM
+					}
+					formula += fmt.Sprintf(" (deep context >128k tier active: input=$%.2f/1M, output=$%.2f/1M)", inputRate, outputRate)
+				}
+				nonCached := req.PromptTokens - req.CachedInputTokens
+				if nonCached < 0 {
+					nonCached = 0
+				}
+				inputCostMicros := int64(math.Round(float64(nonCached) * inputRate))
+				outputCostMicros := int64(math.Round(float64(req.CompletionTokens) * outputRate))
+				var cachedCostMicros, savingsMicros int64
+				if spec.SupportsCaching && req.CachedInputTokens > 0 {
+					cachedCostMicros = int64(math.Round(float64(req.CachedInputTokens) * spec.CachedReadRatePerM))
+					savingsMicros = int64(math.Round(float64(req.CachedInputTokens) * inputRate)) - cachedCostMicros
+					if savingsMicros < 0 {
+						savingsMicros = 0
+					}
+				}
+				costMicros := domain.CalculateProviderTokenCost(spec, req.PromptTokens, req.CompletionTokens, req.CachedInputTokens)
+				return CalculateCostResult{
+					CostMicros:            costMicros,
+					InputCostMicros:       inputCostMicros,
+					OutputCostMicros:      outputCostMicros,
+					CachedInputCostMicros: cachedCostMicros,
+					SavingsMicros:         savingsMicros,
+					PricingModelFormula:   formula,
+					Currency:              "usd",
+					PricingVersion: domain.PricingVersion{
+						Version:                         1,
+						InputUnitPriceMicros:            int64(math.Round(spec.InputRatePerM)),
+						OutputUnitPriceMicros:           int64(math.Round(spec.OutputRatePerM)),
+						CacheReadInputTokenPriceMicros: int64(math.Round(spec.CachedReadRatePerM)),
+					},
+					PromptTokens:      req.PromptTokens,
+					CompletionTokens:  req.CompletionTokens,
+					CachedInputTokens: req.CachedInputTokens,
+				}, nil
+			}
 			return CalculateCostResult{}, domain.ErrPricingUnavailable
 		}
 		return CalculateCostResult{}, err
@@ -335,18 +470,40 @@ func (s *Service) CalculateCost(ctx context.Context, actor domain.Actor, req Cal
 		}
 	}
 
+	nonCached := req.PromptTokens - req.CachedInputTokens
+	if nonCached < 0 {
+		nonCached = 0
+	}
+	var inputCostMicros, cachedCostMicros, savingsMicros int64
+	if pv.CacheReadInputTokenPriceMicros > 0 && req.CachedInputTokens > 0 {
+		inputCostMicros = nonCached * pv.InputUnitPriceMicros
+		cachedCostMicros = req.CachedInputTokens * pv.CacheReadInputTokenPriceMicros
+		savingsMicros = (req.CachedInputTokens * pv.InputUnitPriceMicros) - cachedCostMicros
+		if savingsMicros < 0 {
+			savingsMicros = 0
+		}
+	} else {
+		inputCostMicros = req.PromptTokens * pv.InputUnitPriceMicros
+	}
+	outputCostMicros := req.CompletionTokens * pv.OutputUnitPriceMicros
+
 	costMicros, err := domain.CalculateCost(pv, req.PromptTokens, req.CompletionTokens, req.CachedInputTokens)
 	if err != nil {
 		return CalculateCostResult{}, err
 	}
 
 	return CalculateCostResult{
-		CostMicros:        costMicros,
-		Currency:          model.Currency,
-		PricingVersion:    pv,
-		PromptTokens:      req.PromptTokens,
-		CompletionTokens:  req.CompletionTokens,
-		CachedInputTokens: req.CachedInputTokens,
+		CostMicros:            costMicros,
+		InputCostMicros:       inputCostMicros,
+		OutputCostMicros:      outputCostMicros,
+		CachedInputCostMicros: cachedCostMicros,
+		SavingsMicros:         savingsMicros,
+		PricingModelFormula:   fmt.Sprintf("Organization customized rate sheet v%d: input=%dµ$/tok, output=%dµ$/tok", pv.Version, pv.InputUnitPriceMicros, pv.OutputUnitPriceMicros),
+		Currency:              model.Currency,
+		PricingVersion:        pv,
+		PromptTokens:          req.PromptTokens,
+		CompletionTokens:      req.CompletionTokens,
+		CachedInputTokens:     req.CachedInputTokens,
 	}, nil
 }
 

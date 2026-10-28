@@ -38,23 +38,23 @@ export function DashboardPreview({ className }: { className?: string }) {
             <span className="size-2.5 rounded-full bg-[#4A7A5A]/50" />
           </div>
           <span
-            className="ml-2 text-[11px] text-[#7A6458]"
+            className="ml-2 text-xs text-[#7A6458]"
             style={{ fontFamily: "var(--font-fira-code)" }}
           >
             sentinel / overview
           </span>
         </div>
         <span
-          className="inline-flex items-center gap-1.5 border border-[rgba(74,122,90,0.25)] px-2 py-0.5 text-[10px] font-medium"
+          className="inline-flex items-center gap-1.5 border border-[rgba(74,122,90,0.25)] px-2.5 py-0.5 text-xs font-medium"
           style={{ color: "#4A7A5A", fontFamily: "var(--font-fira-code)", background: "rgba(74,122,90,0.06)" }}
         >
-          <span className="size-1 rounded-full bg-[#4A7A5A]" aria-hidden />
+          <span className="size-1.5 rounded-full bg-[#4A7A5A]" aria-hidden />
           Gateway Live
         </span>
       </div>
 
       {/* Body: sidebar + content */}
-      <div className="grid grid-cols-[88px_1fr] sm:grid-cols-[112px_1fr]">
+      <div className="grid grid-cols-[96px_1fr] sm:grid-cols-[120px_1fr]">
         {/* Sidebar */}
         <nav
           className="hidden border-r border-[rgba(111,78,55,0.10)] p-2.5 sm:block"
@@ -66,7 +66,7 @@ export function DashboardPreview({ className }: { className?: string }) {
               <li key={item}>
                 <span
                   className={cn(
-                    "block truncate px-2 py-1.5 text-[11px] transition-colors",
+                    "block truncate px-2 py-1.5 text-xs transition-colors",
                     index === 0
                       ? "font-semibold text-[#6F4E37] border-l-2 border-[#6F4E37] pl-1.5"
                       : "text-[#7A6458]"
@@ -89,10 +89,10 @@ export function DashboardPreview({ className }: { className?: string }) {
                 className="border border-[rgba(111,78,55,0.12)] p-2.5"
                 style={{ background: "rgba(245,243,240,0.8)" }}
               >
-                <p className="truncate text-[10px] text-[#7A6458]">{kpi.label}</p>
+                <p className="truncate text-xs font-medium text-[#7A6458]">{kpi.label}</p>
                 <p
-                  className="mt-0.5 text-sm font-semibold tabular-nums text-[#1C1412]"
-                  style={{ fontFamily: "var(--font-cormorant)", letterSpacing: "-0.03em", fontSize: "1rem" }}
+                  className="mt-0.5 text-base font-bold tabular-nums text-[#1C1412]"
+                  style={{ fontFamily: "var(--font-cormorant)", letterSpacing: "-0.03em" }}
                 >
                   {kpi.value}
                 </p>
@@ -106,8 +106,8 @@ export function DashboardPreview({ className }: { className?: string }) {
             style={{ background: "rgba(245,243,240,0.8)" }}
           >
             <div className="flex items-center justify-between">
-              <p className="text-[10px] font-medium text-[#7A6458]">Request volume</p>
-              <span className="text-[10px] text-[#7A6458]">last 12 intervals</span>
+              <p className="text-xs font-semibold text-[#7A6458]">Request volume</p>
+              <span className="text-xs text-[#7A6458] font-mono">last 12 intervals</span>
             </div>
             <div className="mt-2.5 flex h-16 items-end gap-1" aria-hidden>
               {SERIES.map((height, index) => (
@@ -135,15 +135,15 @@ export function DashboardPreview({ className }: { className?: string }) {
               >
                 <span className="min-w-0">
                   <span
-                    className="block truncate text-[10px] font-medium text-[#1C1412]"
+                    className="block truncate text-xs font-semibold text-[#1C1412]"
                     style={{ fontFamily: "var(--font-fira-code)" }}
                   >
                     {event.model}
                   </span>
-                  <span className="block truncate text-[10px] text-[#7A6458]">{event.team}</span>
+                  <span className="block truncate text-xs text-[#7A6458]">{event.team}</span>
                 </span>
                 <span
-                  className="shrink-0 px-2 py-0.5 text-[9px] font-semibold border"
+                  className="shrink-0 px-2.5 py-0.5 text-xs font-semibold border"
                   style={{
                     borderColor: event.decision === "Blocked" ? "rgba(181,75,42,0.25)" : "rgba(74,122,90,0.25)",
                     color: event.decision === "Blocked" ? "#B54B2A" : "#4A7A5A",
@@ -160,7 +160,7 @@ export function DashboardPreview({ className }: { className?: string }) {
       </div>
 
       <figcaption
-        className="border-t border-[rgba(111,78,55,0.10)] px-4 py-2 text-[10px] text-[#7A6458]"
+        className="border-t border-[rgba(111,78,55,0.10)] px-4 py-2 text-xs text-[#7A6458]"
         style={{ fontFamily: "var(--font-fira-code)" }}
       >
         Illustrative preview. Real-time control plane demonstration.

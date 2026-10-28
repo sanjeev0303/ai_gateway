@@ -83,6 +83,19 @@ func (q *Queries) GetUserAuthByEmail(ctx context.Context, lower string) (User, e
 	return i, err
 }
 
+const purgeExpiredRefreshTokens = `-- name: PurgeExpiredRefreshTokens :execrows
+DELETE FROM auth_refresh_tokens
+WHERE expires_at < $1 OR (revoked_at IS NOT NULL AND revoked_at < $1)
+`
+
+func (q *Queries) PurgeExpiredRefreshTokens(ctx context.Context, expiresAt time.Time) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeExpiredRefreshTokens, expiresAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const revokeAllRefreshTokensForUser = `-- name: RevokeAllRefreshTokensForUser :execrows
 UPDATE auth_refresh_tokens
 SET revoked_at = now()

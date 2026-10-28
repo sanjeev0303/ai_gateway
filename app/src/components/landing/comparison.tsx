@@ -9,7 +9,7 @@ function Cell({ value, ours = false }: { value: string; ours?: boolean }) {
 
   return (
     <span
-      className="text-xs leading-relaxed"
+      className="text-sm leading-relaxed"
       style={{
         color: affirmative ? "#1C1412" : "rgba(74,58,48,0.55)",
         fontWeight: affirmative ? 600 : 400,
@@ -17,7 +17,7 @@ function Cell({ value, ours = false }: { value: string; ours?: boolean }) {
     >
       {affirmative && (
         <span
-          className="inline-block mr-2 align-middle size-1 rounded-full"
+          className="inline-block mr-2 align-middle size-1.5 rounded-full"
           style={{ background: "#6F4E37" }}
           aria-hidden
         />
@@ -62,14 +62,14 @@ export function Comparison() {
                   <tr style={{ borderBottom: "1px solid rgba(111,78,55,0.12)" }}>
                     <th
                       scope="col"
-                      className="w-[32%] py-4 pl-7 pr-4 text-[10px] font-semibold uppercase text-[#7A6458]"
+                      className="w-[32%] py-4 pl-7 pr-4 text-xs font-semibold uppercase text-[#7A6458]"
                       style={{ fontFamily: "var(--font-fira-code)", letterSpacing: "0.10em" }}
                     >
                       Capability
                     </th>
                     <th
                       scope="col"
-                      className="w-[28%] py-4 px-5 text-[10px] font-bold uppercase text-[#6F4E37]"
+                      className="w-[28%] py-4 px-5 text-xs font-bold uppercase text-[#6F4E37]"
                       style={{
                         fontFamily: "var(--font-fira-code)",
                         letterSpacing: "0.10em",
@@ -82,14 +82,14 @@ export function Comparison() {
                     </th>
                     <th
                       scope="col"
-                      className="w-[20%] py-4 px-5 text-[10px] font-semibold uppercase text-[#7A6458]"
+                      className="w-[20%] py-4 px-5 text-xs font-semibold uppercase text-[#7A6458]"
                       style={{ fontFamily: "var(--font-fira-code)", letterSpacing: "0.10em" }}
                     >
                       {inHouse}
                     </th>
                     <th
                       scope="col"
-                      className="w-[20%] py-4 pl-5 pr-7 text-[10px] font-semibold uppercase text-[#7A6458]"
+                      className="w-[20%] py-4 pl-5 pr-7 text-xs font-semibold uppercase text-[#7A6458]"
                       style={{ fontFamily: "var(--font-fira-code)", letterSpacing: "0.10em" }}
                     >
                       {providerNative}
@@ -104,7 +104,7 @@ export function Comparison() {
                     >
                       <th
                         scope="row"
-                        className="py-4 pl-7 pr-4 text-xs font-semibold text-[#1C1412]"
+                        className="py-4 pl-7 pr-4 text-sm font-semibold text-[#1C1412]"
                         style={{ letterSpacing: "-0.01em" }}
                       >
                         {row.capability}

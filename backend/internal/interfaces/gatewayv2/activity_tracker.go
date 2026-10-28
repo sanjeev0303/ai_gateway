@@ -102,6 +102,7 @@ func (t *ActivityTracker) process(ev domain.ActivityEvent) {
 		pipe.HDel(ctx, orgKey, ev.RequestID)
 	} else {
 		pipe.HSet(ctx, orgKey, ev.RequestID, data)
+		pipe.Expire(ctx, orgKey, 24*time.Hour)
 	}
 
 	pipe.Publish(ctx, channel, data)

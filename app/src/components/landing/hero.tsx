@@ -33,15 +33,15 @@ export function Hero() {
       />
 
       <Container className="relative z-10 pt-24 pb-0 sm:pt-28 lg:pt-32">
-        {/* Z-pattern: left text, right visual, headline overlaps */}
-        <div className="grid gap-0 lg:grid-cols-12 lg:items-end">
+        {/* Left text, right visual centered */}
+        <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
 
           {/* Left: editorial text block */}
           <motion.div
             variants={staggerContainer(0.1)}
             initial="hidden"
             animate="visible"
-            className="lg:col-span-6 pb-16 lg:pb-24 pr-0 lg:pr-8"
+            className="lg:col-span-6 pb-8 lg:pb-0 pr-0 lg:pr-8"
           >
             {/* Eyebrow: monospaced label */}
             <motion.p
@@ -110,32 +110,14 @@ export function Hero() {
             </motion.p>
           </motion.div>
 
-          {/* Right: dashboard visual — overlaps the bottom */}
+          {/* Right: dashboard visual — centered */}
           <motion.div
-            initial={{ opacity: 0, y: 40 }}
+            initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.9, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="lg:col-span-6 relative"
+            className="lg:col-span-6 relative flex items-center justify-center w-full"
           >
-            {/* Headline overlap into visual */}
-            <div
-              className="absolute -top-8 left-6 z-20 hidden lg:block pointer-events-none select-none"
-              aria-hidden
-            >
-              <p
-                className="font-display text-[clamp(4rem,8vw,7rem)] font-semibold leading-none"
-                style={{
-                  fontFamily: "var(--font-cormorant)",
-                  color: "rgba(111,78,55,0.06)",
-                  letterSpacing: "-0.05em",
-                  userSelect: "none",
-                }}
-              >
-                Govern
-              </p>
-            </div>
-
-            <DashboardPreview className="translate-y-6 lg:translate-y-10" />
+            <DashboardPreview className="w-full shadow-2xl" />
           </motion.div>
         </div>
 

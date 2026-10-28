@@ -211,7 +211,7 @@ export function OnboardingClient({
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-semibold truncate leading-tight">{s.title}</p>
-                <p className="text-[10px] opacity-80 truncate hidden sm:block">{s.desc}</p>
+                <p className="text-xs opacity-80 truncate hidden sm:block">{s.desc}</p>
               </div>
             </button>
           );
@@ -328,7 +328,7 @@ export function OnboardingClient({
                     <div key={p.id} className="border rounded-lg p-3 bg-card">
                       <div className="flex items-center justify-between">
                         <p className="font-semibold text-sm">{p.name}</p>
-                        <Badge variant="outline" className="text-[10px]">
+                        <Badge variant="outline" className="text-xs">
                           {p.status || "active"}
                         </Badge>
                       </div>
@@ -379,10 +379,10 @@ export function OnboardingClient({
                 {models.map((m) => (
                   <div key={m.id} className="border rounded-xl p-3 bg-card/80 hover:border-primary/50 transition-colors">
                     <div className="flex items-center justify-between mb-1.5">
-                      <Badge variant="secondary" className="capitalize text-[10px]">
+                      <Badge variant="secondary" className="capitalize text-xs">
                         {m.provider_kind}
                       </Badge>
-                      <span className="text-[10px] text-muted-foreground font-mono">
+                      <span className="text-xs text-muted-foreground font-mono">
                         {m.is_active !== false ? "Active" : "Inactive"}
                       </span>
                     </div>

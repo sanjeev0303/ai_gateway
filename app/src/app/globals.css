@@ -564,6 +564,66 @@
   pointer-events: none;
 }
 
+/* Dataflow & Workflow Pictorial Keyframes */
+@keyframes flowDash {
+  from {
+    stroke-dashoffset: 48;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes flowDashReverse {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 48;
+  }
+}
+
+@keyframes ripplePulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 0.15;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0.75;
+  }
+}
+
+@keyframes hubBeacon {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(111,78,55, 0.25), 0 0 24px -4px rgba(111,78,55, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 16px rgba(111,78,55, 0.04), 0 0 36px 4px rgba(111,78,55, 0.25);
+  }
+}
+
+.animate-flow-dash {
+  animation: flowDash 2.4s linear infinite;
+}
+
+.animate-flow-dash-reverse {
+  animation: flowDashReverse 2.4s linear infinite;
+}
+
+.animate-ripple-pulse {
+  transform-origin: center;
+  animation: ripplePulse 4s ease-in-out infinite;
+}
+
+.animate-hub-beacon {
+  animation: hubBeacon 3s ease-in-out infinite;
+}
+
 /* Accessibility: prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

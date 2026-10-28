@@ -136,45 +136,45 @@ export default async function SubscriptionPage({
       >
         {/* Checkout & Payment Notification Banners */}
         {isCheckoutSuccess && (
-          <div className="flex items-center gap-3 p-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 mb-4">
+          <div className="flex items-center gap-3 p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 mb-4">
             <CheckCircle2 className="size-5 shrink-0 text-emerald-600" />
             <div>
-              <div className="font-semibold text-sm">Checkout Completed</div>
-              <div className="text-xs">
+              <div className="font-semibold text-base">Checkout Completed</div>
+              <div className="text-sm">
                 Your payment was verified successfully and your organization subscription has been upgraded.
               </div>
             </div>
           </div>
         )}
         {isCheckoutCancelled && (
-          <div className="flex items-center gap-3 p-4 rounded-lg border border-border bg-muted/40 text-muted-foreground mb-4">
+          <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-muted/40 text-muted-foreground mb-4">
             <AlertTriangle className="size-5 shrink-0 text-amber-500" />
             <div>
-              <div className="font-semibold text-sm text-foreground">Checkout Cancelled</div>
-              <div className="text-xs">
+              <div className="font-semibold text-base text-foreground">Checkout Cancelled</div>
+              <div className="text-sm">
                 The checkout session was cancelled. No charges were made and your subscription remains unchanged.
               </div>
             </div>
           </div>
         )}
         {checkoutError && (
-          <div className="flex items-center gap-3 p-4 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive mb-4">
+          <div className="flex items-center gap-3 p-4 rounded-xl border border-destructive/30 bg-destructive/10 text-destructive mb-4">
             <XCircle className="size-5 shrink-0" />
             <div>
-              <div className="font-semibold text-sm">Payment Verification Error</div>
-              <div className="text-xs">{checkoutError}</div>
+              <div className="font-semibold text-base">Payment Verification Error</div>
+              <div className="text-sm">{checkoutError}</div>
             </div>
           </div>
         )}
 
         {/* Payment Failure Warning Banner */}
         {subscription && (subscription.status === "past_due" || subscription.status === "unpaid") && (
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-lg border border-destructive bg-destructive/10 text-destructive mb-4 shadow-xs">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl border border-destructive bg-destructive/10 text-destructive mb-4 shadow-xs">
             <div className="flex items-center gap-3">
               <AlertTriangle className="size-6 shrink-0 text-destructive" />
               <div>
-                <div className="font-semibold text-sm">Action Required: Subscription Payment Failed</div>
-                <div className="text-xs text-muted-foreground">
+                <div className="font-semibold text-base">Action Required: Subscription Payment Failed</div>
+                <div className="text-sm text-muted-foreground">
                   Your recent subscription renewal payment could not be settled ({subscription.status}). Please update payment details or re-run checkout to avoid request quota suspension.
                 </div>
               </div>
@@ -194,15 +194,15 @@ export default async function SubscriptionPage({
                     : subscription.plan_code
                 }
               />
-              <div className="flex flex-col justify-between rounded-lg border bg-card p-4 shadow-sm">
+              <div className="flex flex-col justify-between rounded-2xl border border-border/50 bg-card/80 p-5 shadow-xs">
                 <div>
-                  <div className="text-xs font-medium text-muted-foreground">Status</div>
-                  <div className="text-2xl font-bold tracking-tight capitalize mt-1">
+                  <div className="text-sm font-semibold text-muted-foreground tracking-wide">Status</div>
+                  <div className="text-3xl font-bold tracking-tight capitalize mt-2">
                     {subscription.status}
                   </div>
                 </div>
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
                     {subscription.cancel_at_period_end
                       ? "Cancels at period end"
                       : "Auto-renewing cycle"}
@@ -230,26 +230,26 @@ export default async function SubscriptionPage({
               />
             </section>
 
-            <Card>
+            <Card className="rounded-2xl border border-border/50 bg-card/80">
               <CardHeader>
-                <CardTitle>Organization Entitlements & Billing Scope</CardTitle>
-                <CardDescription>
+                <CardTitle className="text-xl font-bold">Organization Entitlements & Billing Scope</CardTitle>
+                <CardDescription className="text-sm text-muted-foreground">
                   Governance capabilities and gateway quotas granted by {subscription.plan_name}.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3 text-sm text-muted-foreground">
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-md border p-3 bg-muted/20">
+              <CardContent className="space-y-4 text-sm text-muted-foreground">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-xl border p-4 bg-muted/20 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <div className="text-xs font-semibold text-foreground">Monthly Request Quota</div>
-                      <span className="text-[11px] font-mono font-medium text-muted-foreground">
+                      <div className="text-sm font-semibold text-foreground">Monthly Request Quota</div>
+                      <span className="text-sm font-mono font-semibold text-muted-foreground">
                         {usagePercent}%
                       </span>
                     </div>
-                    <div className="text-base font-bold text-primary mt-1">
+                    <div className="text-xl font-bold text-primary">
                       {formatNumber(currentRequests)} / {formatNumber(quotaLimit)}
                     </div>
-                    <div className="w-full bg-muted rounded-full h-1.5 mt-2 overflow-hidden">
+                    <div className="w-full bg-muted rounded-full h-2 mt-2 overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all ${
                           usagePercent > 90 ? "bg-destructive" : usagePercent > 75 ? "bg-amber-500" : "bg-primary"
@@ -258,36 +258,38 @@ export default async function SubscriptionPage({
                       />
                     </div>
                   </div>
-                  <div className="rounded-md border p-3 bg-muted/20">
-                    <div className="text-xs font-semibold text-foreground">Payment Processor</div>
-                    <div className="text-base font-bold text-primary mt-1 uppercase">
+                  <div className="rounded-xl border p-4 bg-muted/20 space-y-1.5">
+                    <div className="text-sm font-semibold text-foreground">Payment Processor</div>
+                    <div className="text-xl font-bold text-primary uppercase">
                       {subscription.payment_provider || "Local / System"}
                     </div>
+                    <p className="text-xs text-muted-foreground mt-1">Verified checkout partner</p>
                   </div>
-                  <div className="rounded-md border p-3 bg-muted/20">
-                    <div className="text-xs font-semibold text-foreground">Privacy & Guardrails</div>
-                    <div className="text-base font-bold text-primary mt-1">
+                  <div className="rounded-xl border p-4 bg-muted/20 space-y-1.5">
+                    <div className="text-sm font-semibold text-foreground">Privacy & Guardrails</div>
+                    <div className="text-xl font-bold text-primary">
                       {subscription.plan_code === "enterprise"
                         ? "Full Content & Metadata"
                         : subscription.plan_code === "pro"
                         ? "Standard Guardrails"
                         : "Basic Policy"}
                     </div>
+                    <p className="text-xs text-muted-foreground mt-1">Real-time gateway enforcement</p>
                   </div>
                 </div>
 
                 {subscription.provider_customer_id && (
-                  <p className="rounded-md border bg-muted/40 p-3 text-xs">
-                    <strong>Processor Reference:</strong> Customer ID:{" "}
-                    <code>{subscription.provider_customer_id}</code>
+                  <p className="rounded-xl border bg-muted/30 p-3.5 text-sm text-foreground/90">
+                    <strong className="text-foreground">Processor Reference:</strong> Customer ID:{" "}
+                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{subscription.provider_customer_id}</code>
                     {subscription.provider_subscription_id && (
                       <>
-                        {" "}· Subscription ID: <code>{subscription.provider_subscription_id}</code>
+                        {" "}· Subscription ID: <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{subscription.provider_subscription_id}</code>
                       </>
                     )}
                   </p>
                 )}
-                <p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
                   Recorded consumption for the current cycle is priced by the worker and shown under Billing → Usage.
                 </p>
               </CardContent>
@@ -310,10 +312,10 @@ export default async function SubscriptionPage({
           </Card>
         )}
 
-        <Card>
+        <Card className="rounded-2xl border border-border/50 bg-card/80">
           <CardHeader>
-            <CardTitle>Plan catalog</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-xl font-bold">Plan Catalog & Tier Matrix</CardTitle>
+            <CardDescription className="text-sm text-muted-foreground">
               Compare available tiers and switch plans instantly with one click.
             </CardDescription>
           </CardHeader>

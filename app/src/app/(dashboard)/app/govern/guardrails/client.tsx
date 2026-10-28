@@ -646,7 +646,7 @@ export function GuardrailsClient({
                         <span className="font-medium text-foreground">Action: </span>
                         <Badge
                           variant={g.action === "block" ? "destructive" : "outline"}
-                          className="ml-1 text-[11px]"
+                          className="ml-1 text-xs"
                         >
                           {g.action.toUpperCase()}
                         </Badge>
@@ -658,7 +658,7 @@ export function GuardrailsClient({
                       </div>
                       <div>
                         <span className="font-medium text-foreground">Config: </span>
-                        <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded">
+                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
                           {JSON.stringify(g.configuration)}
                         </code>
                       </div>

@@ -156,6 +156,25 @@ func (q *Queries) MarkInvitationAccepted(ctx context.Context, arg MarkInvitation
 	return i, err
 }
 
+const purgeExpiredInvitations = `-- name: PurgeExpiredInvitations :execrows
+DELETE FROM invitations
+WHERE organization_id = $1 AND (expires_at < $2 OR (status IN ('accepted', 'revoked') AND created_at < $3))
+`
+
+type PurgeExpiredInvitationsParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ExpiresAt      time.Time `json:"expires_at"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+func (q *Queries) PurgeExpiredInvitations(ctx context.Context, arg PurgeExpiredInvitationsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeExpiredInvitations, arg.OrganizationID, arg.ExpiresAt, arg.CreatedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const resolveInvitationByToken = `-- name: ResolveInvitationByToken :one
 SELECT id, organization_id, email, role, token_hash, status, expires_at, invited_by, accepted_by, accepted_at, created_at, updated_at FROM app.resolve_invitation_by_token($1)
 `

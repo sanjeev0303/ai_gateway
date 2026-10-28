@@ -118,7 +118,7 @@ export function ProbeProviderDialog() {
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="e.g. sk-ant-api03-... or sk-dummy-key"
             />
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Tip: Local test mock keys like <code className="bg-muted px-1 py-0.5 rounded">sk-dummy-anthropic-key</code> validate without external network calls.
             </p>
           </div>

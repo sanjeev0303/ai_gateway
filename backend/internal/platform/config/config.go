@@ -183,7 +183,7 @@ const (
 // BillingConfig describes the billing integration (dual provider: Stripe and Razorpay).
 type BillingConfig struct {
 	Enabled               bool   `env:"ENABLED" envDefault:"false"`
-	Mode                  string `env:"MODE" envDefault:"disabled"` // disabled | simulation | test | live
+	Mode                  string `env:"MODE" envDefault:""` // disabled | simulation | test | live
 	Provider              string `env:"PROVIDER" envDefault:"none"`
 	Currency              string `env:"CURRENCY" envDefault:"usd"`
 	StripeSecretKey       string `env:"STRIPE_SECRET_KEY"`

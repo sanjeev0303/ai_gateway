@@ -50,7 +50,7 @@ export function Pillars() {
                 >
                   {pillar.title}
                 </h3>
-                <p className="mt-3 text-sm leading-relaxed text-[#4A3A30] max-w-[40ch]">
+                <p className="mt-3 text-base leading-relaxed text-[#4A3A30] max-w-[40ch]">
                   {pillar.body}
                 </p>
 
@@ -59,7 +59,7 @@ export function Pillars() {
                   {pillar.points.map((point) => (
                     <li
                       key={point}
-                      className="border border-[rgba(111,78,55,0.20)] px-3 py-1 text-[11px] font-medium text-[#4A3A30]"
+                      className="border border-[rgba(111,78,55,0.20)] px-3 py-1 text-xs font-medium text-[#4A3A30]"
                       style={{ fontFamily: "var(--font-fira-code)" }}
                     >
                       {point}

@@ -59,6 +59,7 @@ import type {
 import { isDateRange, type DateRange } from "@/lib/date-range";
 import { cn } from "@/lib/utils";
 import { HeaderActions } from "./header-actions";
+import { AnalyticsSuite } from "./analytics-suite";
 
 type Trend = { direction: TrendDirection; fraction: number };
 
@@ -238,7 +239,7 @@ function SetupStep({ num, title, desc, href, cta, status }: SetupStepProps) {
               {title}
             </h4>
             {isCompleted && (
-              <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span className="text-xs uppercase font-semibold tracking-wider px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                 Done
               </span>
             )}
@@ -335,7 +336,7 @@ async function OnboardingWidget({ timeParams }: { timeParams: TimeRangeQuery }) 
                 <h2 id="operational-heading" className="text-sm font-semibold text-foreground tracking-tight">
                   Workspace Operational
                 </h2>
-                <span className="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <span className="text-xs font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                   Ready
                 </span>
               </div>
@@ -453,7 +454,7 @@ async function OnboardingWidget({ timeParams }: { timeParams: TimeRangeQuery }) 
           <div className="rounded-xl border border-border/60 bg-card/60 p-4 lg:sticky lg:top-24 space-y-4">
             <div>
               <h3 className="font-semibold text-xs text-foreground uppercase tracking-wider">Workspace summary</h3>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Live resource inventory</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Live resource inventory</p>
             </div>
             <div className="space-y-2">
               <SummaryTile
@@ -537,7 +538,7 @@ function ModernKpiCard({
         </div>
         <p
           className={cn(
-            "text-2xl font-semibold tracking-tight tabular-nums",
+            "text-3xl font-bold tracking-tight tabular-nums",
             tone === "danger"
               ? "text-rose-500"
               : tone === "warning"
@@ -551,7 +552,7 @@ function ModernKpiCard({
         </p>
       </div>
 
-      <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-border/30 text-[11px] text-muted-foreground">
+      <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-border/30 text-xs text-muted-foreground">
         <span>{subtitle || "Current window"}</span>
         {delta && (
           <span
@@ -682,64 +683,23 @@ async function KpiRowWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
 // Chart & Data Widgets
 // ---------------------------------------------------------------------------
 
-async function RequestVolumeWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
+async function AnalyticsSuiteWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
   const client = await getApiClient();
-  const series = await safeFetch(() => client.usage.timeseries(timeParams), "timeseries");
-  if (!series || !series.items || series.items.length === 0) {
-    return (
-      <EmptyVisualCard
-        icon={BarChart3}
-        title="No request volume recorded"
-        description="Traffic charts will activate automatically as soon as your apps send prompts through the gateway."
-        actionHref="/app/developer/quick-start"
-        actionLabel="Send a test request in Quick Start"
-        ghostType="chart"
-      />
-    );
-  }
+  const [series, summary, byProvider] = await Promise.all([
+    safeFetch(() => client.usage.timeseries(timeParams), "timeseries"),
+    safeFetch(() => client.usage.summary(timeParams), "summary"),
+    safeFetch(() => client.usage.byProvider(timeParams), "byProvider"),
+  ]);
 
-  const requestSeries = series.items.map((point) => ({
+  const requestSeries = (series?.items || []).map((point) => ({
     date: point.BucketStart.slice(5, 16).replace("T", " "),
     value: point.Requests,
   }));
 
-  return <LineChart data={requestSeries} color={chartColor(0)} formatValue={formatCompact} />;
-}
-
-async function SpendWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
-  const client = await getApiClient();
-  const series = await safeFetch(() => client.usage.timeseries(timeParams), "timeseries");
-  if (!series || !series.items || series.items.length === 0) {
-    return (
-      <EmptyVisualCard
-        icon={CreditCard}
-        title="No spend recorded"
-        description="Cost tracking estimates provider invoices based on input and output token consumption per model."
-        actionHref="/app/govern/budgets"
-        actionLabel="Set up spending budgets"
-        ghostType="chart"
-      />
-    );
-  }
-
-  const spendSeries = series.items.map((point) => ({
+  const spendSeries = (series?.items || []).map((point) => ({
     date: point.BucketStart.slice(5, 16).replace("T", " "),
     value: microsToUsd(point.CostMicros),
   }));
-
-  return (
-    <>
-      <AreaChart series={[{ label: "Spend", color: chartColor(1), data: spendSeries }]} formatValue={formatUsd} />
-      <p className="text-xs text-muted-foreground mt-4">
-        Costs are calculated from published model pricing at request completion time.
-      </p>
-    </>
-  );
-}
-
-async function TokensWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
-  const client = await getApiClient();
-  const summary = await safeFetch(() => client.usage.summary(timeParams), "summary");
 
   const tokenData = [
     { label: "Input", value: summary?.InputTokens ?? 0 },
@@ -747,93 +707,23 @@ async function TokensWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
     { label: "Cached", value: summary?.CachedTokens ?? 0 },
   ].filter((d) => d.value > 0);
 
-  if (tokenData.length === 0) {
-    return (
-      <EmptyVisualCard
-        icon={PieChart}
-        title="No token telemetry"
-        description="A breakdown of prompt tokens, completion tokens, and cache hits will render here."
-        ghostType="donut"
-      />
-    );
-  }
-
-  return <DonutChart data={tokenData} centerLabel="tokens" />;
-}
-
-async function HeatmapWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
-  const client = await getApiClient();
-  const series = await safeFetch(() => client.usage.timeseries(timeParams), "timeseries");
-  if (!series || !series.items || series.items.length === 0) {
-    return (
-      <EmptyVisualCard
-        icon={Flame}
-        title="No activity recorded"
-        description="The hourly density matrix will illuminate as request traffic passes through the gateway."
-        ghostType="heatmap"
-      />
-    );
-  }
-
-  const items = [...series.items];
-  const maxReq = Math.max(...items.map((s) => s.Requests));
-
-  return (
-    <>
-      <div className="flex flex-wrap gap-1.5 mt-2 max-w-full" role="img" aria-label="Activity heatmap">
-        {items.map((s, i) => {
-          const intensity = maxReq > 0 ? s.Requests / maxReq : 0;
-          let bg = "bg-muted/50 border border-border/20";
-          if (intensity > 0) bg = "bg-blue-500/25 border border-blue-500/30";
-          if (intensity > 0.3) bg = "bg-blue-500/45 border border-blue-500/50";
-          if (intensity > 0.6) bg = "bg-blue-500/75 border border-blue-500/80 shadow-xs shadow-blue-500/20";
-          if (intensity > 0.8) bg = "bg-blue-500 border border-blue-400 shadow-sm shadow-blue-500/40";
-          return (
-            <div
-              key={i}
-              title={`${new Date(s.BucketStart).toLocaleDateString()}: ${s.Requests} requests (${s.TotalTokens.toLocaleString()} tokens)`}
-              className={`w-4 h-4 sm:w-5 sm:h-5 rounded-lg ${bg} hover:ring-2 hover:ring-primary/80 hover:scale-110 transition-all cursor-pointer`}
-            />
-          );
-        })}
-      </div>
-      <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-4 pt-2 border-t border-border/40">
-        <span>Activity timeline ({items.length} buckets)</span>
-        <div className="flex items-center gap-1.5">
-          <span>Less</span>
-          <span className="w-2.5 h-2.5 rounded-xs bg-muted/60" />
-          <span className="w-2.5 h-2.5 rounded-xs bg-blue-500/30" />
-          <span className="w-2.5 h-2.5 rounded-xs bg-blue-500/60" />
-          <span className="w-2.5 h-2.5 rounded-xs bg-blue-500" />
-          <span>More</span>
-        </div>
-      </div>
-    </>
-  );
-}
-
-async function ProviderDistWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
-  const client = await getApiClient();
-  const byProvider = await safeFetch(() => client.usage.byProvider(timeParams), "byProvider");
-  if (!byProvider || !byProvider.items || byProvider.items.length === 0) {
-    return (
-      <EmptyVisualCard
-        icon={Globe}
-        title="No provider usage"
-        description="Compares request routing across upstream providers (OpenAI, Anthropic, Google)."
-        actionHref="/app/platform/provider-accounts"
-        actionLabel="Manage upstream providers"
-        ghostType="bars"
-      />
-    );
-  }
-
-  const topProviders: CategoryDatum[] = [...byProvider.items]
+  const topProviders: CategoryDatum[] = [...(byProvider?.items || [])]
     .sort((a, b) => b.Requests - a.Requests)
     .slice(0, 5)
     .map((row) => ({ label: row.Provider, value: row.Requests }));
 
-  return <BarChart data={topProviders} formatValue={formatCompact} />;
+  return (
+    <AnalyticsSuite
+      requestSeries={requestSeries}
+      spendSeries={spendSeries}
+      tokenData={tokenData}
+      providerData={topProviders}
+      totalRequests={summary?.Requests ?? 0}
+      totalSpend={summary?.TotalCostMicros != null ? microsToUsd(summary.TotalCostMicros) : 0}
+      totalTokens={summary?.TotalTokens ?? 0}
+      cachedTokens={summary?.CachedTokens ?? 0}
+    />
+  );
 }
 
 async function ModelsWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
@@ -927,11 +817,11 @@ async function HealthWidget() {
                 <Icon className={`size-4 ${color}`} aria-hidden />
               </span>
               <div>
-                <span className="font-medium text-foreground">{h.provider_kind || "Unknown"}</span>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Active health probe</p>
+                <span className="font-semibold text-foreground text-sm">{h.provider_kind || "Unknown"}</span>
+                <p className="text-sm text-muted-foreground mt-0.5">Active health probe</p>
               </div>
             </div>
-            <span className={cn("capitalize text-xs font-medium px-2 py-0.5 rounded-full border", statusBadge)}>
+            <span className={cn("capitalize text-xs font-semibold px-2.5 py-0.5 rounded-full border", statusBadge)}>
               {h.status}
             </span>
           </div>
@@ -975,7 +865,7 @@ async function AlertsWidget() {
           >
             <div
               className={cn(
-                "size-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5",
+                "size-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5",
                 isCritical
                   ? "bg-rose-500/10 text-rose-400"
                   : isWarning
@@ -983,16 +873,16 @@ async function AlertsWidget() {
                   : "bg-blue-500/10 text-blue-400"
               )}
             >
-              <ShieldAlert className="size-4" aria-hidden />
+              <ShieldAlert className="size-4.5" aria-hidden />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold text-foreground truncate">{a.name}</p>
-                <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                <p className="text-sm font-semibold text-foreground truncate">{a.name}</p>
+                <span className="text-sm text-muted-foreground tabular-nums shrink-0">
                   {a.last_triggered_at ? formatDateTime(a.last_triggered_at) : "Active"}
                 </span>
               </div>
-              <p className="text-[11px] text-muted-foreground mt-0.5 capitalize">{a.alert_type.replace("_", " ")} • {a.severity}</p>
+              <p className="text-sm text-muted-foreground mt-0.5 capitalize">{a.alert_type.replace("_", " ")} • {a.severity}</p>
             </div>
           </Link>
         );
@@ -1084,12 +974,12 @@ function SectionHeader({
           <Icon className="size-3.5" />
         </div>
         <div>
-          <h2 className="text-sm font-semibold tracking-tight text-foreground">{title}</h2>
-          {subtitle && <p className="text-[11px] text-muted-foreground">{subtitle}</p>}
+          <h2 className="text-base font-semibold tracking-tight text-foreground">{title}</h2>
+          {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
         </div>
       </div>
       {badge && (
-        <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60">
+        <span className="text-xs font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60">
           {badge}
         </span>
       )}
@@ -1144,11 +1034,11 @@ export default async function OverviewPage({
           {/* Primary Operational Pulse (Key Metrics) */}
           <section aria-labelledby="kpi-heading" className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 id="kpi-heading" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <h2 id="kpi-heading" className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
                 Operational Telemetry
               </h2>
-              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
+                <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span>Telemetry active</span>
               </div>
             </div>
@@ -1157,73 +1047,38 @@ export default async function OverviewPage({
             </Suspense>
           </section>
 
-          {/* Visual Analytics Row 1: Volume & Spend */}
+          {/* Zone 2: Unified Interactive Analytics Suite */}
+          <Suspense fallback={<WidgetSkeleton />}>
+            <AnalyticsSuiteWidget timeParams={timeParams} />
+          </Suspense>
+
+          {/* Zone 3: Infrastructure Health & Model Allocation */}
           <div className="grid gap-5 lg:grid-cols-2">
-            <section className="bg-card/75 border border-border/70 rounded-2xl p-5 shadow-2xs" aria-labelledby="request-volume-heading">
-              <SectionHeader icon={BarChart3} title="Request Volume" subtitle="Aggregate throughput across time" />
-              <Suspense fallback={<WidgetSkeleton />}>
-                <RequestVolumeWidget timeParams={timeParams} />
-              </Suspense>
-            </section>
+            <div className="space-y-5 flex flex-col">
+              <section className="bg-card/75 border border-border/70 rounded-2xl p-5 shadow-2xs flex-1 flex flex-col" aria-labelledby="health-heading">
+                <SectionHeader icon={Server} title="Provider Health" subtitle="Upstream endpoint availability probes" />
+                <div className="flex-1 flex flex-col justify-center min-h-0">
+                  <Suspense fallback={<WidgetSkeleton />}>
+                    <HealthWidget />
+                  </Suspense>
+                </div>
+              </section>
 
-            <section className="bg-card/75 border border-border/70 rounded-2xl p-5 shadow-2xs" aria-labelledby="spend-heading">
-              <SectionHeader icon={CreditCard} title="Estimated AI Spend" subtitle="Dollar consumption derived from model pricing" />
-              <Suspense fallback={<WidgetSkeleton />}>
-                <SpendWidget timeParams={timeParams} />
-              </Suspense>
-            </section>
-          </div>
+              <section className="bg-card/75 border border-border/70 rounded-2xl p-5 shadow-2xs flex-1 flex flex-col" aria-labelledby="alerts-heading">
+                <SectionHeader icon={ShieldAlert} title="Actionable Alerts" subtitle="Active anomalies and platform incidents" />
+                <div className="flex-1 flex flex-col justify-center min-h-0">
+                  <Suspense fallback={<WidgetSkeleton />}>
+                    <AlertsWidget />
+                  </Suspense>
+                </div>
+              </section>
+            </div>
 
-          {/* Visual Analytics Row 2: Token Breakdown & Temporal Heatmap */}
-          <div className="grid gap-5 lg:grid-cols-2">
-            <section className="bg-card/75 border border-border/70 rounded-2xl p-5 shadow-2xs" aria-labelledby="token-composition-heading">
-              <SectionHeader icon={PieChart} title="Token Composition" subtitle="Prompt, completion, and cache ratios" />
-              <Suspense fallback={<WidgetSkeleton />}>
-                <TokensWidget timeParams={timeParams} />
-              </Suspense>
-            </section>
-
-            <section className="bg-card/75 border border-border/70 rounded-2xl p-5 shadow-2xs" aria-labelledby="activity-heatmap-heading">
-              <SectionHeader icon={Flame} title="Activity Heatmap" subtitle="Temporal request frequency by bucket" />
-              <Suspense fallback={<WidgetSkeleton />}>
-                <HeatmapWidget timeParams={timeParams} />
-              </Suspense>
-            </section>
-          </div>
-
-          {/* Visual Analytics Row 3: Providers & Models */}
-          <div className="grid gap-5 lg:grid-cols-2">
-            <section className="bg-card/75 border border-border/70 rounded-2xl p-5 shadow-2xs" aria-labelledby="provider-dist-heading">
-              <SectionHeader icon={Globe} title="Provider Distribution" subtitle="Traffic share by upstream AI platform" />
-              <Suspense fallback={<WidgetSkeleton />}>
-                <ProviderDistWidget timeParams={timeParams} />
-              </Suspense>
-            </section>
-
-            <section className="bg-card/75 border border-border/70 rounded-2xl p-5 shadow-2xs" aria-labelledby="model-usage-heading">
-              <SectionHeader icon={Zap} title="Top Models Usage" subtitle="Most heavily utilized LLMs by tokens and cost" />
-              <Suspense fallback={<WidgetSkeleton />}>
-                <ModelsWidget timeParams={timeParams} />
-              </Suspense>
-            </section>
-          </div>
-
-          {/* System Reliability: Provider Health & Security Alerts */}
-          <div className="grid gap-5 lg:grid-cols-2">
-            <section className="flex flex-col bg-card/75 border border-border/70 rounded-2xl p-5 shadow-2xs" aria-labelledby="health-heading">
-              <SectionHeader icon={Server} title="Provider Health" subtitle="Upstream endpoint availability probes" />
-              <div className="flex-1 flex flex-col justify-center min-h-0">
+            <section className="bg-card/75 border border-border/70 rounded-2xl p-5 shadow-2xs flex flex-col" aria-labelledby="model-usage-heading">
+              <SectionHeader icon={Zap} title="Model Family Allocation" subtitle="Most heavily utilized LLMs by tokens and cost" />
+              <div className="flex-1 min-h-0">
                 <Suspense fallback={<WidgetSkeleton />}>
-                  <HealthWidget />
-                </Suspense>
-              </div>
-            </section>
-
-            <section className="flex flex-col bg-card/75 border border-border/70 rounded-2xl p-5 shadow-2xs" aria-labelledby="alerts-heading">
-              <SectionHeader icon={ShieldAlert} title="Actionable Alerts" subtitle="Active anomalies and platform incidents" />
-              <div className="flex-1 flex flex-col justify-center min-h-0">
-                <Suspense fallback={<WidgetSkeleton />}>
-                  <AlertsWidget />
+                  <ModelsWidget timeParams={timeParams} />
                 </Suspense>
               </div>
             </section>

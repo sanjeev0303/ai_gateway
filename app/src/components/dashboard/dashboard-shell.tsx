@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { SidebarNav } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
 import { cn } from "@/lib/utils";
@@ -19,17 +19,56 @@ const SidebarContext = createContext<SidebarContextValue>({
 
 export const useSidebar = () => useContext(SidebarContext);
 
+const STORAGE_KEY = "sentinel_sidebar_collapsed";
+
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
-  const toggleCollapsed = () => setCollapsed((prev) => !prev);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored !== null) {
+        setCollapsed(stored === "true");
+      }
+    } catch {
+      // localStorage may be disabled in restricted environments
+    }
+  }, []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(STORAGE_KEY, String(next));
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+      if (e.key === "[" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        toggleCollapsed();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   return (
     <SidebarContext.Provider value={{ collapsed, setCollapsed, toggleCollapsed }}>
       <div className="flex h-screen overflow-hidden bg-background">
         <aside
           className={cn(
-            "hidden shrink-0 border-r border-sidebar-border bg-sidebar transition-[width] duration-300 ease-in-out lg:block",
-            collapsed ? "w-17" : "w-60",
+            "hidden shrink-0 border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-out lg:block",
+            collapsed ? "w-18" : "w-64",
           )}
         >
           <SidebarNav collapsed={collapsed} onToggleCollapse={toggleCollapsed} />

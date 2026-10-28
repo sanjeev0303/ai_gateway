@@ -73,7 +73,9 @@ type IdempotencyRepository interface {
 	// Create registers a key; a duplicate (scope, key) returns ErrConflict.
 	Create(ctx context.Context, orgID uuid.UUID, input domain.NewIdempotencyKey) (domain.IdempotencyKey, error)
 	Get(ctx context.Context, orgID uuid.UUID, scopeKey, key string) (domain.IdempotencyKey, error)
+	PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error)
 }
+
 
 // PlanRepository manages sellable tiers. Plans are a global table.
 type PlanRepository interface {

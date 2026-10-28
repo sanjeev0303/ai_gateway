@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -19,4 +20,6 @@ type InvitationRepository interface {
 	List(ctx context.Context, orgID uuid.UUID) ([]domain.Invitation, error)
 	MarkAccepted(ctx context.Context, orgID, id uuid.UUID, acceptedBy uuid.UUID) (domain.Invitation, error)
 	Revoke(ctx context.Context, orgID, id uuid.UUID) (domain.Invitation, error)
+	PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error)
 }
+

@@ -500,21 +500,100 @@ func (s *Service) RotateCredential(ctx context.Context, actor domain.Actor, cred
 	return rotated, nil
 }
 
-// ListModels returns the active entries of the DB-driven global model
-// catalog.
+// ListModels returns the active entries of the DB-driven model catalog
+// belonging only to providers with an active account and active API key in the
+// actor's organization.
 func (s *Service) ListModels(ctx context.Context, actor domain.Actor) ([]domain.Model, error) {
 	if err := s.RequirePermission(actor, domain.PermissionProvidersRead); err != nil {
 		return nil, err
 	}
-	return s.models.List(ctx)
+	allModels, err := s.models.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.filterAccessibleModels(ctx, actor.OrganizationID, allModels)
 }
 
-// ListAllModels returns all entries in the DB catalog including inactive ones.
+// ListAllModels returns all entries in the DB catalog belonging only to providers
+// with an active account and active API key in the actor's organization.
 func (s *Service) ListAllModels(ctx context.Context, actor domain.Actor) ([]domain.Model, error) {
 	if err := s.RequirePermission(actor, domain.PermissionProvidersRead); err != nil {
 		return nil, err
 	}
-	return s.models.ListAll(ctx)
+	allModels, err := s.models.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.filterAccessibleModels(ctx, actor.OrganizationID, allModels)
+}
+
+// filterAccessibleModels filters a list of models to only those providers that have
+// an active account and at least one active (non-revoked) credential in the organization,
+// and excludes non-generative internal research previews or embeddings.
+func (s *Service) filterAccessibleModels(ctx context.Context, orgID uuid.UUID, models []domain.Model) ([]domain.Model, error) {
+	if s.accounts == nil {
+		return models, nil
+	}
+	accounts, err := s.accounts.List(ctx, orgID)
+	if err != nil {
+		return nil, err
+	}
+	if len(accounts) == 0 {
+		return []domain.Model{}, nil
+	}
+
+	activeProviders := make(map[string]bool)
+	for _, acc := range accounts {
+		if acc.Status != domain.ProviderStatusActive {
+			continue
+		}
+		if s.credentials != nil {
+			creds, err := s.credentials.ListByAccount(ctx, orgID, acc.ID)
+			if err != nil || len(creds) == 0 {
+				continue
+			}
+			hasActiveCred := false
+			for _, c := range creds {
+				if c.Status == domain.ProviderCredentialStatusActive {
+					hasActiveCred = true
+					break
+				}
+			}
+			if !hasActiveCred {
+				continue
+			}
+		}
+		activeProviders[acc.ProviderKind] = true
+	}
+
+	if len(activeProviders) == 0 {
+		return []domain.Model{}, nil
+	}
+
+	filtered := make([]domain.Model, 0, len(models))
+	for _, m := range models {
+		if !activeProviders[m.ProviderKind] {
+			continue
+		}
+
+		// Filter out internal research preview tags, embeddings, TTS-only, audio, or non-chat models
+		slugLower := strings.ToLower(m.ModelSlug)
+		if strings.HasPrefix(slugLower, "antigravity-preview-") ||
+			strings.HasPrefix(slugLower, "deep-research-") ||
+			slugLower == "aqa" ||
+			strings.HasPrefix(slugLower, "lyria-") ||
+			strings.Contains(slugLower, "embedding") ||
+			strings.Contains(slugLower, "robotics-er") ||
+			strings.Contains(slugLower, "tts") ||
+			strings.Contains(slugLower, "transcribe") ||
+			strings.Contains(slugLower, "argon") ||
+			strings.Contains(slugLower, "banana") {
+			continue
+		}
+
+		filtered = append(filtered, m)
+	}
+	return filtered, nil
 }
 
 // CheckHealth runs a live connectivity probe for providerKind using the

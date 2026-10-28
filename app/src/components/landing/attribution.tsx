@@ -71,7 +71,7 @@ export function Attribution() {
                   );
                 })}
               </div>
-              <p className="mt-3 text-[11px] text-[#7A6458]" style={{ fontFamily: "var(--font-fira-code)" }}>
+              <p className="mt-3 text-xs font-medium text-[#7A6458]" style={{ fontFamily: "var(--font-fira-code)" }}>
                 {active.caption}
               </p>
             </ScrollReveal>
@@ -82,10 +82,10 @@ export function Attribution() {
             <div>
               {/* Column headers */}
               <div className="flex items-baseline justify-between mb-4 pb-3 border-b border-[rgba(111,78,55,0.12)]">
-                <span className="text-[10px] font-semibold text-[#7A6458] uppercase" style={{ fontFamily: "var(--font-fira-code)", letterSpacing: "0.10em" }}>
+                <span className="text-xs font-semibold text-[#7A6458] uppercase" style={{ fontFamily: "var(--font-fira-code)", letterSpacing: "0.10em" }}>
                   Team
                 </span>
-                <span className="text-[10px] font-semibold text-[#7A6458] uppercase" style={{ fontFamily: "var(--font-fira-code)", letterSpacing: "0.10em" }}>
+                <span className="text-xs font-semibold text-[#7A6458] uppercase" style={{ fontFamily: "var(--font-fira-code)", letterSpacing: "0.10em" }}>
                   {active.label} ({active.unit})
                 </span>
               </div>
@@ -98,14 +98,14 @@ export function Attribution() {
                     <li key={row.label}>
                       <div className="flex items-baseline justify-between gap-4 mb-2">
                         <span
-                          className="text-sm font-semibold text-[#1C1412] truncate"
+                          className="text-base font-semibold text-[#1C1412] truncate"
                           style={{ letterSpacing: "-0.02em" }}
                         >
                           {row.label}
                         </span>
                         <span
-                          className="shrink-0 text-sm font-semibold tabular-nums text-[#6F4E37]"
-                          style={{ fontFamily: "var(--font-cormorant)", letterSpacing: "-0.02em", fontSize: "1.1rem" }}
+                          className="shrink-0 text-base font-semibold tabular-nums text-[#6F4E37]"
+                          style={{ fontFamily: "var(--font-cormorant)", letterSpacing: "-0.02em", fontSize: "1.15rem" }}
                         >
                           {active.format(value)}
                         </span>
@@ -126,7 +126,7 @@ export function Attribution() {
                 })}
               </ul>
 
-              <p className="mt-8 text-[10px] text-[#7A6458]" style={{ fontFamily: "var(--font-fira-code)" }}>
+              <p className="mt-8 text-xs font-medium text-[#7A6458]" style={{ fontFamily: "var(--font-fira-code)" }}>
                 {ATTRIBUTION.note}
               </p>
             </div>

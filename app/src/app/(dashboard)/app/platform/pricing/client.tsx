@@ -12,6 +12,11 @@ import {
   AlertCircle,
   Tag,
   ArrowRight,
+  Sparkles,
+  Zap,
+  TrendingDown,
+  Layers,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,10 +85,56 @@ const display = (kind: string) =>
     .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : part))
     .join(" ");
 
+const getProviderBadge = (kind: string) => {
+  const k = (kind || "").toLowerCase();
+  switch (k) {
+    case "openai":
+      return {
+        label: "OpenAI",
+        className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+        ruleTitle: "OpenAI Token Consumption Model",
+        ruleDescription: "Standard 2-tier: non-cached input + 50% discount on cache read tokens + completion tokens.",
+        cacheDiscount: "50% discount",
+      };
+    case "anthropic":
+      return {
+        label: "Anthropic",
+        className: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
+        ruleTitle: "Anthropic Prompt Caching Model",
+        ruleDescription: "Prompt Caching: 90% discount on cache read (0.10x rate) • 5x output token rate multiplier.",
+        cacheDiscount: "90% discount",
+      };
+    case "gemini":
+      return {
+        label: "Google Gemini",
+        className: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20",
+        ruleTitle: "Google Gemini Context-Tiered Model",
+        ruleDescription: "Context-tiered: standard rate for ≤128k prompt tokens; 2x deep context rate for >128k prompt tokens; 75% cache read discount.",
+        cacheDiscount: "75% discount",
+      };
+    case "huggingface":
+      return {
+        label: "Hugging Face",
+        className: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+        ruleTitle: "Hugging Face Serverless Pass-Through",
+        ruleDescription: "Pass-through serverless token pricing (Novita, Together, SambaNova, Fireworks) with zero proxy markup.",
+        cacheDiscount: "Not applicable",
+      };
+    default:
+      return {
+        label: display(kind),
+        className: "bg-muted text-muted-foreground border-border",
+        ruleTitle: `${display(kind)} Pricing Model`,
+        ruleDescription: "Standard token rate pricing model.",
+        cacheDiscount: "Standard",
+      };
+  }
+};
+
 const formatMicrosRate = (micros: number): string => {
   if (micros <= 0) return "$0.00 / 1M";
-  const perMillion = (micros / 1_000_000) * 1_000_000;
-  return `$${perMillion.toFixed(2)} / 1M`;
+  if (micros < 0.1) return `$${micros.toFixed(4)} / 1M`;
+  return `$${micros.toFixed(2)} / 1M`;
 };
 
 interface PricingClientProps {
@@ -138,7 +189,7 @@ export function PricingClient({ initialModels }: PricingClientProps) {
             />
           </div>
           <Select value={providerFilter} onValueChange={setProviderFilter}>
-            <SelectTrigger className="w-[140px] h-9 text-xs">
+            <SelectTrigger className="w-35 h-9 text-xs">
               <SelectValue placeholder="All Providers" />
             </SelectTrigger>
             <SelectContent>
@@ -192,19 +243,36 @@ export function PricingClient({ initialModels }: PricingClientProps) {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredRows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-foreground">{row.display_name}</span>
-                        <Badge variant="outline" className="text-[10px] uppercase font-semibold">
-                          {display(row.provider_kind)}
-                        </Badge>
+              filteredRows.map((row) => {
+                const pMeta = getProviderBadge(row.provider_kind);
+                return (
+                  <TableRow key={row.id}>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-foreground text-sm">{row.display_name}</span>
+                          <Badge variant="outline" className={`text-[11px] font-semibold ${pMeta.className}`}>
+                            {pMeta.label}
+                          </Badge>
+                          {row.provider_kind.toLowerCase() === "gemini" && (
+                            <span className="text-[10px] bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 px-1 rounded font-mono">
+                              2x &gt;128k
+                            </span>
+                          )}
+                          {row.provider_kind.toLowerCase() === "anthropic" && (
+                            <span className="text-[10px] bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 px-1 rounded font-mono">
+                              90% cache
+                            </span>
+                          )}
+                          {row.provider_kind.toLowerCase() === "openai" && (
+                            <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-1 rounded font-mono">
+                              50% cache
+                            </span>
+                          )}
+                        </div>
+                        <p className="font-mono text-xs text-muted-foreground">{row.model_slug}</p>
                       </div>
-                      <p className="font-mono text-xs text-muted-foreground">{row.model_slug}</p>
-                    </div>
-                  </TableCell>
+                    </TableCell>
                   <TableCell>
                     {row.latest_version ? (
                       <Badge variant="secondary" className="font-mono text-xs font-semibold">
@@ -222,7 +290,7 @@ export function PricingClient({ initialModels }: PricingClientProps) {
                           : "—"}
                       </div>
                       {row.latest_version && (
-                        <p className="font-mono text-[10px] text-muted-foreground">
+                        <p className="font-mono text-xs text-muted-foreground">
                           {row.latest_version.input_unit_price_micros} µ$/token
                         </p>
                       )}
@@ -236,7 +304,7 @@ export function PricingClient({ initialModels }: PricingClientProps) {
                           : "—"}
                       </div>
                       {row.latest_version && (
-                        <p className="font-mono text-[10px] text-muted-foreground">
+                        <p className="font-mono text-xs text-muted-foreground">
                           {row.latest_version.output_unit_price_micros} µ$/token
                         </p>
                       )}
@@ -250,7 +318,7 @@ export function PricingClient({ initialModels }: PricingClientProps) {
                         <span className="font-medium text-xs text-foreground">
                           {formatMicrosRate(row.latest_version.cache_read_input_token_price_micros)}
                         </span>
-                        <p className="font-mono text-[10px] text-muted-foreground">
+                        <p className="font-mono text-xs text-muted-foreground">
                           {row.latest_version.cache_read_input_token_price_micros} µ$/token
                         </p>
                       </div>
@@ -288,7 +356,8 @@ export function PricingClient({ initialModels }: PricingClientProps) {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>
@@ -594,8 +663,16 @@ function CalculateCostDialog({
   const [cachedTokens, setCachedTokens] = useState("0");
   const [calculatedCost, setCalculatedCost] = useState<{
     costMicros: number;
+    inputCostMicros: number;
+    outputCostMicros: number;
+    cachedInputCostMicros: number;
+    savingsMicros: number;
+    pricingModelFormula?: string;
     currency: string;
     version: number;
+    promptTokens: number;
+    completionTokens: number;
+    cachedTokens: number;
   } | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -604,6 +681,16 @@ function CalculateCostDialog({
     else if (models.length > 0 && !selectedSlug) setSelectedSlug(models[0].model_slug);
   }, [initialModelSlug, models]);
 
+  const currentModel = useMemo(() => {
+    return models.find((m) => m.model_slug === selectedSlug) || models[0] || null;
+  }, [models, selectedSlug]);
+
+  const providerMeta = currentModel ? getProviderBadge(currentModel.provider_kind) : null;
+  const isGemini = currentModel?.provider_kind.toLowerCase() === "gemini";
+  const ptNum = parseInt(promptTokens || "0", 10);
+  const isDeepContext = isGemini && ptNum > 128000;
+  const isHuggingFace = currentModel?.provider_kind.toLowerCase() === "huggingface";
+
   const handleCalculate = () => {
     if (!selectedSlug) {
       toast.error("Please select a model.");
@@ -611,7 +698,7 @@ function CalculateCostDialog({
     }
     const pt = parseInt(promptTokens || "0", 10);
     const ct = parseInt(completionTokens || "0", 10);
-    const cdt = parseInt(cachedTokens || "0", 10);
+    const cdt = isHuggingFace ? 0 : parseInt(cachedTokens || "0", 10);
 
     startTransition(async () => {
       const res = await calculateCostAction({
@@ -626,13 +713,29 @@ function CalculateCostDialog({
       } else {
         const d = res.data as {
           cost_micros: number;
+          input_cost_micros?: number;
+          output_cost_micros?: number;
+          cached_input_cost_micros?: number;
+          savings_micros?: number;
+          pricing_model_formula?: string;
           currency: string;
           pricing_version: { version: number };
+          prompt_tokens: number;
+          completion_tokens: number;
+          cached_input_tokens: number;
         };
         setCalculatedCost({
           costMicros: d.cost_micros,
+          inputCostMicros: d.input_cost_micros ?? 0,
+          outputCostMicros: d.output_cost_micros ?? 0,
+          cachedInputCostMicros: d.cached_input_cost_micros ?? 0,
+          savingsMicros: d.savings_micros ?? 0,
+          pricingModelFormula: d.pricing_model_formula,
           currency: d.currency,
           version: d.pricing_version.version,
+          promptTokens: d.prompt_tokens,
+          completionTokens: d.completion_tokens,
+          cachedTokens: d.cached_input_tokens,
         });
       }
     });
@@ -640,36 +743,83 @@ function CalculateCostDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Calculator className="size-5 text-primary" /> Token Cost Calculator
+            <Calculator className="size-5 text-primary" /> Token Consumption Cost Calculator
           </DialogTitle>
           <DialogDescription>
-            Simulate exact token spend for any model using verified organization pricing rates.
+            Compute accurate token costs across providers based on official pricing rules, cache discounts, and context tiers.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="calc-model">Model</Label>
-            <Select value={selectedSlug} onValueChange={setSelectedSlug}>
-              <SelectTrigger id="calc-model">
+          {/* Model Selector & Provider Rules Card */}
+          <div className="space-y-2">
+            <Label htmlFor="calc-model">Model & Provider</Label>
+            <Select value={selectedSlug} onValueChange={(val) => {
+              setSelectedSlug(val);
+              setCalculatedCost(null);
+            }}>
+              <SelectTrigger id="calc-model" className="h-10">
                 <SelectValue placeholder="Select a model" />
               </SelectTrigger>
               <SelectContent>
                 {models.map((m) => (
                   <SelectItem key={m.id} value={m.model_slug}>
-                    {m.display_name} ({display(m.provider_kind)})
+                    {m.display_name} — {display(m.provider_kind)} ({m.model_slug})
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+
+            {providerMeta && currentModel && (
+              <div className="rounded-lg border bg-muted/40 p-3 space-y-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-foreground flex items-center gap-1.5">
+                    <Sparkles className="size-3.5 text-primary" />
+                    {providerMeta.ruleTitle}
+                  </span>
+                  <Badge variant="outline" className={`font-semibold text-[11px] ${providerMeta.className}`}>
+                    {providerMeta.label}
+                  </Badge>
+                </div>
+                <p className="text-muted-foreground leading-relaxed">
+                  {providerMeta.ruleDescription}
+                </p>
+                {currentModel.latest_version && (
+                  <div className="pt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground font-mono">
+                    <span>Input: {formatMicrosRate(currentModel.latest_version.input_unit_price_micros)}</span>
+                    <span>Output: {formatMicrosRate(currentModel.latest_version.output_unit_price_micros)}</span>
+                    {currentModel.latest_version.cache_read_input_token_price_micros > 0 && (
+                      <span className="text-emerald-600 dark:text-emerald-400">
+                        Cache Read: {formatMicrosRate(currentModel.latest_version.cache_read_input_token_price_micros)} ({providerMeta.cacheDiscount})
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Prompt & Completion Token Inputs */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="calc-prompt">Prompt Tokens</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="calc-prompt">Prompt Tokens</Label>
+                <div className="flex items-center gap-1">
+                  {["1.5k", "32k", "150k"].map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setPromptTokens(t === "1.5k" ? "1500" : t === "32k" ? "32000" : "150000")}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-mono"
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <Input
                 id="calc-prompt"
                 type="number"
@@ -678,8 +828,23 @@ function CalculateCostDialog({
                 onChange={(e) => setPromptTokens(e.target.value)}
               />
             </div>
+
             <div className="space-y-1.5">
-              <Label htmlFor="calc-completion">Completion Tokens</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="calc-completion">Completion Tokens</Label>
+                <div className="flex items-center gap-1">
+                  {["500", "2k", "4k"].map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setCompletionTokens(t === "500" ? "500" : t === "2k" ? "2000" : "4000")}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-mono"
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <Input
                 id="calc-completion"
                 type="number"
@@ -690,45 +855,124 @@ function CalculateCostDialog({
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="calc-cached">Cached Input Tokens</Label>
-            <Input
-              id="calc-cached"
-              type="number"
-              min="0"
-              value={cachedTokens}
-              onChange={(e) => setCachedTokens(e.target.value)}
-            />
-          </div>
-
-          {calculatedCost && (
-            <div className="rounded-lg border bg-muted/40 p-4 space-y-2">
+          {/* Cached Input Tokens Input */}
+          {!isHuggingFace && (
+            <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
-                  Estimated Total Cost
+                <Label htmlFor="calc-cached">Cached Input Tokens (Prompt Caching)</Label>
+                <span className="text-xs text-muted-foreground">
+                  {providerMeta?.cacheDiscount}
                 </span>
+              </div>
+              <Input
+                id="calc-cached"
+                type="number"
+                min="0"
+                max={promptTokens}
+                value={cachedTokens}
+                onChange={(e) => setCachedTokens(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+          )}
+
+          {/* Google Gemini Deep Context Notification */}
+          {isDeepContext && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2">
+              <Zap className="size-4 mt-0.5 shrink-0 text-amber-500" />
+              <div>
+                <span className="font-semibold">Deep Context Tier Triggered (&gt;128k prompt tokens):</span>
+                <p className="mt-0.5 text-amber-700 dark:text-amber-300">
+                  Per Google Gemini pricing policy, prompts exceeding 128,000 tokens are billed at the deep-context rate ($2.50/1M input, $10.00/1M output for Pro).
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Results Card */}
+          {calculatedCost && (
+            <div className="rounded-xl border bg-card p-4 space-y-3.5 shadow-sm">
+              <div className="flex items-center justify-between border-b pb-3">
+                <div>
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                    Calculated Total Spend
+                  </span>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-3xl font-extrabold tracking-tight text-foreground">
+                      ${(calculatedCost.costMicros / 1_000_000).toFixed(6)}
+                    </span>
+                    <span className="text-xs text-muted-foreground font-mono">
+                      ({calculatedCost.costMicros.toLocaleString()} µ$)
+                    </span>
+                  </div>
+                </div>
                 <Badge variant="outline" className="font-mono text-xs">
                   Rate Sheet v{calculatedCost.version}
                 </Badge>
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold tracking-tight text-foreground">
-                  ${(calculatedCost.costMicros / 1_000_000).toFixed(6)}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  ({calculatedCost.costMicros.toLocaleString()} µ$)
-                </span>
+
+              {calculatedCost.pricingModelFormula && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/30 px-2.5 py-1.5 rounded font-mono">
+                  <Info className="size-3.5 shrink-0" />
+                  <span>{calculatedCost.pricingModelFormula}</span>
+                </div>
+              )}
+
+              {/* Itemized Breakdown Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                <div className="rounded-lg border bg-muted/30 p-2.5 space-y-1">
+                  <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+                    Prompt (Uncached)
+                  </div>
+                  <div className="text-sm font-bold text-foreground">
+                    ${(calculatedCost.inputCostMicros / 1_000_000).toFixed(6)}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground font-mono">
+                    {Math.max(0, calculatedCost.promptTokens - calculatedCost.cachedTokens).toLocaleString()} tokens
+                  </div>
+                </div>
+
+                <div className="rounded-lg border bg-muted/30 p-2.5 space-y-1">
+                  <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+                    Cached Prompt Reads
+                  </div>
+                  <div className="text-sm font-bold text-foreground">
+                    ${(calculatedCost.cachedInputCostMicros / 1_000_000).toFixed(6)}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground font-mono">
+                    {calculatedCost.cachedTokens.toLocaleString()} tokens
+                  </div>
+                  {calculatedCost.savingsMicros > 0 && (
+                    <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-0.5">
+                      <TrendingDown className="size-3" />
+                      Saved ${(calculatedCost.savingsMicros / 1_000_000).toFixed(6)}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-lg border bg-muted/30 p-2.5 space-y-1">
+                  <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+                    Completion (Output)
+                  </div>
+                  <div className="text-sm font-bold text-foreground">
+                    ${(calculatedCost.outputCostMicros / 1_000_000).toFixed(6)}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground font-mono">
+                    {calculatedCost.completionTokens.toLocaleString()} tokens
+                  </div>
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-          <Button onClick={handleCalculate} disabled={isPending}>
-            {isPending ? "Calculating..." : "Compute Cost"}
+          <Button onClick={handleCalculate} disabled={isPending} className="gap-1.5">
+            <Calculator className="size-4" />
+            {isPending ? "Calculating..." : "Compute Token Cost"}
           </Button>
         </DialogFooter>
       </DialogContent>
