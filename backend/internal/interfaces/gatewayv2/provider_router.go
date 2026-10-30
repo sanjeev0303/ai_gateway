@@ -71,10 +71,15 @@ func (r *ProviderRouterImpl) Route(ctx context.Context, upstream ResolvedUpstrea
 	case "azure_openai":
 		return r.routeAzureOpenAI(upstreamURL, headers, upstream, hints)
 	case "huggingface":
-		if upstream.BaseURL == "" {
-			upstreamURL = "https://api-inference.huggingface.co/v1/"
+		if upstream.BaseURL == "" || strings.Contains(upstream.BaseURL, "api-inference.huggingface.co") {
+			upstreamURL = "https://router.huggingface.co/v1/"
 		}
 		return r.routeHuggingFace(upstreamURL, headers, upstream, hints)
+	case "mistral":
+		if upstream.BaseURL == "" {
+			upstreamURL = "https://api.mistral.ai/v1/"
+		}
+		return r.routeOpenAI(upstreamURL, headers, upstream, hints)
 	case "custom":
 		return r.routeCustom(upstreamURL, headers, upstream, hints)
 	default:
@@ -186,10 +191,12 @@ func (r *ProviderRouterImpl) routeAzureOpenAI(baseURL string, headers http.Heade
 
 // routeCustom handles Custom provider routing with Authorization Bearer.
 func (r *ProviderRouterImpl) routeCustom(baseURL string, headers http.Header, upstream ResolvedUpstream, hints InspectorHints) (string, http.Header, error) {
-	if key := headers.Get("x-api-key"); key != "" {
+	if upstream.UpstreamKey != "" {
+		headers.Set("Authorization", "Bearer "+upstream.UpstreamKey)
+	} else if key := headers.Get("x-api-key"); key != "" {
 		headers.Set("Authorization", "Bearer "+key)
-		headers.Del("x-api-key")
 	}
+	headers.Del("x-api-key")
 	headers.Del("anthropic-version")
 	headers.Del("anthropic-beta")
 	return baseURL, headers, nil

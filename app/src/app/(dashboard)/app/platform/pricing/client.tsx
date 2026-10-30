@@ -120,6 +120,15 @@ const getProviderBadge = (kind: string) => {
         ruleDescription: "Pass-through serverless token pricing (Novita, Together, SambaNova, Fireworks) with zero proxy markup.",
         cacheDiscount: "Not applicable",
       };
+    case "mistral":
+    case "custom":
+      return {
+        label: "Mistral AI",
+        className: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
+        ruleTitle: "Mistral AI Token Pricing",
+        ruleDescription: "Pay-as-you-go inference pricing across Mistral Small, Medium, Large, and Codestral.",
+        cacheDiscount: "Standard",
+      };
     default:
       return {
         label: display(kind),
@@ -197,6 +206,7 @@ export function PricingClient({ initialModels }: PricingClientProps) {
               <SelectItem value="openai">OpenAI</SelectItem>
               <SelectItem value="anthropic">Anthropic</SelectItem>
               <SelectItem value="gemini">Google Gemini</SelectItem>
+              <SelectItem value="mistral">Mistral AI</SelectItem>
               <SelectItem value="huggingface">Hugging Face</SelectItem>
             </SelectContent>
           </Select>
@@ -464,6 +474,7 @@ function CreatePricingModelDialog({
                 <SelectItem value="openai">OpenAI</SelectItem>
                 <SelectItem value="anthropic">Anthropic</SelectItem>
                 <SelectItem value="gemini">Google Gemini</SelectItem>
+                <SelectItem value="mistral">Mistral AI</SelectItem>
                 <SelectItem value="huggingface">Hugging Face</SelectItem>
               </SelectContent>
             </Select>

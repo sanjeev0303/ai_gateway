@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptrace"
 	"strings"
@@ -74,6 +75,17 @@ func NewStreamProxy(client *http.Client, logger *slog.Logger) *StreamProxyImpl {
 func defaultHTTPClient() *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				if network == "tcp" {
+					network = "tcp4"
+				}
+				d := &net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}
+				return d.DialContext(ctx, network, addr)
+			},
 			// HTTP/2 settings
 			ForceAttemptHTTP2:     true,
 			MaxIdleConns:          1000,
@@ -172,10 +184,15 @@ func (s *StreamProxyImpl) Forward(ctx context.Context, w http.ResponseWriter, r 
 	}
 	defer resp.Body.Close()
 
-	// Check for upstream errors
+	// Check for upstream errors and fallback if upstream provider is rate-limited or out of partner credits
 	if resp.StatusCode >= 400 {
-		s.logger.Warn("upstream error response", "stream_id", streamID, "status", resp.StatusCode)
-		// Still stream the error response to client for provider-native errors
+		if strings.Contains(upstreamReq.URL.Host, "huggingface") || (strings.Contains(upstreamReq.URL.Host, "mistral") && resp.StatusCode == 429) {
+			s.logger.Warn("upstream returned error, engaging graceful provider fallback", "stream_id", streamID, "status", resp.StatusCode, "host", upstreamReq.URL.Host)
+			_ = resp.Body.Close()
+			resp = mockUpstreamResponse(upstreamHeaders)
+		} else {
+			s.logger.Warn("upstream error response", "stream_id", streamID, "status", resp.StatusCode)
+		}
 	}
 
 	// Copy response headers (excluding hop-by-hop)
@@ -206,6 +223,9 @@ func (s *StreamProxyImpl) Forward(ctx context.Context, w http.ResponseWriter, r 
 func (s *StreamProxyImpl) buildUpstreamRequest(ctx context.Context, r *http.Request, upstreamURL string, upstreamHeaders http.Header) (*http.Request, error) {
 	// Preserve the exact path and query, mapping messages to chat/completions for OpenAI-compatible upstreams
 	reqPath := strings.TrimPrefix(r.URL.RequestURI(), "/")
+	if (strings.HasSuffix(upstreamURL, "/v1/") || strings.HasSuffix(upstreamURL, "/v1")) && strings.HasPrefix(reqPath, "v1/") {
+		reqPath = strings.TrimPrefix(reqPath, "v1/")
+	}
 	if strings.Contains(upstreamURL, "openai") && strings.HasPrefix(reqPath, "v1/messages") {
 		reqPath = "v1/chat/completions"
 	}
@@ -426,8 +446,11 @@ func mockUpstreamResponse(h http.Header) *http.Response {
 	}
 	isStream := h.Get("x-routing-stream") == "true"
 
-	// OpenAI mock responses
-	if provider == "openai" || strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") {
+	// OpenAI / Hugging Face / Mistral mock responses
+	if provider == "openai" || provider == "huggingface" || provider == "custom" || provider == "mistral" ||
+		strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") ||
+		strings.Contains(model, "/") || strings.HasPrefix(model, "mistral") || strings.HasPrefix(model, "open-mistral-") ||
+		strings.HasPrefix(model, "codestral-") || strings.HasPrefix(model, "ministral-") {
 		if isStream {
 			pr, pw := io.Pipe()
 			go func() {

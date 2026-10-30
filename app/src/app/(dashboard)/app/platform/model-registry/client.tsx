@@ -103,10 +103,11 @@ export function SyncModelsDialog() {
                 <SelectValue placeholder="Select provider" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
-                <SelectItem value="openai">OpenAI (GPT & o-series)</SelectItem>
                 <SelectItem value="gemini">Google Gemini</SelectItem>
+                <SelectItem value="mistral">Mistral AI</SelectItem>
                 <SelectItem value="huggingface">Hugging Face (Inference Providers)</SelectItem>
+                <SelectItem value="openai">OpenAI (GPT & o-series)</SelectItem>
+                <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
                 <SelectItem value="azure_openai">Azure OpenAI</SelectItem>
                 <SelectItem value="custom">Custom Provider</SelectItem>
               </SelectContent>

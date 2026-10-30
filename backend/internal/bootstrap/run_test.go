@@ -17,6 +17,7 @@ func TestProviderAdapters(t *testing.T) {
 		domain.ProviderKindOpenAI:      true,
 		domain.ProviderKindGemini:      true,
 		domain.ProviderKindHuggingFace: true,
+		domain.ProviderKindCustom:      true,
 	}
 
 	if len(got) != len(want) {

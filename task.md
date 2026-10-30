@@ -1,3 +1,66 @@
+# Push Changes to GitHub — Task Tracker
+
+## Status: COMPLETE
+- [x] 1. Check git status and review diff
+- [x] 2. Stage modified and untracked files
+- [x] 3. Commit staged changes with conventional commit message
+- [x] 4. Push commits to remote origin main
+- [x] 5. Verify remote sync
+
+---
+
+# Multi-Provider Routing, Conversations, Guardrails & Policy Implementation — Task Tracker
+
+## Status: IN PROGRESS
+- [ ] 1. Fix Mistral and Hugging Face provider recognition, routing, and naming across codebase & UI (replace generic `custom` with `mistral` where appropriate)
+- [ ] 2. Fix outbound network routing so Gateway v2 reliably connects to Gemini, Mistral, and Hugging Face without DNS/proxy timeouts
+- [ ] 3. Implement & configure Guardrails and Governance Policies for Galobyte organization via browser and API
+- [ ] 4. Enable conversation tracking in Gateway v2 so employee inference requests populate `/app/observe/conversations` with messages, turns, and token counts
+- [ ] 5. Re-run multi-employee task suite across Gemini, Mistral, and Hugging Face providers (prompts, code gen, multi-turn conversations)
+- [ ] 6. Verify and audit in browser via clicks, page navigation, and tab switching across Models, Overview, Live Activity, Conversations, Guardrails, and Policies
+
+
+---
+
+# E2E Multi-User Provider & Gateway Testing — Task Tracker
+
+## Status: COMPLETE
+- [x] 1. Verify container runtime health & active ports (`app:3000`, `control-api:8081`, `gateway-v2:8084`)
+- [x] 2. Authenticate account `sanju.04044@gmail.com` (password: `sanju@810214044`) via browser & API
+- [x] 3. Connect provider accounts & credentials with user-provided keys:
+  - Gemini: `[REDACTED]`
+  - Mistral: `[REDACTED]`
+  - Hugging Face: `[REDACTED]`
+- [x] 4. Sync models and verify accessibility filtering (Gemini 27 models, Mistral 55 models discovered and active)
+- [x] 5. Provision 20 employees within the organization (`Galobyte`)
+- [x] 6. Generate Gateway credentials/API keys for the 20 employees
+- [x] 7. Perform CLI and browser tasks across employees (view members, credentials, live activity, users)
+- [x] 8. Verify client and server functionality, trace metrics/logs, fix defects (resolved `$NaN` spend display bug and control key issuance flow)
+
+---
+
+# Install Playwright CLI & Skills Globally — Task Tracker
+
+## Status: COMPLETE
+- [x] Install `@playwright/cli@latest` globally via npm
+- [x] Install Playwright browsers (`playwright-cli install`)
+- [x] Install Playwright skills globally (`playwright-cli install --skills -g` / `--skills=agents`)
+- [x] Verify `playwright-cli` execution and global skill availability
+
+---
+
+# Rebuild Docker Images & Run Updated Code — Task Tracker
+
+## Status: COMPLETE
+- [x] Build backend image (`ai-gateway-backend:dev`) with updated code
+- [x] Build web/frontend image (`ai-gateway-web:dev`) with updated code
+- [x] Run migration service to ensure schema indexes (`00039_garbage_cleanup_indexes.sql`) are applied
+- [x] Restart all services (`control-api`, `gateway-v2`, `worker`, `app`)
+- [x] Verify health status across all running containers
+
+
+---
+
 # Push Verified Changes to GitHub — Task Tracker
 
 ## Status: COMPLETE
@@ -243,7 +306,7 @@
 
 ## Status: COMPLETE
 - [x] Rebuild backend and web Docker images (`ai-gateway-backend:dev`, `ai-gateway-web:dev`) with updated codebase
-- [x] Rerun Docker Compose containers 
+- [x] Rerun Docker Compose containers
 - [x] Verify health status of running services
 
 ---

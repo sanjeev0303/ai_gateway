@@ -20,6 +20,7 @@ import {
 import {
   formatNumber,
   formatPercent,
+  formatProviderName,
   formatUsd,
   microsToUsd,
 } from "@/lib/format";
@@ -173,7 +174,7 @@ export default async function ModelsPage({
       id: row.Model,
       name: matched?.display_name ?? row.Model,
       slug: matched?.model_slug ?? row.Model,
-      provider: matched?.provider_kind ?? "Unlisted",
+      provider: formatProviderName(matched?.provider_kind, row.Model),
       active,
       activeTone,
       requests: row.Requests,
@@ -191,7 +192,7 @@ export default async function ModelsPage({
       id: model.id,
       name: model.display_name,
       slug: model.model_slug,
-      provider: model.provider_kind,
+      provider: formatProviderName(model.provider_kind, model.model_slug),
       active,
       activeTone,
       detailUrl: `/app/observe/models/${encodeURIComponent(model.model_slug)}`,

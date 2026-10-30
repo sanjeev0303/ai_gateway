@@ -688,7 +688,32 @@ func (s *Service) CreateCredential(ctx context.Context, actor domain.Actor, name
 	switch scope {
 	case string(domain.APICredentialScopeGateway):
 		serviceAccountID = nil
-	case string(domain.APICredentialScopeControl), string(domain.APICredentialScopeAll):
+	case string(domain.APICredentialScopeControl), "control_plane", "policy_manager", "read_only", string(domain.APICredentialScopeAll):
+		if scope == "control_plane" || scope == "policy_manager" || scope == "read_only" {
+			scope = string(domain.APICredentialScopeControl)
+		}
+		if serviceAccountID == nil {
+			accs, err := s.accounts.List(ctx, actor.OrganizationID)
+			if err == nil && len(accs) > 0 {
+				for _, a := range accs {
+					if a.Status == domain.ServiceAccountStatusActive {
+						saID := a.ID
+						serviceAccountID = &saID
+						break
+					}
+				}
+			}
+			if serviceAccountID == nil {
+				createdSA, err := s.accounts.Create(ctx, actor.OrganizationID, domain.NewServiceAccount{
+					Name:        "Default Automation",
+					Description: "Auto-provisioned default automation service account",
+				})
+				if err == nil {
+					saID := createdSA.ID
+					serviceAccountID = &saID
+				}
+			}
+		}
 		if serviceAccountID == nil {
 			return domain.APICredential{}, "", repositories.ErrInvalid
 		}

@@ -49,13 +49,43 @@ export type CellFormat =
 const FORMATTERS: Record<CellFormat, (value: unknown) => string> = {
   text: (value) =>
     value === null || value === undefined || value === "" ? "—" : String(value),
-  number: (value) => formatNumber(Number(value)),
-  compact: (value) => formatCompact(Number(value)),
-  usd: (value) => formatUsd(Number(value)),
-  usdExact: (value) => formatUsdExact(Number(value)),
-  percent: (value) => formatPercent(Number(value)),
-  percentRaw: (value) => formatPercent(Number(value) / 100),
-  ms: (value) => formatMs(Number(value)),
+  number: (value) => {
+    if (value === null || value === undefined || value === "") return "—";
+    const n = Number(value);
+    return isNaN(n) ? "—" : formatNumber(n);
+  },
+  compact: (value) => {
+    if (value === null || value === undefined || value === "") return "—";
+    const n = Number(value);
+    return isNaN(n) ? "—" : formatCompact(n);
+  },
+  usd: (value) => {
+    if (value === null || value === undefined || value === "" || value === "--" || value === "—") return "—";
+    if (typeof value === "string" && value.startsWith("$")) return value;
+    const n = Number(value);
+    return isNaN(n) ? "—" : formatUsd(n);
+  },
+  usdExact: (value) => {
+    if (value === null || value === undefined || value === "" || value === "--" || value === "—") return "—";
+    if (typeof value === "string" && value.startsWith("$")) return value;
+    const n = Number(value);
+    return isNaN(n) ? "—" : formatUsdExact(n);
+  },
+  percent: (value) => {
+    if (value === null || value === undefined || value === "") return "—";
+    const n = Number(value);
+    return isNaN(n) ? "—" : formatPercent(n);
+  },
+  percentRaw: (value) => {
+    if (value === null || value === undefined || value === "") return "—";
+    const n = Number(value);
+    return isNaN(n) ? "—" : formatPercent(n / 100);
+  },
+  ms: (value) => {
+    if (value === null || value === undefined || value === "") return "—";
+    const n = Number(value);
+    return isNaN(n) ? "—" : formatMs(n);
+  },
   date: (value) => formatDate(String(value)),
   dateTime: (value) => formatDateTime(String(value)),
   relative: (value) => formatRelative(String(value)),

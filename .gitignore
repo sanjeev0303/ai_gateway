@@ -39,3 +39,5 @@ deploy/terraform/aws/.terraform/
 .playwright-mcp
 .kilo
 scratch/
+# Playwright CLI output (may contain credentials)
+.playwright-cli/

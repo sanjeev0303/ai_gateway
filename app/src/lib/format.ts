@@ -105,3 +105,46 @@ export function initials(name: string): string {
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
+
+/** Format raw provider identifiers and model associations into user-friendly names */
+export function formatProviderName(provider?: string, model?: string): string {
+  const p = (provider || "").toLowerCase().trim();
+  const m = (model || "").toLowerCase().trim();
+  if (
+    p === "mistral" ||
+    (p === "custom" && (!m || m.includes("mistral") || m.includes("codestral") || m.includes("ministral"))) ||
+    m.startsWith("mistral") ||
+    m.startsWith("codestral-") ||
+    m.startsWith("ministral-") ||
+    m.startsWith("open-mistral-")
+  ) {
+    return "Mistral AI";
+  }
+  if (p === "gemini" || m.startsWith("gemini")) {
+    return "Google Gemini";
+  }
+  if (
+    p === "huggingface" ||
+    m.startsWith("meta-llama") ||
+    m.startsWith("mistralai") ||
+    m.startsWith("qwen") ||
+    m.startsWith("deepseek") ||
+    m.startsWith("hf-") ||
+    (m.includes("/") && !m.startsWith("openai/") && !m.startsWith("anthropic/"))
+  ) {
+    return "Hugging Face";
+  }
+  if (p === "openai" || m.startsWith("gpt") || m.startsWith("o1") || m.startsWith("o3")) {
+    return "OpenAI";
+  }
+  if (p === "anthropic" || m.startsWith("claude")) {
+    return "Anthropic";
+  }
+  if (p === "azure_openai") {
+    return "Azure OpenAI";
+  }
+  if (p === "custom") {
+    return "Mistral AI";
+  }
+  return provider ? provider.charAt(0).toUpperCase() + provider.slice(1) : "Unknown";
+}

@@ -45,6 +45,7 @@ import {
   formatDelta,
   formatMs,
   formatPercent,
+  formatProviderName,
   formatUsd,
   microsToUsd,
 } from "@/lib/format";
@@ -710,7 +711,7 @@ async function AnalyticsSuiteWidget({ timeParams }: { timeParams: TimeRangeQuery
   const topProviders: CategoryDatum[] = [...(byProvider?.items || [])]
     .sort((a, b) => b.Requests - a.Requests)
     .slice(0, 5)
-    .map((row) => ({ label: row.Provider, value: row.Requests }));
+    .map((row) => ({ label: formatProviderName(row.Provider), value: row.Requests }));
 
   return (
     <AnalyticsSuite
@@ -817,7 +818,7 @@ async function HealthWidget() {
                 <Icon className={`size-4 ${color}`} aria-hidden />
               </span>
               <div>
-                <span className="font-semibold text-foreground text-sm">{h.provider_kind || "Unknown"}</span>
+                <span className="font-semibold text-foreground text-sm">{formatProviderName(h.provider_kind)}</span>
                 <p className="text-sm text-muted-foreground mt-0.5">Active health probe</p>
               </div>
             </div>
@@ -921,7 +922,7 @@ async function RecentRequestsWidget() {
     id: r.ID,
     timestamp: formatDateTime(r.CreatedAt),
     user: r.UserID || r.APICredentialID || "System",
-    provider: r.ProviderKind,
+    provider: formatProviderName(r.ProviderKind, r.Model),
     model: r.Model,
     status: r.Status,
     tokens: r.TotalTokens,

@@ -544,6 +544,7 @@ func providerAdapters() map[string]providerclient.Provider {
 		domain.ProviderKindOpenAI:      openai.NewProviderAdapter(),
 		domain.ProviderKindGemini:      gemini.NewProviderAdapter(),
 		domain.ProviderKindHuggingFace: huggingface.NewProviderAdapter(),
+		domain.ProviderKindCustom:      openai.NewCustomProviderAdapter("https://api.mistral.ai", ""),
 	}
 }
 

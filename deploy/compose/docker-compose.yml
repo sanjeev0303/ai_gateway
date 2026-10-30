@@ -191,6 +191,8 @@ services:
     ports:
       - "8084:8080"
     restart: unless-stopped
+    dns:
+      - 10.200.136.19
     volumes:
       - secrets:/data
     depends_on:
@@ -219,6 +221,8 @@ services:
     ports:
       - "8081:8080"
     restart: unless-stopped
+    dns:
+      - 10.200.136.19
     volumes:
       - secrets:/data
     depends_on:
@@ -247,6 +251,8 @@ services:
     ports:
       - "8082:8080"
     restart: unless-stopped
+    dns:
+      - 10.200.136.19
     volumes:
       - secrets:/data
     depends_on:

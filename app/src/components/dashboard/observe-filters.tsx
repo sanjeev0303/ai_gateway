@@ -48,9 +48,13 @@ export function ObserveFilters() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Providers</SelectItem>
-            <SelectItem value="anthropic">Anthropic</SelectItem>
+            <SelectItem value="gemini">Google Gemini</SelectItem>
+            <SelectItem value="mistral">Mistral AI</SelectItem>
+            <SelectItem value="huggingface">Hugging Face</SelectItem>
             <SelectItem value="openai">OpenAI</SelectItem>
-            <SelectItem value="google">Google</SelectItem>
+            <SelectItem value="anthropic">Anthropic</SelectItem>
+            <SelectItem value="azure_openai">Azure OpenAI</SelectItem>
+            <SelectItem value="custom">Custom Provider</SelectItem>
           </SelectContent>
         </Select>
       </div>

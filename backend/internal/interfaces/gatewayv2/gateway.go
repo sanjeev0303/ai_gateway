@@ -418,6 +418,8 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 			providerKind = domain.ProviderKindOpenAI
 		case strings.HasPrefix(hints.Model, "gemini-"):
 			providerKind = domain.ProviderKindGemini
+		case strings.HasPrefix(hints.Model, "mistral") || strings.HasPrefix(hints.Model, "codestral-") || strings.HasPrefix(hints.Model, "ministral-") || strings.HasPrefix(hints.Model, "voxtral-") || strings.HasPrefix(hints.Model, "magistral-") || strings.HasPrefix(hints.Model, "open-mistral-"):
+			providerKind = domain.ProviderKindCustom
 		case strings.HasPrefix(hints.Model, "meta-llama/") || strings.HasPrefix(hints.Model, "mistralai/") || strings.HasPrefix(hints.Model, "Qwen/") || strings.HasPrefix(hints.Model, "deepseek-ai/") || strings.HasPrefix(hints.Model, "hf-") || strings.Contains(hints.Model, "/"):
 			providerKind = domain.ProviderKindHuggingFace
 		}
@@ -526,6 +528,13 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 		}
 	} else {
 		upstream, err = g.tenantResolver.ResolveUpstreamForProvider(ctx, cred.OrganizationID, providerKind)
+		if err != nil && (providerKind == "mistral" || providerKind == domain.ProviderKindCustom) {
+			if providerKind == "mistral" {
+				upstream, err = g.tenantResolver.ResolveUpstreamForProvider(ctx, cred.OrganizationID, domain.ProviderKindCustom)
+			} else {
+				upstream, err = g.tenantResolver.ResolveUpstreamForProvider(ctx, cred.OrganizationID, "mistral")
+			}
+		}
 		if err != nil {
 			if providerKind == "" {
 				upstream, err = g.tenantResolver.ResolveUpstream(ctx, cred.OrganizationID)
@@ -537,7 +546,7 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 			}
 		}
 	}
-	if upstream.ProviderAccount.ProviderKind != "" && providerKind != "" && upstream.ProviderAccount.ProviderKind != providerKind {
+	if upstream.ProviderAccount.ProviderKind != "" && providerKind != "" && upstream.ProviderAccount.ProviderKind != providerKind && !(providerKind == "mistral" && upstream.ProviderAccount.ProviderKind == domain.ProviderKindCustom) && !(providerKind == domain.ProviderKindCustom && upstream.ProviderAccount.ProviderKind == "mistral") {
 		res := g.pipelineError("tenant_resolver", fmt.Errorf("no active connection for provider %q", providerKind), http.StatusServiceUnavailable, "upstream_unavailable")
 		res.Context = reqCtx
 		return res
@@ -1337,9 +1346,13 @@ func (g *Gateway) isModelSupported(ctx context.Context, providerKind, model stri
 		strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") ||
 		strings.HasPrefix(model, "text-embedding") || strings.HasPrefix(model, "dall-e") ||
 		strings.HasPrefix(model, "gemini-") ||
+		strings.HasPrefix(model, "mistral") || strings.HasPrefix(model, "codestral-") ||
+		strings.HasPrefix(model, "ministral-") || strings.HasPrefix(model, "voxtral-") ||
+		strings.HasPrefix(model, "magistral-") || strings.HasPrefix(model, "open-mistral-") ||
 		strings.HasPrefix(model, "meta-llama/") || strings.HasPrefix(model, "mistralai/") ||
 		strings.HasPrefix(model, "Qwen/") || strings.HasPrefix(model, "deepseek-ai/") ||
-		strings.HasPrefix(model, "hf-") || strings.Contains(model, "/") {
+		strings.HasPrefix(model, "hf-") || strings.Contains(model, "/") ||
+		providerKind == domain.ProviderKindCustom {
 		return true
 	}
 	return false
