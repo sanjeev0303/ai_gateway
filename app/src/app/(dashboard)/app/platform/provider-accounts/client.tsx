@@ -165,7 +165,8 @@ export function CreateProviderAccountButton() {
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        {/* sm: prefix needed: DialogContent's own sm:max-w-sm otherwise wins and squeezes the grid. */}
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl">
               <Sparkles className="size-5 text-primary" /> Connect AI Provider
@@ -215,41 +216,39 @@ export function CreateProviderAccountButton() {
               )}
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4 py-2">
+            <form onSubmit={handleSubmit} className="space-y-5 pt-2">
               <div className="space-y-2">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase">
+                <Label className="text-xs font-semibold text-muted-foreground">
                   1. Select Upstream Provider
                 </Label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {PROVIDER_CATALOG.map((prov) => {
                     const isSelected = selectedProvider.kind === prov.kind;
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={prov.kind}
+                        aria-pressed={isSelected}
                         onClick={() => handleSelectProvider(prov)}
-                        className={`cursor-pointer rounded-lg border p-3 transition-all text-left flex flex-col justify-between ${
+                        className={`flex h-full min-w-0 flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
                           isSelected
                             ? "border-primary bg-accent/30 shadow-xs"
                             : "border-border hover:border-primary/40 bg-card"
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-sm">{prov.name}</span>
-                          <Badge variant="outline" className="text-xs px-1.5 py-0.5">
-                            {prov.badge}
-                          </Badge>
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1 line-clamp-1">
-                          {prov.models}
-                        </div>
-                      </div>
+                        <span className="text-sm font-semibold leading-snug">{prov.name}</span>
+                        <span className="text-xs text-muted-foreground line-clamp-2">{prov.models}</span>
+                        <Badge variant="outline" className="mt-auto max-w-full truncate text-[11px]">
+                          {prov.badge}
+                        </Badge>
+                      </button>
                     );
                   })}
                 </div>
               </div>
 
               <div className="space-y-3 pt-2 border-t">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase">
+                <Label className="text-xs font-semibold text-muted-foreground">
                   2. Connection & Credential Details
                 </Label>
 
@@ -309,7 +308,7 @@ export function CreateProviderAccountButton() {
                 </div>
               </div>
 
-              <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
+              <DialogFooter>
                 <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={isSubmitting}>
                   Cancel
                 </Button>

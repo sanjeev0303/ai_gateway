@@ -16,7 +16,7 @@ import { CreateServiceAccountButton, ServiceAccountActions } from "./client";
 import { ServiceAccountActionsCell } from "./actions-cell";
 
 export const metadata: Metadata = {
-  title: "Service accounts · Sentinel",
+  title: "Service accounts · Tollseal",
   description: "Machine identities used by workloads instead of human sessions.",
 };
 
@@ -89,7 +89,7 @@ export default async function ServiceAccountsPage() {
         description="Non-human identities that call the gateway on behalf of workloads and pipelines."
         actions={<CreateServiceAccountButton />}
       >
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
             label="Service accounts"
             value={formatNumber(total)}

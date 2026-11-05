@@ -10,6 +10,8 @@ import { createAlert, updateAlert, deleteAlert, testAlert } from "./alert-action
 import { AlertSeverity, AlertStatus, AlertType } from "@ai-governance/api-client";
 import { Textarea } from "@/components/ui/textarea";
 import { useRouter } from "next/navigation";
+import { confirmAction } from "@/components/dashboard/confirm-dialog";
+import { toast } from "sonner";
 
 export function CreateAlertDialog() {
   const [open, setOpen] = useState(false);
@@ -137,7 +139,7 @@ export function AlertActionsMenu({ alert }: { alert: any }) {
       const result = await testAlert(alert.id);
       setTestResult(result);
     } catch (err: any) {
-      alert("Test failed: " + err.message);
+      toast.error(`Test failed: ${err.message}`);
     }
   };
 
@@ -178,7 +180,13 @@ export function AlertActionsMenu({ alert }: { alert: any }) {
         variant="destructive" 
         size="sm" 
         onClick={async () => {
-          if (confirm(`Delete alert ${alert.name}?`)) {
+          const confirmed = await confirmAction({
+            title: `Delete ${alert.name}?`,
+            description: "This rule stops raising alerts. Past incidents stay on record.",
+            confirmLabel: "Delete alert",
+            destructive: true,
+          });
+          if (confirmed) {
             setLoading(true);
             try {
               await deleteAlert(alert.id);

@@ -23,7 +23,7 @@ export async function generateMetadata({
   const { policies } = await getApiClient();
   try {
     const policy = await policies.get(id);
-    return { title: `${policy.name} · Sentinel` };
+    return { title: `${policy.name} · Tollseal` };
   } catch (err: any) {
     if (err?.status === 404) return { title: "Not Found" };
     throw err;

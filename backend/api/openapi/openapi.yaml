@@ -947,7 +947,55 @@ paths:
           type: integer
           minimum: 0
           default: 0
+  /v1/conversations/by-key:
+    get:
+      operationId: getv1conversationsbykey
+      summary: Conversation counts per employee and gateway key (members see only their own)
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [user_id, credential_id, conversations, last_activity_at]
+                      properties:
+                        user_id: {type: string, format: uuid}
+                        credential_id: {type: string, format: uuid, nullable: true, description: Null when no key was recorded.}
+                        conversations: {type: integer, format: int64}
+                        last_activity_at: {type: string, format: date-time}
   /v1/conversations/{id}:
+    delete:
+      operationId: deletev1conversationsid
+      summary: Delete one conversation, its text included (owners and admins)
+      responses:
+        '204':
+          description: Deleted.
+        '403':
+          description: Only owners and admins may delete conversations.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No such conversation in the caller's organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
     get:
       operationId: getv1conversationsid
       summary: Get one conversation
@@ -2185,6 +2233,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ConversationMessage'
+        transcript:
+          type: string
+          enum: [available, hidden, expired]
+          description: Conversation text is never stored; the gateway keeps it in memory
+            for 24 hours after the last message. hidden means the privacy mode withholds
+            every turn; expired means the gateway no longer holds it.
     AuditLog:
       type: object
       description: One immutable audit record. Audit records are written by the server

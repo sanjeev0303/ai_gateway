@@ -18,7 +18,7 @@ import type { StatusTone } from "@/types";
 import { CreateProjectDialog } from "./projects-client";
 
 export const metadata: Metadata = {
-  title: "Projects · Sentinel",
+  title: "Projects · Tollseal",
   description: "Workloads that map spend and model access onto a real system of record.",
 };
 
@@ -96,7 +96,7 @@ const rows: ProjectRow[] = projectList.items.map((project) => {
           </CreateProjectDialog>
         }
       >
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
             label="Projects"
             value={String(rows.length)}

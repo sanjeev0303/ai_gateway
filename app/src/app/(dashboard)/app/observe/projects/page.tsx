@@ -7,6 +7,7 @@ import {
   PageShell,
   StatCard,
   type Column,
+  BreakdownTabs,
 } from "@/components/dashboard";
 import {
   Card,
@@ -27,7 +28,7 @@ import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
 
 export const metadata: Metadata = {
-  title: "Projects · Sentinel",
+  title: "Projects · Tollseal",
   description: "Every project routed through the gateway, and the spend each one accrues.",
 };
 
@@ -98,6 +99,7 @@ export default async function ProjectsPage({
     project_id: typeof params.project_id === "string" ? params.project_id : undefined,
     user_id: typeof params.user_id === "string" ? params.user_id : undefined,
     team_id: typeof params.team_id === "string" ? params.team_id : undefined,
+    service_account_id: typeof params.service_account_id === "string" ? params.service_account_id : undefined,
     provider: typeof params.provider === "string" ? params.provider : undefined,
     model: typeof params.model === "string" ? params.model : undefined,
     status: typeof params.status === "string" ? params.status : undefined,
@@ -160,8 +162,9 @@ export default async function ProjectsPage({
         title="Projects"
         description="Every project routed through the gateway, and how the bill divides between them."
       >
+        <BreakdownTabs />
         <ObserveFilters />
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
             label="Active projects"
             value={formatNumber(active.length)}
@@ -205,7 +208,7 @@ export default async function ProjectsPage({
             <CardContent>
               <DonutChart
                 data={spendByStatus}
-                centerLabel={formatCompact(totalSpend)}
+                centerLabel="spend"
                 formatValue={formatUsd}
               />
             </CardContent>

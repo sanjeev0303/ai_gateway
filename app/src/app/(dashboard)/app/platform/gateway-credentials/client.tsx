@@ -210,7 +210,7 @@ export function CreateCredentialButton({
         open={open}
         onOpenChange={setOpen}
         title="Create Gateway Credential"
-        description="Issue a new API key for callers to invoke models through the Sentinel gateway."
+        description="Issue a new API key for callers to invoke models through the Tollseal gateway."
         action={createGatewayCredential}
         submitLabel="Create Key"
         onSuccess={(state: unknown) => {

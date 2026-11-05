@@ -8,6 +8,7 @@ import {
   StatCard,
   StatusBadge,
   type Column,
+  BreakdownTabs,
 } from "@/components/dashboard";
 import {
   Card,
@@ -27,7 +28,7 @@ import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
 
 export const metadata: Metadata = {
-  title: "Providers · Sentinel",
+  title: "Providers · Tollseal",
   description: "Upstream connections, probe health, and cost for every provider.",
 };
 
@@ -124,6 +125,7 @@ export default async function ProvidersPage({
     project_id: typeof params.project_id === "string" ? params.project_id : undefined,
     user_id: typeof params.user_id === "string" ? params.user_id : undefined,
     team_id: typeof params.team_id === "string" ? params.team_id : undefined,
+    service_account_id: typeof params.service_account_id === "string" ? params.service_account_id : undefined,
     provider: typeof params.provider === "string" ? params.provider : undefined,
     model: typeof params.model === "string" ? params.model : undefined,
     status: typeof params.status === "string" ? params.status : undefined,
@@ -190,8 +192,9 @@ export default async function ProvidersPage({
         title="Providers"
         description="Upstream connections, what the last probe said, and what each one costs."
       >
+        <BreakdownTabs />
         <ObserveFilters />
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
             label="Connections"
             value={formatNumber(accounts.items.length)}
@@ -264,7 +267,7 @@ export default async function ProvidersPage({
         </Card>
 
         <section>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <h2 className="text-sm font-semibold text-muted-foreground">
             Status board
           </h2>
           <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

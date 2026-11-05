@@ -17,6 +17,9 @@ test("Dashboard Widgets: currency and micros formatting", () => {
   assert.equal(formatUsd(1250), "$1.3k");
   assert.equal(formatUsd(2_500_000), "$2.5M");
   assert.equal(formatUsd(42), "$42");
+  assert.equal(formatUsd(6.414), "$6.41");
+  assert.equal(formatUsd(0.0034), "<$0.01");
+  assert.equal(formatUsd(0), "$0");
   assert.equal(formatUsdExact(12.5), "$12.50");
 });
 

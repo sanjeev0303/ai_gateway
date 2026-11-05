@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getDirectory, nameFor, nameMap } from "@/lib/directory";
 import { getApiClient } from "@/lib/session";
 import { AuditLogActions } from "./client";
 import { AuditFilters } from "./filters";
@@ -20,7 +21,7 @@ import { AuditActionsCell } from "./actions-cell";
 import { ExportAuditLogsButton } from "./export-button";
 
 export const metadata: Metadata = {
-  title: "Audit logs · Sentinel",
+  title: "Audit logs · Tollseal",
   description: "Append-only record of every actor, action, and resource touched in the console.",
 };
 
@@ -57,14 +58,14 @@ function changedKeys(before: AuditLog["before"], after: AuditLog["after"]): numb
   return changed;
 }
 
-function toRow(record: AuditLog): AuditRow {
+function toRow(record: AuditLog, actorNames: Record<string, string>): AuditRow {
   const changed = changedKeys(record.before, record.after);
 
   return {
     id: record.id,
     action: record.action,
-    actor: actorLabel(record),
-    actorId: record.actor_user_id ?? record.actor_service_account_id ?? "",
+    actor: nameFor(actorNames, record.actor_user_id ?? record.actor_service_account_id),
+    actorId: actorLabel(record),
     resource: record.resource_type,
     resourceId: record.resource_id ?? "",
     changes:
@@ -118,8 +119,12 @@ export default async function AuditLogsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const params = await searchParams;
-  const { items, has_more, limit, offset } = await loadAuditLogs(params);
-  const rows = items.map(toRow);
+  const [{ items, has_more, limit, offset }, directory] = await Promise.all([
+    loadAuditLogs(params),
+    getDirectory(),
+  ]);
+  const actorNames = { ...nameMap(directory.users), ...nameMap(directory.serviceAccounts) };
+  const rows = items.map((record) => toRow(record, actorNames));
 
   const currentPage = Math.floor(offset / limit);
 

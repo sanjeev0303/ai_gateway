@@ -1,10 +1,10 @@
 import type { CategoryDatum } from "@/types";
 import { formatCompact } from "@/lib/format";
-import { chartColor, linearScale } from "./utils";
+import { chartColor } from "./utils";
 
 interface BarChartProps {
   data: readonly CategoryDatum[];
-  /** Row pitch in SVG units; total height derives from the row count. */
+  /** Minimum row height in pixels. */
   rowHeight?: number;
   label?: string;
   formatValue?: (value: number) => string;
@@ -12,17 +12,12 @@ interface BarChartProps {
   showSecondary?: boolean;
 }
 
-const WIDTH = 720;
-const LABEL_WIDTH = 150;
-const VALUE_WIDTH = 76;
-const PADDING = { top: 4, right: VALUE_WIDTH, left: LABEL_WIDTH } as const;
-
-const truncate = (value: string, max = 22): string =>
-  value.length > max ? `${value.slice(0, max - 1)}…` : value;
+const percentOf = (value: number, max: number): string => `${max > 0 ? Math.max(0, (value / max) * 100) : 0}%`;
 
 /**
- * Horizontal bars ranked by value. Horizontal keeps long model and team names
- * readable, which a vertical chart would have to rotate.
+ * Horizontal bars ranked by value, keeping long model and team names readable.
+ * Plain HTML rather than SVG, so labels stay real text at any width: on a phone
+ * the name sits above its bar instead of being clipped beside it.
  */
 export function BarChart({
   data,
@@ -39,82 +34,38 @@ export function BarChart({
     );
   }
 
-  const plotWidth = WIDTH - PADDING.left - PADDING.right;
-  const height = data.length * rowHeight + PADDING.top * 2;
   const primaryMax = data.reduce((acc, datum) => Math.max(acc, datum.value), 0);
-  const secondaryMax = data.reduce(
-    (acc, datum) => Math.max(acc, datum.secondary ?? 0),
-    0,
-  );
-
-  const primary = linearScale([0, primaryMax || 1], [0, plotWidth]);
-  const secondary = linearScale([0, secondaryMax || 1], [0, plotWidth]);
+  const secondaryMax = data.reduce((acc, datum) => Math.max(acc, datum.secondary ?? 0), 0);
   const hasSecondary = showSecondary && data.some((datum) => datum.secondary);
 
   return (
-    <svg
-      viewBox={`0 0 ${WIDTH} ${height}`}
-      className="h-auto w-full"
-      role="img"
-      aria-label={label}
-    >
-      <title>{label}</title>
-      {data.map((datum, index) => {
-        const rowTop = PADDING.top + index * rowHeight;
-        const barHeight = hasSecondary ? 8 : 12;
-        return (
-          <g key={datum.label}>
-            <text
-              x={PADDING.left - 10}
-              y={rowTop + rowHeight / 2}
-              textAnchor="end"
-              dominantBaseline="middle"
-              className="fill-foreground text-xs font-medium"
-            >
-              {truncate(datum.label)}
-            </text>
-
-            <rect
-              x={PADDING.left}
-              y={rowTop + (rowHeight - barHeight * (hasSecondary ? 2 : 1) - 2) / 2}
-              width={plotWidth}
-              height={barHeight * (hasSecondary ? 2 : 1) + 2}
-              rx={3}
-              className="fill-muted"
+    <ul aria-label={label} className="flex flex-col gap-2.5 sm:gap-1">
+      {data.map((datum) => (
+        <li
+          key={datum.label}
+          style={{ minHeight: rowHeight }}
+          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)_5rem]"
+        >
+          <span title={datum.label} className="truncate text-[0.8125rem] font-medium sm:text-right">
+            {datum.label}
+          </span>
+          <span className="col-span-2 row-start-2 flex flex-col gap-0.5 overflow-hidden rounded-[3px] bg-muted sm:col-span-1 sm:col-start-2 sm:row-start-1">
+            <span
+              className="block h-2.5 rounded-[3px]"
+              style={{ width: percentOf(datum.value, primaryMax), backgroundColor: chartColor(0) }}
             />
-
-            <rect
-              x={PADDING.left}
-              y={rowTop + (rowHeight - barHeight * (hasSecondary ? 2 : 1) - 2) / 2}
-              width={primary.map(datum.value)}
-              height={barHeight}
-              rx={3}
-              fill={chartColor(0)}
-            />
-
-            {hasSecondary && datum.secondary !== undefined && (
-              <rect
-                x={PADDING.left}
-                y={rowTop + rowHeight / 2 + 1}
-                width={secondary.map(datum.secondary)}
-                height={barHeight}
-                rx={3}
-                fill={chartColor(1)}
-                fillOpacity={0.6}
+            {hasSecondary && (
+              <span
+                className="block h-1.5 rounded-[3px] opacity-60"
+                style={{ width: percentOf(datum.secondary ?? 0, secondaryMax), backgroundColor: chartColor(1) }}
               />
             )}
-
-            <text
-              x={PADDING.left + plotWidth + 8}
-              y={rowTop + rowHeight / 2}
-              dominantBaseline="middle"
-              className="fill-muted-foreground text-xs font-mono"
-            >
-              {formatValue(datum.value)}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
+          </span>
+          <span className="text-right text-[0.8125rem] text-muted-foreground tabular-nums">
+            {formatValue(datum.value)}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -905,7 +905,7 @@ function CalculateCostDialog({
             <div className="rounded-xl border bg-card p-4 space-y-3.5 shadow-sm">
               <div className="flex items-center justify-between border-b pb-3">
                 <div>
-                  <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                  <span className="text-xs text-muted-foreground font-semibold">
                     Calculated Total Spend
                   </span>
                   <div className="flex items-baseline gap-2 mt-0.5">
@@ -932,7 +932,7 @@ function CalculateCostDialog({
               {/* Itemized Breakdown Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
                 <div className="rounded-lg border bg-muted/30 p-2.5 space-y-1">
-                  <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+                  <div className="text-[11px] text-muted-foreground font-semibold">
                     Prompt (Uncached)
                   </div>
                   <div className="text-sm font-bold text-foreground">
@@ -944,7 +944,7 @@ function CalculateCostDialog({
                 </div>
 
                 <div className="rounded-lg border bg-muted/30 p-2.5 space-y-1">
-                  <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+                  <div className="text-[11px] text-muted-foreground font-semibold">
                     Cached Prompt Reads
                   </div>
                   <div className="text-sm font-bold text-foreground">
@@ -962,7 +962,7 @@ function CalculateCostDialog({
                 </div>
 
                 <div className="rounded-lg border bg-muted/30 p-2.5 space-y-1">
-                  <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+                  <div className="text-[11px] text-muted-foreground font-semibold">
                     Completion (Output)
                   </div>
                   <div className="text-sm font-bold text-foreground">

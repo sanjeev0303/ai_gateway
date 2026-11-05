@@ -2,10 +2,12 @@
 package anthropic
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -176,36 +178,53 @@ type ModelsResponse struct {
 // MessageStream handles streaming responses from Anthropic.
 type MessageStream struct {
 	resp   *http.Response
-	reader *json.Decoder
+	reader *bufio.Reader
 	done   bool
 	err    error
 }
 
-// Next returns the next streaming event.
+// Next returns the next streaming event. Anthropic streams Server-Sent Events
+// ("event: <name>\ndata: {json}\n\n"), so we read line by line and decode the
+// JSON from each "data:" line rather than treating the body as a JSON stream.
 func (s *MessageStream) Next() (*StreamingEvent, error) {
 	if s.done {
 		return nil, io.EOF
 	}
 
-	var event StreamingEvent
-	if err := s.reader.Decode(&event); err != nil {
-		s.done = true
-		if err == io.EOF {
-			return nil, io.EOF
+	for {
+		line, err := s.reader.ReadString('\n')
+		if err != nil {
+			s.done = true
+			if err == io.EOF {
+				return nil, io.EOF
+			}
+			s.err = err
+			return nil, err
 		}
-		s.err = err
-		return nil, err
-	}
-
-	if event.Type == "message_stop" || event.Type == "error" {
-		s.done = true
-		if event.Type == "error" && event.Error != nil {
-			s.err = errors.New(event.Error.Error.Message)
-			return nil, ErrProviderError
+		line = strings.TrimSpace(line)
+		// Skip blank separators, SSE comments, and the "event:" name line.
+		if !strings.HasPrefix(line, "data:") {
+			continue
 		}
-	}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 
-	return &event, nil
+		var event StreamingEvent
+		if err := json.Unmarshal([]byte(data), &event); err != nil {
+			s.done = true
+			s.err = err
+			return nil, err
+		}
+
+		if event.Type == "message_stop" || event.Type == "error" {
+			s.done = true
+			if event.Type == "error" && event.Error != nil {
+				s.err = errors.New(event.Error.Error.Message)
+				return nil, ErrProviderError
+			}
+		}
+
+		return &event, nil
+	}
 }
 
 // Close closes the stream.

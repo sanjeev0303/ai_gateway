@@ -16,7 +16,7 @@ import type { StatusTone } from "@/types";
 import { CreateProviderAccountButton } from "./client";
 
 export const metadata: Metadata = {
-  title: "Provider accounts · Sentinel",
+  title: "Provider accounts · Tollseal",
   description: "Connected upstream providers and the base URL each one is reached at.",
 };
 
@@ -37,6 +37,8 @@ interface AccountRow {
   kind: string;
   baseUrl: string;
   status: string;
+  /** Usable for routing: enabled and holding a non-revoked key. */
+  routable: boolean;
   tone: StatusTone;
   created: string;
   detailUrl: string;
@@ -57,13 +59,19 @@ const COLUMNS: readonly Column<AccountRow>[] = [
 
 async function loadProviderAccounts() {
   const { providers } = await getApiClient();
-  const [list, healthList] = await Promise.all([
+  const [list, healthList, credentialList] = await Promise.all([
     providers.listAccounts(),
     providers.health().catch(() => ({ items: [] })),
+    providers.listCredentials().catch(() => ({ items: [] })),
   ]);
 
   const healthMap = new Map<string, any>(
     healthList.items.map((h: any) => [h.provider_kind, h])
+  );
+  const accountsWithKey = new Set(
+    credentialList.items
+      .filter((c) => c.status !== "revoked")
+      .map((c) => c.provider_account_id)
   );
 
   const rows: AccountRow[] = [...list.items]
@@ -71,10 +79,15 @@ async function loadProviderAccounts() {
     .map((account) => {
       let validationStatus = "Provider connected";
       let tone: StatusTone = "success";
+      const hasKey = accountsWithKey.has(account.id);
 
       if (account.status === "disabled") {
         validationStatus = "Disabled";
         tone = "neutral";
+      } else if (!hasKey) {
+        // An account without a key cannot route anything, whatever its health says.
+        validationStatus = "No API key";
+        tone = "warning";
       } else {
         const h = healthMap.get(account.provider_kind);
         if (h) {
@@ -109,6 +122,7 @@ async function loadProviderAccounts() {
         kind: display(account.provider_kind),
         baseUrl: account.base_url ?? "Provider default",
         status: validationStatus,
+        routable: account.status === "active" && hasKey,
         tone,
         created: formatDate(account.created_at),
         detailUrl: `/app/platform/provider-accounts/${account.id}`,
@@ -123,7 +137,7 @@ async function loadProviderAccounts() {
   return {
     rows,
     total: rows.length,
-    active: rows.filter((row) => row.status === "active").length,
+    active: rows.filter((row) => row.routable).length,
     kinds: kindCounts.size,
     kindMix: [...kindCounts.entries()]
       .map(([label, value]) => ({ label, value }))
@@ -141,17 +155,17 @@ export default async function ProviderAccountsPage() {
         description="Every upstream account behind one gateway key."
         actions={<CreateProviderAccountButton />}
       >
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
             label="Connected accounts"
             value={formatNumber(total)}
             hint={`${formatNumber(active)} active`}
           />
           <StatCard
-            label="Disabled"
+            label="Not routing"
             value={formatNumber(total - active)}
             tone={total - active > 0 ? "warning" : "success"}
-            hint="Not used for routing"
+            hint="Disabled, or no API key attached"
           />
           <StatCard
             label="Provider kinds"
@@ -174,7 +188,7 @@ export default async function ProviderAccountsPage() {
             <CardContent>
               <DonutChart
                 data={kindMix}
-                centerLabel={formatNumber(total)}
+                centerLabel="total"
                 formatValue={(value) => `${formatNumber(value)} accounts`}
               />
             </CardContent>

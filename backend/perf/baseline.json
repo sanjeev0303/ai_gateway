@@ -1,0 +1,29 @@
+{
+  "metadata": {
+    "git_branch": "n/a",
+    "git_commit": "n/a",
+    "go_version": "go1.26.0",
+    "goarch": "amd64",
+    "goos": "windows",
+    "host": "Exuv04",
+    "num_cpu": 8,
+    "recorded_at": "2026-11-03T04:56:53Z"
+  },
+  "benchmarks": {
+    "BenchmarkPromptTurn/large_80turns_22490B": {
+      "ns_per_op": 421523,
+      "bytes_per_op": 52160,
+      "allocs_per_op": 301
+    },
+    "BenchmarkPromptTurn/multi_10turns_2855B": {
+      "ns_per_op": 58900,
+      "bytes_per_op": 6576,
+      "allocs_per_op": 50
+    },
+    "BenchmarkPromptTurn/small_1turn_337B": {
+      "ns_per_op": 6468,
+      "bytes_per_op": 1072,
+      "allocs_per_op": 14
+    }
+  }
+}

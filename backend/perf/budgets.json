@@ -1,0 +1,36 @@
+{
+  "_about": "Central performance budgets for AI Gateway. Calibrated from the local baseline (docs/local-readiness/). Budgets are environment-specific: these values are for a local dev box. Enforcement is split: the end-to-end API/resource/DB budgets are checked by cmd/perf (existing load harness); the micro-benchmark regression policy is enforced by cmd/perfgate against perf/baseline.json. See perf/README.md for rationale.",
+  "environment": "local-dev",
+
+  "api": {
+    "_enforced_by": "cmd/perf (gateway mixed workload through cmd/mockupstream)",
+    "throughput_rps_min": 100,
+    "p50_latency_ms_max": 250,
+    "p95_latency_ms_max": 1500,
+    "p99_latency_ms_max": 2500,
+    "streaming_ttft_p50_ms_max": 500,
+    "streaming_ttft_p95_ms_max": 1000,
+    "error_rate_percent_max": 0
+  },
+
+  "resources": {
+    "_enforced_by": "cmd/perf sustained-traffic benchmark",
+    "sustained_heap_growth_mb_max": 30,
+    "goroutine_leak_delta_max": 5
+  },
+
+  "database": {
+    "_enforced_by": "cmd/perf",
+    "connections_max": 50,
+    "aggregate_query_p50_ms_max": 50
+  },
+
+  "regression": {
+    "_about": "Used by cmd/perfgate to compare the current micro-benchmark run against perf/baseline.json. Allocations and bytes are deterministic (no run-to-run noise), so their thresholds are strict; ns/op is noisy on a shared box, so its threshold is looser and sub-noise-floor benchmarks are skipped.",
+    "latency_increase_percent": 25,
+    "allocs_increase_percent": 5,
+    "bytes_increase_percent": 10,
+    "noise_floor_ns": 100,
+    "bench_count": 6
+  }
+}

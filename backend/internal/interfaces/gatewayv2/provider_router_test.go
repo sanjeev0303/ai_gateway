@@ -287,7 +287,7 @@ func TestProviderRouter_Route_HuggingFaceDedicatedEndpoint(t *testing.T) {
 	// 1. Default Hub endpoint
 	url, headers, err := r.Route(context.Background(), upstream, InspectorHints{})
 	requireNoErr(t, err)
-	if url != "https://api-inference.huggingface.co/v1/" {
+	if url != "https://router.huggingface.co/v1/" { // HF retired api-inference; the router targets router.huggingface.co
 		t.Fatalf("expected default HF hub router URL, got %q", url)
 	}
 	if got := headers.Get("Authorization"); got != "Bearer hf_token_123" {

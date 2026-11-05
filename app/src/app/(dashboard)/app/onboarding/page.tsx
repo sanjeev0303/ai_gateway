@@ -4,7 +4,7 @@ import { getCurrentOrganization, getApiClient, requireSession } from "@/lib/sess
 import { OnboardingClient } from "./onboarding-client";
 
 export const metadata: Metadata = {
-  title: "Employee Onboarding · Sentinel",
+  title: "Employee Onboarding · Tollseal",
   description: "Guided onboarding: verify access, obtain credentials, and run test requests.",
 };
 

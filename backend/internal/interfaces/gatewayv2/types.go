@@ -66,12 +66,15 @@ type ResolvedUpstream struct {
 
 // RequestContext carries the fully resolved request context through the pipeline.
 type RequestContext struct {
-	Credential      GatewayCredential
-	Upstream        ResolvedUpstream
-	PolicySnapshot  PolicySnapshot
-	RateLimit       RateLimitResult
-	BudgetResult    BudgetResult
-	BudgetRelease   BudgetReleaseFunc
+	Credential     GatewayCredential
+	Upstream       ResolvedUpstream
+	PolicySnapshot PolicySnapshot
+	RateLimit      RateLimitResult
+	BudgetResult   BudgetResult
+	BudgetRelease  BudgetReleaseFunc
+	// BudgetCommit charges a finished request to every reserved budget in
+	// that budget's own unit: dollars, tokens or one request.
+	BudgetCommit    func(cost float64, tokens int)
 	InspectorHints  InspectorHints
 	StartTime       time.Time
 	UpstreamURL     string

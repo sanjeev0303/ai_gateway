@@ -5,7 +5,7 @@ import { ProviderDetailClient } from "./provider-detail-client";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Provider Account Detail · Sentinel",
+  title: "Provider Account Detail · Tollseal",
 };
 
 export default async function ProviderAccountDetailPage({

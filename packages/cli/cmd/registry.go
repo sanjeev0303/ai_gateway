@@ -604,6 +604,64 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 		},
 	})
 
+	r.Register(&SlashCommand{
+		Name:            "/top-p",
+		Description:     "Set or inspect nucleus sampling probability (top_p)",
+		Provider:        "common",
+		Classification:  ClassLocalOnlyAndFunctional,
+		ArgsDescription: "[0.0-1.0]",
+		HelpText:        "/top-p <value> limits sampling to the smallest token set whose probability sums to the value; /top-p 0 resets.",
+		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
+			if len(args) == 0 {
+				if session.TopP == nil {
+					fmt.Fprintln(out, "Current top_p: default (model standard)")
+				} else {
+					fmt.Fprintf(out, "Current top_p: %.2f\n", *session.TopP)
+				}
+				return nil
+			}
+			val, err := strconv.ParseFloat(args[0], 64)
+			if err != nil || val < 0.0 || val > 1.0 {
+				return fmt.Errorf("invalid top_p %q: must be between 0.0 and 1.0", args[0])
+			}
+			if val == 0 {
+				session.TopP = nil
+				fmt.Fprintln(out, "top_p reset to default.")
+				return nil
+			}
+			session.TopP = &val
+			fmt.Fprintf(out, "top_p set to %.2f\n", val)
+			return nil
+		},
+	})
+
+	r.Register(&SlashCommand{
+		Name:            "/stop",
+		Description:     "Set or clear stop sequences that halt generation",
+		Provider:        "common",
+		Classification:  ClassLocalOnlyAndFunctional,
+		ArgsDescription: "[seq ...|clear]",
+		HelpText:        "/stop <seq> [seq ...] sets stop sequences; /stop clear removes them; /stop alone shows them.",
+		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
+			if len(args) == 0 {
+				if len(session.StopSequences) == 0 {
+					fmt.Fprintln(out, "No stop sequences set.")
+				} else {
+					fmt.Fprintf(out, "Stop sequences: %s\n", strings.Join(session.StopSequences, ", "))
+				}
+				return nil
+			}
+			if len(args) == 1 && strings.EqualFold(args[0], "clear") {
+				session.StopSequences = nil
+				fmt.Fprintln(out, "Stop sequences cleared.")
+				return nil
+			}
+			session.StopSequences = args
+			fmt.Fprintf(out, "Stop sequences set: %s\n", strings.Join(session.StopSequences, ", "))
+			return nil
+		},
+	})
+
 	// -------------------------------------------------------------
 	// Anthropic-Specific Commands
 	// -------------------------------------------------------------
@@ -626,6 +684,71 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 			}
 			session.MaxTokens = n
 			fmt.Fprintf(out, "Max tokens set to %d\n", session.MaxTokens)
+			return nil
+		},
+	})
+
+	r.Register(&SlashCommand{
+		Name:            "/top-k",
+		Description:     "Set or inspect top_k sampling (Claude only)",
+		Provider:        "anthropic",
+		Classification:  ClassLocalOnlyAndFunctional,
+		ArgsDescription: "[number]",
+		HelpText:        "/top-k <int> samples only from the k most likely tokens; /top-k 0 resets to default.",
+		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
+			if len(args) == 0 {
+				if session.TopK == nil {
+					fmt.Fprintln(out, "Current top_k: default (model standard)")
+				} else {
+					fmt.Fprintf(out, "Current top_k: %d\n", *session.TopK)
+				}
+				return nil
+			}
+			n, err := strconv.Atoi(args[0])
+			if err != nil || n < 0 {
+				return fmt.Errorf("invalid top_k %q: must be a non-negative integer", args[0])
+			}
+			if n == 0 {
+				session.TopK = nil
+				fmt.Fprintln(out, "top_k reset to default.")
+				return nil
+			}
+			session.TopK = &n
+			fmt.Fprintf(out, "top_k set to %d\n", n)
+			return nil
+		},
+	})
+
+	r.Register(&SlashCommand{
+		Name:            "/thinking",
+		Description:     "Enable Claude extended thinking with a token budget, or turn it off",
+		Provider:        "anthropic",
+		Classification:  ClassLocalOnlyAndFunctional,
+		ArgsDescription: "[budget|off]",
+		HelpText:        "/thinking <tokens> enables extended thinking with that budget (at least 1024, below max-tokens); /thinking off disables it.",
+		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
+			if len(args) == 0 {
+				if session.ThinkingBudget <= 0 {
+					fmt.Fprintln(out, "Extended thinking: off")
+				} else {
+					fmt.Fprintf(out, "Extended thinking: on (budget %d tokens)\n", session.ThinkingBudget)
+				}
+				return nil
+			}
+			if strings.EqualFold(args[0], "off") || args[0] == "0" {
+				session.ThinkingBudget = 0
+				fmt.Fprintln(out, "Extended thinking disabled.")
+				return nil
+			}
+			n, err := strconv.Atoi(args[0])
+			if err != nil || n < 1024 {
+				return fmt.Errorf("invalid thinking budget %q: give a token count of at least 1024, or 'off'", args[0])
+			}
+			if n >= session.MaxTokens {
+				return fmt.Errorf("thinking budget %d must be below max-tokens %d: raise /max-tokens first", n, session.MaxTokens)
+			}
+			session.ThinkingBudget = n
+			fmt.Fprintf(out, "Extended thinking enabled (budget %d tokens). Temperature is ignored while thinking is on.\n", n)
 			return nil
 		},
 	})
@@ -662,6 +785,37 @@ func NewDefaultCommandRegistry() *CommandRegistry {
 				session.ReasoningEffort = level
 				fmt.Fprintf(out, "Reasoning effort set to: %s\n", session.ReasoningEffort)
 			}
+			return nil
+		},
+	})
+
+	r.Register(&SlashCommand{
+		Name:            "/seed",
+		Description:     "Set or clear a deterministic sampling seed (OpenAI)",
+		Provider:        "openai",
+		Classification:  ClassLocalOnlyAndFunctional,
+		ArgsDescription: "[number|off]",
+		HelpText:        "/seed <int> requests reproducible sampling on OpenAI models; /seed off clears it.",
+		Execute: func(ctx context.Context, session *SessionState, args []string, out io.Writer) error {
+			if len(args) == 0 {
+				if session.Seed == nil {
+					fmt.Fprintln(out, "Seed: not set")
+				} else {
+					fmt.Fprintf(out, "Seed: %d\n", *session.Seed)
+				}
+				return nil
+			}
+			if strings.EqualFold(args[0], "off") || strings.EqualFold(args[0], "clear") {
+				session.Seed = nil
+				fmt.Fprintln(out, "Seed cleared.")
+				return nil
+			}
+			n, err := strconv.Atoi(args[0])
+			if err != nil {
+				return fmt.Errorf("invalid seed %q: must be an integer", args[0])
+			}
+			session.Seed = &n
+			fmt.Fprintf(out, "Seed set to %d\n", n)
 			return nil
 		},
 	})

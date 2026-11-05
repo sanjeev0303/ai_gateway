@@ -7,6 +7,7 @@ import {
   PageShell,
   StatCard,
   type Column,
+  BreakdownTabs,
 } from "@/components/dashboard";
 import {
   Card,
@@ -19,7 +20,7 @@ import { formatNumber, formatPercent, formatUsd, microsToUsd } from "@/lib/forma
 import { getApiClient } from "@/lib/session";
 
 export const metadata: Metadata = {
-  title: "Teams · Sentinel",
+  title: "Teams · Tollseal",
   description: "The spend each team owns, and how the bill divides between them.",
 };
 
@@ -91,6 +92,7 @@ export default async function TeamsPage({
     project_id: typeof params.project_id === "string" ? params.project_id : undefined,
     user_id: typeof params.user_id === "string" ? params.user_id : undefined,
     team_id: typeof params.team_id === "string" ? params.team_id : undefined,
+    service_account_id: typeof params.service_account_id === "string" ? params.service_account_id : undefined,
     provider: typeof params.provider === "string" ? params.provider : undefined,
     model: typeof params.model === "string" ? params.model : undefined,
     status: typeof params.status === "string" ? params.status : undefined,
@@ -143,8 +145,9 @@ export default async function TeamsPage({
         title="Teams"
         description="Who owns which spend. One team holding most of the bill is the thing to look at."
       >
+        <BreakdownTabs />
         <ObserveFilters />
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
             label="Teams"
             value={formatNumber(rows.length)}

@@ -6,14 +6,16 @@ import { usePathname } from "next/navigation";
 import {
   Building2,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  LifeBuoy,
-  Plus,
+  ChevronsUpDown,
+  ExternalLink,
+  LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
   Settings,
-  Sparkles,
+  Users,
 } from "lucide-react";
 
+import { signOut } from "@/app/(auth)/signin/actions";
 import { Logo } from "@/components/logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -39,172 +41,163 @@ interface SidebarNavProps {
 const isActive = (pathname: string, href: string): boolean =>
   pathname === href || pathname.startsWith(`${href}/`);
 
-/** Three primary macro-domains for cognitive chunking (Miller's Law / 7±2) */
+const childActive = (pathname: string, child: NavSection["children"][number]): boolean =>
+  (child.match ?? [child.href]).some((href) => isActive(pathname, href));
+
+/** Three groups, so the list reads as watch, control, run. */
 const NAV_GROUPS: { title: string; sectionTitles: string[] }[] = [
-  {
-    title: "Telemetry & Metrics",
-    sectionTitles: ["Overview", "Observe"],
-  },
-  {
-    title: "Control & Platform",
-    sectionTitles: ["Govern", "Security", "Platform"],
-  },
-  {
-    title: "Workspace & Dev",
-    sectionTitles: ["Organization", "Billing", "Developer"],
-  },
+  { title: "Monitor", sectionTitles: ["Overview", "Observe"] },
+  { title: "Control", sectionTitles: ["Govern", "Security", "Platform"] },
+  { title: "Workspace", sectionTitles: ["Organization", "Billing", "Developer"] },
 ];
 
-export function SidebarNav({
-  onNavigate,
-  collapsed = false,
-  onToggleCollapse,
-}: SidebarNavProps) {
+/* One row style for every link and section header, so the eye lands in one place. */
+const ROW =
+  "group relative flex h-9 w-full items-center gap-2.5 rounded-xl px-2.5 text-sm outline-none transition-[background-color,color,transform] duration-150 ease-(--ease-out-strong) focus-visible:ring-2 focus-visible:ring-sidebar-ring active:scale-[0.98]";
+const ROW_IDLE = "text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground";
+/* The page you are on: a green pill with an indicator at its left edge. */
+const ROW_ACTIVE =
+  "bg-primary/10 font-medium text-primary before:absolute before:top-2 before:bottom-2 before:left-0 before:w-[3px] before:rounded-full before:bg-primary";
+
+export function SidebarNav({ onNavigate, collapsed = false, onToggleCollapse }: SidebarNavProps) {
   const pathname = usePathname();
   const session = useSession();
 
-  // Accordion state tracking open/closed sections (Progressive Disclosure)
+  // Sections start open when they hold the current page.
   const [openSections, setOpenSections] = React.useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     for (const section of DASHBOARD_NAV) {
       if (section.children.length > 0) {
-        const hasActive = section.children.some((child) => isActive(pathname, child.href));
-        // Auto-expand if current route belongs to this section, or default open "Observe"
-        initial[section.title] = hasActive || section.title === "Observe";
+        initial[section.title] = section.children.some((child) => childActive(pathname, child));
       }
     }
     return initial;
   });
 
-  // Auto-expand when route changes (Recognition over Recall)
-  React.useEffect(() => {
-    for (const section of DASHBOARD_NAV) {
-      if (section.children.some((child) => isActive(pathname, child.href))) {
-        setOpenSections((prev) => (prev[section.title] ? prev : { ...prev, [section.title]: true }));
-      }
+  // Moving to a page inside a closed section opens it (adjusted during render, not in an effect).
+  const [seenPath, setSeenPath] = React.useState(pathname);
+  if (seenPath !== pathname) {
+    setSeenPath(pathname);
+    const section = DASHBOARD_NAV.find((s) => s.children.some((child) => childActive(pathname, child)));
+    if (section && !openSections[section.title]) {
+      setOpenSections((prev) => ({ ...prev, [section.title]: true }));
     }
-  }, [pathname]);
+  }
 
-  const toggleSection = (title: string) => {
-    setOpenSections((prev) => ({ ...prev, [title]: !prev[title] }));
-  };
+  const toggleSection = (title: string) => setOpenSections((prev) => ({ ...prev, [title]: !prev[title] }));
+
+  const sectionMap = React.useMemo(() => new Map(DASHBOARD_NAV.map((sec) => [sec.title, sec])), []);
 
   if (session.status !== "authenticated") return null;
   const { user, organization } = session.session;
-
-  const sectionMap = React.useMemo(() => {
-    const map = new Map<string, NavSection>();
-    for (const sec of DASHBOARD_NAV) {
-      map.set(sec.title, sec);
-    }
-    return map;
-  }, []);
+  const orgInitials = organization.name.slice(0, 2).toUpperCase();
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-sidebar select-none">
-      {/* Header / Logo */}
-      <div
-        className={cn(
-          "flex h-14 shrink-0 items-center border-b border-sidebar-border px-4",
-          collapsed ? "justify-center px-2" : "justify-between",
-        )}
-      >
+    <div className="flex h-full min-h-0 flex-col select-none">
+      {/* Brand and the collapse control, together where the eye starts */}
+      <div className={cn("flex h-16 shrink-0 items-center gap-2", collapsed ? "flex-col justify-center pt-3 pb-1" : "justify-between px-4")}>
         <Link
           href="/app/overview"
           onClick={onNavigate}
-          className="rounded-lg p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring transition-transform active:scale-95"
-          title="Sentinel AI Gateway"
+          className="rounded-lg p-1 outline-none transition-transform focus-visible:ring-2 focus-visible:ring-sidebar-ring active:scale-95"
+          aria-label="Tollseal overview"
         >
           <Logo markOnly={collapsed} className="text-sidebar-foreground" />
         </Link>
-      </div>
-
-      {/* Workspace Switcher (Common Region & Jakob's Law) */}
-      <div
-        className={cn(
-          "shrink-0 border-b border-sidebar-border py-2.5",
-          collapsed ? "px-2 text-center" : "px-3",
+        {onToggleCollapse && !collapsed && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="hidden size-8 items-center justify-center rounded-lg text-sidebar-muted outline-none transition-[background-color,color] duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring lg:flex"
+            title="Collapse sidebar ( [ )"
+            aria-label="Collapse sidebar"
+          >
+            <PanelLeftClose className="size-4" aria-hidden />
+          </button>
         )}
-      >
-        {collapsed ? (
-          <div className="flex justify-center">
-            <span
-              className="flex size-9 items-center justify-center rounded-xl bg-white/10 font-mono text-xs font-bold text-sidebar-foreground ring-1 ring-white/15 shadow-2xs"
-              title={`Organization: ${organization.name}`}
+      </div>
+      {onToggleCollapse && collapsed && (
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="mx-auto mb-2 hidden size-9 items-center justify-center rounded-lg text-sidebar-muted outline-none transition-[background-color,color] duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring lg:flex"
+          title="Expand sidebar ( [ )"
+          aria-label="Expand sidebar"
+        >
+          <PanelLeftOpen className="size-4" aria-hidden />
+        </button>
+      )}
+
+      {/* Workspace */}
+      <div className={cn("shrink-0 pb-3", collapsed ? "px-2" : "px-3")}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              title={collapsed ? `Workspace: ${organization.name}` : undefined}
+              className={cn(
+                "flex w-full items-center gap-2.5 rounded-xl border border-sidebar-border bg-card/70 text-left outline-none transition-[background-color,border-color,transform] duration-150 hover:border-border-strong hover:bg-card focus-visible:ring-2 focus-visible:ring-sidebar-ring active:scale-[0.99]",
+                collapsed ? "mx-auto size-10 justify-center p-0" : "px-2.5 py-2",
+              )}
             >
-              {organization.name.slice(0, 2).toUpperCase()}
-            </span>
-          </div>
-        ) : (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-left transition-all duration-150 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring active:scale-[0.99] border border-transparent hover:border-sidebar-border/60"
-              >
-                <div className="min-w-0 pr-2">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-sidebar-muted">
-                      Workspace
-                    </p>
-                    <span className="size-1.5 rounded-full bg-emerald-500" />
-                  </div>
-                  <p className="truncate text-sm font-semibold text-sidebar-foreground">
-                    {organization.name}
-                  </p>
-                </div>
-                <ChevronDown className="size-3.5 shrink-0 text-sidebar-muted/80" aria-hidden />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56 glass border border-sidebar-border shadow-xl">
-              <DropdownMenuLabel className="text-xs text-muted-foreground">Active Workspace</DropdownMenuLabel>
-              <DropdownMenuItem className="text-sm font-medium cursor-pointer">
-                <Building2 className="mr-2 size-4 text-primary" aria-hidden />
-                <span className="truncate">{organization.name}</span>
-                <span className="ml-auto text-xs text-emerald-400 font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10">Active</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild className="text-xs cursor-pointer">
-                <Link href="/app/organization/settings">
-                  <Plus className="mr-2 size-3.5" aria-hidden /> Manage Workspaces
-                </Link>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary text-[0.6875rem] font-semibold text-primary-foreground">
+                {orgInitials}
+              </span>
+              {!collapsed && (
+                <>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-sidebar-foreground">{organization.name}</span>
+                    <span className="block text-xs text-sidebar-muted">Workspace</span>
+                  </span>
+                  <ChevronsUpDown className="size-3.5 shrink-0 text-sidebar-muted" aria-hidden />
+                </>
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side={collapsed ? "right" : "bottom"} className="w-60">
+            <DropdownMenuLabel className="text-xs text-muted-foreground">Workspace</DropdownMenuLabel>
+            <DropdownMenuItem className="text-sm font-medium">
+              <Building2 className="mr-2 size-4 text-primary" aria-hidden />
+              <span className="truncate">{organization.name}</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild className="text-sm">
+              <Link href="/app/organization/settings" onClick={onNavigate}>
+                <Settings className="mr-2 size-4" aria-hidden /> Workspace settings
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild className="text-sm">
+              <Link href="/app/organization/members" onClick={onNavigate}>
+                <Users className="mr-2 size-4" aria-hidden /> Members
+              </Link>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      {/* Navigation Tree (Structured Hierarchies & Progressive Disclosure) */}
-      <nav className="min-h-0 flex-1 overflow-y-auto sidebar-scrollbar px-2.5 py-3 space-y-4">
+      <nav aria-label="Main" className="sidebar-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-1">
         {NAV_GROUPS.map((group, groupIdx) => {
           const sections = group.sectionTitles
             .map((t) => sectionMap.get(t))
             .filter((s): s is NavSection => Boolean(s));
 
           return (
-            <div key={group.title} className="space-y-1">
-              {/* Domain Group Label (Miller's Law Chunking) */}
-              {!collapsed ? (
-                <div className="flex items-center justify-between px-2.5 pt-2 pb-1.5 text-xs font-bold uppercase tracking-wider text-sidebar-muted/80">
-                  <span>{group.title}</span>
-                  {groupIdx > 0 && <span className="h-px flex-1 ml-2 bg-sidebar-border/30" />}
-                </div>
+            <div key={group.title} className="flex flex-col gap-1">
+              {collapsed ? (
+                groupIdx > 0 && <div className="mx-auto mb-1 h-px w-6 bg-sidebar-border" aria-hidden />
               ) : (
-                groupIdx > 0 && <div className="h-px w-6 mx-auto my-1.5 bg-sidebar-border/40" />
+                <p className="px-2.5 pb-0.5 text-xs font-medium text-sidebar-muted">{group.title}</p>
               )}
 
-              {/* Sections in this group */}
-              <ul className="space-y-1">
+              <ul className="flex flex-col gap-0.5">
                 {sections.map((section) => {
                   const Icon = section.icon;
                   const isLeaf = section.children.length === 0;
-                  const isParentActive =
-                    isLeaf
-                      ? isActive(pathname, section.href)
-                      : section.children.some((c) => isActive(pathname, c.href));
+                  const active = isLeaf
+                    ? isActive(pathname, section.href)
+                    : section.children.some((c) => childActive(pathname, c));
                   const isOpen = Boolean(openSections[section.title]);
 
-                  // Collapsed View: Icon button with DropdownMenu flyout
                   if (collapsed) {
                     if (isLeaf) {
                       return (
@@ -213,24 +206,15 @@ export function SidebarNav({
                             href={section.href}
                             onClick={onNavigate}
                             title={section.title}
-                            aria-current={isParentActive ? "page" : undefined}
-                            className={cn(
-                              "flex items-center justify-center size-10 mx-auto rounded-xl transition-all duration-150 relative",
-                              isParentActive
-                                ? "bg-white/[0.08] text-white shadow-xs border border-white/10"
-                                : "text-sidebar-muted hover:bg-white/[0.04] hover:text-sidebar-foreground",
-                              "active:scale-95",
-                            )}
+                            aria-label={section.title}
+                            aria-current={active ? "page" : undefined}
+                            className={cn(ROW, "mx-auto size-10 justify-center px-0", active ? ROW_ACTIVE : ROW_IDLE)}
                           >
                             <Icon className="size-4 shrink-0" aria-hidden />
-                            {isParentActive && (
-                              <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-emerald-500 ring-2 ring-sidebar" />
-                            )}
                           </Link>
                         </li>
                       );
                     }
-
                     return (
                       <li key={section.title}>
                         <DropdownMenu>
@@ -238,169 +222,122 @@ export function SidebarNav({
                             <button
                               type="button"
                               title={section.title}
-                              className={cn(
-                                "flex items-center justify-center size-10 mx-auto rounded-xl transition-all duration-150 relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
-                                isParentActive
-                                  ? "bg-white/[0.08] text-white shadow-xs border border-white/10"
-                                  : "text-sidebar-muted hover:bg-white/[0.04] hover:text-sidebar-foreground",
-                                "active:scale-95",
-                              )}
+                              aria-label={section.title}
+                              className={cn(ROW, "mx-auto size-10 justify-center px-0", active ? ROW_ACTIVE : ROW_IDLE)}
                             >
                               <Icon className="size-4 shrink-0" aria-hidden />
-                              {isParentActive && (
-                                <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-emerald-500 ring-2 ring-sidebar" />
-                              )}
                             </button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            side="right"
-                            align="start"
-                            sideOffset={10}
-                            className="w-56 glass border border-sidebar-border shadow-xl p-1.5"
-                          >
-                            <DropdownMenuLabel className="flex items-center gap-2 px-2 py-1.5 text-xs font-semibold text-sidebar-foreground">
+                          <DropdownMenuContent side="right" align="start" sideOffset={10} className="w-60">
+                            <DropdownMenuLabel className="flex items-center gap-2 text-xs font-semibold text-foreground">
                               <Icon className="size-3.5 text-primary" aria-hidden />
                               {section.title}
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <div className="space-y-0.5">
-                              {section.children.map((child) => {
-                                const active = pathname === child.href;
-                                return (
-                                  <DropdownMenuItem key={child.href} asChild>
-                                    <Link
-                                      href={child.href}
-                                      onClick={onNavigate}
-                                      className={cn(
-                                        "flex flex-col py-1.5 px-2.5 rounded-lg text-sm cursor-pointer transition-colors",
-                                        active
-                                          ? "bg-white/[0.08] text-white font-semibold border-l-2 border-primary"
-                                          : "text-sidebar-muted hover:text-sidebar-foreground hover:bg-white/5",
-                                      )}
-                                    >
-                                      <div className="flex items-center justify-between w-full">
-                                        <span>{child.label}</span>
-                                        {child.label === "Live activity" && (
-                                          <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                        )}
-                                      </div>
-                                      {child.description && (
-                                        <span className="text-xs text-muted-foreground/80 font-normal">
-                                          {child.description}
-                                        </span>
-                                      )}
-                                    </Link>
-                                  </DropdownMenuItem>
-                                );
-                              })}
-                            </div>
+                            {section.children.map((child) => {
+                              const childIsActive = childActive(pathname, child);
+                              return (
+                                <DropdownMenuItem key={child.href} asChild>
+                                  <Link
+                                    href={child.href}
+                                    onClick={onNavigate}
+                                    target={child.external ? "_blank" : undefined}
+                                    rel={child.external ? "noopener" : undefined}
+                                    aria-current={childIsActive ? "page" : undefined}
+                                    className={cn("flex flex-col items-start gap-0 rounded-lg", childIsActive && "font-medium text-primary")}
+                                  >
+                                    <span className="text-sm">{child.label}</span>
+                                    {child.description && (
+                                      <span className="text-xs font-normal text-muted-foreground">{child.description}</span>
+                                    )}
+                                  </Link>
+                                </DropdownMenuItem>
+                              );
+                            })}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </li>
                     );
                   }
 
-                  // Expanded View: Leaf link or Collapsible Accordion Group
                   if (isLeaf) {
                     return (
                       <li key={section.title}>
                         <Link
                           href={section.href}
                           onClick={onNavigate}
-                          aria-current={isParentActive ? "page" : undefined}
-                          className={cn(
-                            "flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-semibold transition-all duration-150 h-9.5",
-                            isParentActive
-                              ? "bg-white/[0.08] text-white font-semibold shadow-xs border-l-2 border-primary pl-2"
-                              : "text-sidebar-muted hover:bg-white/[0.04] hover:text-sidebar-foreground",
-                            "active:scale-[0.98]",
-                          )}
+                          aria-current={active ? "page" : undefined}
+                          className={cn(ROW, active ? ROW_ACTIVE : ROW_IDLE)}
                         >
-                          <Icon className={cn("size-4 shrink-0 transition-colors", isParentActive ? "text-primary" : "text-sidebar-muted")} aria-hidden />
+                          <Icon className="size-4 shrink-0" aria-hidden />
                           <span className="truncate">{section.title}</span>
                         </Link>
                       </li>
                     );
                   }
 
+                  const panelId = `nav-${section.title.toLowerCase().replace(/\s+/g, "-")}`;
                   return (
-                    <li key={section.title} className="space-y-0.5">
-                      {/* Accordion Header (Hick's Law & Fitts's Law) */}
+                    <li key={section.title}>
                       <button
                         type="button"
                         onClick={() => toggleSection(section.title)}
                         aria-expanded={isOpen}
-                        className={cn(
-                          "flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-sm font-semibold transition-all duration-150 h-9.5",
-                          isParentActive
-                            ? "text-sidebar-foreground font-bold"
-                            : "text-sidebar-muted hover:bg-white/[0.04] hover:text-sidebar-foreground",
-                          "active:scale-[0.99] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring",
-                        )}
+                        aria-controls={panelId}
+                        className={cn(ROW, active ? "font-medium text-sidebar-foreground hover:bg-sidebar-accent" : ROW_IDLE)}
                       >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <Icon className={cn("size-4 shrink-0 transition-colors", isParentActive ? "text-primary" : "text-sidebar-muted")} aria-hidden />
-                          <span className="truncate">{section.title}</span>
-                          {isParentActive && (
-                            <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
-                          )}
-                        </div>
+                        <Icon className={cn("size-4 shrink-0", active && "text-primary")} aria-hidden />
+                        <span className="flex-1 truncate text-left">{section.title}</span>
                         <ChevronDown
-                          className={cn(
-                            "size-3.5 shrink-0 text-sidebar-muted/70 transition-transform duration-200",
-                            isOpen && "rotate-180 text-sidebar-foreground",
-                          )}
+                          className={cn("size-3.5 shrink-0 text-sidebar-muted transition-transform duration-200 ease-(--ease-out-strong)", isOpen && "rotate-180")}
                           aria-hidden
                         />
                       </button>
 
-                      {/* Accordion Subitems (Visual Hierarchy & Law of Proximity) */}
-                      {isOpen && (
-                        <ul className="space-y-0.5 border-l border-sidebar-border/50 ml-4 pl-2.5 py-0.5">
+                      {/* Opens and closes smoothly; closed items leave the tab order */}
+                      <div
+                        id={panelId}
+                        inert={!isOpen}
+                        className={cn(
+                          "grid transition-[grid-template-rows,opacity] duration-200 ease-(--ease-out-strong) motion-reduce:transition-none",
+                          isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+                        )}
+                      >
+                        <ul className="ml-[1.0625rem] flex min-h-0 flex-col gap-0.5 overflow-hidden border-l border-sidebar-border pl-2.5">
                           {section.children.map((child) => {
-                            const active = pathname === child.href;
-                            const isLive = child.label === "Live activity";
-                            const isAlerts = child.label === "Alerts";
-                            const isQuickStart = child.label === "Quick start";
-
+                            const childIsActive = childActive(pathname, child);
                             return (
-                              <li key={child.href}>
+                              <li key={child.href} className="first:pt-1 last:pb-1">
                                 <Link
                                   href={child.href}
                                   onClick={onNavigate}
-                                  aria-current={active ? "page" : undefined}
+                                  title={child.description}
+                                  target={child.external ? "_blank" : undefined}
+                                  rel={child.external ? "noopener" : undefined}
+                                  aria-current={childIsActive ? "page" : undefined}
                                   className={cn(
-                                    "flex items-center justify-between truncate rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all duration-150 h-8.5",
-                                    active
-                                      ? "bg-white/[0.08] text-white font-semibold shadow-xs border-l-2 border-primary pl-2"
-                                      : "text-sidebar-muted hover:bg-white/[0.04] hover:text-sidebar-foreground",
-                                    "active:scale-[0.98]",
+                                    "flex h-8 items-center gap-2 rounded-lg px-2.5 text-[0.8125rem] outline-none transition-[background-color,color] duration-150 focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+                                    childIsActive
+                                      ? "bg-primary/10 font-medium text-primary"
+                                      : "text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground",
                                   )}
                                 >
                                   <span className="truncate">{child.label}</span>
-                                  {isLive && (
-                                    <span className="flex items-center gap-1 text-xs text-emerald-400 font-mono">
-                                      <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                      Live
-                                    </span>
+                                  {child.external && (
+                                    <>
+                                      <ExternalLink className="ml-auto size-3.5 shrink-0 opacity-70" aria-hidden />
+                                      <span className="sr-only">(opens in a new tab)</span>
+                                    </>
                                   )}
-                                  {isAlerts && (
-                                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20 font-medium">
-                                      Watch
-                                    </span>
-                                  )}
-                                  {isQuickStart && (
-                                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary-foreground border border-primary/30 font-medium flex items-center gap-0.5">
-                                      <Sparkles className="size-3" />
-                                      Guide
-                                    </span>
+                                  {child.label === "Live activity" && (
+                                    <span className="ml-auto size-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden />
                                   )}
                                 </Link>
                               </li>
                             );
                           })}
                         </ul>
-                      )}
+                      </div>
                     </li>
                   );
                 })}
@@ -410,89 +347,57 @@ export function SidebarNav({
         })}
       </nav>
 
-      {/* Footer / Utilities & Collapse Toggle (Serial Position Effect) */}
-      <div className="shrink-0 space-y-1 border-t border-sidebar-border px-2.5 py-2.5 bg-sidebar/80">
-        <Link
-          href="/app/organization/settings"
-          onClick={onNavigate}
-          title={collapsed ? "Settings" : undefined}
-          className={cn(
-            "flex items-center rounded-xl text-sm font-medium text-sidebar-muted transition-all hover:bg-white/[0.04] hover:text-sidebar-foreground h-9.5",
-            collapsed ? "justify-center size-10 mx-auto" : "gap-2.5 px-2.5",
-            "active:scale-[0.98]",
-          )}
-        >
-          <Settings className="size-4 shrink-0 text-sidebar-muted" aria-hidden />
-          {!collapsed && <span>Settings</span>}
-        </Link>
-
-        <Link
-          href="/app/developer/quick-start"
-          onClick={onNavigate}
-          title={collapsed ? "Help & Documentation" : undefined}
-          className={cn(
-            "flex items-center rounded-xl text-sm font-medium text-sidebar-muted transition-all hover:bg-white/[0.04] hover:text-sidebar-foreground h-9.5",
-            collapsed ? "justify-center size-10 mx-auto" : "gap-2.5 px-2.5",
-            "active:scale-[0.98]",
-          )}
-        >
-          <LifeBuoy className="size-4 shrink-0 text-sidebar-muted" aria-hidden />
-          {!collapsed && <span>Docs &amp; Help</span>}
-        </Link>
-
-        {/* User Identity Preview with Beacon */}
-        <div
-          className={cn(
-            "mt-1.5 flex items-center rounded-xl bg-white/[0.03] border border-sidebar-border/40 p-1.5",
-            collapsed ? "justify-center" : "gap-2.5 px-2.5 py-1.5",
-          )}
-        >
-          <div className="relative shrink-0">
-            <Avatar className="size-7 ring-1 ring-white/20">
-              <AvatarFallback className="bg-primary/20 text-sidebar-foreground text-xs font-bold">
-                {initials(user.name)}
-              </AvatarFallback>
-            </Avatar>
-            <span className="absolute -bottom-0.5 -right-0.5 size-2 rounded-full bg-emerald-500 ring-2 ring-sidebar" />
-          </div>
-          {!collapsed && (
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-sidebar-foreground">{user.name}</p>
-              <p className="truncate text-xs text-sidebar-muted">{user.email || "Active User"}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Desktop Collapse Toggle (Fitts's Law + Keyboard Shortcut Hint) */}
-        {onToggleCollapse && (
-          <div className="pt-1 hidden lg:block">
+      {/* The account: settings and sign out */}
+      <div className={cn("flex shrink-0 flex-col gap-1 border-t border-sidebar-border py-2.5", collapsed ? "px-2" : "px-3")}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <button
               type="button"
-              onClick={onToggleCollapse}
+              title={collapsed ? user.name : undefined}
+              aria-label={`Account: ${user.name}`}
               className={cn(
-                "flex w-full items-center justify-between rounded-xl py-1.5 text-xs text-sidebar-muted hover:bg-white/[0.05] hover:text-sidebar-foreground transition-all h-9",
-                collapsed ? "justify-center px-1" : "px-2.5",
-                "active:scale-[0.98] border border-transparent hover:border-sidebar-border/50",
+                "flex w-full items-center gap-2.5 rounded-xl text-left outline-none transition-[background-color,transform] duration-150 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring active:scale-[0.99]",
+                collapsed ? "mx-auto size-10 justify-center" : "px-2 py-1.5",
               )}
-              title={collapsed ? "Expand sidebar ([)" : "Collapse sidebar ([)"}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
-              {collapsed ? (
-                <ChevronRight className="size-4" aria-hidden />
-              ) : (
+              <span className="relative shrink-0">
+                <Avatar className="size-8 ring-1 ring-sidebar-border">
+                  <AvatarFallback className="bg-accent text-xs font-semibold text-primary">{initials(user.name)}</AvatarFallback>
+                </Avatar>
+                <span className="absolute -right-0.5 -bottom-0.5 size-2 rounded-full bg-emerald-500 ring-2 ring-card" aria-hidden />
+              </span>
+              {!collapsed && (
                 <>
-                  <div className="flex items-center gap-2">
-                    <ChevronLeft className="size-4" aria-hidden />
-                    <span className="text-xs font-medium">Collapse sidebar</span>
-                  </div>
-                  <kbd className="hidden font-mono text-xs uppercase tracking-wider px-2 py-0.5 rounded bg-white/5 border border-white/10 text-muted-foreground sm:inline-block">
-                    [
-                  </kbd>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-sidebar-foreground">{user.name}</span>
+                    <span className="block truncate text-xs text-sidebar-muted">{user.email || "Signed in"}</span>
+                  </span>
+                  <ChevronsUpDown className="size-3.5 shrink-0 text-sidebar-muted" aria-hidden />
                 </>
               )}
             </button>
-          </div>
-        )}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side={collapsed ? "right" : "top"} align="start" sideOffset={8} className="w-60">
+            <DropdownMenuLabel className="flex flex-col gap-0.5">
+              <span className="truncate text-sm font-medium text-foreground">{user.name}</span>
+              <span className="truncate text-xs font-normal text-muted-foreground">{user.email}</span>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild className="text-sm">
+              <Link href="/app/organization/settings" onClick={onNavigate}>
+                <Settings className="mr-2 size-4" aria-hidden /> Workspace settings
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <form action={signOut}>
+              <DropdownMenuItem asChild variant="destructive" className="w-full text-sm">
+                <button type="submit">
+                  <LogOut className="mr-2 size-4" aria-hidden /> Sign out
+                </button>
+              </DropdownMenuItem>
+            </form>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

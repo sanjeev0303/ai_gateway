@@ -103,7 +103,7 @@ export function IncidentsClient({
                 Active Incidents & Triggered Events
               </CardTitle>
               <CardDescription>
-                Real-time incident states dispatched by the Sentinel Watchdog evaluator.
+                Real-time incident states dispatched by the Tollseal Watchdog evaluator.
               </CardDescription>
             </div>
             <Badge variant="outline" className="font-mono">

@@ -157,11 +157,18 @@ func setupPerfTenant() *PerfTenant {
 	email := fmt.Sprintf("perf_%d@example.com", time.Now().UnixNano())
 	cookie, csrf, userID := signup(email, "Password123!", "Perf Test Org")
 
-	// Upstream provider account with dummy key
-	provResp, _ := post("/v1/provider-accounts", map[string]interface{}{
+	// Upstream provider account with dummy key. Set AIGW_PERF_UPSTREAM_URL to
+	// the mock upstream (go run ./cmd/mockupstream) so forwarded requests get
+	// real 2xx responses and the numbers reflect the gateway's own processing
+	// rather than upstream auth failures.
+	provPayload := map[string]interface{}{
 		"provider_kind": "anthropic",
 		"name":          "Anthropic Perf",
-	}, cookie, csrf, 8081)
+	}
+	if up := os.Getenv("AIGW_PERF_UPSTREAM_URL"); up != "" {
+		provPayload["base_url"] = up
+	}
+	provResp, _ := post("/v1/provider-accounts", provPayload, cookie, csrf, 8081)
 	provID := extractID(provResp)
 
 	post(fmt.Sprintf("/v1/provider-accounts/%s/credentials", provID), map[string]interface{}{

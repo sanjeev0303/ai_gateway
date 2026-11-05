@@ -8,6 +8,10 @@ export function formatUsd(value: number): string {
   const abs = Math.abs(value);
   if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
   if (abs >= 1_000) return `$${(value / 1_000).toFixed(1)}k`;
+  if (value === 0) return "$0";
+  // Model calls cost fractions of a cent; rounding them to "$0" hid real spend.
+  if (abs < 0.01) return value < 0 ? "-<$0.01" : "<$0.01";
+  if (abs < 10) return `$${value.toFixed(2)}`;
   return `$${Math.round(value)}`;
 }
 

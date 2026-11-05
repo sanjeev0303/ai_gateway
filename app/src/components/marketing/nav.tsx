@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Moon, Sun, Monitor, Menu, X } from "lucide-react";
+import { LayoutDashboard, Moon, Sun, Monitor, Menu, X } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Logo } from "@/components/logo";
 import { MARKETING_NAV } from "@/lib/constants";
@@ -25,7 +25,7 @@ function ThemeToggle() {
 
   if (!mounted) return (
     <button
-      className="size-8 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6F4E37]"
+      className="flex size-9 items-center justify-center rounded-full text-muted-foreground"
       aria-label="Toggle theme"
     >
       <Sun className="size-4 opacity-40" aria-hidden />
@@ -36,7 +36,7 @@ function ThemeToggle() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="size-8 flex items-center justify-center text-[#7A6458] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6F4E37]"
+          className="flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30 focus-visible:outline-none"
           aria-label="Toggle theme"
         >
           {resolvedTheme === "dark" ? <Moon className="size-4" aria-hidden /> : <Sun className="size-4" aria-hidden />}
@@ -44,27 +44,27 @@ function ThemeToggle() {
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        className="w-32 rounded-none border-[rgba(111,78,55,0.16)] bg-canvas"
+        className="w-36"
       >
-        <DropdownMenuLabel className="text-xs font-medium text-[#7A6458]" style={{ fontFamily: "var(--font-fira-code)" }}>
+        <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
           Theme
         </DropdownMenuLabel>
-        <DropdownMenuItem onClick={() => setTheme("light")} className="text-xs text-[#4A3A30]">
+        <DropdownMenuItem onClick={() => setTheme("light")} className="text-sm">
           <Sun className="mr-2 size-3.5" aria-hidden /> Light
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")} className="text-xs text-[#4A3A30]">
+        <DropdownMenuItem onClick={() => setTheme("dark")} className="text-sm">
           <Moon className="mr-2 size-3.5" aria-hidden /> Dark
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")} className="text-xs text-[#4A3A30]">
+        <DropdownMenuItem onClick={() => setTheme("system")} className="text-sm">
           <Monitor className="mr-2 size-3.5" aria-hidden /> System
-          {theme === "system" && <span className="ml-auto text-xs text-[#7A6458]">active</span>}
+          {theme === "system" && <span className="ml-auto text-xs text-muted-foreground">active</span>}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-export function MarketingNav({ className }: { className?: string }) {
+export function MarketingNav({ className, signedIn = false }: { className?: string; signedIn?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -100,33 +100,30 @@ export function MarketingNav({ className }: { className?: string }) {
     return () => observer.disconnect();
   }, [pathname]);
 
+  // On the homepage a section link scrolls instead of navigating. Sections carry
+  // their own scroll-margin for the header, so no extra offset is added here;
+  // a link whose section is missing falls through to a normal navigation.
   const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    if (href.startsWith("/#")) {
-      const targetId = href.replace("/#", "");
-      if (pathname === "/") {
-        e.preventDefault();
-        const element = document.getElementById(targetId);
-        if (element) {
-          scrollTo(element, { offset: -70 });
-          window.history.pushState(null, "", `#${targetId}`);
-        }
-      }
-    }
+    if (!href.startsWith("/#") || pathname !== "/") return;
+    const targetId = href.replace("/#", "");
+    const element = document.getElementById(targetId);
+    if (!element) return;
+    e.preventDefault();
+    scrollTo(element, { offset: 0 });
+    window.history.pushState(null, "", `#${targetId}`);
+    setActiveSection(targetId);
   };
 
   return (
     <>
-      <header
-        className={cn(
-          "sticky top-0 z-50 transition-all duration-300",
-          scrolled
-            ? "border-b border-[rgba(111,78,55,0.12)] backdrop-blur-sm"
-            : "border-b border-transparent",
-          className,
-        )}
-        style={{ background: scrolled ? "rgba(229,228,226,0.94)" : "var(--canvas)" }}
-      >
-        <div className="mx-auto flex h-14 max-w-7xl items-center gap-8 px-6 sm:px-8">
+      {/* One glass bar floating over the page: logo, links and actions share a single surface. */}
+      <header className={cn("sticky top-0 z-50 px-3 pt-3 sm:px-5", className)}>
+        <div
+          className={cn(
+            "liquid-glass mx-auto flex h-14 w-full max-w-[1240px] items-center gap-6 rounded-full border pr-2 pl-5 transition-[box-shadow] duration-300 sm:gap-8",
+            scrolled && "shadow-(--shadow-float)",
+          )}
+        >
           {/* Logo */}
           <Link
             href="/"
@@ -137,13 +134,13 @@ export function MarketingNav({ className }: { className?: string }) {
                 window.history.pushState(null, "", "/");
               }
             }}
-            className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6F4E37]"
+            className="shrink-0 rounded-lg focus-visible:ring-3 focus-visible:ring-ring/30 focus-visible:outline-none"
           >
             <Logo />
           </Link>
 
           {/* Desktop nav */}
-          <nav aria-label="Main" className="hidden md:block ml-4">
+          <nav aria-label="Main" className="ml-2 hidden md:block">
             <ul className="flex items-center gap-0">
               {MARKETING_NAV.map((item) => {
                 const sectionId = item.href.replace("/#", "");
@@ -154,12 +151,10 @@ export function MarketingNav({ className }: { className?: string }) {
                       href={item.href}
                       onClick={(e) => handleNavClick(e, item.href)}
                       aria-current={active ? "page" : undefined}
-                      className="block px-4 py-2 text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6F4E37]"
-                      style={{
-                        color: active ? "#6F4E37" : "#4A3A30",
-                        fontWeight: active ? 600 : 400,
-                        letterSpacing: "-0.01em",
-                      }}
+                      className={cn(
+                        "block rounded-full px-3.5 py-2 text-sm transition-colors duration-150 focus-visible:ring-3 focus-visible:ring-ring/30 focus-visible:outline-none",
+                        active ? "font-medium text-primary" : "text-foreground/75 hover:text-foreground",
+                      )}
                     >
                       {item.label}
                     </Link>
@@ -171,33 +166,43 @@ export function MarketingNav({ className }: { className?: string }) {
 
           {/* Right: actions */}
           <div className="ml-auto flex items-center gap-3">
-            <ThemeToggle />
+            <div className="hidden sm:block">
+              <ThemeToggle />
+            </div>
 
-            <Link
-              href="/app/overview"
-              id="nav-sign-in"
-              className="hidden sm:inline-flex items-center h-8 px-4 text-sm font-medium text-[#4A3A30] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6F4E37]"
-              style={{ letterSpacing: "-0.01em" }}
-            >
-              Sign in
-            </Link>
-
-            <Link
-              href="/app/overview"
-              id="nav-open-dashboard"
-              className="inline-flex items-center h-8 px-4 text-sm font-semibold text-[#F5F3F0] transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6F4E37]"
-              style={{ background: "#6F4E37", letterSpacing: "-0.01em" }}
-              onMouseEnter={e => (e.currentTarget.style.background = "#4A3224")}
-              onMouseLeave={e => (e.currentTarget.style.background = "#6F4E37")}
-            >
-              Open dashboard
-            </Link>
+            {signedIn ? (
+              <Link
+                href="/app/overview"
+                id="nav-dashboard"
+                className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-medium whitespace-nowrap text-primary-foreground sm:px-5 transition-[background-color,transform] duration-150 hover:bg-primary-hover focus-visible:ring-3 focus-visible:ring-ring/30 focus-visible:outline-none active:scale-[0.97]"
+              >
+                <LayoutDashboard className="size-4" aria-hidden />
+                Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/signin"
+                  id="nav-sign-in"
+                  className="hidden h-9 items-center rounded-full px-4 text-sm font-medium text-foreground/80 transition-colors duration-150 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30 focus-visible:outline-none sm:inline-flex"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  href="/signup"
+                  id="nav-get-started"
+                  className="inline-flex h-9 items-center rounded-full bg-primary px-4 text-sm font-medium whitespace-nowrap text-primary-foreground sm:px-5 transition-[background-color,transform] duration-150 hover:bg-primary-hover focus-visible:ring-3 focus-visible:ring-ring/30 focus-visible:outline-none active:scale-[0.97]"
+                >
+                  Get started
+                </Link>
+              </>
+            )}
 
             {/* Mobile menu toggle */}
             <button
               type="button"
               onClick={() => setOpen(!open)}
-              className="flex size-8 items-center justify-center text-[#4A3A30] border border-[rgba(111,78,55,0.20)] md:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6F4E37]"
+              className="flex size-9 items-center justify-center rounded-full border border-border-strong text-foreground md:hidden focus-visible:ring-3 focus-visible:ring-ring/30 focus-visible:outline-none"
               aria-label={open ? "Close menu" : "Open menu"}
               aria-expanded={open}
             >
@@ -210,8 +215,7 @@ export function MarketingNav({ className }: { className?: string }) {
       {/* Mobile drawer */}
       {open && (
         <div
-          className="fixed inset-0 z-40 md:hidden"
-          style={{ background: "rgba(28,20,18,0.5)" }}
+          className="fixed inset-0 z-40 bg-[rgba(20,26,51,0.32)] backdrop-blur-[2px] md:hidden"
           onClick={() => setOpen(false)}
           aria-hidden
         />
@@ -219,12 +223,11 @@ export function MarketingNav({ className }: { className?: string }) {
       <nav
         aria-label="Mobile"
         className={cn(
-          "fixed top-14 right-0 bottom-0 z-50 w-72 overflow-y-auto transition-transform duration-300 ease-out md:hidden",
-          open ? "translate-x-0" : "translate-x-full"
+          "liquid-glass-panel fixed top-[4.75rem] right-3 bottom-3 z-50 w-72 overflow-y-auto rounded-2xl border transition-transform duration-300 ease-(--ease-drawer) md:hidden",
+          open ? "visible translate-x-0" : "invisible translate-x-[calc(100%+1rem)]"
         )}
-        style={{ background: "var(--canvas)", borderLeft: "1px solid rgba(111,78,55,0.12)" }}
       >
-        <ul className="p-4 space-y-0">
+        <ul className="flex flex-col p-3">
           {MARKETING_NAV.map((item) => {
             const sectionId = item.href.replace("/#", "");
             const active = pathname === "/" ? activeSection === sectionId : pathname === item.href;
@@ -237,12 +240,10 @@ export function MarketingNav({ className }: { className?: string }) {
                     handleNavClick(e, item.href);
                   }}
                   aria-current={active ? "page" : undefined}
-                  className="block px-4 py-3 text-sm font-medium border-b border-[rgba(111,78,55,0.08)] transition-colors duration-150"
-                  style={{
-                    color: active ? "#6F4E37" : "#4A3A30",
-                    fontWeight: active ? 600 : 400,
-                    letterSpacing: "-0.01em",
-                  }}
+                  className={cn(
+                    "block rounded-xl px-4 py-3 text-[0.9375rem] transition-colors duration-150",
+                    active ? "bg-accent font-medium text-primary" : "text-foreground hover:bg-accent",
+                  )}
                 >
                   {item.label}
                 </Link>
@@ -250,22 +251,38 @@ export function MarketingNav({ className }: { className?: string }) {
             );
           })}
         </ul>
-        <div className="border-t border-[rgba(111,78,55,0.10)] p-4 space-y-3">
-          <Link
-            href="/app/overview"
-            onClick={() => setOpen(false)}
-            className="flex items-center justify-center w-full h-10 text-sm font-medium text-[#4A3A30] border border-[rgba(111,78,55,0.24)]"
-          >
-            Sign in
-          </Link>
-          <Link
-            href="/app/overview"
-            onClick={() => setOpen(false)}
-            className="flex items-center justify-center w-full h-10 text-sm font-semibold text-[#F5F3F0]"
-            style={{ background: "#6F4E37" }}
-          >
-            Open dashboard
-          </Link>
+        <div className="flex flex-col gap-3 border-t border-border p-4">
+          {signedIn ? (
+            <Link
+              href="/app/overview"
+              onClick={() => setOpen(false)}
+              className="flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-primary text-sm font-medium text-primary-foreground"
+            >
+              <LayoutDashboard className="size-4" aria-hidden />
+              Dashboard
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/signin"
+                onClick={() => setOpen(false)}
+                className="flex h-11 w-full items-center justify-center rounded-full border border-border-strong text-sm font-medium"
+              >
+                Sign in
+              </Link>
+              <Link
+                href="/signup"
+                onClick={() => setOpen(false)}
+                className="flex h-11 w-full items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground"
+              >
+                Get started
+              </Link>
+            </>
+          )}
+          <div className="flex items-center justify-between pt-1 text-sm text-muted-foreground">
+            Theme
+            <ThemeToggle />
+          </div>
         </div>
       </nav>
     </>

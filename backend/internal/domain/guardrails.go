@@ -76,6 +76,7 @@ type SecretsConfiguration struct {
 	DetectApiKeys      bool `json:"detect_api_keys"`
 	DetectBearerTokens bool `json:"detect_bearer_tokens"`
 	DetectPasswords    bool `json:"detect_passwords"`
+	DetectPrivateKeys  bool `json:"detect_private_keys"`
 }
 
 type UnsafeKeywordsConfiguration struct {
@@ -85,4 +86,6 @@ type UnsafeKeywordsConfiguration struct {
 type RequestConstraintsConfiguration struct {
 	MaxInputTokens  *int `json:"max_input_tokens"`
 	MaxOutputTokens *int `json:"max_output_tokens"`
+	// MaxTokens is what the dashboard saves; it limits input tokens like MaxInputTokens.
+	MaxTokens *int `json:"max_tokens"`
 }

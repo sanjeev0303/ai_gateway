@@ -23,24 +23,29 @@ import {
   Wallet,
 } from "lucide-react";
 
-export const APP_NAME = "Sentinel";
+export const APP_NAME = "Tollseal";
 export const APP_TAGLINE = "Govern every AI request your company makes.";
 export const APP_DESCRIPTION =
-  "Sentinel is the control plane for enterprise AI: one gateway over your model providers, with per-project cost attribution and a recorded history of every request.";
+  "Tollseal is the control plane for enterprise AI: one gateway over your model providers, with per-project cost attribution and a recorded history of every request.";
 
 /** Marketing navigation, rendered by the (marketing) header. */
+/* In the order the sections appear on the homepage. */
 export const MARKETING_NAV = [
-  { label: "Product", href: "/#product" },
-  { label: "Solutions", href: "/#solutions" },
+  { label: "Product", href: "/#workflow" },
+  { label: "Developers", href: "/#integration" },
+  { label: "Features", href: "/#solutions" },
+  { label: "Security", href: "/#trust" },
   { label: "Pricing", href: "/#pricing" },
-  { label: "Resources", href: "/#integration" },
-  { label: "Company", href: "/#trust" },
 ] as const;
 
 export interface NavChild {
   label: string;
   href: string;
   description: string;
+  /** Other routes that count as this entry, when one entry stands for several pages. */
+  match?: string[];
+  /** Opens outside the console (the public site), in a new tab. */
+  external?: boolean;
 }
 
 export interface NavSection {
@@ -79,29 +84,16 @@ export const DASHBOARD_NAV: NavSection[] = [
         description: "Spend and forecast",
       },
       {
-        label: "Models",
+        label: "Breakdowns",
         href: "/app/observe/models",
-        description: "Catalog and health",
-      },
-      {
-        label: "Providers",
-        href: "/app/observe/providers",
-        description: "Upstream status",
-      },
-      {
-        label: "Users",
-        href: "/app/observe/users",
-        description: "People and activity",
-      },
-      {
-        label: "Teams",
-        href: "/app/observe/teams",
-        description: "Groups and spend",
-      },
-      {
-        label: "Projects",
-        href: "/app/observe/projects",
-        description: "Workloads",
+        description: "By model, provider, user, team, project",
+        match: [
+          "/app/observe/models",
+          "/app/observe/providers",
+          "/app/observe/users",
+          "/app/observe/teams",
+          "/app/observe/projects",
+        ],
       },
       {
         label: "Conversations",
@@ -279,6 +271,12 @@ export const DASHBOARD_NAV: NavSection[] = [
         label: "API reference",
         href: "/app/developer/api-docs",
         description: "Endpoints and schemas",
+      },
+      {
+        label: "Product docs",
+        href: "/resources",
+        description: "Guides on the public site",
+        external: true,
       },
     ],
   },

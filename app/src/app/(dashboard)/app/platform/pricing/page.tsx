@@ -9,7 +9,7 @@ import { getApiClient } from "@/lib/session";
 import { PricingClient, type PricingModelRow } from "./client";
 
 export const metadata: Metadata = {
-  title: "Pricing management · Sentinel",
+  title: "Pricing management · Tollseal",
   description: "Configure token rates, price sheet versions, and cost calculation rules per model.",
 };
 
@@ -74,7 +74,7 @@ export default async function PricingPage() {
       title="Pricing management"
       description="Define token rates, versioned price sheets, and cost calculation rules for your organization."
     >
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard
           label="Pricing Models"
           value={String(totalModels)}

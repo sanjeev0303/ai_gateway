@@ -54,7 +54,7 @@ func newMockUpstream(t *testing.T, cap *capture) *httptest.Server {
 func newGatewayWithRealProxy(t *testing.T, upstreamURL string) (*Gateway, *gatewayStubs) {
 	t.Helper()
 	g, stubs := newGatewayForPipeline()
-	g.streamProxy = NewStreamProxy(nil, discardLogger())
+	g.streamProxy = NewStreamProxy(defaultHTTPClient(true), discardLogger(), true)
 	stubs.router.url = strings.TrimRight(upstreamURL, "/") + "/"
 	stubs.router.headers = http.Header{"X-Upstream-Key": {"k"}}
 	return g, stubs
@@ -213,7 +213,7 @@ func TestPipelinePreservesContentLength(t *testing.T) {
 func TestStreamProxyForwardDoesNotRequireCloseNotifier(t *testing.T) {
 	var cap capture
 	upstream := newMockUpstream(t, &cap)
-	proxy := NewStreamProxy(nil, discardLogger())
+	proxy := NewStreamProxy(defaultHTTPClient(true), discardLogger(), true)
 
 	req := pipelineRequest("key-1", `{"model":"claude-sonnet-4-5"}`)
 	rec := httptest.NewRecorder()
@@ -231,7 +231,7 @@ func TestStreamProxyForwardDoesNotRequireCloseNotifier(t *testing.T) {
 func TestStreamProxyReleasesStreamOnCompletion(t *testing.T) {
 	var cap capture
 	upstream := newMockUpstream(t, &cap)
-	proxy := NewStreamProxy(nil, discardLogger())
+	proxy := NewStreamProxy(defaultHTTPClient(true), discardLogger(), true)
 
 	for i := 0; i < 3; i++ {
 		req := pipelineRequest("key-1", `{"model":"claude-sonnet-4-5"}`)

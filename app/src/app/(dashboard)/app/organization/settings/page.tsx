@@ -5,7 +5,7 @@ import { OrgSettings } from "@/components/dashboard/org-settings";
 import { getCurrentOrganization } from "@/lib/session";
 
 export const metadata: Metadata = {
-  title: "Settings · Sentinel",
+  title: "Settings · Tollseal",
   description: "View organization identity and status; edit the name and slug.",
 };
 

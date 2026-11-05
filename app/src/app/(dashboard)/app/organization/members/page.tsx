@@ -19,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MembersClient, type MemberRow } from "./members-client";
 
 export const metadata: Metadata = {
-  title: "Members · Sentinel",
+  title: "Members · Tollseal",
   description: "Everyone in the organization, with their role, status, and attributed spend.",
 };
 
@@ -66,7 +66,7 @@ export default async function MembersPage() {
           </Button>
         }
       >
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard label="Active members" value={String(active.length)} tone="success" hint="Enabled and signing in" />
         </section>
 

@@ -54,10 +54,6 @@ func IsSensitiveKey(key string) bool {
 	return false
 }
 
-func isSensitiveKey(key string) bool {
-	return IsSensitiveKey(key)
-}
-
 // RedactAttr replaces sensitive key values and bearer tokens with redacted placeholders.
 func RedactAttr(groups []string, a slog.Attr) slog.Attr {
 	if IsSensitiveKey(a.Key) {

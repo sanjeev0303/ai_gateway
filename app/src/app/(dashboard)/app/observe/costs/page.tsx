@@ -18,11 +18,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatCompact, formatUsd, formatUsdExact, microsToUsd } from "@/lib/format";
+import { formatProviderName, formatCompact, formatUsd, formatUsdExact, microsToUsd } from "@/lib/format";
 import { getApiClient } from "@/lib/session";
 
 export const metadata: Metadata = {
-  title: "Costs · Sentinel",
+  title: "Costs · Tollseal",
   description: "Spend attributed to models, teams, projects, and providers.",
 };
 
@@ -168,6 +168,7 @@ export default async function CostsPage({
     project_id: typeof params.project_id === "string" ? params.project_id : undefined,
     user_id: typeof params.user_id === "string" ? params.user_id : undefined,
     team_id: typeof params.team_id === "string" ? params.team_id : undefined,
+    service_account_id: typeof params.service_account_id === "string" ? params.service_account_id : undefined,
     provider: typeof params.provider === "string" ? params.provider : undefined,
     model: typeof params.model === "string" ? params.model : undefined,
     status: typeof params.status === "string" ? params.status : undefined,
@@ -283,7 +284,7 @@ export default async function CostsPage({
         actions={<RangeTabs />}
       >
         <ObserveFilters />
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
             label="Spend"
             value={formatUsd(spend)}
@@ -363,10 +364,10 @@ export default async function CostsPage({
             <CardContent>
               <DonutChart
                 data={byProvider.items.map((row) => ({
-                  label: row.Provider,
+                  label: formatProviderName(row.Provider),
                   value: microsToUsd(row.CostMicros),
                 }))}
-                centerLabel={formatUsd(spend)}
+                centerLabel="spend"
                 formatValue={formatUsd}
               />
             </CardContent>

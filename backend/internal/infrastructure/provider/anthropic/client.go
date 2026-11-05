@@ -4,6 +4,7 @@
 package anthropic
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +17,10 @@ import (
 )
 
 const defaultBaseURL = "https://api.anthropic.com"
+
+// noRedirect stops the client following upstream redirects, which would re-send
+// the API key (carried on a custom header) to the redirect target.
+func noRedirect(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 
 // Client talks to the Anthropic API.
 type Client struct {
@@ -46,7 +51,7 @@ func New(baseAddr, version, userAgent string) (*Client, error) {
 	}
 	return &Client{
 		baseURL:   u,
-		client:    &http.Client{Timeout: 30 * time.Second},
+		client:    &http.Client{Timeout: 30 * time.Second, CheckRedirect: noRedirect},
 		version:   version,
 		userAgent: userAgent,
 	}, nil
@@ -127,7 +132,8 @@ func (c *Client) ListModels(ctx context.Context, apiKey string) ([]Model, error)
 
 func (c *Client) do(ctx context.Context, apiKey, path string, body io.Reader) (*http.Response, error) {
 	u := *c.baseURL
-	u.Path = path
+	// Preserve any base-URL path prefix so validation and inference agree.
+	u.Path = strings.TrimRight(u.Path, "/") + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), body)
 	if err != nil {
 		return nil, fmt.Errorf("anthropic: build request: %w", err)
@@ -202,7 +208,7 @@ func (c *Client) CreateMessageStream(ctx context.Context, apiKey string, req *Me
 
 	return &MessageStream{
 		resp:   resp,
-		reader: json.NewDecoder(resp.Body),
+		reader: bufio.NewReader(resp.Body),
 	}, nil
 }
 

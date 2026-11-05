@@ -11,3 +11,6 @@ export * from "./topbar";
 export * from "./dialogs";
 export * from "./one-time-secret-dialog";
 export * from "./observe-filters";
+export * from "./confirm-dialog";
+export * from "./search-select";
+export * from "./breakdown-tabs";

@@ -5,7 +5,7 @@ import { ProjectDetailClient } from "./project-detail-client";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Project Detail · Sentinel",
+  title: "Project Detail · Tollseal",
 };
 
 export default async function ProjectDetailPage({

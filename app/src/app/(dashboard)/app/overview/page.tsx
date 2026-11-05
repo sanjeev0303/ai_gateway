@@ -1,39 +1,23 @@
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import {
   Activity,
   AlertTriangle,
   ArrowRight,
-  BarChart3,
   CheckCircle,
   Clock,
   Cpu,
   CreditCard,
-  ExternalLink,
-  Flame,
-  Globe,
   HelpCircle,
   History,
-  KeyRound,
-  Layers,
-  PieChart,
   Server,
   ShieldAlert,
-  ShieldCheck,
-  Sparkles,
   Users,
   XCircle,
-  Zap,
 } from "lucide-react";
-import type { Alert, SecurityEvent } from "@ai-governance/api-client";
+import type { Alert } from "@ai-governance/api-client";
 
-import {
-  AreaChart,
-  BarChart,
-  DonutChart,
-  LineChart,
-  chartColor,
-} from "@/components/charts";
 import {
   DataTable,
   PageShell,
@@ -53,14 +37,17 @@ import {
 import { getApiClient } from "@/lib/session";
 import type {
   TimeSeriesPoint,
-  CategoryDatum,
   StatusTone,
   TrendDirection,
 } from "@/types";
-import { isDateRange, type DateRange } from "@/lib/date-range";
+import { DEFAULT_RANGE, isDateRange, type DateRange } from "@/lib/date-range";
+import { getDirectory, nameFor, nameMap } from "@/lib/directory";
 import { cn } from "@/lib/utils";
+import { GuillocheBand } from "@/components/brand/guilloche";
 import { HeaderActions } from "./header-actions";
-import { AnalyticsSuite } from "./analytics-suite";
+import { RankingCard, type RankRow } from "./ranking-card";
+import { TrendChart, type TrendPoint } from "./trend-chart";
+import { HERO_COOKIE, OverviewHero } from "./overview-hero";
 
 type Trend = { direction: TrendDirection; fraction: number };
 
@@ -197,103 +184,6 @@ function EmptyVisualCard({
 // Onboarding Step & Workspace Hub
 // ---------------------------------------------------------------------------
 
-interface SetupStepProps {
-  num: number;
-  title: string;
-  desc: string;
-  href: string;
-  cta: string;
-  status: "completed" | "not-started";
-}
-
-function SetupStep({ num, title, desc, href, cta, status }: SetupStepProps) {
-  const isCompleted = status === "completed";
-  return (
-    <div
-      role="listitem"
-      className={cn(
-        "group flex flex-col sm:flex-row gap-4 sm:items-center justify-between p-4 rounded-xl border transition-all duration-200",
-        isCompleted
-          ? "bg-card/40 border-border/40 hover:border-border/70"
-          : "bg-card/80 border-border hover:border-primary/50 hover:shadow-xs"
-      )}
-    >
-      <div className="flex items-start gap-3.5 min-w-0 flex-1">
-        <div
-          className={cn(
-            "mt-0.5 shrink-0 size-7 rounded-lg flex items-center justify-center text-xs font-semibold transition-colors",
-            isCompleted
-              ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-              : "bg-muted text-foreground border border-border"
-          )}
-        >
-          {isCompleted ? <CheckCircle className="size-4 text-emerald-400" /> : num}
-        </div>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h4
-              className={cn(
-                "text-sm font-medium truncate",
-                isCompleted ? "text-muted-foreground line-through decoration-muted-foreground/40" : "text-foreground"
-              )}
-            >
-              {title}
-            </h4>
-            {isCompleted && (
-              <span className="text-xs uppercase font-semibold tracking-wider px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                Done
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{desc}</p>
-        </div>
-      </div>
-      <Link
-        href={href}
-        className={cn(
-          "inline-flex items-center justify-center gap-1.5 shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg transition-all",
-          isCompleted
-            ? "text-muted-foreground hover:text-foreground bg-secondary/40 hover:bg-secondary/70 border border-transparent"
-            : "text-primary-foreground bg-primary hover:bg-primary/90 shadow-xs"
-        )}
-      >
-        <span>{cta}</span>
-        <ArrowRight className="size-3" />
-      </Link>
-    </div>
-  );
-}
-
-interface SummaryTileProps {
-  label: string;
-  value: number;
-  href: string;
-  icon: React.ReactNode;
-  accent: string;
-}
-
-function SummaryTile({ label, value, href, icon, accent }: SummaryTileProps) {
-  return (
-    <Link
-      href={href}
-      className="group flex items-center justify-between p-2.5 rounded-lg border border-border/40 bg-muted/20 hover:bg-muted/50 hover:border-border transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-primary"
-    >
-      <div className="flex items-center gap-3 min-w-0">
-        <span className={cn("flex size-7 items-center justify-center rounded-md text-xs", accent)}>
-          {icon}
-        </span>
-        <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors truncate">
-          {label}
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-semibold tabular-nums text-foreground">{value.toLocaleString("en-US")}</span>
-        <ExternalLink className="size-3 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
-      </div>
-    </Link>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Widgets
 // ---------------------------------------------------------------------------
@@ -314,192 +204,27 @@ async function OnboardingWidget({ timeParams }: { timeParams: TimeRangeQuery }) 
   const hasAccess = (modelAccess?.items?.length ?? 0) > 0;
   const requestCount = summary?.Requests ?? 0;
   const hasTraffic = requestCount > 0;
+  const heroCookie = (await cookies()).get(HERO_COOKIE)?.value;
 
   const providerCount = accounts?.items?.length ?? 0;
-  const projectCount = projects?.items?.length ?? 0;
   const credentialCount = credentials?.items?.length ?? 0;
   const modelAccessCount = modelAccess?.items?.length ?? 0;
 
-  const completedSteps = [hasProvider, hasProject, hasCredential, hasAccess, hasTraffic].filter(Boolean).length;
-  const totalSetupSteps = 5;
-  const isOperational = completedSteps === totalSetupSteps;
-
-  if (isOperational) {
-    return (
-      <section aria-labelledby="operational-heading" className="p-4 sm:p-5 rounded-2xl border border-border/80 bg-linear-to-r from-card/90 via-card/60 to-card/40 backdrop-blur-xs shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="size-9 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 flex items-center justify-center shrink-0">
-              <CheckCircle className="size-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 id="operational-heading" className="text-sm font-semibold text-foreground tracking-tight">
-                  Workspace Operational
-                </h2>
-                <span className="text-xs font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  Ready
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                All 5 milestone setup steps completed. Traffic routing, security, and governance policies are active.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-muted-foreground">
-            <Link href="/app/platform/provider-accounts" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-muted/40 hover:bg-muted transition-colors">
-              <Server className="size-3.5 text-blue-400" />
-              <span>{providerCount} providers</span>
-            </Link>
-            <Link href="/app/organization/projects" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-muted/40 hover:bg-muted transition-colors">
-              <Layers className="size-3.5 text-purple-400" />
-              <span>{projectCount} projects</span>
-            </Link>
-            <Link href="/app/platform/gateway-credentials" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-muted/40 hover:bg-muted transition-colors">
-              <KeyRound className="size-3.5 text-amber-400" />
-              <span>{credentialCount} keys</span>
-            </Link>
-            <Link href="/app/govern/model-access" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-muted/40 hover:bg-muted transition-colors">
-              <ShieldCheck className="size-3.5 text-emerald-400" />
-              <span>{modelAccessCount} policies</span>
-            </Link>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
   return (
-    <section
-      aria-labelledby="onboarding-heading"
-      className="p-5 sm:p-6 rounded-2xl border border-border/80 bg-linear-to-b from-card/90 via-card/60 to-card/40 backdrop-blur-xs shadow-xs"
-    >
-      <div className="space-y-6">
-        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-border/40">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="size-2 rounded-full bg-blue-500 animate-pulse" />
-              <h2 id="onboarding-heading" className="text-base font-semibold tracking-tight text-foreground">
-                Get your AI gateway ready
-              </h2>
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                {completedSteps} of {totalSetupSteps} completed
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Complete the essential setup steps to start routing AI requests, managing model access, and tracking costs.
-            </p>
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="h-2 w-36 sm:w-48 bg-muted/60 rounded-full overflow-hidden p-0.5 border border-border/40">
-              <div
-                className="h-full bg-linear-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500"
-                style={{ width: `${(completedSteps / totalSetupSteps) * 100}%` }}
-                role="progressbar"
-                aria-valuenow={completedSteps}
-                aria-valuemin={0}
-                aria-valuemax={totalSetupSteps}
-                aria-label="Setup progress"
-              />
-            </div>
-            <span className="text-xs font-semibold tabular-nums text-foreground">
-              {Math.round((completedSteps / totalSetupSteps) * 100)}%
-            </span>
-          </div>
-        </header>
-
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
-          <div className="space-y-2.5" role="list" aria-label="Setup steps">
-            <SetupStep
-              num={1}
-              title="Connect an AI provider"
-              desc="Connect upstream providers such as OpenAI, Anthropic, or Google Gemini."
-              href="/app/platform/provider-accounts"
-              cta="Connect provider"
-              status={hasProvider ? "completed" : "not-started"}
-            />
-            <SetupStep
-              num={2}
-              title="Create a project"
-              desc="Organize applications and attribute gateway usage to individual project workspaces."
-              href="/app/organization/projects"
-              cta="Create project"
-              status={hasProject ? "completed" : "not-started"}
-            />
-            <SetupStep
-              num={3}
-              title="Create a gateway credential"
-              desc="Generate secure API keys for authenticating downstream application requests."
-              href="/app/platform/gateway-credentials"
-              cta="Create credential"
-              status={hasCredential ? "completed" : "not-started"}
-            />
-            <SetupStep
-              num={4}
-              title="Configure model access"
-              desc="Define governance access policies restricting models, capabilities, and budgets."
-              href="/app/govern/model-access"
-              cta="Configure access"
-              status={hasAccess ? "completed" : "not-started"}
-            />
-            <SetupStep
-              num={5}
-              title="Send your first request"
-              desc="Route a test prompt through the gateway endpoint to verify telemetry flow."
-              href="/app/developer/quick-start"
-              cta="Open quick start"
-              status={hasTraffic ? "completed" : "not-started"}
-            />
-          </div>
-
-          <div className="rounded-xl border border-border/60 bg-card/60 p-4 lg:sticky lg:top-24 space-y-4">
-            <div>
-              <h3 className="font-semibold text-xs text-foreground uppercase tracking-wider">Workspace summary</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Live resource inventory</p>
-            </div>
-            <div className="space-y-2">
-              <SummaryTile
-                label="Connected providers"
-                value={providerCount}
-                href="/app/platform/provider-accounts"
-                icon={<Server className="size-3.5 text-blue-400" />}
-                accent="bg-blue-500/10"
-              />
-              <SummaryTile
-                label="Configured projects"
-                value={projectCount}
-                href="/app/organization/projects"
-                icon={<Layers className="size-3.5 text-purple-400" />}
-                accent="bg-purple-500/10"
-              />
-              <SummaryTile
-                label="Active credentials"
-                value={credentialCount}
-                href="/app/platform/gateway-credentials"
-                icon={<KeyRound className="size-3.5 text-amber-400" />}
-                accent="bg-amber-500/10"
-              />
-              <SummaryTile
-                label="Model access rules"
-                value={modelAccessCount}
-                href="/app/govern/model-access"
-                icon={<ShieldCheck className="size-3.5 text-emerald-400" />}
-                accent="bg-emerald-500/10"
-              />
-              <div className="flex items-center justify-between p-2.5 rounded-lg border border-border/40 bg-muted/20">
-                <div className="flex items-center gap-3">
-                  <span className="flex size-7 items-center justify-center rounded-md text-xs bg-sky-500/10">
-                    <Activity className="size-3.5 text-sky-400" />
-                  </span>
-                  <span className="text-xs font-medium text-muted-foreground">Gateway requests</span>
-                </div>
-                <span className="text-sm font-semibold tabular-nums text-foreground">{requestCount.toLocaleString("en-US")}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+    <OverviewHero
+      stored={heroCookie}
+      providerCount={providerCount}
+      accessRuleCount={modelAccessCount}
+      keyCount={credentialCount}
+      requestCount={requestCount}
+      setup={[
+        { title: "Provider", cta: "Connect a provider", href: "/app/platform/provider-accounts", done: hasProvider },
+        { title: "Project", cta: "Create a project", href: "/app/organization/projects", done: hasProject },
+        { title: "Gateway key", cta: "Issue a gateway key", href: "/app/platform/gateway-credentials", done: hasCredential },
+        { title: "Model access", cta: "Set model access", href: "/app/govern/model-access", done: hasAccess },
+        { title: "First request", cta: "Send a request", href: "/app/developer/quick-start", done: hasTraffic },
+      ]}
+    />
   );
 }
 
@@ -514,7 +239,15 @@ interface ModernKpiCardProps {
   icon: React.ComponentType<{ className?: string }>;
   tone?: StatusTone;
   delta?: Trend;
-  accentClass?: string;
+  /** Spend, latency and errors are better when they fall. */
+  higherIsWorse?: boolean;
+  /** Where to go to see what is behind the number. */
+  href: string;
+}
+
+/** A figure with nothing behind it yet: no traffic in the range, or no data. */
+function isEmptyFigure(value: string): boolean {
+  return value === "—" || /^\$?0(\.0+)?(%| ms)?$/.test(value);
 }
 
 function ModernKpiCard({
@@ -524,60 +257,92 @@ function ModernKpiCard({
   icon: Icon,
   tone,
   delta,
-  accentClass = "text-blue-400",
+  higherIsWorse = false,
+  href,
 }: ModernKpiCardProps) {
+  let deltaTone = "text-muted-foreground";
+  if (delta && delta.direction !== "flat") {
+    const worse = higherIsWorse ? delta.direction === "up" : delta.direction === "down";
+    deltaTone = worse ? "text-rose-700 dark:text-rose-400" : "text-emerald-700 dark:text-emerald-400";
+  }
+  // An empty figure is drawn as a ghost numeral: present, unlit, and quiet.
+  const empty = isEmptyFigure(value);
   return (
-    <div className="flex flex-col justify-between p-4 rounded-2xl border border-border/50 bg-card/80 hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-200 shadow-xs group relative overflow-hidden">
-      <div>
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors truncate">
-            {label}
-          </span>
-          <div className={cn("size-7 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20", accentClass)}>
-            <Icon className="size-3.5" />
-          </div>
-        </div>
-        <p
-          className={cn(
-            "text-3xl font-bold tracking-tight tabular-nums",
-            tone === "danger"
-              ? "text-rose-500"
-              : tone === "warning"
-              ? "text-amber-500"
-              : tone === "success"
-              ? "text-emerald-500"
-              : "text-foreground"
-          )}
-        >
-          {value}
-        </p>
-      </div>
-
-      <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-border/30 text-xs text-muted-foreground">
-        <span>{subtitle || "Current window"}</span>
-        {delta && (
-          <span
-            className={cn(
-              "font-medium",
-              delta.direction === "up" ? "text-emerald-400" : delta.direction === "down" ? "text-rose-400" : "text-muted-foreground"
-            )}
-          >
-            {formatDelta(delta.fraction)}
-          </span>
+    <Link
+      href={href}
+      aria-label={`${label}: ${value}. ${subtitle ?? ""} View details.`}
+      className="group flex min-w-0 flex-col justify-between gap-3 bg-card p-4 transition-[background-color] duration-150 ease-(--ease-out-strong) hover:bg-accent/60 focus-visible:z-10 focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none"
+    >
+      <span className="flex items-center gap-2 text-[0.8125rem] font-medium text-muted-foreground">
+        <Icon className="size-3.5 shrink-0 text-copper" />
+        <span className="truncate">{label}</span>
+      </span>
+      <p
+        data-slot="stat-value"
+        className={cn(
+          "font-display text-[1.75rem] leading-none tabular-nums",
+          empty
+            ? "text-foreground/25"
+            : tone === "danger"
+            ? "text-rose-700 dark:text-rose-400"
+            : tone === "warning"
+            ? "text-amber-700 dark:text-amber-400"
+            : tone === "success"
+            ? "text-emerald-700 dark:text-emerald-400"
+            : "text-foreground"
         )}
-      </div>
-    </div>
+      >
+        {value}
+      </p>
+      {/* The ghost numeral already says "nothing yet"; a caption repeated in every cell is noise */}
+      {!empty && (
+        <span className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span className="truncate">{subtitle || "Current window"}</span>
+          {delta && <span className={cn("font-medium tabular-nums", deltaTone)}>{formatDelta(delta.fraction)}</span>}
+        </span>
+      )}
+    </Link>
   );
 }
 
-async function KpiRowWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
+/** Plain words for the status codes a failed request records. */
+function failureReason(code?: string | null): string {
+  if (code === "429") return "rate limits";
+  if (code === "403") return "policy or guardrail blocks";
+  if (code === "402") return "budgets or provider credit";
+  if (code === "401") return "invalid keys";
+  if (code === "404") return "unavailable models";
+  if (code === "400") return "rejected requests";
+  if (code && code.startsWith("5")) return "provider errors";
+  return "unclassified failures";
+}
+
+function topFailureReason(codes: readonly (string | null | undefined)[]): string | null {
+  if (codes.length === 0) return null;
+  const counts = new Map<string, number>();
+  for (const code of codes) {
+    const reason = failureReason(code);
+    counts.set(reason, (counts.get(reason) ?? 0) + 1);
+  }
+  const [reason, count] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]!;
+  return `${Math.round((count / codes.length) * 100)}% ${reason}`;
+}
+
+async function KpiRowWidget({ timeParams, rangeQuery }: { timeParams: TimeRangeQuery; rangeQuery: string }) {
   const client = await getApiClient();
-  const [summary, latency, series, activeUsersResp] = await Promise.all([
+  const [summary, latency, series, activeUsersResp, failed] = await Promise.all([
     safeFetch(() => client.usage.summary(timeParams), "summary"),
     safeFetch(() => client.usage.latency(timeParams), "latency"),
     safeFetch(() => client.usage.timeseries(timeParams), "timeseries"),
     safeFetch(() => client.activity.activeUsers(), "activeUsers"),
+    safeFetch(() => client.usage.requests({ ...timeParams, status: "failed", limit: 200 }), "failedRequests"),
   ]);
+
+  const failureSummary = topFailureReason((failed?.items ?? []).map((r) => r.ErrorCode));
+  const withRange = (path: string, extra = "") => {
+    const query = [rangeQuery, extra].filter(Boolean).join("&");
+    return query ? `${path}?${query}` : path;
+  };
 
   const totalRequests = summary?.Requests;
   const totalTokens = summary?.TotalTokens;
@@ -587,8 +352,6 @@ async function KpiRowWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
   const totalSpend = totalCostMicros != null ? microsToUsd(totalCostMicros) : null;
   const errorRate = totalRequests != null && totalRequests > 0 && errors != null
     ? errors / totalRequests
-    : totalRequests === 0
-    ? 0
     : null;
 
   const overall = latency?.items?.find((row) => !row.Provider && !row.Model);
@@ -597,15 +360,13 @@ async function KpiRowWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
   const hasTTFT = p95ttft != null && p95ttft > 0;
   const hasP95 = p95 != null && p95 > 0;
 
-  const latencyLabel = "P95 Latency";
+  const latencyLabel = "P95 latency";
   const latencyValue = latency === null
     ? "—"
     : hasP95
     ? formatMs(p95)
     : hasTTFT
     ? formatMs(p95ttft)
-    : (totalRequests ?? 0) === 0
-    ? "0 ms"
     : "—";
 
 
@@ -622,44 +383,45 @@ async function KpiRowWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
   const requestTrend = series ? periodChange(requestSeries) : undefined;
 
   return (
-    <div className="grid gap-3.5 grid-cols-2 md:grid-cols-3 xl:grid-cols-6" role="region" aria-label="Key metrics">
+    <div className="grid grid-cols-2 gap-px bg-border md:grid-cols-3 xl:grid-cols-6" role="region" aria-label="Key metrics">
       <ModernKpiCard
         label="Total requests"
         value={totalRequests != null ? formatCompact(totalRequests) : "—"}
         subtitle="Gateway calls"
+        href={withRange("/app/observe/usage")}
         icon={Activity}
         delta={requestTrend}
-        accentClass="text-sky-400 bg-sky-500/10"
       />
       <ModernKpiCard
         label="Total tokens"
         value={totalTokens != null ? formatCompact(totalTokens) : "—"}
-        subtitle="In / Out / Cached"
+        subtitle="In, out and cached"
+        href={withRange("/app/observe/usage")}
         icon={Cpu}
-        accentClass="text-purple-400 bg-purple-500/10"
       />
       <ModernKpiCard
-        label="Estimated spend"
+        label="Spend"
         value={totalSpend != null ? formatUsd(totalSpend) : "—"}
         subtitle="Model billing"
+        href={withRange("/app/observe/costs")}
         icon={CreditCard}
         delta={spendTrend}
-        accentClass="text-emerald-400 bg-emerald-500/10"
+        higherIsWorse
       />
       <ModernKpiCard
         label="Error rate"
         value={errorRate != null ? formatPercent(errorRate, 2) : "—"}
-        subtitle="4xx & 5xx failures"
+        subtitle={failureSummary ?? "No failures"}
+        href={withRange("/app/observe/usage", "status=failed")}
         icon={AlertTriangle}
         tone={errorRate != null ? errorTone(errorRate) : undefined}
-        accentClass="text-amber-400 bg-amber-500/10"
       />
       <ModernKpiCard
         label={latencyLabel}
         value={latencyValue}
-        subtitle={hasTTFT ? `P95 TTFT: ${formatMs(p95ttft)}` : "Roundtrip duration"}
+        subtitle={hasTTFT ? `First token ${formatMs(p95ttft)}` : "Roundtrip duration"}
+        href={withRange("/app/observe/models")}
         icon={Clock}
-        accentClass="text-indigo-400 bg-indigo-500/10"
       />
       <ModernKpiCard
         label="Active users"
@@ -672,9 +434,9 @@ async function KpiRowWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
             ? formatCompact(activeUsersResp.count)
             : "0"
         }
-        subtitle="Unique consumers"
+        subtitle="Unique people"
+        href={withRange("/app/observe/users")}
         icon={Users}
-        accentClass="text-teal-400 bg-teal-500/10"
       />
     </div>
   );
@@ -684,92 +446,42 @@ async function KpiRowWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
 // Chart & Data Widgets
 // ---------------------------------------------------------------------------
 
-async function AnalyticsSuiteWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
+async function UsageWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
   const client = await getApiClient();
-  const [series, summary, byProvider] = await Promise.all([
+  const [series, byProvider, byModel] = await Promise.all([
     safeFetch(() => client.usage.timeseries(timeParams), "timeseries"),
-    safeFetch(() => client.usage.summary(timeParams), "summary"),
     safeFetch(() => client.usage.byProvider(timeParams), "byProvider"),
+    safeFetch(() => client.usage.byModel(timeParams), "byModel"),
   ]);
 
-  const requestSeries = (series?.items || []).map((point) => ({
-    date: point.BucketStart.slice(5, 16).replace("T", " "),
-    value: point.Requests,
+  const points: TrendPoint[] = (series?.items || []).map((point) => ({
+    at: point.BucketStart,
+    requests: point.Requests,
+    spend: microsToUsd(point.CostMicros),
   }));
-
-  const spendSeries = (series?.items || []).map((point) => ({
-    date: point.BucketStart.slice(5, 16).replace("T", " "),
-    value: microsToUsd(point.CostMicros),
-  }));
-
-  const tokenData = [
-    { label: "Input", value: summary?.InputTokens ?? 0 },
-    { label: "Output", value: summary?.OutputTokens ?? 0 },
-    { label: "Cached", value: summary?.CachedTokens ?? 0 },
-  ].filter((d) => d.value > 0);
-
-  const topProviders: CategoryDatum[] = [...(byProvider?.items || [])]
+  const models: RankRow[] = [...(byModel?.items || [])]
     .sort((a, b) => b.Requests - a.Requests)
     .slice(0, 5)
-    .map((row) => ({ label: formatProviderName(row.Provider), value: row.Requests }));
+    .map((r) => ({ name: r.Model, requests: r.Requests, spend: microsToUsd(r.CostMicros) }));
+  const providers: RankRow[] = [...(byProvider?.items || [])]
+    .sort((a, b) => b.Requests - a.Requests)
+    .slice(0, 5)
+    .map((r) => ({ name: formatProviderName(r.Provider), requests: r.Requests }));
 
   return (
-    <AnalyticsSuite
-      requestSeries={requestSeries}
-      spendSeries={spendSeries}
-      tokenData={tokenData}
-      providerData={topProviders}
-      totalRequests={summary?.Requests ?? 0}
-      totalSpend={summary?.TotalCostMicros != null ? microsToUsd(summary.TotalCostMicros) : 0}
-      totalTokens={summary?.TotalTokens ?? 0}
-      cachedTokens={summary?.CachedTokens ?? 0}
-    />
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+      <section aria-labelledby="traffic-heading" className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5">
+        <div>
+          <h2 id="traffic-heading" className="text-[0.9375rem] font-semibold tracking-[-0.01em]">
+            Traffic
+          </h2>
+          <p className="text-xs text-muted-foreground">Requests and spend over the selected range</p>
+        </div>
+        <TrendChart points={points} />
+      </section>
+      <RankingCard models={models} providers={providers} />
+    </div>
   );
-}
-
-async function ModelsWidget({ timeParams }: { timeParams: TimeRangeQuery }) {
-  const client = await getApiClient();
-  const byModel = await safeFetch(() => client.usage.byModel(timeParams), "byModel");
-
-  interface ModelRow {
-    id: string;
-    model: string;
-    requests: number;
-    cost: number;
-    tokens: number;
-  }
-  const modelColumns: Column<ModelRow>[] = [
-    { key: "model", header: "Model", primary: "model" },
-    { key: "requests", header: "Reqs", primary: "requests", align: "right", format: "compact" },
-    { key: "cost", header: "Spend", primary: "cost", align: "right", format: "usd" },
-    { key: "tokens", header: "Tokens", primary: "tokens", align: "right", format: "compact" },
-  ];
-
-  const modelRows: ModelRow[] = (byModel?.items || [])
-    .map((r) => ({
-      id: r.Model,
-      model: r.Model,
-      requests: r.Requests,
-      cost: microsToUsd(r.CostMicros),
-      tokens: r.TotalTokens,
-    }))
-    .sort((a, b) => b.requests - a.requests)
-    .slice(0, 5);
-
-  if (modelRows.length === 0) {
-    return (
-      <EmptyVisualCard
-        icon={Sparkles}
-        title="No model usage recorded"
-        description="Track latency, token consumption, and dollar volume broken down by individual model family."
-        actionHref="/app/govern/model-access"
-        actionLabel="View allowed model registry"
-        ghostType="list"
-      />
-    );
-  }
-
-  return <DataTable columns={modelColumns} rows={modelRows} rowKey="id" emptyMessage="No model usage recorded yet." />;
 }
 
 async function HealthWidget() {
@@ -841,15 +553,18 @@ async function AlertsWidget() {
 
   if (activeAlerts.length === 0) {
     return (
-      <EmptyVisualCard
-        icon={ShieldCheck}
-        title="All Systems Operational"
-        description="Zero active incidents or security anomalies detected across the gateway perimeter."
-        actionHref="/app/security/alerts"
-        actionLabel="View alert policies"
-        ghostType="shield"
-        iconAccent="text-emerald-400 bg-emerald-500/10 border-emerald-500/25 shadow-xs"
-      />
+      // Say what the data shows, no more: nothing open, and where the rules live.
+      <div className="flex flex-col items-center gap-1.5 py-6 text-center">
+        <p className="text-sm font-semibold text-foreground">No open alerts</p>
+        <p className="text-sm text-muted-foreground">Nothing has triggered an alert rule.</p>
+        <Link
+          href="/app/security/alerts"
+          className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none"
+        >
+          View alert rules
+          <ArrowRight className="size-3.5" aria-hidden />
+        </Link>
+      </div>
     );
   }
 
@@ -894,7 +609,11 @@ async function AlertsWidget() {
 
 async function RecentRequestsWidget() {
   const client = await getApiClient();
-  const recentRequests = await safeFetch(() => client.usage.requests({ limit: 8 }), "recentRequests");
+  const [recentRequests, directory] = await Promise.all([
+    safeFetch(() => client.usage.requests({ limit: 8 }), "recentRequests"),
+    getDirectory(),
+  ]);
+  const people = { ...nameMap(directory.users), ...nameMap(directory.serviceAccounts) };
 
   interface RecentRow {
     id: string;
@@ -909,7 +628,7 @@ async function RecentRequestsWidget() {
   }
   const recentColumns: Column<RecentRow>[] = [
     { key: "timestamp", header: "Time", primary: "timestamp" },
-    { key: "user", header: "Consumer", primary: "user" },
+    { key: "user", header: "Sent by", primary: "user" },
     { key: "provider", header: "Provider", primary: "provider" },
     { key: "model", header: "Model", primary: "model" },
     { key: "status", header: "Status", primary: "status" },
@@ -921,7 +640,7 @@ async function RecentRequestsWidget() {
   const recentRows: RecentRow[] = (recentRequests?.items || []).map((r) => ({
     id: r.ID,
     timestamp: formatDateTime(r.CreatedAt),
-    user: r.UserID || r.APICredentialID || "System",
+    user: r.UserID ? nameFor(people, r.UserID) : r.APICredentialID ? "Service key" : "System",
     provider: formatProviderName(r.ProviderKind, r.Model),
     model: r.Model,
     status: r.Status,
@@ -958,29 +677,30 @@ async function RecentRequestsWidget() {
 // ---------------------------------------------------------------------------
 
 function SectionHeader({
+  id,
   icon: Icon,
   title,
   subtitle,
   badge,
 }: {
+  id: string;
   icon: React.ComponentType<{ className?: string }>;
   title: string;
   subtitle?: string;
   badge?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 pb-3 mb-4 border-b border-border/40">
-      <div className="flex items-center gap-2.5">
-        <div className="size-6 rounded-md bg-muted/40 border border-border/50 flex items-center justify-center text-muted-foreground">
-          <Icon className="size-3.5" />
-        </div>
+    <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="flex items-start gap-2.5">
+        <Icon className="mt-1 size-4 shrink-0 text-copper" />
         <div>
-          <h2 className="text-base font-semibold tracking-tight text-foreground">{title}</h2>
+          <h2 id={id} className="text-[0.9375rem] font-semibold tracking-[-0.01em] text-foreground">{title}</h2>
           {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
         </div>
       </div>
       {badge && (
-        <span className="text-xs font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60">
+        <span className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">
+          <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden />
           {badge}
         </span>
       )}
@@ -989,9 +709,24 @@ function SectionHeader({
 }
 
 function WidgetSkeleton() {
+  return <div className="h-55 w-full animate-pulse rounded-2xl border border-border bg-card/70" aria-hidden />;
+}
+
+/** The final layout with its values missing, so nothing jumps when data lands. */
+function HeroSkeleton() {
+  return <div className="h-[84px] w-full animate-pulse rounded-2xl border border-border bg-card/70 md:h-80 md:rounded-[28px]" aria-hidden />;
+}
+
+function KpiSkeleton() {
   return (
-    <div className="animate-pulse bg-card/60 border border-border/40 rounded-xl h-55 w-full flex items-center justify-center">
-      <div className="size-6 rounded-full border-2 border-border border-t-primary animate-spin" />
+    <div className="grid grid-cols-2 gap-px bg-border md:grid-cols-3 xl:grid-cols-6" aria-hidden>
+      {Array.from({ length: 6 }, (_, i) => (
+        <div key={i} className="flex h-[118px] flex-col justify-between bg-card p-4">
+          <span className="h-3 w-20 animate-pulse rounded bg-muted" />
+          <span className="h-6 w-16 animate-pulse rounded bg-muted" />
+          <span className="h-3 w-24 animate-pulse rounded bg-muted" />
+        </div>
+      ))}
     </div>
   );
 }
@@ -1007,7 +742,7 @@ export default async function OverviewPage({
 }) {
   const params = await searchParams;
   const raw = typeof params.range === "string" ? params.range : null;
-  const range: DateRange = isDateRange(raw) ? raw : "30d";
+  const range: DateRange = isDateRange(raw) ? raw : DEFAULT_RANGE;
 
   const RANGE_MS: Record<DateRange, number> = {
     "24h": 24 * 60 * 60 * 1000,
@@ -1023,71 +758,56 @@ export default async function OverviewPage({
     <div className="p-4 sm:p-6">
       <PageShell
         title="Overview"
-        description="Real-time observability, spending metrics, and governance enforcement across your AI workloads."
+        description="Traffic, spend and enforcement across every model request in your workspace."
         actions={<HeaderActions lastUpdated={new Date()} />}
       >
         <div className="space-y-6 pb-12">
-          {/* Onboarding / Operational Roadmap Hub */}
-          <Suspense fallback={<WidgetSkeleton />}>
-            <OnboardingWidget timeParams={timeParams} />
-          </Suspense>
-
-          {/* Primary Operational Pulse (Key Metrics) */}
-          <section aria-labelledby="kpi-heading" className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 id="kpi-heading" className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                Operational Telemetry
+          {/* Health at a glance: one ledger of the figures that matter */}
+          <section aria-labelledby="kpi-heading" className="overflow-hidden rounded-2xl border border-border-strong bg-card">
+            <GuillocheBand className="opacity-70" />
+            <div className="flex items-center justify-between gap-3 px-5 pt-1 pb-3">
+              <h2 id="kpi-heading" className="text-[0.9375rem] font-semibold tracking-[-0.01em] text-foreground">
+                Health
               </h2>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-                <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Telemetry active</span>
-              </div>
             </div>
-            <Suspense fallback={<WidgetSkeleton />}>
-              <KpiRowWidget timeParams={timeParams} />
-            </Suspense>
+            <div className="border-t border-border">
+              <Suspense fallback={<KpiSkeleton />}>
+                <KpiRowWidget timeParams={timeParams} rangeQuery={range === DEFAULT_RANGE ? "" : `range=${range}`} />
+              </Suspense>
+            </div>
           </section>
 
-          {/* Zone 2: Unified Interactive Analytics Suite */}
-          <Suspense fallback={<WidgetSkeleton />}>
-            <AnalyticsSuiteWidget timeParams={timeParams} />
-          </Suspense>
-
-          {/* Zone 3: Infrastructure Health & Model Allocation */}
+          {/* What needs attention */}
           <div className="grid gap-5 lg:grid-cols-2">
-            <div className="space-y-5 flex flex-col">
-              <section className="bg-card/75 border border-border/70 rounded-2xl p-5 shadow-2xs flex-1 flex flex-col" aria-labelledby="health-heading">
-                <SectionHeader icon={Server} title="Provider Health" subtitle="Upstream endpoint availability probes" />
-                <div className="flex-1 flex flex-col justify-center min-h-0">
-                  <Suspense fallback={<WidgetSkeleton />}>
-                    <HealthWidget />
-                  </Suspense>
-                </div>
-              </section>
-
-              <section className="bg-card/75 border border-border/70 rounded-2xl p-5 shadow-2xs flex-1 flex flex-col" aria-labelledby="alerts-heading">
-                <SectionHeader icon={ShieldAlert} title="Actionable Alerts" subtitle="Active anomalies and platform incidents" />
-                <div className="flex-1 flex flex-col justify-center min-h-0">
-                  <Suspense fallback={<WidgetSkeleton />}>
-                    <AlertsWidget />
-                  </Suspense>
-                </div>
-              </section>
-            </div>
-
-            <section className="bg-card/75 border border-border/70 rounded-2xl p-5 shadow-2xs flex flex-col" aria-labelledby="model-usage-heading">
-              <SectionHeader icon={Zap} title="Model Family Allocation" subtitle="Most heavily utilized LLMs by tokens and cost" />
-              <div className="flex-1 min-h-0">
+            <section className="flex flex-col rounded-2xl border border-border bg-card p-5" aria-labelledby="alerts-heading">
+              <SectionHeader id="alerts-heading" icon={ShieldAlert} title="Alerts" subtitle="Active anomalies and platform incidents" />
+              <div className="flex min-h-0 flex-1 flex-col justify-center">
                 <Suspense fallback={<WidgetSkeleton />}>
-                  <ModelsWidget timeParams={timeParams} />
+                  <AlertsWidget />
+                </Suspense>
+              </div>
+            </section>
+            <section className="flex flex-col rounded-2xl border border-border bg-card p-5" aria-labelledby="health-heading">
+              <SectionHeader id="health-heading" icon={Server} title="Provider health" subtitle="Latest availability probe per upstream" />
+              <div className="flex min-h-0 flex-1 flex-col justify-center">
+                <Suspense fallback={<WidgetSkeleton />}>
+                  <HealthWidget />
                 </Suspense>
               </div>
             </section>
           </div>
 
-          {/* Live Stream: Recent Requests */}
-          <section className="bg-card/75 border border-border/70 rounded-2xl p-5 shadow-2xs" aria-labelledby="recent-requests-heading">
-            <SectionHeader icon={History} title="Recent Gateway Requests" subtitle="Live ledger of the latest proxied LLM transactions" badge="Streaming" />
+          {/* Setup until it is done, then the gateway's stages at a glance */}
+          <Suspense fallback={<HeroSkeleton />}>
+            <OnboardingWidget timeParams={timeParams} />
+          </Suspense>
+
+          <Suspense fallback={<WidgetSkeleton />}>
+            <UsageWidget timeParams={timeParams} />
+          </Suspense>
+
+          <section className="rounded-2xl border border-border bg-card p-5" aria-labelledby="recent-requests-heading">
+            <SectionHeader id="recent-requests-heading" icon={History} title="Recent requests" subtitle="The latest calls through the gateway" badge="Live" />
             <Suspense fallback={<WidgetSkeleton />}>
               <RecentRequestsWidget />
             </Suspense>

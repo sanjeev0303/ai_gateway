@@ -20,15 +20,15 @@ export default function SignUpPage() {
 
   return (
     <main className="flex flex-1 items-center justify-center p-6">
-      <Card className="w-full max-w-sm">
+      <Card className="w-full max-w-sm border-none bg-transparent shadow-none ring-0">
         <CardHeader>
-          <CardTitle>Create account</CardTitle>
-          <CardDescription>Set up your organization on the AI Governance console.</CardDescription>
+          <CardTitle className="text-2xl tracking-[-0.025em]">Create account</CardTitle>
+          <CardDescription>Set up your organization on Tollseal.</CardDescription>
         </CardHeader>
 
         <CardContent>
-          <form action={submit} className="grid gap-3">
-            <label className="grid gap-1.5 text-sm" htmlFor="display_name">
+          <form action={submit} className="grid gap-4">
+            <label className="grid gap-1.5 text-sm font-medium" htmlFor="display_name">
               Name
               <Input
                 id="display_name"
@@ -38,7 +38,7 @@ export default function SignUpPage() {
               />
             </label>
 
-            <label className="grid gap-1.5 text-sm" htmlFor="organization_name">
+            <label className="grid gap-1.5 text-sm font-medium" htmlFor="organization_name">
               Organization
               <Input
                 id="organization_name"
@@ -48,7 +48,7 @@ export default function SignUpPage() {
               />
             </label>
 
-            <label className="grid gap-1.5 text-sm" htmlFor="email">
+            <label className="grid gap-1.5 text-sm font-medium" htmlFor="email">
               Email
               <Input
                 id="email"
@@ -59,7 +59,7 @@ export default function SignUpPage() {
               />
             </label>
 
-            <label className="grid gap-1.5 text-sm" htmlFor="password">
+            <label className="grid gap-1.5 text-sm font-medium" htmlFor="password">
               Password
               <Input
                 id="password"
@@ -83,7 +83,7 @@ export default function SignUpPage() {
 
           <p className="mt-4 text-sm text-muted-foreground">
             Already have an account?{" "}
-            <Link href="/signin" className="underline-offset-4 hover:underline">
+            <Link href="/signin" className="font-medium text-primary underline-offset-4 hover:underline">
               Sign in
             </Link>
           </p>

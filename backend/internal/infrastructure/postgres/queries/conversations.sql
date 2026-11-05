@@ -18,6 +18,7 @@ SELECT c.id,
        c.project_id,
        c.model,
        c.provider,
+       c.credential_id,
        c.privacy_state,
        c.created_at,
        COUNT(m.id)::bigint                                        AS message_count,
@@ -36,6 +37,8 @@ WHERE c.organization_id = sqlc.arg(organization_id)
   AND (sqlc.narg(project_id)::uuid IS NULL OR c.project_id = sqlc.narg(project_id))
   AND (sqlc.narg(provider)::text IS NULL OR c.provider = sqlc.narg(provider))
   AND (sqlc.narg(model)::text IS NULL OR c.model = sqlc.narg(model))
+  AND (sqlc.narg(credential_id)::uuid IS NULL OR c.credential_id = sqlc.narg(credential_id))
+  AND (NOT sqlc.arg(without_key)::bool OR c.credential_id IS NULL)
   AND (sqlc.narg(from_ts)::timestamptz IS NULL OR c.created_at >= sqlc.narg(from_ts)::timestamptz)
   AND (sqlc.narg(to_ts)::timestamptz IS NULL OR c.created_at < sqlc.narg(to_ts)::timestamptz)
   AND (sqlc.narg(team_id)::uuid IS NULL OR EXISTS (
@@ -60,7 +63,36 @@ SELECT * FROM conversation_messages
 WHERE organization_id = sqlc.arg(organization_id) AND conversation_id = sqlc.arg(conversation_id)
 ORDER BY created_at, id;
 
+-- name: DeleteConversation :execrows
+-- Removes one conversation; its messages go with it (ON DELETE CASCADE).
+DELETE FROM conversations
+WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id);
+
 -- name: PurgeExpiredConversations :execrows
 DELETE FROM conversations
 WHERE organization_id = sqlc.arg(organization_id)
   AND created_at < sqlc.arg(older_than)::timestamptz;
+-- name: UpsertGatewayConversation :one
+-- Creates the conversation a gateway request belongs to, or touches it on a later turn.
+-- A matching id in another organization is left alone and returns no row.
+INSERT INTO conversations (id, organization_id, user_id, title, status, project_id, model, provider, credential_id)
+VALUES (sqlc.arg(id), sqlc.arg(organization_id), sqlc.arg(user_id), sqlc.arg(title), 'active',
+        sqlc.narg(project_id), sqlc.narg(model), sqlc.narg(provider), sqlc.narg(credential_id))
+ON CONFLICT (id) DO UPDATE
+SET updated_at = now(), model = EXCLUDED.model, provider = EXCLUDED.provider,
+    credential_id = COALESCE(EXCLUDED.credential_id, conversations.credential_id)
+WHERE conversations.organization_id = EXCLUDED.organization_id
+RETURNING *;
+
+-- name: ConversationCountsByKey :many
+-- How many conversations each employee has through each gateway key; a NULL
+-- credential_id counts conversations that recorded no key.
+SELECT c.user_id,
+       c.credential_id,
+       COUNT(*)::bigint AS conversations,
+       MAX(c.updated_at)::timestamptz AS last_activity_at
+FROM conversations c
+WHERE c.organization_id = sqlc.arg(organization_id)
+  AND (sqlc.narg(user_id)::uuid IS NULL OR c.user_id = sqlc.narg(user_id))
+GROUP BY c.user_id, c.credential_id
+ORDER BY c.user_id, last_activity_at DESC;

@@ -73,12 +73,12 @@ func TestMultiProvider_01_CredentialValidation(t *testing.T) {
 		}))
 		defer invalidServer.Close()
 
-		validAdapter := openai.NewCustomProviderAdapter(validServer.URL, "2024-08-01-preview")
+		validAdapter := openai.NewCustomProviderAdapter(validServer.URL, "2024-08-01-preview", true)
 		if err := validAdapter.ValidateCredentials(ctx, "valid-openai-key"); err != nil {
 			t.Fatalf("expected valid credentials to pass, got: %v", err)
 		}
 
-		invalidAdapter := openai.NewCustomProviderAdapter(invalidServer.URL, "2024-08-01-preview")
+		invalidAdapter := openai.NewCustomProviderAdapter(invalidServer.URL, "2024-08-01-preview", true)
 		err := invalidAdapter.ValidateCredentials(ctx, "invalid-openai-key")
 		if err == nil || !errors.Is(err, providerclient.ErrInvalidCredentials) {
 			t.Fatalf("expected ErrInvalidCredentials, got: %v", err)
@@ -200,7 +200,7 @@ func TestMultiProvider_02_ModelDiscoveryAndAvailability(t *testing.T) {
 		}))
 		defer mockServer.Close()
 
-		adapter := openai.NewCustomProviderAdapter(mockServer.URL, "2024-08-01-preview")
+		adapter := openai.NewCustomProviderAdapter(mockServer.URL, "2024-08-01-preview", true)
 		models, err := adapter.ListModels(ctx, "mock-key")
 		if err != nil {
 			t.Fatalf("openai ListModels error: %v", err)
@@ -217,7 +217,7 @@ func TestMultiProvider_02_ModelDiscoveryAndAvailability(t *testing.T) {
 			w.WriteHeader(http.StatusUnauthorized)
 		}))
 		defer failServer.Close()
-		failAdapter := openai.NewCustomProviderAdapter(failServer.URL, "2024-08-01-preview")
+		failAdapter := openai.NewCustomProviderAdapter(failServer.URL, "2024-08-01-preview", true)
 		_, err = failAdapter.ListModels(ctx, "mock-key")
 		if err == nil || !errors.Is(err, providerclient.ErrInvalidCredentials) {
 			t.Fatalf("expected ErrInvalidCredentials without static fallback, got: %v", err)
@@ -727,7 +727,7 @@ func TestMultiProvider_06_RequestAndResponseMapping(t *testing.T) {
 		}))
 		defer mockServer.Close()
 
-		adapter := openai.NewCustomProviderAdapter(mockServer.URL, "2024-08-01-preview")
+		adapter := openai.NewCustomProviderAdapter(mockServer.URL, "2024-08-01-preview", true)
 		resp, err := adapter.Execute(ctx, "mock-key", providerclient.NormalizedRequest{
 			Model: "gpt-4o",
 			Tools: []providerclient.ToolDefinition{
@@ -834,7 +834,7 @@ func TestMultiProvider_07_ProviderSpecificOptions(t *testing.T) {
 			validVal any
 		}{
 			{gemini.NewProviderAdapter(), "gemini-1.5-pro", "top_k", 40},
-			{openai.NewProviderAdapter(), "gpt-4o", "reasoning_effort", "high"},
+			{openai.NewProviderAdapter(true), "gpt-4o", "reasoning_effort", "high"},
 			{anthropic.NewProviderAdapter(), "claude-3-5-sonnet-20241022", "thinking", map[string]any{"budget_tokens": 2048}},
 			{huggingface.NewProviderAdapter(), "meta-llama/Llama-3.3-70B-Instruct", "wait_for_model", true},
 		}
@@ -863,7 +863,7 @@ func TestMultiProvider_07_ProviderSpecificOptions(t *testing.T) {
 			alienVal any
 		}{
 			{gemini.NewProviderAdapter(), "gemini-1.5-pro", "reasoning_effort", "high"},
-			{openai.NewProviderAdapter(), "gpt-4o", "safety_settings", "strict"},
+			{openai.NewProviderAdapter(true), "gpt-4o", "safety_settings", "strict"},
 			{anthropic.NewProviderAdapter(), "claude-3-5-sonnet-20241022", "reasoning_effort", "medium"},
 			{huggingface.NewProviderAdapter(), "meta-llama/Llama-3.3-70B-Instruct", "safety_settings", "strict"},
 		}

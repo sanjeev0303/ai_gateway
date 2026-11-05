@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { createControlCredentialAction, revokeControlCredentialAction } from "./actions";
+import { confirmAction } from "@/components/dashboard/confirm-dialog";
 
 export function IssueCredentialDialog({
   triggerLabel = "Issue Control Key",
@@ -162,7 +163,13 @@ export function CredentialRowActions({ id, status }: { id: string; status: strin
   const [loading, setLoading] = React.useState(false);
 
   const handleRevoke = async () => {
-    if (!confirm("Are you sure you want to revoke this credential? Any system using this key will immediately be rejected.")) return;
+    const confirmed = await confirmAction({
+      title: "Revoke this credential?",
+      description: "Any system using this key is rejected straight away. A revoked key cannot be restored.",
+      confirmLabel: "Revoke credential",
+      destructive: true,
+    });
+    if (!confirmed) return;
     setLoading(true);
     const res = await revokeControlCredentialAction(id);
     setLoading(false);

@@ -27,7 +27,7 @@ import {
 import { CheckCircle2, AlertTriangle, XCircle, CreditCard } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Subscription · Sentinel",
+  title: "Subscription · Tollseal",
   description: "The plan recorded for this organization and the billing cycle it runs on.",
 };
 
@@ -128,10 +128,12 @@ export default async function SubscriptionPage({
         title="Subscription"
         description="The plan recorded for this organization and the billing cycle it runs on."
         actions={
+          plans.length > 0 ? (
           <ChangePlanDialog
             currentPlanCode={subscription?.plan_code}
             plans={plans}
           />
+          ) : undefined
         }
       >
         {/* Checkout & Payment Notification Banners */}
@@ -184,7 +186,7 @@ export default async function SubscriptionPage({
 
         {subscription ? (
           <>
-            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
               <StatCard
                 label="Plan"
                 value={subscription.plan_name}
@@ -299,25 +301,26 @@ export default async function SubscriptionPage({
           <Card>
             <CardHeader>
               <CardTitle>No subscription on record</CardTitle>
-              <CardDescription>
-                This organization has no subscription row in the control plane.
-              </CardDescription>
+              <CardDescription>This organization has no subscription yet.</CardDescription>
             </CardHeader>
             <CardContent>
               <EmptyState
-                title="There is no plan to show"
-                description="Click 'Change Plan' above to initialize a subscription tier for this organization."
+                title={activePlans.length > 0 ? "Choose a plan to start" : "Billing is not set up yet"}
+                description={
+                  activePlans.length > 0
+                    ? "Use Change Plan above to start a subscription for this organization."
+                    : "No plans have been published, so there is nothing to choose. Usage is still recorded under Billing, Usage."
+                }
               />
             </CardContent>
           </Card>
         )}
 
-        <Card className="rounded-2xl border border-border/50 bg-card/80">
+        {activePlans.length > 0 && (
+        <Card>
           <CardHeader>
-            <CardTitle className="text-xl font-bold">Plan Catalog & Tier Matrix</CardTitle>
-            <CardDescription className="text-sm text-muted-foreground">
-              Compare available tiers and switch plans instantly with one click.
-            </CardDescription>
+            <CardTitle>Plans</CardTitle>
+            <CardDescription>Compare the available plans and switch between them.</CardDescription>
           </CardHeader>
           <CardContent>
             <DataTable
@@ -330,6 +333,7 @@ export default async function SubscriptionPage({
             />
           </CardContent>
         </Card>
+        )}
       </PageShell>
     </div>
   );

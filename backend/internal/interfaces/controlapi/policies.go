@@ -85,6 +85,7 @@ func (a *api) createPolicy(w http.ResponseWriter, r *http.Request) {
 		Priority    int32  `json:"priority"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
+		writeServiceError(w, r, err)
 		return
 	}
 	actor, _ := actorFrom(r.Context())
@@ -139,6 +140,7 @@ func (a *api) updatePolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	var in domain.UpdatePolicy
 	if err := decodeJSON(w, r, &in); err != nil {
+		writeServiceError(w, r, err)
 		return
 	}
 	pol, err := a.policy.UpdatePolicy(r.Context(), actor, id, in)
@@ -178,6 +180,7 @@ func (a *api) createPolicyRule(w http.ResponseWriter, r *http.Request) {
 		Enabled     bool           `json:"enabled"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
+		writeServiceError(w, r, err)
 		return
 	}
 	condBytes, _ := json.Marshal(in.Conditions)
@@ -237,6 +240,7 @@ func (a *api) updatePolicyRule(w http.ResponseWriter, r *http.Request) {
 		Enabled     *bool           `json:"enabled"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -294,6 +298,7 @@ func (a *api) previewPolicy(w http.ResponseWriter, r *http.Request) {
 		Scopes           []string   `json:"scopes"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
+		writeServiceError(w, r, err)
 		return
 	}
 

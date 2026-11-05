@@ -57,6 +57,12 @@ func (f *fakeConversationRepo) List(_ context.Context, _ uuid.UUID, filter domai
 	return f.summaries, nil
 }
 
+func (f *fakeConversationRepo) Delete(context.Context, uuid.UUID, uuid.UUID) error { return nil }
+
+func (f *fakeConversationRepo) CountsByKey(context.Context, uuid.UUID, *uuid.UUID) ([]domain.ConversationKeyCount, error) {
+	return nil, nil
+}
+
 func (f *fakeConversationRepo) PurgeExpired(_ context.Context, _ uuid.UUID, _ time.Time) (int64, error) {
 	return 0, nil
 }
@@ -198,52 +204,20 @@ func TestConversationInvalidPathUUID(t *testing.T) {
 	}
 }
 
-// TestMetadataOnlyOmitsContent is the core privacy guarantee: under the
-// fail-closed default no message content may appear in the payload, and the
-// content key is absent rather than blank.
-func TestMetadataOnlyOmitsContent(t *testing.T) {
-	st := newControlStubs()
-	msg := &fakeMessageRepo{messages: []domain.ConversationMessage{
-		{ID: uuid.New(), ConversationID: uuid.New(), Role: "user", Content: "secret prompt"},
-		{ID: uuid.New(), ConversationID: uuid.New(), Role: "assistant", Content: "secret answer"},
-	}}
-	_, body := getConv(t, st, &fakeConversationRepo{}, msg, domain.PrivacyMetadataOnly,
-		"/v1/conversations/"+uuid.New().String()+"/messages")
-
-	if strings.Contains(body, "secret prompt") || strings.Contains(body, "secret answer") {
-		t.Errorf("METADATA_ONLY leaked content: %s", body)
-	}
-	if strings.Contains(body, `"content"`) {
-		t.Errorf("METADATA_ONLY included a content key: %s", body)
-	}
-}
-
-func TestPromptOnlyRedactsAssistant(t *testing.T) {
-	st := newControlStubs()
-	msg := &fakeMessageRepo{messages: []domain.ConversationMessage{
-		{ID: uuid.New(), ConversationID: uuid.New(), Role: "user", Content: "visible prompt"},
-		{ID: uuid.New(), ConversationID: uuid.New(), Role: "assistant", Content: "hidden answer"},
-	}}
-	_, body := getConv(t, st, &fakeConversationRepo{}, msg, domain.PrivacyPromptOnly,
-		"/v1/conversations/"+uuid.New().String()+"/messages")
-
-	if !strings.Contains(body, "visible prompt") {
-		t.Errorf("PROMPT_ONLY should keep user content: %s", body)
-	}
-	if strings.Contains(body, "hidden answer") {
-		t.Errorf("PROMPT_ONLY leaked assistant content: %s", body)
-	}
-}
-
-func TestFullContentReturnsContent(t *testing.T) {
-	st := newControlStubs()
-	msg := &fakeMessageRepo{messages: []domain.ConversationMessage{
-		{ID: uuid.New(), ConversationID: uuid.New(), Role: "assistant", Content: "shown"},
-	}}
-	_, body := getConv(t, st, &fakeConversationRepo{}, msg, domain.PrivacyFullContent,
-		"/v1/conversations/"+uuid.New().String()+"/messages")
-	if !strings.Contains(body, "shown") {
-		t.Errorf("FULL_CONTENT should return content: %s", body)
+// TestMessagesShownWhateverThePrivacyMode: conversation text is never stored,
+// so the privacy mode no longer hides it; every turn the read path holds is
+// returned in every mode.
+func TestMessagesShownWhateverThePrivacyMode(t *testing.T) {
+	for _, mode := range []domain.PrivacyMode{domain.PrivacyMetadataOnly, domain.PrivacyPromptOnly, domain.PrivacyFullContent, domain.PrivacyOff} {
+		st := newControlStubs()
+		msg := &fakeMessageRepo{messages: []domain.ConversationMessage{
+			{ID: uuid.New(), Role: "user", Content: "Hello"},
+			{ID: uuid.New(), Role: "assistant", Content: "Hi there"},
+		}}
+		_, body := getConv(t, st, &fakeConversationRepo{}, msg, mode, "/v1/conversations/"+uuid.New().String()+"/messages")
+		if !strings.Contains(body, "Hello") || !strings.Contains(body, "Hi there") {
+			t.Errorf("%s hid the transcript: %s", mode, body)
+		}
 	}
 }
 
@@ -326,39 +300,6 @@ func TestConversationRoutesRequireAuth(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("unauthenticated status = %d, want 401", resp.StatusCode)
-	}
-}
-
-func TestConversationMessagesRedacted(t *testing.T) {
-	st := newControlStubs()
-
-	msg := &fakeMessageRepo{
-		messages: []domain.ConversationMessage{
-			{ID: uuid.New(), Role: "user", Content: "Hello"},
-			{ID: uuid.New(), Role: "assistant", Content: "Hi"},
-		},
-	}
-	conv := &fakeConversationRepo{detail: domain.ConversationSummary{ID: uuid.New(), StartedAt: testNow}}
-
-	// Test METADATA_ONLY (hides both user and assistant)
-	_, body := getConv(t, st, conv, msg, domain.PrivacyMetadataOnly, "/v1/conversations/"+uuid.New().String()+"/messages")
-	if strings.Contains(body, "Hello") || strings.Contains(body, "Hi") {
-		t.Errorf("METADATA_ONLY should redact all content, got: %s", body)
-	}
-
-	// Test PROMPT_ONLY (shows user, hides assistant)
-	_, body = getConv(t, st, conv, msg, domain.PrivacyPromptOnly, "/v1/conversations/"+uuid.New().String()+"/messages")
-	if !strings.Contains(body, "Hello") {
-		t.Errorf("PROMPT_ONLY should show user prompt, got: %s", body)
-	}
-	if strings.Contains(body, "Hi") {
-		t.Errorf("PROMPT_ONLY should redact assistant response, got: %s", body)
-	}
-
-	// Test FULL_CONTENT (shows all)
-	_, body = getConv(t, st, conv, msg, domain.PrivacyFullContent, "/v1/conversations/"+uuid.New().String()+"/messages")
-	if !strings.Contains(body, "Hello") || !strings.Contains(body, "Hi") {
-		t.Errorf("FULL_CONTENT should show all content, got: %s", body)
 	}
 }
 

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "cn";
 
 const LANGUAGE_LABELS: Record<string, string> = {
-  bash: "cURL",
+  bash: "Shell",
   typescript: "TypeScript",
   python: "Python",
 };

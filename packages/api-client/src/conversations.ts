@@ -18,6 +18,8 @@ export interface ConversationSummary {
   project_id?: string | null;
   provider?: string | null;
   model?: string | null;
+  /** The gateway key (aigw_…) the conversation came through, when recorded. */
+  credential_id?: string | null;
   /** RFC3339. */
   started_at: string;
   /** RFC3339, or null/undefined when the conversation has no messages. */
@@ -54,6 +56,17 @@ export interface ConversationMessage {
   created_at: string;
 }
 
+/**
+ * Conversation text is never stored. The gateway keeps it in memory until the
+ * conversation is deleted; this says whether the turns carry it. `expired`:
+ * the gateway restarted since, so only counts and times remain.
+ */
+export type TranscriptState = "available" | "expired";
+
+export interface ConversationMessages extends ListResponse<ConversationMessage> {
+  transcript?: TranscriptState;
+}
+
 export interface ConversationQuery {
   /** RFC3339; a `Date` is serialised as ISO 8601. */
   from?: string | Date;
@@ -63,6 +76,18 @@ export interface ConversationQuery {
   project_id?: string;
   provider?: string;
   model?: string;
+  /** One gateway key (aigw_…). */
+  credential_id?: string;
+}
+
+/** How many conversations one employee has through one gateway key. */
+export interface ConversationKeyCount {
+  user_id: string;
+  /** Null for conversations that recorded no key. */
+  credential_id: string | null;
+  conversations: number;
+  /** RFC3339. */
+  last_activity_at: string;
 }
 
 export interface ConversationListQuery extends ConversationQuery {
@@ -74,7 +99,11 @@ export interface ConversationListQuery extends ConversationQuery {
 export interface ConversationsModule {
   list(query?: ConversationListQuery, options?: RequestOptions): Promise<ListResponse<ConversationSummary>>;
   get(conversationId: string, options?: RequestOptions): Promise<ConversationSummary>;
-  messages(conversationId: string, options?: RequestOptions): Promise<ListResponse<ConversationMessage>>;
+  messages(conversationId: string, options?: RequestOptions): Promise<ConversationMessages>;
+  /** Conversation counts per employee and gateway key. Members see only their own. */
+  byKey(options?: RequestOptions): Promise<ListResponse<ConversationKeyCount>>;
+  /** Deletes the whole conversation, its text included. Owners and admins only. */
+  remove(conversationId: string, options?: RequestOptions): Promise<void>;
 }
 
 export function createConversationsModule(transport: Transport): ConversationsModule {
@@ -90,6 +119,7 @@ export function createConversationsModule(transport: Transport): ConversationsMo
           project_id: query?.project_id,
           provider: query?.provider,
           model: query?.model,
+          credential_id: query?.credential_id,
           limit: query?.limit,
           offset: query?.offset,
         },
@@ -100,9 +130,15 @@ export function createConversationsModule(transport: Transport): ConversationsMo
         options,
       ),
     messages: (conversationId, options) =>
-      transport.requestAt<ListResponse<ConversationMessage>>(
+      transport.requestAt<ConversationMessages>(
         `/v1/conversations/${encodeURIComponent(conversationId)}/messages`,
         options,
       ),
+    byKey: (options) => transport.requestAt<ListResponse<ConversationKeyCount>>("/v1/conversations/by-key", options),
+    remove: (conversationId, options) =>
+      transport.requestAt<void>(`/v1/conversations/${encodeURIComponent(conversationId)}`, {
+        ...options,
+        method: "DELETE",
+      }),
   };
 }

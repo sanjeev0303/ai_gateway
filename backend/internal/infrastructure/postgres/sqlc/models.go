@@ -278,6 +278,7 @@ type Conversation struct {
 	Model          *string    `json:"model"`
 	Provider       *string    `json:"provider"`
 	PrivacyState   *string    `json:"privacy_state"`
+	CredentialID   *uuid.UUID `json:"credential_id"`
 }
 
 type ConversationMessage struct {
@@ -291,6 +292,25 @@ type ConversationMessage struct {
 	ProviderMessageID *string   `json:"provider_message_id"`
 	CreatedAt         time.Time `json:"created_at"`
 	ToolName          *string   `json:"tool_name"`
+}
+
+type EventOutbox struct {
+	ID            int64     `json:"id"`
+	Kind          string    `json:"kind"`
+	Payload       []byte    `json:"payload"`
+	Attempts      int32     `json:"attempts"`
+	CreatedAt     time.Time `json:"created_at"`
+	NextAttemptAt time.Time `json:"next_attempt_at"`
+	LastError     *string   `json:"last_error"`
+}
+
+type EventOutboxDeadLetter struct {
+	ID       int64     `json:"id"`
+	Kind     string    `json:"kind"`
+	Payload  []byte    `json:"payload"`
+	Attempts int32     `json:"attempts"`
+	Error    *string   `json:"error"`
+	FailedAt time.Time `json:"failed_at"`
 }
 
 type GatewayCredential struct {

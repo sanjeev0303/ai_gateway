@@ -6,6 +6,8 @@ import (
 	"io"
 	"log/slog"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"ai-governance-saas/backend/internal/infrastructure/eventbus"
 	"ai-governance-saas/backend/internal/platform/config"
 	"ai-governance-saas/backend/internal/ports"
@@ -39,7 +41,9 @@ func (b usageBus) Ping(ctx context.Context) error {
 	return nil
 }
 
-func newUsageBus(ctx context.Context, cfg *config.EventbusConfig, log *slog.Logger) (usageBus, error) {
+// pool may be nil for processes without a database; the postgres kind requires
+// it and errors clearly when it is missing.
+func newUsageBus(ctx context.Context, cfg *config.EventbusConfig, pool *pgxpool.Pool, log *slog.Logger) (usageBus, error) {
 	switch cfg.Kind {
 	case "inmemory":
 		return usageBus{EventBus: eventbus.NewInMemory(usageEventQueueSize, log), inProcess: true}, nil
@@ -54,6 +58,14 @@ func newUsageBus(ctx context.Context, cfg *config.EventbusConfig, log *slog.Logg
 			closer:    bus,
 			ping:      bus.Ping,
 		}, nil
+	case "postgres":
+		if pool == nil {
+			return usageBus{}, fmt.Errorf("eventbus kind %q requires the database (AIGW_DATABASE_ENABLED=true)", cfg.Kind)
+		}
+		bus := eventbus.NewOutbox(pool, log)
+		// The outbox reuses the service pool, so it is shared/durable (consumer
+		// runs in the worker) and does not own a connection to close.
+		return usageBus{EventBus: bus, inProcess: false, ping: bus.Ping}, nil
 	default:
 		return usageBus{}, fmt.Errorf("eventbus kind %q is not available in this build", cfg.Kind)
 	}

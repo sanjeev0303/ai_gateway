@@ -49,6 +49,12 @@
       "skillPath": ".agents/skills/impeccable/SKILL.md",
       "computedHash": "f7c4e03bef91154273d2dc3b62aff829cf4ab1b1f16e6b98c8c6a31be4405318"
     },
+    "liquid-glass": {
+      "source": "haider-nawaz/liquid-glass-skill",
+      "sourceType": "github",
+      "skillPath": "plugins/liquid-glass/skills/liquid-glass/SKILL.md",
+      "computedHash": "59ee3595d5fce64196df06c0269790e14998fdeae3eda372c5a40212db619086"
+    },
     "motion": {
       "source": "motiondivision/ai-kit",
       "sourceType": "github",

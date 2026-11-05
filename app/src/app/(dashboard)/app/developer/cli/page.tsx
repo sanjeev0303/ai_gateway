@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/card";
 
 export const metadata: Metadata = {
-  title: "CLI · Sentinel",
+  title: "CLI · Tollseal",
   description: "Command reference for the aigw CLI.",
 };
 
@@ -34,15 +34,16 @@ const COLUMNS: readonly Column<CommandRow>[] = [
   { key: "summary", header: "What it does", primary: "summary", sort: "summary" },
 ];
 
-// Subcommands and flags below are taken from packages/cli/cmd. There is no
-// --output flag, no --version, and no models/policies/usage/traces command.
+// Subcommands and flags below are taken from packages/cli/cmd (request.go,
+// models.go, projects.go, auth.go, credential.go, config.go). There is no
+// --output flag, no --version, and no policies/usage/traces command.
 const COMMANDS: readonly CommandRow[] = [
   {
     id: "c1",
     command: "aigw auth login",
     group: "auth",
     summary: "Authenticate against a gateway and store the credential locally",
-    example: "aigw auth login --gateway-url http://localhost:8084",
+    example: "aigw auth login --gateway-url http://localhost:8084 --credential aigw_...",
   },
   {
     id: "c2",
@@ -108,6 +109,34 @@ const COMMANDS: readonly CommandRow[] = [
     example: "aigw credential restore cred_1",
   },
   {
+    id: "c14",
+    command: "aigw request",
+    group: "request",
+    summary: "Send a prompt through the gateway; streams the reply by default",
+    example: 'aigw request -m claude-sonnet-4-5 -p "Write a retry helper in Go" --max-tokens 1024',
+  },
+  {
+    id: "c15",
+    command: "aigw models list",
+    group: "models",
+    summary: "List the models your key is allowed to call",
+    example: "aigw models list",
+  },
+  {
+    id: "c16",
+    command: "aigw projects list",
+    group: "projects",
+    summary: "List the projects you can scope requests to",
+    example: "aigw projects list",
+  },
+  {
+    id: "c17",
+    command: "aigw projects select <project-id>",
+    group: "projects",
+    summary: "Scope later requests to one project (current shows it, clear removes it)",
+    example: "aigw projects select proj_payments",
+  },
+  {
     id: "c11",
     command: "aigw config install",
     group: "config",
@@ -130,16 +159,20 @@ const COMMANDS: readonly CommandRow[] = [
   },
 ];
 
+const GROUPS = [...new Set(COMMANDS.map((c) => c.group))];
+
 const INSTALL_SNIPPET = `cd packages/cli
 go build -o aigw .
-./aigw auth login --gateway-url http://localhost:8084`;
+./aigw auth login --gateway-url http://localhost:8084 --credential aigw_...
+./aigw models list
+./aigw request -m claude-sonnet-4-5 -p "Hello from the gateway"`;
 
 export default function DeveloperCliPage() {
   return (
     <div className="p-4 sm:p-6">
       <PageShell
         title="CLI"
-        description="The aigw CLI manages credentials and local gateway configuration. It covers the control plane only — it has no commands for model traffic."
+        description="The aigw CLI sends prompts through the gateway with your gateway key, lists the models and projects you can use, and manages credentials and local configuration."
         eyebrow={
           <p className="text-xs text-muted-foreground">
             Built from source · <code className="font-mono">aigw</code>
@@ -147,13 +180,8 @@ export default function DeveloperCliPage() {
         }
       >
         <section className="grid gap-4 sm:grid-cols-2">
-          <StatCard label="Commands" value={String(COMMANDS.length)} hint="Across 3 groups" />
-          <StatCard
-            label="Scope"
-            value="Credentials"
-            tone="info"
-            hint="auth, credential, config"
-          />
+          <StatCard label="Commands" value={String(COMMANDS.length)} hint={`Across ${GROUPS.length} groups`} />
+          <StatCard label="Groups" value={String(GROUPS.length)} tone="info" hint={GROUPS.join(", ")} />
         </section>
 
         <Card>

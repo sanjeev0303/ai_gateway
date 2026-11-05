@@ -22,15 +22,15 @@ export default function SignInPage() {
 
   return (
     <main className="flex flex-1 items-center justify-center p-6">
-      <Card className="w-full max-w-sm">
+      <Card className="w-full max-w-sm border-none bg-transparent shadow-none ring-0">
         <CardHeader>
-          <CardTitle>Sign in</CardTitle>
-          <CardDescription>Access the AI Governance console.</CardDescription>
+          <CardTitle className="text-2xl tracking-[-0.025em]">Sign in</CardTitle>
+          <CardDescription>Welcome back. Sign in to the Tollseal console.</CardDescription>
         </CardHeader>
 
         <CardContent>
-          <form action={submitCredentials} className="grid gap-3">
-            <label className="grid gap-1.5 text-sm" htmlFor="email">
+          <form action={submitCredentials} className="grid gap-4">
+            <label className="grid gap-1.5 text-sm font-medium" htmlFor="email">
               Email
               <Input
                 id="email"
@@ -41,7 +41,7 @@ export default function SignInPage() {
               />
             </label>
 
-            <label className="grid gap-1.5 text-sm" htmlFor="password">
+            <label className="grid gap-1.5 text-sm font-medium" htmlFor="password">
               Password
               <Input
                 id="password"
@@ -83,7 +83,7 @@ export default function SignInPage() {
             </p>
           ) : null}
 
-          <div className="mt-4 rounded-md border border-border/60 bg-muted/30 p-2.5 text-xs text-muted-foreground">
+          <div className="mt-5 rounded-xl border border-border bg-muted/50 p-3 text-xs text-muted-foreground">
             <span className="font-semibold text-foreground">Demo credentials:</span>
             <div className="mt-1 flex flex-col gap-0.5 font-mono text-xs">
               <div>Email: <span className="text-foreground">admin@acme.example</span></div>
@@ -93,7 +93,7 @@ export default function SignInPage() {
 
           <p className="mt-4 text-sm text-muted-foreground">
             Don&apos;t have an account?{" "}
-            <Link href="/signup" className="underline-offset-4 hover:underline">
+            <Link href="/signup" className="font-medium text-primary underline-offset-4 hover:underline">
               Create account
             </Link>
           </p>

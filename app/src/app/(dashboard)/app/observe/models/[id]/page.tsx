@@ -30,7 +30,7 @@ const breakdownColumns: readonly Column<UsageBreakdownRow>[] = [
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const decoded = decodeURIComponent(id);
-  return { title: `Model ${decoded} · Sentinel` };
+  return { title: `Model ${decoded} · Tollseal` };
 }
 
 export default async function ModelDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -111,7 +111,7 @@ export default async function ModelDetailPage({ params }: { params: Promise<{ id
           title={displayName}
           description={`Model Telemetry & Attribution for ${modelSlug} (${catalogEntry?.provider_kind ?? "All Providers"})`}
         >
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
             <StatCard label="Total Requests" value={formatCompact(totalRequests)} />
             <StatCard label="Total Tokens" value={formatCompact(totalTokens)} />
             <StatCard label="Estimated Spend" value={formatUsd(totalCost)} />

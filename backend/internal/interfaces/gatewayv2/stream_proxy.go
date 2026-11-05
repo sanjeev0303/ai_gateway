@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"ai-governance-saas/backend/internal/platform/netguard"
 )
 
 var (
@@ -32,6 +34,9 @@ type StreamProxyImpl struct {
 	readBufferSize  int
 	writeBufferSize int
 	logger          *slog.Logger
+	// allowMockBypass enables the deterministic offline mock for test-marker
+	// keys. Dev/test only (sourced from AllowInsecureDev); never in production.
+	allowMockBypass bool
 	mu              sync.RWMutex
 	activeStreams   map[uuid.UUID]*activeStream
 	streamCount     int64
@@ -52,10 +57,14 @@ const (
 	defaultMaxStreams      = 10000
 )
 
-// NewStreamProxy creates a new stream proxy.
-func NewStreamProxy(client *http.Client, logger *slog.Logger) *StreamProxyImpl {
+// NewStreamProxy creates a new stream proxy. allowMockBypass enables the
+// deterministic offline mock for test-marker keys and must be false in prod.
+func NewStreamProxy(client *http.Client, logger *slog.Logger, allowMockBypass bool) *StreamProxyImpl {
 	if client == nil {
-		client = defaultHTTPClient()
+		// Secure by default: block private/metadata upstreams. Production wires
+		// an explicit client via defaultHTTPClient(cfg.AllowInsecureDev); the
+		// nil path is used by tests and must stay fail-closed.
+		client = defaultHTTPClient(false)
 	}
 	if logger == nil {
 		logger = slog.Default()
@@ -66,14 +75,25 @@ func NewStreamProxy(client *http.Client, logger *slog.Logger) *StreamProxyImpl {
 		readBufferSize:  defaultReadBufferSize,
 		writeBufferSize: defaultWriteBufferSize,
 		logger:          logger,
+		allowMockBypass: allowMockBypass,
 		activeStreams:   make(map[uuid.UUID]*activeStream),
 		maxStreams:      defaultMaxStreams,
 	}
 }
 
-// defaultHTTPClient returns a client optimized for streaming proxies.
-func defaultHTTPClient() *http.Client {
+// defaultHTTPClient returns a client optimized for streaming proxies. When
+// allowPrivate is false (production) it refuses to connect to private, loopback,
+// and metadata addresses and will not follow upstream redirects — together
+// these close SSRF (incl. DNS-rebinding) and redirect-based key exfiltration on
+// the tenant-controlled upstream URL. allowPrivate is true only in local dev.
+func defaultHTTPClient(allowPrivate bool) *http.Client {
 	return &http.Client{
+		// Relay an upstream 3xx to the client instead of following it: following
+		// a cross-host redirect would re-send the injected provider key (which
+		// Go keeps on custom headers like x-api-key) to the redirect target.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -83,6 +103,9 @@ func defaultHTTPClient() *http.Client {
 				d := &net.Dialer{
 					Timeout:   30 * time.Second,
 					KeepAlive: 30 * time.Second,
+				}
+				if !allowPrivate {
+					d.Control = netguard.DialControl
 				}
 				return d.DialContext(ctx, network, addr)
 			},
@@ -145,7 +168,6 @@ func (s *StreamProxyImpl) Forward(ctx context.Context, w http.ResponseWriter, r 
 	// Client-disconnect cancellation needs no extra watcher: streamCtx derives
 	// from the request context, which net/http already cancels when the client goes away.
 
-
 	// Build upstream request
 	upstreamReq, err := s.buildUpstreamRequest(streamCtx, r, upstreamURL, upstreamHeaders)
 	if err != nil {
@@ -164,9 +186,11 @@ func (s *StreamProxyImpl) Forward(ctx context.Context, w http.ResponseWriter, r 
 	}
 	upstreamReq = upstreamReq.WithContext(httptrace.WithClientTrace(streamCtx, trace))
 
-	// Execute upstream request (or deterministic mock if test bypass key)
+	// Execute upstream request (or deterministic mock if test bypass key).
+	// The mock is dev/test only; in production every request hits the real
+	// upstream regardless of the key.
 	var resp *http.Response
-	if isDummyMockKey(upstreamHeaders) {
+	if s.allowMockBypass && isDummyMockKey(upstreamHeaders) {
 		resp = mockUpstreamResponse(upstreamHeaders)
 	} else {
 		var err error
@@ -184,15 +208,11 @@ func (s *StreamProxyImpl) Forward(ctx context.Context, w http.ResponseWriter, r 
 	}
 	defer resp.Body.Close()
 
-	// Check for upstream errors and fallback if upstream provider is rate-limited or out of partner credits
+	// Upstream errors pass through unchanged. This used to answer Hugging Face errors
+	// (402 out of credits, 400 unsupported model) and Mistral 429s with the canned mock
+	// response and HTTP 200, so callers received fake text and fake usage was recorded.
 	if resp.StatusCode >= 400 {
-		if strings.Contains(upstreamReq.URL.Host, "huggingface") || (strings.Contains(upstreamReq.URL.Host, "mistral") && resp.StatusCode == 429) {
-			s.logger.Warn("upstream returned error, engaging graceful provider fallback", "stream_id", streamID, "status", resp.StatusCode, "host", upstreamReq.URL.Host)
-			_ = resp.Body.Close()
-			resp = mockUpstreamResponse(upstreamHeaders)
-		} else {
-			s.logger.Warn("upstream error response", "stream_id", streamID, "status", resp.StatusCode)
-		}
+		s.logger.Warn("upstream error response", "stream_id", streamID, "status", resp.StatusCode, "host", upstreamReq.URL.Host)
 	}
 
 	// Copy response headers (excluding hop-by-hop)
@@ -247,12 +267,21 @@ func (s *StreamProxyImpl) buildUpstreamRequest(ctx context.Context, r *http.Requ
 	// Copy forward headers (excluding hop-by-hop and auth)
 	copyForwardHeaders(outReq.Header, r.Header)
 
-	// Inject upstream headers
+	// Inject upstream headers with Set semantics: delete any client-supplied
+	// value first so a smuggled provider-auth header cannot coexist with (and
+	// shadow) the gateway's injected key.
 	for k, v := range upstreamHeaders {
+		outReq.Header.Del(k)
 		for _, vv := range v {
 			outReq.Header.Add(k, vv)
 		}
 	}
+
+	// Ask the provider for an uncompressed body. The usage observer reads the
+	// bytes as they pass; a client's "Accept-Encoding: gzip" forwarded upstream
+	// made it see only compressed bytes, so reported usage silently fell back to
+	// estimates and no reply text could be recorded.
+	outReq.Header.Del("Accept-Encoding")
 
 	return outReq, nil
 }
@@ -407,6 +436,8 @@ func copyForwardHeaders(dst, src http.Header) {
 		"content-length":      true,
 		"authorization":       true,
 		"x-api-key":           true,
+		"x-goog-api-key":      true,
+		"api-key":             true,
 	}
 
 	for key, values := range src {
@@ -434,7 +465,11 @@ func isDummyMockKey(h http.Header) bool {
 	if k == "" {
 		k = h.Get("api-key")
 	}
-	return k == "sk-dummy-key" || strings.HasPrefix(k, "sk-dummy-") || strings.HasPrefix(k, "sk-proj-") || k == "dummy" || k == "test"
+	// NB: never match a real provider key format here. "sk-proj-" is the standard
+	// modern OpenAI key prefix, so matching it shunted live tenant traffic to the
+	// offline mock (fabricated usage, never reaching the provider). Only
+	// unambiguous test markers belong in this list.
+	return k == "sk-dummy-key" || strings.HasPrefix(k, "sk-dummy-") || k == "dummy" || k == "test"
 }
 
 // mockUpstreamResponse builds a deterministic in-memory provider response for automated testing across providers.

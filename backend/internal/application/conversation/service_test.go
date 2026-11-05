@@ -23,6 +23,8 @@ type mockConvRepo struct {
 	repositories.ConversationRepository
 	conv      domain.Conversation
 	summaries []domain.ConversationSummary
+	deleted   []uuid.UUID
+	countsFor *uuid.UUID
 }
 
 func (m *mockConvRepo) Get(ctx context.Context, orgID, id uuid.UUID) (domain.Conversation, error) {
@@ -48,6 +50,73 @@ func (m *mockMessageRepo) List(ctx context.Context, orgID, conversationID uuid.U
 	return out, nil
 }
 
+// fakeTranscripts stands in for gateway memory, the only place text lives.
+type fakeTranscripts map[uuid.UUID]domain.Transcript
+
+func (f fakeTranscripts) Transcripts(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID, withMessages bool) (map[uuid.UUID]domain.Transcript, error) {
+	out := map[uuid.UUID]domain.Transcript{}
+	for _, id := range ids {
+		if t, ok := f[id]; ok {
+			out[id] = t
+		}
+	}
+	return out, nil
+}
+
+func (f fakeTranscripts) Delete(ctx context.Context, orgID, conversationID uuid.UUID) error {
+	delete(f, conversationID)
+	return nil
+}
+
+func (m *mockConvRepo) CountsByKey(ctx context.Context, orgID uuid.UUID, userID *uuid.UUID) ([]domain.ConversationKeyCount, error) {
+	m.countsFor = userID
+	return nil, nil
+}
+
+// Members see only their own counts; owners see everyone's.
+func TestConversationService_CountsByKeyScope(t *testing.T) {
+	member := domain.Actor{Kind: domain.ActorKindUser, OrganizationID: uuid.New(), UserID: uuid.New(), Role: domain.RoleMember}
+	repo := &mockConvRepo{}
+	svc := conversation.NewService(conversation.ServiceDeps{Organizations: &mockOrgRepo{}, Conversations: repo, Messages: &mockMessageRepo{}})
+	if _, err := svc.CountsByKey(context.Background(), member); err != nil {
+		t.Fatal(err)
+	}
+	if repo.countsFor == nil || *repo.countsFor != member.UserID {
+		t.Fatal("a member's counts were not narrowed to themselves")
+	}
+	owner := member
+	owner.Role = domain.RoleOwner
+	if _, err := svc.CountsByKey(context.Background(), owner); err != nil || repo.countsFor != nil {
+		t.Fatal("an owner's counts were narrowed")
+	}
+}
+
+func (m *mockConvRepo) Delete(ctx context.Context, orgID, id uuid.UUID) error {
+	m.deleted = append(m.deleted, id)
+	return nil
+}
+
+// Deleting removes the text from gateway memory and the record, and only
+// owners and admins may do it.
+func TestConversationService_Delete(t *testing.T) {
+	ctx := context.Background()
+	orgID, convID := uuid.New(), uuid.New()
+	for _, role := range []string{domain.RoleOwner, domain.RoleAdmin, domain.RoleAuditor, domain.RoleMember} {
+		live := fakeTranscripts{convID: {Title: "hello"}}
+		repo := &mockConvRepo{conv: domain.Conversation{ID: convID, OrganizationID: orgID}}
+		svc := conversation.NewService(conversation.ServiceDeps{Organizations: &mockOrgRepo{}, Conversations: repo, Messages: &mockMessageRepo{}, Transcripts: live})
+		err := svc.Delete(ctx, domain.Actor{Kind: domain.ActorKindUser, OrganizationID: orgID, UserID: uuid.New(), Role: role}, convID)
+
+		mayDelete := role == domain.RoleOwner || role == domain.RoleAdmin
+		if mayDelete && (err != nil || len(live) != 0 || len(repo.deleted) != 1) {
+			t.Errorf("%s: err %v, text left %d, records deleted %d", role, err, len(live), len(repo.deleted))
+		}
+		if !mayDelete && (err != repositories.ErrForbidden || len(live) != 1 || len(repo.deleted) != 0) {
+			t.Errorf("%s: should be forbidden and change nothing, got err %v", role, err)
+		}
+	}
+}
+
 func TestConversationService_PrivacyModes(t *testing.T) {
 	ctx := context.Background()
 	orgID := uuid.New()
@@ -62,28 +131,15 @@ func TestConversationService_PrivacyModes(t *testing.T) {
 	}
 
 	messages := []domain.ConversationMessage{
-		{
-			ID:             uuid.New(),
-			ConversationID: convID,
-			Role:           "system",
-			Content:        "You are a helpful assistant.",
-			Tokens:         10,
-		},
-		{
-			ID:             uuid.New(),
-			ConversationID: convID,
-			Role:           "user",
-			Content:        "What is Sentinel?",
-			Tokens:         5,
-		},
-		{
-			ID:             uuid.New(),
-			ConversationID: convID,
-			Role:           "assistant",
-			Content:        "Sentinel is an enterprise AI gateway.",
-			Tokens:         8,
-		},
+		{ID: uuid.New(), ConversationID: convID, Role: "system", Tokens: 10},
+		{ID: uuid.New(), ConversationID: convID, Role: "user", Tokens: 5},
+		{ID: uuid.New(), ConversationID: convID, Role: "assistant", Tokens: 8},
 	}
+	live := fakeTranscripts{convID: {Messages: map[uuid.UUID]string{
+		messages[0].ID: "You are a helpful assistant.",
+		messages[1].ID: "What is Sentinel?",
+		messages[2].ID: "Sentinel is an enterprise AI gateway.",
+	}}}
 
 	tests := []struct {
 		name        string
@@ -93,18 +149,18 @@ func TestConversationService_PrivacyModes(t *testing.T) {
 		wantAssist  string
 	}{
 		{
-			name:        "METADATA_ONLY redacts all turn content",
+			name:        "METADATA_ONLY still shows the transcript",
 			privacyMode: domain.PrivacyMetadataOnly,
-			wantSystem:  "",
-			wantUser:    "",
-			wantAssist:  "",
+			wantSystem:  "You are a helpful assistant.",
+			wantUser:    "What is Sentinel?",
+			wantAssist:  "Sentinel is an enterprise AI gateway.",
 		},
 		{
-			name:        "PROMPT_ONLY keeps prompts and redacts assistant turns",
+			name:        "PROMPT_ONLY still shows the transcript",
 			privacyMode: domain.PrivacyPromptOnly,
 			wantSystem:  "You are a helpful assistant.",
 			wantUser:    "What is Sentinel?",
-			wantAssist:  "",
+			wantAssist:  "Sentinel is an enterprise AI gateway.",
 		},
 		{
 			name:        "FULL_CONTENT preserves all turns",
@@ -142,9 +198,10 @@ func TestConversationService_PrivacyModes(t *testing.T) {
 				Organizations: orgRepo,
 				Conversations: convRepo,
 				Messages:      msgRepo,
+				Transcripts:   live,
 			})
 
-			res, err := svc.ListMessages(ctx, actor, convID)
+			res, _, err := svc.ListMessages(ctx, actor, convID)
 			if err != nil {
 				t.Fatalf("ListMessages failed: %v", err)
 			}
@@ -190,7 +247,7 @@ func TestConversationService_PermissionDenied(t *testing.T) {
 		Messages:      &mockMessageRepo{},
 	})
 
-	_, err := svc.ListMessages(ctx, actor, convID)
+	_, _, err := svc.ListMessages(ctx, actor, convID)
 	if err != repositories.ErrForbidden {
 		t.Fatalf("expected ErrForbidden, got %v", err)
 	}
@@ -198,5 +255,43 @@ func TestConversationService_PermissionDenied(t *testing.T) {
 	_, _, err = svc.List(ctx, actor, domain.ConversationFilter{}, 10, 0)
 	if err != repositories.ErrForbidden {
 		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+}
+
+// With the text gone from gateway memory the turns stay empty and the state
+// says why, so the console can explain it instead of showing blank bubbles.
+func TestConversationService_TranscriptStates(t *testing.T) {
+	ctx := context.Background()
+	orgID, convID := uuid.New(), uuid.New()
+	actor := domain.Actor{Kind: domain.ActorKindUser, OrganizationID: orgID, UserID: uuid.New(), Role: domain.RoleOwner}
+	msg := domain.ConversationMessage{ID: uuid.New(), ConversationID: convID, Role: "user", Tokens: 3}
+
+	cases := []struct {
+		name string
+		mode domain.PrivacyMode
+		live fakeTranscripts
+		want conversation.TranscriptState
+		text string
+	}{
+		{"live text shown", domain.PrivacyFullContent, fakeTranscripts{convID: {Messages: map[uuid.UUID]string{msg.ID: "hi"}}}, conversation.TranscriptAvailable, "hi"},
+		{"gone from memory", domain.PrivacyFullContent, fakeTranscripts{}, conversation.TranscriptExpired, ""},
+		{"privacy mode no longer hides it", domain.PrivacyMetadataOnly, fakeTranscripts{convID: {Messages: map[uuid.UUID]string{msg.ID: "hi"}}}, conversation.TranscriptAvailable, "hi"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := conversation.NewService(conversation.ServiceDeps{
+				Organizations: &mockOrgRepo{org: domain.Organization{ID: orgID, PrivacyDefault: tc.mode}},
+				Conversations: &mockConvRepo{conv: domain.Conversation{ID: convID, OrganizationID: orgID}},
+				Messages:      &mockMessageRepo{messages: []domain.ConversationMessage{msg}},
+				Transcripts:   tc.live,
+			})
+			res, state, err := svc.ListMessages(ctx, actor, convID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state != tc.want || res[0].Content != tc.text {
+				t.Fatalf("got state %q text %q, want %q %q", state, res[0].Content, tc.want, tc.text)
+			}
+		})
 	}
 }

@@ -26,7 +26,7 @@ import { getApiClient } from "@/lib/session";
 import { ExportBillingUsageButton } from "./export-button";
 
 export const metadata: Metadata = {
-  title: "Usage · Sentinel",
+  title: "Usage · Tollseal",
   description: "Recorded metered spend for the trailing 30 days, with plan context.",
 };
 
@@ -180,7 +180,7 @@ export default async function BillingUsagePage() {
         eyebrow={<p className="text-xs text-muted-foreground">{subscriptionLine}</p>}
         actions={<ExportBillingUsageButton summary={summary} />}
       >
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
             label="Recorded cost"
             value={formatUsd(totalSpend)}
@@ -239,7 +239,7 @@ export default async function BillingUsagePage() {
             <CardContent>
               <DonutChart
                 data={spendByProject}
-                centerLabel={formatUsd(totalSpend)}
+                centerLabel="spend"
                 formatValue={formatUsd}
               />
             </CardContent>

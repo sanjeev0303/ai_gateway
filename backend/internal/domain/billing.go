@@ -534,7 +534,41 @@ func LookupCanonicalPricing(providerKind, modelSlug string) (ProviderPricingSpec
 		}, true
 	}
 
+	// 5. Mistral models, usually connected as a custom OpenAI-compatible provider
+	if provider == "mistral" || isMistralSlug(slug) {
+		spec := ProviderPricingSpec{ProviderKind: "mistral", ModelSlug: modelSlug, SupportsCaching: false}
+		switch {
+		case strings.Contains(slug, "large") || strings.Contains(slug, "pixtral"):
+			spec.DisplayName, spec.InputRatePerM, spec.OutputRatePerM = "Mistral Large", 2.00, 6.00
+		case strings.Contains(slug, "magistral-medium"):
+			spec.DisplayName, spec.InputRatePerM, spec.OutputRatePerM = "Magistral Medium", 2.00, 5.00
+		case strings.Contains(slug, "medium"):
+			spec.DisplayName, spec.InputRatePerM, spec.OutputRatePerM = "Mistral Medium", 0.40, 2.00
+		case strings.Contains(slug, "codestral"):
+			spec.DisplayName, spec.InputRatePerM, spec.OutputRatePerM = "Codestral", 0.30, 0.90
+		case strings.Contains(slug, "nemo"):
+			spec.DisplayName, spec.InputRatePerM, spec.OutputRatePerM = "Mistral NeMo", 0.15, 0.15
+		case strings.Contains(slug, "ministral-3b"):
+			spec.DisplayName, spec.InputRatePerM, spec.OutputRatePerM = "Ministral 3B", 0.04, 0.04
+		case strings.Contains(slug, "ministral"):
+			spec.DisplayName, spec.InputRatePerM, spec.OutputRatePerM = "Ministral 8B", 0.10, 0.10
+		default:
+			// mistral-small, devstral-small, magistral-small and anything newer
+			spec.DisplayName, spec.InputRatePerM, spec.OutputRatePerM = "Mistral Small", 0.10, 0.30
+		}
+		return spec, true
+	}
+
 	return ProviderPricingSpec{}, false
+}
+
+func isMistralSlug(slug string) bool {
+	for _, family := range []string{"mistral", "codestral", "ministral", "magistral", "pixtral", "devstral"} {
+		if strings.Contains(slug, family) {
+			return true
+		}
+	}
+	return false
 }
 
 // CalculateProviderTokenCost calculates the exact cost in micro-dollars based on provider-specific pricing rules.

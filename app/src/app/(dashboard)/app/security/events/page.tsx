@@ -25,7 +25,7 @@ import { EventActionsCell } from "./actions-cell";
 import { ExportEventsButton } from "./export-button";
 
 export const metadata: Metadata = {
-  title: "Events · Sentinel",
+  title: "Events · Tollseal",
   description: "Platform-originated events: provider health transitions and failed usage rollups.",
 };
 

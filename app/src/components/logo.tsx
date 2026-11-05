@@ -7,38 +7,34 @@ interface LogoProps {
   className?: string;
 }
 
-/** Shield-and-beam mark; inherits text colour so it themes automatically. */
+/**
+ * The Tollseal mark: a seal (an outer ring with a fine inner guilloche ring)
+ * around a T drawn as a toll barrier, a bar across a single post. Every request
+ * passes the barrier and leaves sealed. Drawn in the action green so it reads
+ * the same on security paper and on night intaglio.
+ */
 export function LogoMark({ className }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 24 24"
-      className={cn("size-6 shrink-0", className)}
+      viewBox="0 0 32 32"
+      className={cn("size-7 shrink-0 text-primary", className)}
       role="img"
       aria-label={`${APP_NAME} logo`}
       fill="none"
     >
-      <path
-        d="M12 2.5 4.75 5.6v6.15c0 4.53 3.02 8.44 7.25 9.75 4.23-1.31 7.25-5.22 7.25-9.75V5.6L12 2.5Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M12 7.4v9.2M8.9 10.2h6.2"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
+      <circle cx="16" cy="16" r="13.4" stroke="currentColor" strokeWidth="2.2" />
+      <circle cx="16" cy="16" r="10.2" stroke="currentColor" strokeWidth="0.9" strokeDasharray="1.6 1.4" opacity="0.6" />
+      <path d="M10.4 12.4H21.6M16 12.4V22.2" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
     </svg>
   );
 }
 
 export function Logo({ markOnly = false, className }: LogoProps) {
-  if (markOnly) return <LogoMark className={className} />;
+  if (markOnly) return <LogoMark />;
   return (
-    <span className={cn("inline-flex items-center gap-2", className)}>
+    <span className={cn("inline-flex items-center gap-2.5", className)}>
       <LogoMark />
-      <span className="text-base font-semibold tracking-tight">{APP_NAME}</span>
+      <span translate="no" className="font-display text-[1.0625rem] tracking-[-0.01em]">{APP_NAME}</span>
     </span>
   );
 }

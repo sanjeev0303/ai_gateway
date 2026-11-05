@@ -87,7 +87,7 @@ export function OnboardingClient({
 
   // Step 5 state
   const [testModel, setTestModel] = React.useState<string>(models[0]?.model_slug || "claude-3-5-sonnet");
-  const [testPrompt, setTestPrompt] = React.useState("Hello Sentinel! Please verify my gateway access.");
+  const [testPrompt, setTestPrompt] = React.useState("Hello Tollseal! Please verify my gateway access.");
   const [testResponse, setTestResponse] = React.useState<any | null>(null);
   const [isTesting, setIsTesting] = React.useState(false);
   const [testError, setTestError] = React.useState<string | null>(null);
@@ -234,7 +234,7 @@ export function OnboardingClient({
           <CardContent className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="border rounded-lg p-3 bg-muted/20">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <p className="text-xs font-semibold text-muted-foreground">
                   Organization
                 </p>
                 <p className="text-base font-semibold text-foreground mt-0.5">{organization.name}</p>
@@ -242,7 +242,7 @@ export function OnboardingClient({
               </div>
 
               <div className="border rounded-lg p-3 bg-muted/20">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <p className="text-xs font-semibold text-muted-foreground">
                   Employee Identity
                 </p>
                 <p className="text-base font-semibold text-foreground mt-0.5">{user.name || user.email}</p>
@@ -250,7 +250,7 @@ export function OnboardingClient({
               </div>
 
               <div className="border rounded-lg p-3 bg-muted/20">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <p className="text-xs font-semibold text-muted-foreground">
                   Assigned Organization Role
                 </p>
                 <Badge className="mt-1" variant={user.role === "admin" || user.role === "owner" ? "default" : "secondary"}>
@@ -259,7 +259,7 @@ export function OnboardingClient({
               </div>
 
               <div className="border rounded-lg p-3 bg-muted/20">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <p className="text-xs font-semibold text-muted-foreground">
                   Status
                 </p>
                 <div className="flex items-center gap-1.5 mt-1 text-emerald-500 font-medium text-sm">
@@ -416,7 +416,7 @@ export function OnboardingClient({
             </div>
             <CardTitle>Obtain Your Gateway Credential</CardTitle>
             <CardDescription>
-              Issue a personal API key to authenticate with the Sentinel gateway from Python, TypeScript, or CLI.
+              Issue a personal API key to authenticate with the Tollseal gateway from Python, TypeScript, or CLI.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -436,7 +436,7 @@ export function OnboardingClient({
                   </Button>
                 </div>
 
-                <div className="rounded-lg bg-black/60 p-3 text-xs font-mono text-zinc-300 space-y-1 mt-2">
+                <div className="mt-2 flex flex-col gap-1 rounded-lg bg-(--terminal-bg) p-3 font-mono text-xs text-(--terminal-text)">
                   <p className="text-zinc-500"># Shell configuration</p>
                   <p>export AIGW_API_KEY=&quot;{issuedKey}&quot;</p>
                   <p>export AIGW_BASE_URL=&quot;http://localhost:8084&quot;</p>
@@ -518,7 +518,7 @@ export function OnboardingClient({
             </div>
             <CardTitle>Run Test Gateway Request</CardTitle>
             <CardDescription>
-              Execute a real test prompt through Sentinel to verify request authorization and review live telemetry.
+              Execute a real test prompt through Tollseal to verify request authorization and review live telemetry.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -591,7 +591,7 @@ export function OnboardingClient({
                 </div>
 
                 <div className="border rounded-lg p-3 bg-muted/20 text-sm font-sans space-y-1">
-                  <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+                  <p className="text-xs text-muted-foreground font-semibold">
                     Model Response ({testResponse.model})
                   </p>
                   <p className="text-foreground whitespace-pre-wrap">{testResponse.content}</p>

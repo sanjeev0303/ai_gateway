@@ -9,7 +9,7 @@ import { APP_NAME } from "@/lib/constants";
 export const metadata: Metadata = {
   title: `Solutions · ${APP_NAME}`,
   description:
-    "How platform, security, and finance teams each use Sentinel to answer a different question about AI traffic.",
+    "How platform, security, and finance teams each use Tollseal to answer a different question about AI traffic.",
 };
 
 export default function SolutionsPage() {
@@ -17,7 +17,7 @@ export default function SolutionsPage() {
     <>
       <Hero
         headline="Three teams, one source of truth"
-        subheadline="Sentinel answers the question each of your stakeholders actually needs answered about AI usage — without building three separate systems."
+        subheadline="Tollseal answers the question each of your stakeholders actually needs answered about AI usage — without building three separate systems."
       />
       <FeatureGrid
         eyebrow="By team"

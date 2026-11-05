@@ -129,6 +129,11 @@ export interface Column<T> {
   sort?: Field<T>;
   /** Optional custom cell renderer. */
   render?: (row: T) => React.ReactNode;
+  /**
+   * Takes the table's spare width and truncates its text (full value on hover),
+   * so one long value never pushes the table into a sideways scroll.
+   */
+  grow?: boolean;
 }
 
 interface DataTableProps<T> {
@@ -216,6 +221,67 @@ export function DataTable<T>({
     setAscending(true);
   };
 
+  const cellContent = (column: Column<T>, row: T): React.ReactNode => {
+    const record = row as Record<string, unknown>;
+    const format = column.format ?? "text";
+
+    if (column.tone) {
+      return (
+        <StatusBadge tone={record[column.tone] as StatusTone}>
+          {cellText(record, column.primary, format)}
+        </StatusBadge>
+      );
+    }
+    if (column.render) return column.render(row);
+
+    const primaryText = cellText(record, column.primary, format);
+    const href = column.href ? record[column.href] : undefined;
+    const secondaryText = column.secondary ? cellText(record, column.secondary, "text") : null;
+    const meterValue = column.meter ? Number(record[column.meter]) : null;
+
+    return (
+      <div className={cn("min-w-0", column.align === "right" && "flex flex-col items-end")}>
+        {href ? (
+          <a
+            href={String(href)}
+            suppressHydrationWarning
+            title={column.grow ? String(primaryText) : undefined}
+            className={cn(
+              "font-medium underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              column.grow && "block truncate",
+            )}
+          >
+            {primaryText}
+          </a>
+        ) : (
+          <span
+            suppressHydrationWarning
+            title={column.grow ? String(primaryText) : undefined}
+            className={cn("block", TABULAR.has(format) && "tabular-nums", column.grow && "truncate")}
+          >
+            {primaryText}
+          </span>
+        )}
+        {secondaryText && secondaryText !== "—" && (
+          <span className="block truncate text-xs text-muted-foreground">{secondaryText}</span>
+        )}
+        {meterValue !== null && (
+          <span aria-hidden className="mt-1.5 block h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <span
+              className="block h-full rounded-full bg-primary"
+              style={{ width: `${Math.min(100, Math.max(0, (meterValue / (column.meterMax ?? 100)) * 100))}%` }}
+            />
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  // On a phone a row becomes a card: its identity and status up top, the rest as pairs.
+  const titleColumn = columns.find((column) => !column.tone) ?? columns[0];
+  const statusColumn = columns.find((column) => column.tone);
+  const detailColumns = columns.filter((column) => column !== titleColumn && column !== statusColumn);
+
   if (rows.length === 0) {
     return (
       <div className="space-y-3">
@@ -229,7 +295,40 @@ export function DataTable<T>({
     <div className="space-y-3">
       {toolbar}
 
-      <div className="overflow-x-auto rounded-lg border">
+      <ul className="flex flex-col gap-2 md:hidden">
+        {visible.map((row) => {
+          const record = row as Record<string, unknown>;
+          return (
+            <li key={String(record[rowKey as string])} className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <div suppressHydrationWarning className="min-w-0 flex-1 text-sm font-medium">
+                  {titleColumn && cellContent(titleColumn, row)}
+                </div>
+                {statusColumn && <div className="shrink-0">{cellContent(statusColumn, row)}</div>}
+                {ActionsComponent && (
+                  <div className="-mt-1 -mr-1 shrink-0">
+                    <ActionsComponent row={row} />
+                  </div>
+                )}
+              </div>
+              {detailColumns.length > 0 && (
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+                  {detailColumns.map((column) => (
+                    <div key={column.key} className="flex min-w-0 flex-col gap-0.5">
+                      <dt className="text-xs text-muted-foreground">{column.header}</dt>
+                      <dd suppressHydrationWarning className="min-w-0 text-[0.8125rem] break-words [&>div]:items-start!">
+                        {cellContent(column, row)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="hidden overflow-x-auto rounded-xl border border-border md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -241,19 +340,20 @@ export function DataTable<T>({
                     className={cn(
                       column.align === "right" && "text-right",
                       column.meter && "w-44",
+                      column.grow && "w-full max-w-0",
                     )}
                   >
                     <button
                       type="button"
                       onClick={() => toggleSort(column)}
                       className={cn(
-                        "inline-flex items-center gap-1.5 rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-sm font-semibold",
+                        "inline-flex items-center gap-1 rounded-sm text-xs font-medium transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                         active && "text-foreground",
                         column.align === "right" && "flex-row-reverse",
                       )}
                     >
                       {column.header}
-                      <span className={cn("transition-opacity", !active && "opacity-0")}>
+                      <span className={cn(!active && "hidden")}>
                         {ascending ? (
                           <ArrowUp className="size-3.5" aria-hidden />
                         ) : (
@@ -277,93 +377,15 @@ export function DataTable<T>({
               const record = row as Record<string, unknown>;
               return (
                 <TableRow key={String(record[rowKey as string])}>
-                  {columns.map((column) => {
-                    const alignRight = column.align === "right";
-                    const format = column.format ?? "text";
-
-                    if (column.tone) {
-                      return (
-                        <TableCell key={column.key} suppressHydrationWarning>
-                          <StatusBadge tone={record[column.tone] as StatusTone}>
-                            {cellText(record, column.primary, format)}
-                          </StatusBadge>
-                        </TableCell>
-                      );
-                    }
-
-                    if (column.render) {
-                      return (
-                        <TableCell key={column.key} suppressHydrationWarning className={cn(alignRight && "text-right")}>
-                          {column.render(row)}
-                        </TableCell>
-                      );
-                    }
-
-                    const primaryText = cellText(record, column.primary, format);
-                    const href = column.href ? record[column.href] : undefined;
-                    const secondaryText = column.secondary
-                      ? cellText(record, column.secondary, "text")
-                      : null;
-                    const meterValue = column.meter
-                      ? Number(record[column.meter])
-                      : null;
-
-                    return (
-                      <TableCell
-                        key={column.key}
-                        suppressHydrationWarning
-                        className={cn(alignRight && "text-right")}
-                      >
-                        <div
-                          className={cn(
-                            "min-w-0",
-                            alignRight && "flex flex-col items-end",
-                          )}
-                        >
-                          {href ? (
-                            <a
-                              href={String(href)}
-                              suppressHydrationWarning
-                              className="font-medium underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            >
-                              {primaryText}
-                            </a>
-                          ) : (
-                            <span
-                              suppressHydrationWarning
-                              className={cn(
-                                "block",
-                                TABULAR.has(format) && "tabular-nums",
-                              )}
-                            >
-                              {primaryText}
-                            </span>
-                          )}
-                          {secondaryText && secondaryText !== "—" && (
-                            <span className="block truncate text-sm text-muted-foreground/90">
-                              {secondaryText}
-                            </span>
-                          )}
-                          {meterValue !== null && (
-                            <span
-                              aria-hidden
-                              className="mt-1.5 block h-1.5 w-full overflow-hidden rounded-full bg-muted"
-                            >
-                              <span
-                                className="block h-full rounded-full bg-primary"
-                                style={{
-                                  width: `${Math.min(
-                                    100,
-                                    Math.max(0, (meterValue / (column.meterMax ?? 100)) * 100),
-                                  )}%`,
-                                }}
-                              />
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                    );
-                  })}
+                  {columns.map((column) => (
+                    <TableCell
+                      key={column.key}
+                      suppressHydrationWarning
+                      className={cn(column.align === "right" && "text-right", column.grow && "w-full max-w-0")}
+                    >
+                      {cellContent(column, row)}
+                    </TableCell>
+                  ))}
                   {ActionsComponent && (
                     <TableCell className="text-right">
                       <ActionsComponent row={row} />

@@ -56,6 +56,13 @@ type Provider interface {
 	ListModels(ctx context.Context, apiKey string) ([]Model, error)
 }
 
+// BaseURLOverrider is implemented by adapters whose upstream can differ per
+// account (custom and OpenAI-compatible endpoints). WithBaseURL returns a
+// Provider bound to baseURL, leaving the receiver unchanged.
+type BaseURLOverrider interface {
+	WithBaseURL(baseURL string) Provider
+}
+
 // Capability represents an inference capability supported by a provider or model.
 type Capability string
 

@@ -783,7 +783,7 @@ func TestGateway_Stats(t *testing.T) {
 	g := &Gateway{
 		config:      DefaultGatewayConfig(),
 		logger:      discardLogger(),
-		streamProxy: NewStreamProxy(nil, discardLogger()),
+		streamProxy: NewStreamProxy(nil, discardLogger(), true),
 	}
 	requireNoErr(t, g.Start(), "Start")
 

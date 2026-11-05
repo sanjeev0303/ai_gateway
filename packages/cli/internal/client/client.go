@@ -67,6 +67,11 @@ type RequestPayload struct {
 	ReasoningEffort string
 	SafetySettings  string
 	HFEndpoint      string
+	TopP            *float64
+	TopK            *int
+	StopSequences   []string
+	ThinkingBudget  int
+	Seed            *int
 }
 
 // New creates a new GatewayClient.
@@ -141,7 +146,7 @@ func (c *GatewayClient) ListModels(ctx context.Context) ([]Model, error) {
 // StreamRequest sends a streaming prompt to the gateway and invokes onChunk for each text delta.
 func (c *GatewayClient) StreamRequest(ctx context.Context, payload RequestPayload, onChunk func(string)) (*RequestMetadata, error) {
 	start := time.Now()
-	isOpenAI := strings.HasPrefix(payload.Model, "gpt-") || strings.HasPrefix(payload.Model, "o1") || strings.HasPrefix(payload.Model, "o3") || strings.HasPrefix(payload.Model, "gemini-")
+	isOpenAI := usesChatCompletions(payload.Model)
 
 	endpoint := c.GatewayURL + "/v1/messages"
 	if isOpenAI {
@@ -309,7 +314,7 @@ func (c *GatewayClient) StreamRequest(ctx context.Context, payload RequestPayloa
 // SendRequest sends a non-streaming prompt to the gateway.
 func (c *GatewayClient) SendRequest(ctx context.Context, payload RequestPayload) (string, *RequestMetadata, error) {
 	start := time.Now()
-	isOpenAI := strings.HasPrefix(payload.Model, "gpt-") || strings.HasPrefix(payload.Model, "o1") || strings.HasPrefix(payload.Model, "o3") || strings.HasPrefix(payload.Model, "gemini-")
+	isOpenAI := usesChatCompletions(payload.Model)
 
 	endpoint := c.GatewayURL + "/v1/messages"
 	if isOpenAI {
@@ -536,11 +541,41 @@ func (c *GatewayClient) buildRequestBody(payload RequestPayload, stream, isOpenA
 	isReasoningModel := strings.HasPrefix(payload.Model, "o1") || strings.HasPrefix(payload.Model, "o3")
 	isGemini := strings.HasPrefix(payload.Model, "gemini-") || strings.Contains(payload.Model, "gemini")
 
-	if payload.Temperature != nil && !isReasoningModel {
+	// Extended thinking (Anthropic) defaults temperature to 1, so Claude rejects
+	// a request that sets both. When thinking is on we leave temperature off.
+	thinkingOn := !isOpenAI && payload.ThinkingBudget > 0
+
+	if payload.Temperature != nil && !isReasoningModel && !thinkingOn {
 		m["temperature"] = *payload.Temperature
+	}
+	// Nucleus sampling works on both the Anthropic and OpenAI-style bodies;
+	// reasoning models (o1/o3) reject it, same as temperature.
+	if payload.TopP != nil && !isReasoningModel {
+		m["top_p"] = *payload.TopP
 	}
 	if payload.ReasoningEffort != "" && isOpenAI && isReasoningModel {
 		m["reasoning_effort"] = payload.ReasoningEffort
+	}
+	// Stop strings: Anthropic calls them stop_sequences, the OpenAI surface stop.
+	if len(payload.StopSequences) > 0 {
+		if isOpenAI {
+			m["stop"] = payload.StopSequences
+		} else {
+			m["stop_sequences"] = payload.StopSequences
+		}
+	}
+	if !isOpenAI {
+		// Anthropic-only knobs.
+		if payload.TopK != nil {
+			m["top_k"] = *payload.TopK
+		}
+		if thinkingOn {
+			m["thinking"] = map[string]any{"type": "enabled", "budget_tokens": payload.ThinkingBudget}
+		}
+	} else if payload.Seed != nil && !isGemini {
+		// Deterministic sampling is an OpenAI chat-completions knob; Gemini's
+		// surface does not take a seed, so it is sent to OpenAI models only.
+		m["seed"] = *payload.Seed
 	}
 	if payload.SafetySettings != "" && isGemini {
 		categories := []string{
@@ -593,4 +628,15 @@ func parseHTTPError(resp *http.Response) error {
 		return fmt.Errorf("[HTTP %d] %s", resp.StatusCode, errEnvelope.Error.Message)
 	}
 	return fmt.Errorf("[HTTP %d] %s", resp.StatusCode, strings.TrimSpace(string(data)))
+}
+
+// usesChatCompletions reports whether a model speaks the OpenAI chat format.
+// Only Anthropic (Claude) models use /v1/messages; Gemini, Mistral, Hugging
+// Face, Azure and custom endpoints all reach the gateway as chat completions.
+// Choosing by an OpenAI/Gemini name prefix sent Mistral and Hugging Face
+// models to /v1/messages, which Mistral answers with 404 and whose
+// Hugging Face reply the Anthropic parser read as empty.
+func usesChatCompletions(model string) bool {
+	m := strings.ToLower(model)
+	return !strings.HasPrefix(m, "claude") && !strings.HasPrefix(m, "anthropic/")
 }

@@ -8,7 +8,7 @@ import { formatDate, formatNumber, microsToUsd, formatUsd } from "@/lib/format";
 import { toneFor } from "@/lib/org-tones";
 
 export const metadata: Metadata = {
-  title: "Service account details · Sentinel",
+  title: "Service account details · Tollseal",
 };
 
 interface ServiceAccountPageProps {

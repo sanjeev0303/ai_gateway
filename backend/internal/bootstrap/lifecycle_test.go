@@ -60,7 +60,7 @@ func TestNewUsageBus_RejectsUnimplementedKinds(t *testing.T) {
 	quiet := slog.New(slog.DiscardHandler)
 	for _, kind := range []string{"postgres", "kafka", "redis", ""} {
 		cfg := config.EventbusConfig{Enabled: true, Kind: kind}
-		bus, err := newUsageBus(context.Background(), &cfg, quiet)
+		bus, err := newUsageBus(context.Background(), &cfg, nil, quiet)
 		if err == nil {
 			t.Fatalf("kind %q must be rejected explicitly, got bus %v", kind, bus)
 		}
@@ -73,7 +73,7 @@ func TestNewUsageBus_RejectsUnimplementedKinds(t *testing.T) {
 func TestNewUsageBus_NATSFailsClosedWhenUnreachable(t *testing.T) {
 	quiet := slog.New(slog.DiscardHandler)
 	cfg := config.EventbusConfig{Enabled: true, Kind: "nats", URL: "nats://127.0.0.1:1"}
-	bus, err := newUsageBus(context.Background(), &cfg, quiet)
+	bus, err := newUsageBus(context.Background(), &cfg, nil, quiet)
 	if err == nil {
 		bus.Close()
 		t.Fatal("an unreachable nats server must not yield a usable bus")
@@ -86,7 +86,7 @@ func TestNewUsageBus_NATSFailsClosedWhenUnreachable(t *testing.T) {
 func TestNewUsageBus_NATSRequiresURL(t *testing.T) {
 	quiet := slog.New(slog.DiscardHandler)
 	cfg := config.EventbusConfig{Enabled: true, Kind: "nats"}
-	if _, err := newUsageBus(context.Background(), &cfg, quiet); err == nil {
+	if _, err := newUsageBus(context.Background(), &cfg, nil, quiet); err == nil {
 		t.Fatal("nats without a URL must be rejected")
 	}
 }
@@ -94,7 +94,7 @@ func TestNewUsageBus_NATSRequiresURL(t *testing.T) {
 func TestNewUsageBus_BuildsInMemory(t *testing.T) {
 	quiet := slog.New(slog.DiscardHandler)
 	cfg := config.EventbusConfig{Enabled: true, Kind: "inmemory"}
-	bus, err := newUsageBus(context.Background(), &cfg, quiet)
+	bus, err := newUsageBus(context.Background(), &cfg, nil, quiet)
 	if err != nil {
 		t.Fatalf("inmemory must build: %v", err)
 	}

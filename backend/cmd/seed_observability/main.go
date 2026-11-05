@@ -303,8 +303,8 @@ func main() {
 			msgID := uuid.New()
 			_, err := tx.ExecContext(ctx, `
 				INSERT INTO conversation_messages (id, conversation_id, organization_id, user_id, role, content, tokens, created_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-			`, msgID, convID, orgIDStr, s.userID, m.role, m.content, m.tokens, turnTime)
+				VALUES ($1, $2, $3, $4, $5, '', $6, $7)
+			`, msgID, convID, orgIDStr, s.userID, m.role, m.tokens, turnTime) // text is never stored
 			if err != nil {
 				log.Fatalf("failed to insert message for %q: %v", s.title, err)
 			}

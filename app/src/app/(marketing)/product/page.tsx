@@ -18,7 +18,7 @@ export default function ProductPage() {
     <>
       <Hero
         headline="Inspect, attribute, and record every request"
-        subheadline="Sentinel proxies your AI traffic through one gateway, tags every call with the user, team, and project that caused it, and writes the cost and outcome to a recorded request trail."
+        subheadline="Tollseal proxies your AI traffic through one gateway, tags every call with the user, team, and project that caused it, and writes the cost and outcome to a recorded request trail."
       />
       <FeatureGrid
         eyebrow="Capabilities"

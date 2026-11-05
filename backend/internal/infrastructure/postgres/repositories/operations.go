@@ -86,6 +86,8 @@ func (r *conversationRepo) List(ctx context.Context, orgID uuid.UUID, filter dom
 			ProjectID:      filter.ProjectID,
 			Provider:       filter.Provider,
 			Model:          filter.Model,
+			CredentialID:   filter.CredentialID,
+			WithoutKey:     filter.WithoutKey,
 			FromTs:         timeOrNil(filter.From),
 			ToTs:           timeOrNil(filter.To),
 			TeamID:         filter.TeamID,
@@ -102,6 +104,43 @@ func (r *conversationRepo) List(ctx context.Context, orgID uuid.UUID, filter dom
 		return nil
 	})
 	return summaries, err
+}
+
+// CountsByKey counts conversations per employee and gateway key. userID, when
+// set, narrows it to one employee.
+func (r *conversationRepo) CountsByKey(ctx context.Context, orgID uuid.UUID, userID *uuid.UUID) ([]domain.ConversationKeyCount, error) {
+	var counts []domain.ConversationKeyCount
+	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		rows, err := q.ConversationCountsByKey(ctx, db.ConversationCountsByKeyParams{OrganizationID: orgID, UserID: userID})
+		if err != nil {
+			return err
+		}
+		counts = make([]domain.ConversationKeyCount, 0, len(rows))
+		for _, row := range rows {
+			counts = append(counts, domain.ConversationKeyCount{
+				UserID:         row.UserID,
+				CredentialID:   row.CredentialID,
+				Conversations:  row.Conversations,
+				LastActivityAt: row.LastActivityAt,
+			})
+		}
+		return nil
+	})
+	return counts, err
+}
+
+// Delete removes one conversation and its messages, or reports ErrNotFound.
+func (r *conversationRepo) Delete(ctx context.Context, orgID, id uuid.UUID) error {
+	return r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
+		n, err := q.DeleteConversation(ctx, db.DeleteConversationParams{OrganizationID: orgID, ID: id})
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return ports.ErrNotFound
+		}
+		return nil
+	})
 }
 
 func (r *conversationRepo) PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error) {
@@ -2105,6 +2144,7 @@ func toConversationSummary(row db.ListConversationsRow) domain.ConversationSumma
 		ProjectID:    row.ProjectID,
 		Model:        row.Model,
 		Provider:     row.Provider,
+		CredentialID: row.CredentialID,
 		StartedAt:    row.CreatedAt,
 		RequestCount: int32(row.RequestCount),
 		MessageCount: int32(row.MessageCount),

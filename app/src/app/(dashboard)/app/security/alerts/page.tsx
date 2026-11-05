@@ -20,7 +20,7 @@ import { AlertActionsMenu, CreateAlertDialog } from "./client";
 import { AlertActionsCell } from "./actions-cell";
 
 export const metadata: Metadata = {
-  title: "Alerts · Sentinel",
+  title: "Alerts · Tollseal",
   description: "Alert rules configured for your organization.",
 };
 
@@ -151,7 +151,7 @@ export default async function AlertsPage() {
               <CardHeader>
                 <CardTitle>Configured rules</CardTitle>
                 <CardDescription>
-                  Configured watchdog rules evaluated continuously by the Sentinel background engine against real gateway usage, spend, errors, and provider metrics.
+                  Configured watchdog rules evaluated continuously by the Tollseal background engine against real gateway usage, spend, errors, and provider metrics.
                 </CardDescription>
               </CardHeader>
               <CardContent>

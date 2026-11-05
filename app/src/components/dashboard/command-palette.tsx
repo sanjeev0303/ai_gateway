@@ -8,12 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Dialog,
-  DialogContent,
-  DialogPortal,
-  DialogOverlay,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogPortal, DialogOverlay, DialogTitle } from "@/components/ui/dialog";
 import { useSession } from "@/lib/session-context";
 import { useApiClient } from "@/hooks/use-api-client";
 import type { SearchOptions, SearchResultItem } from "@ai-governance/api-client";
@@ -156,11 +151,15 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPortal>
-        <DialogOverlay className="bg-black/30 backdrop-blur-sm" />
+        {/* Opened from the keyboard many times a day, so it appears and leaves instantly. */}
+        <DialogOverlay transition={{ duration: 0 }} />
         <DialogContent
-          className="fixed top-[20%] left-1/2 -translate-x-1/2 w-full max-w-2xl max-h-[70vh] p-0 shadow-xl"
+          className="fixed inset-x-0 top-[20%] bottom-auto mx-auto w-full max-w-2xl max-h-[70vh] gap-0 p-0"
           showCloseButton={false}
+          transition={{ duration: 0 }}
+          exitTransition={{ duration: 0 }}
         >
+          <DialogTitle className="sr-only">Search Tollseal</DialogTitle>
           <div className="flex flex-col">
             <div className="relative p-4 border-b">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-muted-foreground" aria-hidden />
@@ -257,6 +256,13 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 let commandPaletteOpen = false;
 let commandPaletteSetOpen: ((open: boolean) => void) | null = null;
 
+/** Opens the palette from anywhere in the console, such as the sidebar's help menu. */
+export function openCommandPalette() {
+  if (!commandPaletteSetOpen) return;
+  commandPaletteSetOpen(true);
+  commandPaletteOpen = true;
+}
+
 export function useCommandPalette() {
   const [open, setOpen] = React.useState(false);
 
@@ -297,6 +303,17 @@ export function CommandPaletteTrigger() {
   const { open, setOpen } = useCommandPalette();
 
   return (
-    <CommandPalette open={open} onOpenChange={setOpen} />
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="hidden h-9 w-56 items-center gap-2 rounded-full border border-border bg-card/80 pr-1.5 pl-3 text-sm text-muted-foreground transition-[border-color,background-color,color] duration-150 hover:border-border-strong hover:bg-card hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30 focus-visible:outline-none md:flex xl:w-64"
+      >
+        <Search className="size-4 shrink-0" aria-hidden />
+        <span className="flex-1 text-left">Search</span>
+        <kbd className="rounded-full border border-border bg-muted px-2 py-0.5 text-[0.6875rem] text-muted-foreground">Ctrl&nbsp;K</kbd>
+      </button>
+      <CommandPalette open={open} onOpenChange={setOpen} />
+    </>
   );
 }

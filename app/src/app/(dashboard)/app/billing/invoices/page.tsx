@@ -24,7 +24,7 @@ import type { StatusTone } from "@/types";
 import { ExportAllInvoicesButton, InvoiceActions } from "./client";
 
 export const metadata: Metadata = {
-  title: "Invoices · Sentinel",
+  title: "Invoices · Tollseal",
   description: "Invoices recorded for this organization, with their itemised lines.",
 };
 

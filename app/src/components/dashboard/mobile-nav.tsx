@@ -29,11 +29,11 @@ export function MobileNav() {
           <Menu className="size-5" aria-hidden />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-72 p-0">
+      <SheetContent side="left" className="w-72 gap-0 bg-background p-0">
         {/* Radix needs these for the dialog's accessible name. */}
         <SheetTitle className="sr-only">Dashboard navigation</SheetTitle>
         <SheetDescription className="sr-only">
-          Jump to a section of the Sentinel dashboard.
+          Jump to a section of the Tollseal dashboard.
         </SheetDescription>
         <SidebarNav onNavigate={() => setOpen(false)} />
       </SheetContent>

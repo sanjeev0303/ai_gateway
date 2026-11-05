@@ -22,7 +22,7 @@ import { GatewayCredentialActions, CreateCredentialButton } from "./client";
 import { CredentialActionsCell } from "./actions-cell";
 
 export const metadata: Metadata = {
-  title: "Gateway credentials · Sentinel",
+  title: "Gateway credentials · Tollseal",
   description: "Every credential the gateway holds, with expiry and scope.",
 };
 
@@ -62,7 +62,7 @@ const COLUMNS: readonly Column<CredentialRow>[] = [
   },
   {
     key: "subject",
-    header: "Subject",
+    header: "Issued to",
     primary: "subject",
     secondary: "subjectId",
     sort: "subject",
@@ -95,6 +95,12 @@ async function loadGatewayCredentials() {
     projects.list().catch(() => ({ items: [] })),
     serviceAccounts.list().catch(() => ({ items: [] })),
   ]);
+  const names: Record<string, string> = {};
+  for (const m of memberList.items) names[m.user.id] = m.user.display_name || m.user.email;
+  for (const t of teamList.items) names[t.id] = t.name;
+  for (const p of projectList.items) names[p.id] = p.name;
+  for (const a of saList.items) names[a.id] = a.name;
+
   const now = new Date();
   const windowEnd = now.getTime() + EXPIRY_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
@@ -106,15 +112,17 @@ async function loadGatewayCredentials() {
         : credential.team_id
           ? "Team"
           : "Organization";
+      const subjectName = names[credential.subject_id] ?? short(credential.subject_id);
+      const ownerName = credential.project_id ?? credential.team_id;
 
       return {
         id: credential.id,
         name: credential.name,
         prefix: credential.key_prefix,
-        subject: credential.subject_type.replace(/_/g, " "),
-        subjectId: short(credential.subject_id),
-        owner,
-        ownerId: short(credential.project_id ?? credential.team_id),
+        subject: subjectName,
+        subjectId: credential.subject_type.replace(/_/g, " "),
+        owner: ownerName ? (names[ownerName] ?? short(ownerName)) : owner,
+        ownerId: ownerName ? owner : "—",
         scopes: credential.scopes.length ? credential.scopes.join(", ") : "none",
         status: credential.status,
         tone: toneFor(CREDENTIAL_TONE, credential.status),
@@ -177,7 +185,7 @@ export default async function GatewayCredentialsPage() {
           />
         }
       >
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
             label="Gateway credentials"
             value={formatNumber(total)}

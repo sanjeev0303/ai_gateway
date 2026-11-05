@@ -29,9 +29,14 @@ func TestCommandRegistry_ProviderSpecificFiltering(t *testing.T) {
 	assertContains(t, anthropicNames, "/max-tokens", "anthropic session should have /max-tokens")
 	assertContains(t, anthropicNames, "/temp", "anthropic session should have /temp")
 	assertContains(t, anthropicNames, "/compact", "anthropic session should have /compact")
+	assertContains(t, anthropicNames, "/top-k", "anthropic session should have /top-k")
+	assertContains(t, anthropicNames, "/thinking", "anthropic session should have /thinking")
+	assertContains(t, anthropicNames, "/top-p", "anthropic session should have /top-p")
+	assertContains(t, anthropicNames, "/stop", "anthropic session should have /stop")
 	assertNotContains(t, anthropicNames, "/reasoning", "anthropic session must not have /reasoning")
 	assertNotContains(t, anthropicNames, "/safety", "anthropic session must not have /safety")
 	assertNotContains(t, anthropicNames, "/endpoint", "anthropic session must not have /endpoint")
+	assertNotContains(t, anthropicNames, "/seed", "anthropic session must not have /seed")
 
 	// 2. Gemini Session
 	geminiSess := &SessionState{
@@ -46,8 +51,13 @@ func TestCommandRegistry_ProviderSpecificFiltering(t *testing.T) {
 	}
 	assertContains(t, geminiNames, "/safety", "gemini session should have /safety")
 	assertContains(t, geminiNames, "/temp", "gemini session should have /temp")
+	assertContains(t, geminiNames, "/top-p", "gemini session should have /top-p")
+	assertContains(t, geminiNames, "/stop", "gemini session should have /stop")
 	assertNotContains(t, geminiNames, "/max-tokens", "gemini session must not have /max-tokens")
 	assertNotContains(t, geminiNames, "/reasoning", "gemini session must not have /reasoning")
+	assertNotContains(t, geminiNames, "/top-k", "gemini session must not have /top-k")
+	assertNotContains(t, geminiNames, "/thinking", "gemini session must not have /thinking")
+	assertNotContains(t, geminiNames, "/seed", "gemini session must not have /seed")
 
 	// 3. OpenAI Session with standard model (gpt-4o) - no reasoning capability
 	openaiStandardSess := &SessionState{
@@ -62,6 +72,11 @@ func TestCommandRegistry_ProviderSpecificFiltering(t *testing.T) {
 	}
 	assertNotContains(t, standardNames, "/reasoning", "standard model gpt-4o must not have /reasoning")
 	assertContains(t, standardNames, "/temp", "openai session should have /temp")
+	assertContains(t, standardNames, "/seed", "openai session should have /seed")
+	assertContains(t, standardNames, "/top-p", "openai session should have /top-p")
+	assertContains(t, standardNames, "/stop", "openai session should have /stop")
+	assertNotContains(t, standardNames, "/top-k", "openai session must not have /top-k")
+	assertNotContains(t, standardNames, "/thinking", "openai session must not have /thinking")
 
 	// 4. OpenAI Session with reasoning model (o1) - reasoning capability enabled
 	openaiReasoningSess := &SessionState{
@@ -345,6 +360,64 @@ func TestCommandRegistry_PermissionsCommand(t *testing.T) {
 	}
 	if !strings.Contains(output, "2 models accessible") {
 		t.Errorf("expected 2 models accessible, got: %s", output)
+	}
+}
+
+func TestCommandRegistry_SamplingKnobExecution(t *testing.T) {
+	ctx := context.Background()
+	reg := NewDefaultCommandRegistry()
+
+	// /top-p sets and resets.
+	sess := &SessionState{Provider: "anthropic", Model: "claude-sonnet-4-5", MaxTokens: 4096, Registry: reg}
+	var out bytes.Buffer
+	if _, _, err := HandleSlashCommand(ctx, "/top-p 0.9", sess, &out); err != nil {
+		t.Fatalf("/top-p 0.9 failed: %v", err)
+	}
+	if sess.TopP == nil || *sess.TopP != 0.9 {
+		t.Errorf("expected top_p 0.9, got %v", sess.TopP)
+	}
+	if _, _, err := HandleSlashCommand(ctx, "/top-p 2", sess, &out); err == nil {
+		t.Errorf("expected error for top_p 2 (out of range)")
+	}
+
+	// /thinking rejects a budget at or above max-tokens, accepts a valid one.
+	if _, _, err := HandleSlashCommand(ctx, "/thinking 5000", sess, &out); err == nil {
+		t.Errorf("expected error: thinking budget 5000 >= max-tokens 4096")
+	}
+	if _, _, err := HandleSlashCommand(ctx, "/thinking 2048", sess, &out); err != nil {
+		t.Fatalf("/thinking 2048 failed: %v", err)
+	}
+	if sess.ThinkingBudget != 2048 {
+		t.Errorf("expected thinking budget 2048, got %d", sess.ThinkingBudget)
+	}
+	if _, _, err := HandleSlashCommand(ctx, "/thinking off", sess, &out); err != nil {
+		t.Fatalf("/thinking off failed: %v", err)
+	}
+	if sess.ThinkingBudget != 0 {
+		t.Errorf("expected thinking disabled, got %d", sess.ThinkingBudget)
+	}
+
+	// /stop sets then clears.
+	if _, _, err := HandleSlashCommand(ctx, "/stop END ###", sess, &out); err != nil {
+		t.Fatalf("/stop failed: %v", err)
+	}
+	if len(sess.StopSequences) != 2 {
+		t.Errorf("expected 2 stop sequences, got %v", sess.StopSequences)
+	}
+	if _, _, err := HandleSlashCommand(ctx, "/stop clear", sess, &out); err != nil {
+		t.Fatalf("/stop clear failed: %v", err)
+	}
+	if len(sess.StopSequences) != 0 {
+		t.Errorf("expected stop sequences cleared, got %v", sess.StopSequences)
+	}
+
+	// /seed on an OpenAI session.
+	openai := &SessionState{Provider: "openai", Model: "gpt-4o", MaxTokens: 1024, Registry: reg}
+	if _, _, err := HandleSlashCommand(ctx, "/seed 42", openai, &out); err != nil {
+		t.Fatalf("/seed 42 failed: %v", err)
+	}
+	if openai.Seed == nil || *openai.Seed != 42 {
+		t.Errorf("expected seed 42, got %v", openai.Seed)
 	}
 }
 

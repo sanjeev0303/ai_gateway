@@ -73,7 +73,7 @@ func setupMockGateway(t *testing.T, mockUpstreamURL string, providerKind string,
 		policyResolver: &stubGatewayPolicyResolver{snapshot: policySnap},
 		rateLimiter:    rateLimiter,
 		budgetGuard:    budgetGuard,
-		streamProxy:    NewStreamProxy(mockClientWithTimeout(5*time.Second), nil),
+		streamProxy:    NewStreamProxy(mockClientWithTimeout(5*time.Second), nil, true),
 		providerRouter: NewProviderRouter(mockUpstreamURL, "2024-08-01-preview"),
 		requestInspector: &stubGatewayRequestInspector{
 			hints: InspectorHints{

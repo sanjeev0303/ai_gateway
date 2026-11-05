@@ -1,39 +1,27 @@
+import { HomeHero } from "@/components/home/hero";
+import { HomeMotion } from "@/components/home/home-motion";
+import { Workflow } from "@/components/home/workflow";
 import {
-  Architecture,
-  Attribution,
-  CodeTabs,
-  Comparison,
+  Capabilities,
+  Developers,
   FinalCta,
-  GatewayFlow,
-  Governance,
-  Hero,
-  Pillars,
-  PricingTeaser,
-  Problem,
+  ProblemRegister,
   ProviderStrip,
-  RequestInspector,
-  Trust,
-  UseCases,
-} from "@/components/landing";
+  Security,
+} from "@/components/home/sections";
 
 export default function HomePage() {
   return (
     <>
-      <Hero />
+      <HomeHero />
       <ProviderStrip />
-      <Problem />
-      <GatewayFlow />
-      <Pillars />
-      <RequestInspector />
-      <UseCases />
-      <Attribution />
-      <Governance />
-      <CodeTabs />
-      <Architecture />
-      <Comparison />
-      <Trust />
-      <PricingTeaser />
+      <ProblemRegister />
+      <Workflow />
+      <Developers />
+      <Capabilities />
+      <Security />
       <FinalCta />
+      <HomeMotion />
     </>
   );
 }

@@ -1,13 +1,7 @@
 import type { TimeSeriesPoint } from "@/types";
 import { formatCompact } from "@/lib/format";
-import {
-  areaPath,
-  labelStride,
-  linearScale,
-  niceMax,
-  niceTicks,
-  type Point,
-} from "./utils";
+import { areaPath, labelStride, linearScale, niceMax, niceTicks, type Point, axisLabel } from "./utils";
+import { ChartFrame } from "./chart-frame";
 
 export interface AreaSeries {
   label: string;
@@ -70,6 +64,7 @@ export function AreaChart({
   const stride = labelStride(length);
 
   return (
+    <ChartFrame>
     <svg
       viewBox={`0 0 ${WIDTH} ${height}`}
       className="h-auto w-full"
@@ -92,7 +87,7 @@ export function AreaChart({
             y={y.map(tick)}
             textAnchor="end"
             dominantBaseline="middle"
-            className="fill-muted-foreground text-xs font-mono"
+            className="fill-muted-foreground text-xs tabular-nums"
           >
             {formatValue(tick)}
           </text>
@@ -156,11 +151,12 @@ export function AreaChart({
             x={x.map(index)}
             y={baseline + 18}
             textAnchor="middle"
-            className="fill-muted-foreground text-xs font-mono"
+            className="fill-muted-foreground text-xs tabular-nums"
           >
-            {(series[0]!.data[index]?.date ?? "").slice(5)}
+            {axisLabel(series[0]!.data[index]?.date ?? "")}
           </text>
         ))}
     </svg>
+    </ChartFrame>
   );
 }

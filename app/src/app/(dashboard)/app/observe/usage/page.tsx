@@ -21,6 +21,7 @@ import {
 import {
   formatCompact,
   formatNumber,
+  formatProviderName,
   formatUsd,
   microsToUsd,
 } from "@/lib/format";
@@ -29,7 +30,7 @@ import type { TrendDirection } from "@/types";
 import { ExportUsageButton } from "./export-button";
 
 export const metadata: Metadata = {
-  title: "Usage · Sentinel",
+  title: "Usage · Tollseal",
   description: "Request and token volume across every route, with spend attribution.",
 };
 
@@ -180,6 +181,7 @@ export default async function UsagePage({
     project_id: typeof params.project_id === "string" ? params.project_id : undefined,
     user_id: typeof params.user_id === "string" ? params.user_id : undefined,
     team_id: typeof params.team_id === "string" ? params.team_id : undefined,
+    service_account_id: typeof params.service_account_id === "string" ? params.service_account_id : undefined,
     provider: typeof params.provider === "string" ? params.provider : undefined,
     model: typeof params.model === "string" ? params.model : undefined,
     status: typeof params.status === "string" ? params.status : undefined,
@@ -299,7 +301,7 @@ export default async function UsagePage({
         }
       >
         <ObserveFilters />
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
             label="Requests"
             value={formatNumber(summary.Requests)}
@@ -372,10 +374,10 @@ export default async function UsagePage({
             <CardContent>
               <DonutChart
                 data={byProvider.items.map((row) => ({
-                  label: row.Provider,
+                  label: formatProviderName(row.Provider),
                   value: microsToUsd(row.CostMicros),
                 }))}
-                centerLabel={formatUsd(totalSpend)}
+                centerLabel="spend"
                 formatValue={formatUsd}
               />
             </CardContent>

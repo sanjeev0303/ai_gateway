@@ -1,0 +1,701 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-05T16:25:07.255Z",
+  "title": "Design System: Tollseal",
+  "extensions": {
+    "colorMeta": {
+      "banknote-green": {
+        "role": "primary",
+        "displayName": "Banknote Green",
+        "canonical": "oklch(42.5% 0.079 170)",
+        "tonalRamp": [
+          "#12392d",
+          "#154536",
+          "#185642",
+          "#1d6b50",
+          "#278463",
+          "#45a07b",
+          "#a8d6c0",
+          "#ecf6f1"
+        ],
+        "cssVar": "--primary",
+        "night": "#4cc9a4",
+        "note": "The one primary action per view and the seal mark. Sage ramp (--sage-*) is the family."
+      },
+      "banknote-green-deep": {
+        "role": "primary",
+        "displayName": "Banknote Green, Pressed",
+        "canonical": "#0a4a3a",
+        "tonalRamp": [
+          "#12392d",
+          "#154536",
+          "#185642",
+          "#1d6b50",
+          "#278463",
+          "#45a07b",
+          "#a8d6c0",
+          "#ecf6f1"
+        ],
+        "cssVar": "--primary-hover",
+        "night": "#6ad6b6"
+      },
+      "banknote-green-night": {
+        "role": "primary",
+        "displayName": "Banknote Green, Night",
+        "canonical": "oklch(75.6% 0.123 170)",
+        "tonalRamp": [
+          "#001406",
+          "#00331d",
+          "#005538",
+          "#007756",
+          "#009977",
+          "#43bd99",
+          "#80dfbf",
+          "#b5ffe6"
+        ],
+        "cssVar": "--primary (.dark)"
+      },
+      "teal-iris": {
+        "role": "secondary",
+        "displayName": "Teal Iris",
+        "canonical": "oklch(52.5% 0.087 190)",
+        "tonalRamp": [
+          "#001211",
+          "#002f2d",
+          "#00504d",
+          "#00716d",
+          "#35938e",
+          "#5eb6b1",
+          "#91d9d4",
+          "#c1fcf8"
+        ],
+        "cssVar": "--copper / --ring",
+        "night": "#4fc7bd",
+        "note": "Working accent: focus, caret, selection, icons, progress. Legacy token name --copper."
+      },
+      "intaglio-indigo": {
+        "role": "secondary",
+        "displayName": "Intaglio Indigo",
+        "canonical": "oklch(32.4% 0.084 272)",
+        "tonalRamp": [
+          "#050723",
+          "#1a2146",
+          "#343e6d",
+          "#515e91",
+          "#717fb5",
+          "#94a2d9",
+          "#bac7f7",
+          "#e1edff"
+        ],
+        "cssVar": "--brown / --ai",
+        "night": "#8fa4e6",
+        "note": "Engraved brand ink. Legacy token name --brown."
+      },
+      "foil-teal": {
+        "role": "tertiary",
+        "displayName": "Foil Teal",
+        "canonical": "oklch(64.9% 0.103 187)",
+        "tonalRamp": [
+          "#001310",
+          "#00312c",
+          "#00524b",
+          "#00736b",
+          "#11968d",
+          "#4bb9b0",
+          "#85dcd3",
+          "#b8fef7"
+        ],
+        "cssVar": "--foil stop 0%",
+        "night": "#4fc7bd"
+      },
+      "foil-blue": {
+        "role": "tertiary",
+        "displayName": "Foil Blue",
+        "canonical": "oklch(53.6% 0.158 265)",
+        "tonalRamp": [
+          "#25305c",
+          "#283870",
+          "#2b4189",
+          "#3250a8",
+          "#4166c8",
+          "#6584d0",
+          "#b8c8ee",
+          "#eef2fb"
+        ],
+        "cssVar": "--foil stop 48%",
+        "night": "#84a2f0"
+      },
+      "foil-gold": {
+        "role": "tertiary",
+        "displayName": "Foil Gold",
+        "canonical": "oklch(73.3% 0.128 89)",
+        "tonalRamp": [
+          "#190500",
+          "#391f00",
+          "#5c3b00",
+          "#7e5b00",
+          "#a17d00",
+          "#c4a03a",
+          "#e5c675",
+          "#ffecab"
+        ],
+        "cssVar": "--foil stop 100%",
+        "night": "#e2c15f",
+        "note": "Foil only: prism plates, cap edge, the seal on the cap."
+      },
+      "prism-cap": {
+        "role": "tertiary",
+        "displayName": "Prism Cap Indigo",
+        "canonical": "oklch(28.2% 0.079 271)",
+        "tonalRamp": [
+          "#050821",
+          "#1a2245",
+          "#333f6b",
+          "#515e8e",
+          "#7180b2",
+          "#93a3d6",
+          "#b9c7f5",
+          "#e1edff"
+        ],
+        "night": "#1a2350"
+      },
+      "intaglio-red": {
+        "role": "status",
+        "displayName": "Intaglio Red",
+        "canonical": "oklch(47.3% 0.162 28)",
+        "tonalRamp": [
+          "#5c1b17",
+          "#6e1c17",
+          "#861f19",
+          "#a3271f",
+          "#c13a32",
+          "#d65a52",
+          "#f0b5b1",
+          "#fcefee"
+        ],
+        "cssVar": "--destructive / --danger",
+        "night": "#f0736a",
+        "note": "Blocked, failed, destructive, SPECIMEN overprint. Tailwind rose/red remap to --brick-*."
+      },
+      "ochre": {
+        "role": "status",
+        "displayName": "Ochre",
+        "canonical": "oklch(51.9% 0.102 75)",
+        "tonalRamp": [
+          "#4b3413",
+          "#5a3e13",
+          "#6f4c12",
+          "#8a5f12",
+          "#ad7a19",
+          "#c9952e",
+          "#ebcd85",
+          "#fbf5e6"
+        ],
+        "cssVar": "--warning",
+        "night": "#e2b24f",
+        "note": "Tailwind amber/yellow/orange remap to --honey-*."
+      },
+      "indigo-info": {
+        "role": "status",
+        "displayName": "Indigo Info",
+        "canonical": "oklch(45.9% 0.146 266)",
+        "tonalRamp": [
+          "#25305c",
+          "#283870",
+          "#2b4189",
+          "#3250a8",
+          "#4166c8",
+          "#6584d0",
+          "#b8c8ee",
+          "#eef2fb"
+        ],
+        "cssVar": "--info",
+        "night": "#84a2f0",
+        "note": "Tailwind blue/sky/cyan remap to --dusk-*."
+      },
+      "security-paper": {
+        "role": "neutral",
+        "displayName": "Security Paper",
+        "canonical": "oklch(95.4% 0.006 153)",
+        "tonalRamp": [
+          "#0a0c0a",
+          "#232624",
+          "#404341",
+          "#5f6260",
+          "#808381",
+          "#a2a6a3",
+          "#c7cac8",
+          "#ecefed"
+        ],
+        "cssVar": "--background / --canvas",
+        "night": "#12102a"
+      },
+      "note-paper": {
+        "role": "neutral",
+        "displayName": "Note Paper",
+        "canonical": "oklch(98.3% 0.002 165)",
+        "tonalRamp": [
+          "#0a0b0b",
+          "#242525",
+          "#414242",
+          "#606261",
+          "#818382",
+          "#a4a5a4",
+          "#c8c9c9",
+          "#edefee"
+        ],
+        "cssVar": "--card / --surface",
+        "night": "#191736"
+      },
+      "intaglio-ink": {
+        "role": "neutral",
+        "displayName": "Intaglio Ink",
+        "canonical": "oklch(22.6% 0.049 271)",
+        "tonalRamp": [
+          "#070a19",
+          "#1e2439",
+          "#39415c",
+          "#57607e",
+          "#7881a1",
+          "#9aa4c4",
+          "#bfc8e5",
+          "#e6eeff"
+        ],
+        "cssVar": "--foreground / --ink",
+        "night": "#ecebf8"
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "oklch(46.2% 0.052 271)",
+        "tonalRamp": [
+          "#060a1a",
+          "#1e243a",
+          "#38405d",
+          "#57607f",
+          "#7781a2",
+          "#99a4c6",
+          "#bfc8e6",
+          "#e6eeff"
+        ],
+        "cssVar": "--muted-foreground",
+        "night": "#a9a5c9"
+      },
+      "night-paper": {
+        "role": "neutral",
+        "displayName": "Night Intaglio Paper",
+        "canonical": "oklch(19.2% 0.051 283)",
+        "tonalRamp": [
+          "#0a0919",
+          "#232239",
+          "#3f3e5c",
+          "#5d5e7e",
+          "#7e7fa0",
+          "#a1a1c4",
+          "#c5c6e5",
+          "#ebecff"
+        ],
+        "cssVar": "--background (.dark)"
+      },
+      "night-note": {
+        "role": "neutral",
+        "displayName": "Night Note",
+        "canonical": "oklch(22.6% 0.059 283)",
+        "tonalRamp": [
+          "#09081b",
+          "#22213c",
+          "#3e3e60",
+          "#5d5d82",
+          "#7d7ea5",
+          "#a0a1c8",
+          "#c4c6e9",
+          "#eaecff"
+        ],
+        "cssVar": "--card (.dark)"
+      },
+      "night-ink": {
+        "role": "neutral",
+        "displayName": "Night Ink",
+        "canonical": "oklch(94.5% 0.017 289)",
+        "tonalRamp": [
+          "#0b0a10",
+          "#25242c",
+          "#42414b",
+          "#61606b",
+          "#82818c",
+          "#a4a3af",
+          "#c9c8d2",
+          "#eeedf6"
+        ],
+        "cssVar": "--foreground (.dark)"
+      },
+      "terminal-ink": {
+        "role": "neutral",
+        "displayName": "Terminal Ink",
+        "canonical": "oklch(20.7% 0.054 271)",
+        "tonalRamp": [
+          "#060a1a",
+          "#1d243b",
+          "#38405e",
+          "#566080",
+          "#7681a3",
+          "#99a4c7",
+          "#bec8e7",
+          "#e5eeff"
+        ],
+        "cssVar": "--terminal-bg",
+        "night": "#0c0a1f"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display (denomination)",
+        "purpose": "Hero headline on the note. Archivo at 118% width, 640."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Marketing section headings and the closing seal block."
+      },
+      "numeral": {
+        "displayName": "Numeral",
+        "purpose": "Figures read as values: health ledger cells, sample figures."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card, panel and register-row titles; all console headings."
+      },
+      "body-lead": {
+        "displayName": "Body Lead",
+        "purpose": "The one supporting sentence under a display heading, 48-52ch."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Register text, descriptions, table cells."
+      },
+      "label": {
+        "displayName": "Check Label",
+        "purpose": "Uppercase tracked mono naming a value inside a ledger, register, diagram or stamp. Never a kicker."
+      },
+      "microprint": {
+        "displayName": "Microprint",
+        "purpose": "Repeating edge strip of a note; serials at 0.625rem / 0.1em."
+      },
+      "code": {
+        "displayName": "Code",
+        "purpose": "Terminal panel and inline commands."
+      }
+    },
+    "shadows": [
+      {
+        "name": "shadow-float",
+        "value": "0 1px 2px rgba(20,26,51,0.06), 0 12px 32px -12px rgba(20,26,51,0.2)",
+        "night": "0 1px 2px rgba(0,0,0,0.35), 0 16px 40px -16px rgba(0,0,0,0.65)",
+        "purpose": "Menus, selects, popovers, the command palette, hovered stage chips."
+      },
+      {
+        "name": "shadow-dialog",
+        "value": "0 2px 6px rgba(20,26,51,0.07), 0 32px 64px -24px rgba(20,26,51,0.34)",
+        "night": "0 2px 6px rgba(0,0,0,0.4), 0 32px 72px -24px rgba(0,0,0,0.8)",
+        "purpose": "Dialogs and presented objects: the hero note, the console fragment, the code terminal."
+      },
+      {
+        "name": "card-hairline",
+        "value": "0 1px 2px rgba(20,26,51,0.03)",
+        "purpose": "Resting card."
+      },
+      {
+        "name": "pressed-ink",
+        "value": "inset 0 1px 0 rgba(255,255,255,0.12), 0 1px 2px rgba(20,26,51,0.18)",
+        "purpose": "Primary button."
+      },
+      {
+        "name": "pressed-ink-hero",
+        "value": "inset 0 1px 0 rgba(255,255,255,0.16), 0 8px 18px -8px rgba(13,92,72,0.6)",
+        "purpose": "Marketing Get started action."
+      },
+      {
+        "name": "prism-plate",
+        "value": "inset 0 1px 0 color-mix(in oklab, white 55%, transparent), 0 18px 30px -18px rgba(20,26,51,0.4)",
+        "purpose": "Gateway prism foil plates."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "Default for state transitions, presses, arrow nudges (also --ease-out-strong)."
+      },
+      {
+        "name": "ease-drawer",
+        "value": "cubic-bezier(0.32, 0.72, 0, 1)",
+        "purpose": "Sheets and drawers."
+      },
+      {
+        "name": "ease-micro",
+        "value": "cubic-bezier(0.5, 0, 0.5, 1)",
+        "purpose": "Small symmetric micro-motion."
+      },
+      {
+        "name": "motion-fast",
+        "value": "140ms",
+        "purpose": "Colour and border changes (buttons use 150ms)."
+      },
+      {
+        "name": "motion-base",
+        "value": "220ms",
+        "purpose": "Standard transitions."
+      },
+      {
+        "name": "motion-slow",
+        "value": "480ms",
+        "purpose": "Progress fills, larger moves."
+      },
+      {
+        "name": "press-scale",
+        "value": "scale(0.97)",
+        "purpose": "Active state of buttons and pills; nav items 0.95."
+      },
+      {
+        "name": "hero-engrave",
+        "value": "GSAP stroke-dashoffset 1.6s power2.inOut, stagger 0.03s",
+        "purpose": "Hero guilloche engraves once, under gsap.matchMedia (prefers-reduced-motion: no-preference) only."
+      },
+      {
+        "name": "hero-stamp",
+        "value": "GSAP from autoAlpha 0, y 6, scale 0.97; 0.5s expo.out, stagger 0.16s, starts at 0.5s",
+        "purpose": "Ledger checks stamp in once, then rest."
+      },
+      {
+        "name": "diagram-step",
+        "value": "step 480ms, hold 720ms, fast 160ms, ease cubic-bezier(.2,.8,.2,1)",
+        "purpose": "diagram-design controller: reveal once on first view; Play/Pause/Replay/Prev/Next; reduced motion and print = static complete frame."
+      },
+      {
+        "name": "flow-token",
+        "value": "4s linear infinite, paused until :hover or :focus-within",
+        "purpose": "One request dot on the 'Where Tollseal sits' path."
+      },
+      {
+        "name": "prism-float",
+        "value": "translateY(-8px), 7s ease-in-out infinite",
+        "purpose": "Gateway prism idle float; off under reduced motion."
+      },
+      {
+        "name": "keyboard-surfaces",
+        "value": "duration 0",
+        "purpose": "Command palette overlay and content open and close without animation."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px",
+        "note": "Desktop diagram SVGs appear; stacked layouts below."
+      },
+      {
+        "name": "lg",
+        "value": "1024px",
+        "note": "Two-column marketing grids; six-column hero ledger."
+      },
+      {
+        "name": "xl",
+        "value": "1280px",
+        "note": "Six-cell health ledger; overview prism band."
+      },
+      {
+        "name": "2xl",
+        "value": "1536px"
+      }
+    ],
+    "themes": {
+      "light": "security paper (:root)",
+      "dark": "night intaglio (.dark); the marketing developers band forces .dark"
+    },
+    "statusRemap": {
+      "emerald|green|teal": "--sage-* (banknote green)",
+      "amber|yellow|orange": "--honey-* (ochre)",
+      "rose|red": "--brick-* (intaglio red)",
+      "blue|sky|cyan": "--dusk-* (indigo)",
+      "violet|purple|indigo": "--lav-400..600 (teal iris)"
+    },
+    "foil": {
+      "light": "linear-gradient(115deg, #2aa39a 0%, #4166c8 48%, #c9a43a 100%)",
+      "dark": "linear-gradient(115deg, #4fc7bd 0%, #84a2f0 48%, #e2c15f 100%)",
+      "scope": "Gateway prism plates and seal only."
+    },
+    "ambient": {
+      "value": "radial-gradient(60% 70% at 88% 0%, var(--glow-cool), transparent 70%), radial-gradient(45% 60% at 0% 10%, var(--glow-warm), transparent 70%)",
+      "purpose": "Iris light behind heroes (teal and blue at 12-16% alpha). Light, not foil."
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Banknote green pill: the one filled action per view.",
+      "html": "<button class=\"ds-btn-primary\">Get started <svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg></button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 8px; height: 48px; padding: 0 28px; border: 1px solid transparent; border-radius: 9999px; background: var(--primary); color: var(--primary-foreground); font-family: var(--font-ui); font-size: 0.9375rem; font-weight: 500; box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 8px 18px -8px rgba(13,92,72,0.6); cursor: pointer; transition: background-color 150ms cubic-bezier(0.23,1,0.32,1), transform 150ms cubic-bezier(0.23,1,0.32,1); } .ds-btn-primary svg { transition: transform 200ms cubic-bezier(0.23,1,0.32,1); } .ds-btn-primary:hover { background: var(--primary-hover); } .ds-btn-primary:hover svg { transform: translateX(2px); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 38%, transparent); } .ds-btn-primary:active { transform: scale(0.97); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary action: note paper pill on a strong hairline.",
+      "html": "<button class=\"ds-btn-outline\">See how a request travels</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; height: 48px; padding: 0 28px; border: 1px solid var(--border-strong); border-radius: 9999px; background: var(--card); color: var(--foreground); font-family: var(--font-ui); font-size: 0.9375rem; font-weight: 500; cursor: pointer; transition: background-color 150ms cubic-bezier(0.23,1,0.32,1), transform 150ms cubic-bezier(0.23,1,0.32,1); } .ds-btn-outline:hover { background: var(--accent); } .ds-btn-outline:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 38%, transparent); } .ds-btn-outline:active { transform: scale(0.97); }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Low-emphasis pill; paper-press fill on hover.",
+      "html": "<button class=\"ds-btn-ghost\">View usage</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; height: 36px; padding: 0 16px; border: 1px solid transparent; border-radius: 9999px; background: transparent; color: color-mix(in oklab, var(--foreground) 80%, transparent); font-family: var(--font-ui); font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: background-color 150ms cubic-bezier(0.23,1,0.32,1), color 150ms, transform 150ms; } .ds-btn-ghost:hover { background: var(--accent); color: var(--foreground); } .ds-btn-ghost:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 38%, transparent); } .ds-btn-ghost:active { transform: scale(0.97); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "36px field, 10px radius, teal-iris focus and caret.",
+      "html": "<input class=\"ds-input\" placeholder=\"Search requests\" aria-label=\"Search requests\" />",
+      "css": ".ds-input { height: 36px; width: 260px; padding: 4px 12px; border: 1px solid var(--input); border-radius: 10px; background: var(--card); color: var(--foreground); caret-color: var(--copper); font-family: var(--font-ui); font-size: 0.875rem; outline: none; transition: border-color 150ms, box-shadow 150ms; } .ds-input::placeholder { color: var(--muted-foreground); } .ds-input:hover { border-color: var(--border-strong); } .ds-input:focus-visible { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 25%, transparent); }"
+    },
+    {
+      "name": "Stamps",
+      "kind": "chip",
+      "refersTo": "stamp-specimen",
+      "description": "SPECIMEN overprint (intaglio red, rotated) and SAMPLE FIGURES stamp (muted, upright) for illustrative data.",
+      "html": "<span class=\"ds-stamp ds-stamp--specimen\">SPECIMEN</span> <span class=\"ds-stamp ds-stamp--sample\">SAMPLE FIGURES</span>",
+      "css": ".ds-stamp { display: inline-block; padding: 2px 8px; border-radius: 4px; font-family: var(--font-code); line-height: 1.4; } .ds-stamp--specimen { transform: rotate(-3deg); border: 1px solid color-mix(in oklab, var(--brick-600) 50%, transparent); color: var(--brick-700); font-size: 0.6875rem; letter-spacing: 0.2em; } .ds-stamp--sample { border: 1px solid var(--border-strong); color: var(--muted-foreground); font-size: 0.625rem; letter-spacing: 0.16em; }"
+    },
+    {
+      "name": "Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "24px status pill on paper shade.",
+      "html": "<span class=\"ds-badge\"><span class=\"ds-badge__dot\"></span>Live</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 2px 10px; border: 1px solid var(--border); border-radius: 9999px; background: var(--secondary); color: var(--secondary-foreground); font-family: var(--font-ui); font-size: 0.75rem; font-weight: 500; } .ds-badge__dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--sage-500); }"
+    },
+    {
+      "name": "Health Ledger",
+      "kind": "card",
+      "refersTo": "ledger-cell",
+      "description": "One panel, guilloche-ruled top, gap-px cells with display numerals; ghost numeral and 'Nothing in this range' when empty, em dash when unmeasured.",
+      "html": "<section class=\"ds-ledger\" aria-label=\"Health\"><div class=\"ds-ledger__band\"></div><h3 class=\"ds-ledger__title\">Health</h3><div class=\"ds-ledger__grid\"><a class=\"ds-ledger__cell\" href=\"#\"><span class=\"ds-ledger__label\">Requests</span><span class=\"ds-ledger__value\">48.2K</span><span class=\"ds-ledger__sub\">Current window <b class=\"ds-up\">+4.1%</b></span></a><a class=\"ds-ledger__cell\" href=\"#\"><span class=\"ds-ledger__label\">Blocked</span><span class=\"ds-ledger__value ds-ledger__value--ghost\">0</span><span class=\"ds-ledger__sub\">Nothing in this range</span></a><a class=\"ds-ledger__cell\" href=\"#\"><span class=\"ds-ledger__label\">Latency p95</span><span class=\"ds-ledger__value\">&mdash;</span><span class=\"ds-ledger__sub\">No measurement</span></a></div></section>",
+      "css": ".ds-ledger { width: 560px; overflow: hidden; border: 1px solid var(--border-strong); border-radius: 18px; background: var(--card); color: var(--foreground); font-family: var(--font-ui); } .ds-ledger__band { height: 24px; opacity: 0.7; background: repeating-linear-gradient(90deg, var(--guilloche) 0 1px, transparent 1px 7px); } .ds-ledger__title { margin: 0; padding: 4px 20px 12px; font-size: 0.9375rem; font-weight: 600; letter-spacing: -0.01em; } .ds-ledger__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border-top: 1px solid var(--border); } .ds-ledger__cell { display: flex; flex-direction: column; gap: 12px; padding: 16px; background: var(--card); color: inherit; text-decoration: none; transition: background-color 150ms cubic-bezier(0.23,1,0.32,1); } .ds-ledger__cell:hover { background: color-mix(in oklab, var(--accent) 60%, var(--card)); } .ds-ledger__cell:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 38%, transparent); position: relative; z-index: 1; } .ds-ledger__label { font-size: 0.8125rem; font-weight: 500; color: var(--muted-foreground); } .ds-ledger__value { font-family: var(--font-display-face); font-weight: 640; font-stretch: 118%; letter-spacing: -0.02em; font-size: 1.75rem; line-height: 1; font-variant-numeric: tabular-nums; } .ds-ledger__value--ghost { color: color-mix(in oklab, var(--foreground) 25%, transparent); } .ds-ledger__sub { display: flex; justify-content: space-between; gap: 8px; font-size: 0.75rem; color: var(--muted-foreground); } .ds-up { font-weight: 500; color: var(--sage-700); }"
+    },
+    {
+      "name": "Ruled Register",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Mechanisms and steps as a hairline-ruled register, not feature cards.",
+      "html": "<ul class=\"ds-register\"><li><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"/></svg><span class=\"ds-register__t\">Provider keys stay with the gateway</span><span class=\"ds-register__b\">Apps hold a scoped Tollseal key, so a leak never exposes a provider account.</span></li><li><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"/></svg><span class=\"ds-register__t\">Audit logs</span><span class=\"ds-register__b\">Every console change, who made it and when, ready to export.</span></li></ul>",
+      "css": ".ds-register { width: 620px; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--border-strong); border-bottom: 1px solid var(--border-strong); font-family: var(--font-ui); color: var(--foreground); } .ds-register li { display: grid; grid-template-columns: 20px minmax(0,0.9fr) minmax(0,1.1fr); column-gap: 24px; padding: 16px 0; } .ds-register li + li { border-top: 1px solid var(--border); } .ds-register svg { margin-top: 2px; color: var(--sage-600); } .ds-register__t { font-size: 0.9375rem; font-weight: 600; } .ds-register__b { font-size: 0.875rem; line-height: 1.625; color: var(--muted-foreground); }"
+    },
+    {
+      "name": "Sidebar Nav Item",
+      "kind": "nav",
+      "refersTo": "panel",
+      "description": "Console navigation on security paper; current page in paper-press-active with full ink.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Console\"><a href=\"#\" aria-current=\"page\">Overview</a><a href=\"#\">Usage</a><a href=\"#\">Policies</a></nav>",
+      "css": ".ds-nav { display: flex; flex-direction: column; gap: 2px; width: 220px; padding: 8px; background: var(--sidebar); font-family: var(--font-ui); font-size: 0.875rem; } .ds-nav a { padding: 8px 12px; border-radius: 12px; color: var(--sidebar-muted); text-decoration: none; transition: background-color 150ms, color 150ms, transform 150ms; } .ds-nav a:hover { background: var(--sidebar-accent); color: var(--sidebar-foreground); } .ds-nav a[aria-current=page] { background: var(--sidebar-active); color: var(--sidebar-foreground); font-weight: 500; } .ds-nav a:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 38%, transparent); } .ds-nav a:active { transform: scale(0.95); }"
+    },
+    {
+      "name": "Code Terminal",
+      "kind": "custom",
+      "refersTo": "code-terminal",
+      "description": "Always-dark CLI / SDK / REST panel with tab pills.",
+      "html": "<div class=\"ds-term\"><div class=\"ds-term__bar\" role=\"tablist\"><button role=\"tab\" aria-selected=\"true\">CLI</button><button role=\"tab\" aria-selected=\"false\">SDK</button><button role=\"tab\" aria-selected=\"false\">REST</button></div><pre class=\"ds-term__code\">aigw request -m claude-sonnet-4-5 \"Summarise this ticket\"</pre></div>",
+      "css": ".ds-term { width: 520px; overflow: hidden; border: 1px solid rgba(132,162,240,0.18); border-radius: 18px; background: var(--terminal-bg); color: var(--terminal-text); box-shadow: var(--shadow-dialog); } .ds-term__bar { display: flex; gap: 4px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.08); } .ds-term__bar button { padding: 4px 12px; border: 0; border-radius: 9999px; background: transparent; color: var(--terminal-dim); font-family: var(--font-ui); font-size: 0.8125rem; cursor: pointer; transition: color 150ms, background-color 150ms; } .ds-term__bar button:hover { color: #e8edf7; } .ds-term__bar button[aria-selected=true] { background: rgba(255,255,255,0.1); color: #e8edf7; } .ds-term__bar button:focus-visible { outline: none; box-shadow: 0 0 0 2px #4fc7bd; } .ds-term__code { margin: 0; padding: 20px; font-family: var(--font-code); font-size: 0.8125rem; line-height: 1.625; overflow-x: auto; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Sealed Note",
+    "overview": "Tollseal is printed, not rendered. Every surface is a security document: cool security paper, fine guilloche linework cut by a computed lathe, deep intaglio indigo ink, serial numbers in the corners, microprint along the edge. A request is a document of value: it passes the toll, is inspected check by check, and leaves sealed and numbered. The marketing site persuades with one large note (the hero) and a sequence of ruled registers and ledgers; the console operates on the same paper, quieter, its figures set like denominations. Dark mode is night intaglio: indigo-black paper and luminous teal linework, the same hues lifted, not a separate theme.\n\nDensity is calm and ruled. Information lives in hairline-divided registers and gap-px ledgers inside one bordered panel, rarely in grids of separate cards. Colour sits on data and on the single primary action; everything else is ink on paper. The iris foil (teal to blue to gold) is the one luxurious material and is held back for the gateway prism and the seal. The world refuses the dark dev-tool hero with glow, the grid of feature cards, and the warm ivory editorial world it replaced.\n\nMotion engraves and stamps once, then rests. The page is complete without JavaScript; motion only reveals what the markup already holds.",
+    "keyCharacteristics": [
+      "Security printing: guilloche rosettes and bands, microprint strips, serial numbers, SPECIMEN overprints.",
+      "Banknote green for the one primary action and the seal mark; intaglio red for blocked and danger.",
+      "Iris foil only on the gateway prism and seal.",
+      "Archivo set wide (118% width, weight 640) for denominations: headlines and figures. Geist for the interface, Geist Mono for serials, codes and check labels.",
+      "Ruled registers and gap-px ledgers instead of card grids.",
+      "Light \"security paper\" and dark \"night intaglio\", sharing hues."
+    ],
+    "rules": [
+      {
+        "name": "The One Green Note Rule",
+        "body": "Banknote green fills one action per view. Secondary actions are outlined pills on note paper; the seal beside the hero action is printed, not a second button.",
+        "section": "colors"
+      },
+      {
+        "name": "The Foil Is Earned Rule",
+        "body": "The iris foil gradient appears on the gateway prism and its seal and nowhere else: not on buttons, text, backgrounds or borders. Ambient iris light (teal and blue radials at 12-16% alpha) may sit behind a hero; that is light, not foil.",
+        "section": "colors"
+      },
+      {
+        "name": "The Red Means Stop Rule",
+        "body": "Intaglio red marks blocked, failed, destructive and the SPECIMEN overprint. Never decoration, never a highlight.",
+        "section": "colors"
+      },
+      {
+        "name": "The No Violet Rule",
+        "body": "The violet, purple and indigo Tailwind slots resolve to teal iris. Do not add a violet.",
+        "section": "colors"
+      },
+      {
+        "name": "The Denomination Rule",
+        "body": "The wide display face is for marketing h1/h2, the wordmark, provider names and figures read as values. Console titles, card titles and dialog titles are Geist.",
+        "section": "typography"
+      },
+      {
+        "name": "The Microprint Rule",
+        "body": "Mono carries identifiers and machinery (serials, request ids, codes, check labels, stamps). Uppercase tracked mono labels a value inside a ledger, register or diagram; it never sits above a heading as a kicker.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Figures that are compared are tabular (tables, stat values, `.tabular`).",
+        "section": "typography"
+      },
+      {
+        "name": "The Ledger Rule",
+        "body": "Figures read together live in one bordered panel as cells separated by 1px of border colour (a gap-px grid over the border colour), not as separate cards.",
+        "section": "layout"
+      },
+      {
+        "name": "The Register Rule",
+        "body": "Lists of mechanisms, steps or problems are ruled registers (dividers between hairline top and bottom rules, or a table with fixed tiers), not grids of feature cards.",
+        "section": "layout"
+      },
+      {
+        "name": "The Only What Floats Rule",
+        "body": "Panels, registers and ledgers rest flat on a hairline. Only floating surfaces and the few presented objects (the note, the console fragment, the terminal) carry a shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep banknote green to one filled action per view, and print the seal in the primary.",
+      "Do draw guilloche only from the computed `GuillocheRosette` and `GuillocheBand`, in the guilloche line tokens, `aria-hidden`.",
+      "Do stamp every illustrative figure: SPECIMEN on sample requests, SAMPLE FIGURES on sample console fragments.",
+      "Do set compared figures in display numerals with tabular figures, inside one gap-px ledger panel.",
+      "Do show empty figures as a ghost numeral with \"Nothing in this range\", and missing measurements as an em dash.",
+      "Do use ruled registers (dividers between hairlines) for lists of mechanisms, problems and steps.",
+      "Do ship every surface complete without JavaScript; motion only engraves, stamps or steps through what is already rendered, under `gsap.matchMedia` or the diagram controller.",
+      "Do provide the stacked HTML version of every diagram below `md`."
+    ],
+    "donts": [
+      "Don't put the iris foil on anything but the gateway prism and its seal.",
+      "Don't use intaglio red for anything but blocked, failed, destructive and the SPECIMEN overprint.",
+      "Don't invent customers, traffic totals, logos or certifications, or show unlabelled sample figures.",
+      "Don't add a violet; the violet slots are teal iris.",
+      "Don't set console, card or dialog titles in the display face.",
+      "Don't build feature-card grids or a dark glowing dev-tool hero; the one night band on the marketing page is the developers band.",
+      "Don't reveal sections on scroll, or animate surfaces opened from the keyboard.",
+      "Don't shadow resting panels; shadow is for floating surfaces and presented objects."
+    ]
+  }
+}

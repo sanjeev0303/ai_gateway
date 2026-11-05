@@ -10,7 +10,7 @@ import (
 // valid domain kinds deliberately left unmapped: pointing them at another
 // upstream's client would validate a credential against the wrong provider.
 func TestProviderAdapters(t *testing.T) {
-	got := providerAdapters()
+	got := providerAdapters(false)
 
 	want := map[string]bool{
 		domain.ProviderKindAnthropic:   true,
@@ -21,20 +21,20 @@ func TestProviderAdapters(t *testing.T) {
 	}
 
 	if len(got) != len(want) {
-		t.Errorf("providerAdapters() has %d kinds, want %d", len(got), len(want))
+		t.Errorf("providerAdapters(false) has %d kinds, want %d", len(got), len(want))
 	}
 	for kind := range want {
 		adapter, ok := got[kind]
 		switch {
 		case !ok:
-			t.Errorf("providerAdapters() missing kind %q", kind)
+			t.Errorf("providerAdapters(false) missing kind %q", kind)
 		case adapter == nil:
-			t.Errorf("providerAdapters()[%q] is nil; credential create would panic", kind)
+			t.Errorf("providerAdapters(false)[%q] is nil; credential create would panic", kind)
 		}
 	}
 	for kind := range got {
 		if !want[kind] {
-			t.Errorf("providerAdapters() has unexpected kind %q", kind)
+			t.Errorf("providerAdapters(false) has unexpected kind %q", kind)
 		}
 	}
 }

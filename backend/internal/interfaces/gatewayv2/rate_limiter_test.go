@@ -125,6 +125,7 @@ func TestBucket_MinimalRefillDoesNotAllow(t *testing.T) {
 
 func TestSlidingWindow_AllowsUpToLimit(t *testing.T) {
 	sw := NewSlidingWindowRateLimiter()
+	defer sw.Close()
 	ctx := context.Background()
 	key := "cred:anthropic:acct-1"
 	now := time.Now()
@@ -163,6 +164,7 @@ func TestSlidingWindow_AllowsUpToLimit(t *testing.T) {
 
 func TestSlidingWindow_ExpiredRequestsPruned(t *testing.T) {
 	sw := NewSlidingWindowRateLimiter()
+	defer sw.Close()
 	ctx := context.Background()
 	key := "cred:anthropic:acct-1"
 	now := time.Now()
@@ -185,6 +187,7 @@ func TestSlidingWindow_ExpiredRequestsPruned(t *testing.T) {
 
 func TestSlidingWindow_RetryAfterShrinksAsRequestsAge(t *testing.T) {
 	sw := NewSlidingWindowRateLimiter()
+	defer sw.Close()
 	ctx := context.Background()
 	key := "cred:anthropic:acct-1"
 	now := time.Now()

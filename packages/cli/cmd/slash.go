@@ -25,6 +25,11 @@ type SessionState struct {
 	ReasoningEffort      string
 	SafetySettings       string
 	HFEndpoint           string
+	TopP                 *float64
+	TopK                 *int
+	StopSequences        []string
+	ThinkingBudget       int
+	Seed                 *int
 	TotalInputTokens     int
 	TotalOutputTokens    int
 	TotalTokens          int
@@ -64,6 +69,15 @@ func (s *SessionState) SyncPermittedScope(ctx context.Context) {
 		}
 	}
 	s.AuthorizedProviders = provs
+
+	// The gateway knows which provider serves each model, so a model it lists
+	// keeps the provider it reports instead of one guessed from the name.
+	for _, m := range models {
+		if strings.EqualFold(m.ID, s.Model) && m.Provider != "" {
+			s.Provider = strings.ToLower(m.Provider)
+			return
+		}
+	}
 
 	// Check if current provider is permitted
 	currProvAuthorized := false
@@ -307,6 +321,11 @@ func RunInteractiveSession(ctx context.Context, session *SessionState, in io.Rea
 			ReasoningEffort: session.ReasoningEffort,
 			SafetySettings:  session.SafetySettings,
 			HFEndpoint:      session.HFEndpoint,
+			TopP:            session.TopP,
+			TopK:            session.TopK,
+			StopSequences:   session.StopSequences,
+			ThinkingBudget:  session.ThinkingBudget,
+			Seed:            session.Seed,
 		}
 
 		reqCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)

@@ -16,7 +16,7 @@ import { getApiClient } from "@/lib/session";
 import { CreateTeamDialog } from "./teams-client";
 
 export const metadata: Metadata = {
-  title: "Teams · Sentinel",
+  title: "Teams · Tollseal",
   description: "Groups that own workloads and accrue spend.",
 };
 
@@ -84,7 +84,7 @@ const rows: TeamRow[] = teamList.items.map((team) => {
           </CreateTeamDialog>
         }
       >
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard label="Teams" value={String(rows.length)} hint="Across the organization" />
           <StatCard
             label="Seats filled"

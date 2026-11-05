@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -360,6 +361,12 @@ func newLlmRequestFrom(record UsageRecord, providerKind, status string) domain.N
 			costStatus = domain.CostStatusUnavailable
 		}
 	}
+	// The HTTP status is the error code alerts match on ("401", "403", "429").
+	var errorCode *string
+	if record.StatusCode >= 400 {
+		code := strconv.Itoa(record.StatusCode)
+		errorCode = &code
+	}
 	return domain.NewLlmRequest{
 		ProjectID:           record.ProjectID,
 		UserID:              subjectUserID(record),
@@ -370,6 +377,7 @@ func newLlmRequestFrom(record UsageRecord, providerKind, status string) domain.N
 		ProviderKind:        providerKind,
 		Model:               record.Model,
 		Status:              status,
+		ErrorCode:           errorCode,
 		PromptTokens:        int32(record.InputTokens),
 		CompletionTokens:    int32(record.OutputTokens),
 		CachedInputTokens:   int32(record.CacheReadTokens),

@@ -18,7 +18,7 @@ import {
 import { sdkIntegrations } from "@/lib/developer-content";
 
 export const metadata: Metadata = {
-  title: "SDKs · Sentinel",
+  title: "SDKs · Tollseal",
   description: "Client libraries available in this repository.",
 };
 
@@ -49,7 +49,7 @@ export default function SdksPage() {
     <div className="p-4 sm:p-6">
       <PageShell
         title="SDKs"
-        description="No client library is published to a public registry yet. The gateway is plain HTTP, and these two TypeScript packages exist inside this monorepo only."
+        description="No client library is published to a public registry yet. The gateway is plain HTTP, and the TypeScript client in this monorepo wraps it: models, chat completions and messages, with streaming."
       >
         <section className="grid gap-4 sm:grid-cols-2">
           <StatCard label="Published libraries" value="0" hint="Nothing on npm, PyPI, or Go proxies" />
@@ -75,7 +75,44 @@ export default function SdksPage() {
               code={`curl http://localhost:8084/v1/messages \\
   -H "x-api-key: $AIGW_API_KEY" \\
   -H "content-type: application/json" \\
-  -d '{"model":"claude-sonnet-4-5","max_tokens":1024,"messages":[]}'`}
+  -d '{"model":"claude-sonnet-4-5","max_tokens":1024,"messages":[{"role":"user","content":"Hello"}]}'`}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>TypeScript gateway client</CardTitle>
+            <CardDescription>
+              createGatewayClient in @ai-governance/api-client calls the gateway with your gateway key:
+              listModels, chatCompletion and sendMessage, each with a streaming variant, plus retries
+              and an optional project scope.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <CodeBlock
+              label="packages/api-client/src/gateway.ts"
+              language="typescript"
+              code={`import { createGatewayClient } from "@ai-governance/api-client";
+
+const gateway = createGatewayClient({
+  gatewayUrl: process.env.AIGW_GATEWAY_URL ?? "http://localhost:8084",
+  apiKey: process.env.AIGW_API_KEY!,
+  projectId: process.env.AIGW_PROJECT_ID, // optional: scope requests to one project
+});
+
+const models = await gateway.listModels();
+const { text, meta } = await gateway.chatCompletion({
+  model: "gpt-4o-mini",
+  messages: [{ role: "user", content: "Summarise this ticket." }],
+});
+console.log(text, meta.totalTokens, meta.durationMs);
+
+// Stream the reply as it arrives
+await gateway.streamMessage(
+  { model: "claude-sonnet-4-5", max_tokens: 1024, messages: [{ role: "user", content: "Hello" }] },
+  (chunk) => process.stdout.write(chunk),
+);`}
             />
           </CardContent>
         </Card>
@@ -84,8 +121,8 @@ export default function SdksPage() {
           <CardHeader>
             <CardTitle>Available packages</CardTitle>
             <CardDescription>
-              Both are private workspace packages versioned at 0.0.0. The API client
-              talks to the control plane, not the gateway.
+              Both are private workspace packages versioned at 0.0.0. The API client holds the gateway
+              client above and the control-plane client the console uses.
             </CardDescription>
           </CardHeader>
           <CardContent>

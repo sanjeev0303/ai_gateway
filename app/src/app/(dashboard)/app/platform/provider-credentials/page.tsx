@@ -15,7 +15,7 @@ import { getApiClient } from "@/lib/session";
 import { ProviderCredentialsClient, type CredentialRow } from "./client";
 
 export const metadata: Metadata = {
-  title: "Provider credentials · Sentinel",
+  title: "Provider credentials · Tollseal",
   description: "API credentials for upstream providers, with fingerprint and status.",
 };
 
@@ -88,7 +88,7 @@ export default async function ProviderCredentialsPage() {
         title="Provider credentials"
         description="Credentials for upstream providers. Only a fingerprint and tail are stored."
       >
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
             label="Credentials"
             value={formatNumber(total)}
@@ -115,7 +115,7 @@ export default async function ProviderCredentialsPage() {
           <CardContent>
             <DonutChart
               data={kindMix}
-              centerLabel={formatNumber(total)}
+              centerLabel="total"
               formatValue={(value) => `${formatNumber(value)} credentials`}
             />
           </CardContent>

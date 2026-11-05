@@ -68,7 +68,7 @@ export function AcceptInviteClient({ token, user }: AcceptInviteClientProps) {
           </div>
           <CardTitle>Accept Organization Invitation</CardTitle>
           <CardDescription>
-            You have been invited to join an organization on Sentinel AI Gateway.
+            You have been invited to join an organization on Tollseal AI Gateway.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -103,7 +103,7 @@ export function AcceptInviteClient({ token, user }: AcceptInviteClientProps) {
         <div className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-2">
           <KeyRound className="size-6" />
         </div>
-        <CardTitle>Join Sentinel AI Gateway</CardTitle>
+        <CardTitle>Join Tollseal AI Gateway</CardTitle>
         <CardDescription>
           Sign in or create an account with your invited email to accept the invitation.
         </CardDescription>

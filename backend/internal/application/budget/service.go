@@ -153,15 +153,9 @@ func (s *Service) syncBudgetToPolicyRules(ctx context.Context, actor domain.Acto
 
 	// Build the budget rule
 	// Use scope-based key for gateway budget guard matching (format: scope:scope_id)
-	scopeKey := string(budget.Scope)
-	if budget.Scope != domain.BudgetScopeOrganization {
-		scopeKey = string(budget.Scope) + ":" + budget.ScopeID.String()
-	} else {
-		scopeKey = "org:" + actor.OrganizationID.String()
-	}
 	conditions := map[string]any{
 		"type":       "budget",
-		"key":        scopeKey,
+		"key":        budgetScopeKey(budget, actor.OrganizationID),
 		"scope":      budget.Scope,
 		"scope_id":   budget.ScopeID.String(),
 		"limit_type": budget.LimitType,
@@ -184,12 +178,9 @@ func (s *Service) syncBudgetToPolicyRules(ctx context.Context, actor domain.Acto
 
 	var existingRule *domain.PolicyRule
 	for _, r := range rules {
-		var cond map[string]any
-		if err := json.Unmarshal(r.Conditions, &cond); err == nil {
-			if cond["key"] == budget.ID.String() {
-				existingRule = &r
-				break
-			}
+		if isBudgetRule(r, budget, actor.OrganizationID) {
+			existingRule = &r
+			break
 		}
 	}
 
@@ -222,14 +213,6 @@ func (s *Service) deleteBudgetPolicyRules(ctx context.Context, orgID uuid.UUID, 
 		return err
 	}
 
-	// Build scope-based key (same as in syncBudgetToPolicyRules)
-	scopeKey := string(budget.Scope)
-	if budget.Scope != domain.BudgetScopeOrganization {
-		scopeKey = string(budget.Scope) + ":" + budget.ScopeID.String()
-	} else {
-		scopeKey = "org:" + orgID.String()
-	}
-
 	pol, err := s.findOrCreateBudgetPolicy(ctx, orgID)
 	if err != nil {
 		return err
@@ -241,17 +224,36 @@ func (s *Service) deleteBudgetPolicyRules(ctx context.Context, orgID uuid.UUID, 
 	}
 
 	for _, r := range rules {
-		var cond map[string]any
-		if err := json.Unmarshal(r.Conditions, &cond); err == nil {
-			if cond["key"] == scopeKey {
-				if err := s.rules.Delete(ctx, orgID, pol.ID, r.ID); err != nil {
-					return err
-				}
-			}
+		if !isBudgetRule(r, budget, orgID) {
+			continue
+		}
+		if err := s.rules.Delete(ctx, orgID, pol.ID, r.ID); err != nil {
+			return err
 		}
 	}
 
 	return nil
+}
+
+// budgetScopeKey is the key a budget's rule and gateway counter share
+// ("team:<id>", "org:<id>").
+func budgetScopeKey(budget domain.Budget, orgID uuid.UUID) string {
+	if budget.Scope == domain.BudgetScopeOrganization {
+		return "org:" + orgID.String()
+	}
+	return string(budget.Scope) + ":" + budget.ScopeID.String()
+}
+
+// isBudgetRule reports whether a rule enforces this budget. Update used to
+// compare the key with the budget id, never matched, and added a duplicate
+// rule on every edit.
+func isBudgetRule(rule domain.PolicyRule, budget domain.Budget, orgID uuid.UUID) bool {
+	var cond map[string]any
+	if json.Unmarshal(rule.Conditions, &cond) != nil {
+		return false
+	}
+	key, _ := cond["key"].(string)
+	return key == budgetScopeKey(budget, orgID)
 }
 
 func (s *Service) findOrCreateBudgetPolicy(ctx context.Context, orgID uuid.UUID) (domain.Policy, error) {

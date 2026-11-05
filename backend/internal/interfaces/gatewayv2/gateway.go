@@ -60,6 +60,8 @@ type Gateway struct {
 	guardrails       *GuardrailEvaluator // Wrapper for the domain evaluator
 	modelRepo        repositories.ModelRepository
 	projectRepo      repositories.ProjectRepository
+	conversations    repositories.GatewayConversationStore
+	transcripts      *transcriptCache
 
 	// State
 	mu           sync.RWMutex
@@ -73,6 +75,11 @@ type Gateway struct {
 type GatewayDeps struct {
 	Config GatewayConfig
 	Logger *slog.Logger
+
+	// AllowPrivateUpstreams disables the SSRF guard on the forward path so dev
+	// harnesses can target localhost upstreams. Must be false in production
+	// (sourced from cfg.AllowInsecureDev, which prod config rejects).
+	AllowPrivateUpstreams bool
 
 	// Auth
 	Hasher          ports.TokenHasher
@@ -93,6 +100,9 @@ type GatewayDeps struct {
 	// Usage accounting. The data plane derives usage and publishes it; the
 	// worker owns every ledger write.
 	EventBus ports.EventBus
+
+	// Conversations records successful user turns. Optional: nil disables recording.
+	Conversations repositories.GatewayConversationStore
 
 	// Optional overrides
 	CredentialCache *InMemoryCredentialCache
@@ -164,7 +174,7 @@ func NewGateway(deps GatewayDeps) (*Gateway, error) {
 
 	requestInspector := NewRequestInspector()
 	providerRouter := NewProviderRouter("", "") // will use defaults
-	streamProxy := NewStreamProxy(nil, deps.Logger)
+	streamProxy := NewStreamProxy(defaultHTTPClient(deps.AllowPrivateUpstreams), deps.Logger, deps.AllowPrivateUpstreams)
 
 	g := &Gateway{
 		config:           config,
@@ -181,6 +191,8 @@ func NewGateway(deps GatewayDeps) (*Gateway, error) {
 		guardrails:       NewGuardrailEvaluator(deps.Guardrails),
 		modelRepo:        deps.ModelRepo,
 		projectRepo:      deps.ProjectRepo,
+		conversations:    deps.Conversations,
+		transcripts:      newTranscriptCache(),
 	}
 
 	return g, nil
@@ -241,6 +253,29 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}()
 
+		// Read the payload exactly as it will be forwarded (after any guardrail
+		// redaction) so the recorded prompt matches what the provider received.
+		var turn *domain.GatewayConversationTurn
+		if g.conversations != nil && userID != nil {
+			if body, err := readAndRestoreBody(r); err == nil {
+				if firstUser, latestUser := promptTurn(body); latestUser != "" {
+					hints := result.Context.InspectorHints
+					convID := conversationIDFor(r, hints, result.Context.Credential.ID, firstUser)
+					w.Header().Set("x-conversation-id", convID.String())
+					turn = &domain.GatewayConversationTurn{
+						ConversationID: convID,
+						UserID:         *userID,
+						CredentialID:   result.Context.Credential.ID,
+						ProjectID:      result.Context.Credential.ProjectID,
+						Title:          truncateRunes(firstUser, conversationTitle),
+						Model:          hints.Model,
+						Provider:       result.Context.Upstream.ProviderAccount.ProviderKind,
+						UserText:       truncateRunes(latestUser, maxRecordedPrompt),
+					}
+				}
+			}
+		}
+
 		observed, err := g.streamProxy.Forward(r.Context(), w, r, result.Context.UpstreamURL, result.Context.UpstreamHeaders)
 		if err != nil {
 			g.logger.Error("stream proxy forward failed", "error", err)
@@ -271,6 +306,12 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		g.emitTelemetry(r.Context(), reqID, result, start, observed)
+		if turn != nil && err == nil && observed != nil && observed.StatusCode > 0 && observed.StatusCode < 400 {
+			turn.AssistantText = observed.Text
+			turn.InputTokens = int32(observed.InputTokens)
+			turn.OutputTokens = int32(observed.OutputTokens)
+			go g.recordConversation(*turn, result.Context.Credential.OrganizationID)
+		}
 		return
 	}
 
@@ -424,6 +465,9 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 			providerKind = domain.ProviderKindHuggingFace
 		}
 	}
+	if providerKind == "" && hints.Model != "" {
+		providerKind = g.registryProviderFor(ctx, hints.Model)
+	}
 	if providerKind == "" {
 		if p := r.Header.Get("x-provider"); p != "" {
 			providerKind = strings.ToLower(strings.TrimSpace(p))
@@ -489,6 +533,7 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 	}
 
 	// Stage 3.5: Guardrails
+	var redact func(string) string
 	if g.guardrails != nil {
 		gResult := g.guardrails.CheckInput(ctx, body, cred.OrganizationID.String(), reqID, cred)
 		if gResult.Triggered && gResult.Action == domain.GuardrailActionBlock {
@@ -496,6 +541,15 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 			res.Context = reqCtx
 			return res
 		}
+		redact = gResult.Redact
+	}
+
+	// Forward only what the provider should see: redacted content, without
+	// the gateway's own fields.
+	if upstreamBody := prepareUpstreamBody(body, redact); upstreamBody != nil {
+		body = upstreamBody
+		r.Body = io.NopCloser(bytes.NewReader(upstreamBody))
+		r.ContentLength = int64(len(upstreamBody))
 	}
 
 	// Stage 4: Authorize the requested model against policy.
@@ -592,6 +646,7 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 	applicableBudgets := policy.applicableBudgets(cred)
 	var finalBudgetResult BudgetResult
 	var releaseFuncs []BudgetReleaseFunc
+	var limitTypes []string
 
 	if len(applicableBudgets) == 0 {
 		budgetKey := g.buildBudgetKey(cred, upstream)
@@ -606,21 +661,18 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 		}
 		finalBudgetResult = bResult
 		releaseFuncs = append(releaseFuncs, release)
+		limitTypes = append(limitTypes, "spend")
 	} else {
 		for _, cfg := range applicableBudgets {
 			budgetKey := cfg.Key
 			if budgetKey == "" {
 				budgetKey = cfg.Scope
 			}
-			var checkCost float64
-			if cfg.LimitType == "tokens" {
-				checkCost = float64(hints.EstimatedInputTokens + hints.EstimatedOutputTokens)
-				if checkCost <= 0 {
-					checkCost = 1
-				}
-			} else {
-				checkCost = g.estimateCost(hints)
+			estimatedTokens := hints.EstimatedInputTokens + hints.EstimatedOutputTokens
+			if estimatedTokens <= 0 {
+				estimatedTokens = 1
 			}
+			checkCost := budgetUnits(cfg.LimitType, g.estimateCost(hints), estimatedTokens)
 			bResult, release := g.budgetGuard.Reserve(ctx, budgetKey, cfg.Limit, cfg.Window, checkCost, reqID)
 			if !bResult.Allowed {
 				// Rollback already acquired reservations for this request
@@ -631,6 +683,7 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 			}
 			finalBudgetResult = bResult
 			releaseFuncs = append(releaseFuncs, release)
+			limitTypes = append(limitTypes, cfg.LimitType)
 		}
 	}
 
@@ -640,6 +693,11 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 		}
 	}
 	reqCtx.BudgetRelease = combinedRelease
+	reqCtx.BudgetCommit = func(cost float64, tokens int) {
+		for i, rFn := range releaseFuncs {
+			rFn(budgetUnits(limitTypes[i], cost, tokens), nil)
+		}
+	}
 
 	// Stage 8: Route to provider
 	upstreamURL, upstreamHeaders, err := g.providerRouter.Route(ctx, upstream, hints)
@@ -753,6 +811,19 @@ func (g *Gateway) buildBudgetKey(cred GatewayCredential, upstream ResolvedUpstre
 	}
 	// Default to organization scope
 	return "org:" + cred.OrganizationID.String()
+}
+
+// budgetUnits converts a request into what a budget counts. A request budget
+// counts the request itself; charging it dollars let a cap of 3 requests
+// behave like $3.
+func budgetUnits(limitType string, cost float64, tokens int) float64 {
+	switch limitType {
+	case "tokens":
+		return float64(tokens)
+	case "requests":
+		return 1
+	}
+	return cost
 }
 
 // estimateCost provides a rough cost estimate for the request.
@@ -992,8 +1063,8 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 		// Actual tokens are charged for successful requests (status < 400) or client disconnects (499) with partial tokens.
 		// Failed/rejected requests release their reservation with zero charge.
 		if actualStatusCode < 400 || (actualStatusCode == 499 && (usage.InputTokens > 0 || usage.OutputTokens > 0)) {
-			if result.Context != nil && result.Context.BudgetRelease != nil {
-				result.Context.BudgetRelease(cost, nil)
+			if result.Context != nil && result.Context.BudgetCommit != nil {
+				result.Context.BudgetCommit(cost, usage.InputTokens+usage.OutputTokens)
 			} else {
 				appBudgets := result.Context.PolicySnapshot.applicableBudgets(result.Context.Credential)
 				if len(appBudgets) == 0 {
@@ -1003,10 +1074,7 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 					}
 				} else {
 					for _, cfg := range appBudgets {
-						usageAmt := cost
-						if cfg.LimitType == "tokens" {
-							usageAmt = float64(usage.InputTokens + usage.OutputTokens)
-						}
+						usageAmt := budgetUnits(cfg.LimitType, cost, usage.InputTokens+usage.OutputTokens)
 						if err := g.budgetGuard.RecordUsage(ctx, cfg.Key, usageAmt); err != nil {
 							g.logger.Warn("failed to record local budget usage", "error", err, "key", cfg.Key)
 						}
@@ -1326,6 +1394,24 @@ func (g *Gateway) handleListModels(w http.ResponseWriter, r *http.Request, reqID
 }
 
 // isModelSupported checks whether a requested model matches known provider patterns or catalog entries and is active.
+// registryProviderFor finds the provider that serves a synced model whose name
+// alone does not say, such as Gemini's "gemma-" models.
+func (g *Gateway) registryProviderFor(ctx context.Context, model string) string {
+	if g.modelRepo == nil {
+		return ""
+	}
+	models, err := g.modelRepo.List(ctx)
+	if err != nil {
+		return ""
+	}
+	for _, m := range models {
+		if m.ModelSlug == model && m.IsActive {
+			return m.ProviderKind
+		}
+	}
+	return ""
+}
+
 func (g *Gateway) isModelSupported(ctx context.Context, providerKind, model string) bool {
 	if model == "" {
 		return true

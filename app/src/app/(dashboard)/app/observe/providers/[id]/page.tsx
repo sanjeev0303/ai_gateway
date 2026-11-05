@@ -44,7 +44,7 @@ const accountColumns: readonly Column<AccountHealthRow>[] = [
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const decoded = decodeURIComponent(id);
-  return { title: `Provider ${decoded} · Sentinel` };
+  return { title: `Provider ${decoded} · Tollseal` };
 }
 
 export default async function ProviderDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -107,7 +107,7 @@ export default async function ProviderDetailPage({ params }: { params: Promise<{
           title={`Provider: ${providerKind}`}
           description={`Operational telemetry, connected accounts, and model metrics for ${providerKind}.`}
         >
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
             <StatCard label="Total Requests" value={formatCompact(totalRequests)} />
             <StatCard label="Total Tokens" value={formatCompact(totalTokens)} />
             <StatCard label="Estimated Spend" value={formatUsd(totalCost)} />

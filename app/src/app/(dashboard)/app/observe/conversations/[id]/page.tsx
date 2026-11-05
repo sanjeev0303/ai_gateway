@@ -1,70 +1,125 @@
 import { Metadata } from "next";
-import { PageShell, StatCard } from "@/components/dashboard";
-import { getApiClient } from "@/lib/session";
 import { notFound } from "next/navigation";
-import { formatCompact, formatUsd, formatDate } from "@/lib/format";
+import type { ConversationMessage, TranscriptState } from "@ai-governance/api-client";
+import { PageShell, StatCard } from "@/components/dashboard";
+import { getApiClient, requireSession } from "@/lib/session";
+import { formatCompact, formatDate, formatDateTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import { DeleteConversationButton } from "./delete-button";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  return { title: `Conversation ${id} · Sentinel` };
+  return { title: `Conversation ${id} · Tollseal` };
 }
 
-export default async function ConversationDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const { conversations, members } = await getApiClient();
+/** Shown when the gateway no longer holds the text. */
+function ExpiredNotice() {
+  return (
+    <div role="status" className="rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm">
+      <p className="font-medium">Transcript no longer available</p>
+      <p className="mt-1 text-muted-foreground">
+        Tollseal never stores conversation text. The gateway keeps it in memory until the conversation is deleted,
+        so it was cleared when the gateway last restarted. Counts and times remain.
+      </p>
+    </div>
+  );
+}
 
+async function load(id: string) {
+  const { conversations, members } = await getApiClient();
   try {
-    const [conversation, messages, membersList] = await Promise.all([
+    return await Promise.all([
       conversations.get(id),
       conversations.messages(id),
       members.list().catch(() => ({ items: [] })),
     ]);
+  } catch {
+    return null;
+  }
+}
 
-    const member = membersList.items.find((m) => m.user.id === conversation.user_id);
-    const userName = member ? member.user.display_name || member.user.email : conversation.user_id;
+export default async function ConversationDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const [loaded, { claims }] = await Promise.all([load(id), requireSession()]);
+  if (!loaded) notFound();
+  const [conversation, messages, membersList] = loaded;
+  const canDelete = claims.role === "owner" || claims.role === "admin";
 
-    return (
-      <div className="p-4 sm:p-6 space-y-6">
-        <PageShell title={conversation.title || `Conversation ${id}`} description={`Detailed conversation trace.`}>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-6">
-          <StatCard label="User" value={userName} />
-          <StatCard label="Provider" value={conversation.provider ?? "—"} />
-          <StatCard label="Model" value={conversation.model ?? "—"} />
-          <StatCard label="Tokens" value={formatCompact(conversation.total_tokens)} />
+  const member = membersList.items.find((m) => m.user.id === conversation.user_id);
+  const userName = member ? member.user.display_name || member.user.email : "Employee";
+  const state: TranscriptState =
+    messages.transcript ?? (messages.items.some((m) => m.content) ? "available" : "expired");
+
+  const speaker = (msg: ConversationMessage) => {
+    if (msg.role === "user") return userName;
+    if (msg.role === "assistant") return conversation.model ?? "Assistant";
+    if (msg.role === "tool") return msg.tool_name ?? "Tool";
+    return "System";
+  };
+
+  return (
+    <div className="p-4 sm:p-6">
+      <PageShell
+        title={conversation.title || "Conversation"}
+        description={`${userName} · started ${formatDate(conversation.started_at)}`}
+        actions={canDelete ? <DeleteConversationButton id={conversation.id} /> : undefined}
+      >
+        <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
+          <StatCard label="Model" value={conversation.model ?? "—"} hint={conversation.provider ?? undefined} />
           <StatCard label="Messages" value={formatCompact(conversation.message_count)} />
-          <StatCard label="Cost" value={conversation.cost_micros ? formatUsd(conversation.cost_micros / 1000000) : "n/a"} />
-          <StatCard label="Privacy State" value={conversation.privacy_state} />
-          <StatCard label="Started At" value={formatDate(conversation.started_at)} />
+          <StatCard label="Tokens" value={formatCompact(conversation.total_tokens)} />
         </div>
 
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold tracking-tight">Messages</h2>
+        <section aria-labelledby="transcript-heading" className="flex flex-col gap-4">
+          <h2 id="transcript-heading" className="text-lg font-semibold tracking-tight">
+            Transcript
+          </h2>
+          {state !== "available" && <ExpiredNotice />}
+
           {messages.items.length === 0 ? (
-            <p className="text-muted-foreground">No messages recorded or they were fully redacted.</p>
+            <p className="text-sm text-muted-foreground">No messages in this conversation.</p>
+          ) : state === "available" ? (
+            <ol className="flex flex-col gap-5">
+              {messages.items.map((msg) => {
+                const fromUser = msg.role === "user";
+                return (
+                  <li key={msg.id} className={cn("flex flex-col gap-1.5", fromUser ? "items-end" : "items-start")}>
+                    <p className="flex items-baseline gap-2 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">{speaker(msg)}</span>
+                      <time dateTime={msg.created_at}>{formatDateTime(msg.created_at)}</time>
+                      <span className="tabular-nums">{msg.tokens} tokens</span>
+                    </p>
+                    {msg.content ? (
+                      <div
+                        className={cn(
+                          "max-w-[min(48rem,92%)] rounded-2xl border px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words",
+                          fromUser ? "rounded-tr-md border-primary/20 bg-primary/10" : "rounded-tl-md border-border bg-card",
+                        )}
+                      >
+                        {msg.content}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">Text no longer available</p>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
           ) : (
-            <div className="space-y-4">
+            <ol className="divide-y divide-border rounded-xl border border-border bg-card">
               {messages.items.map((msg) => (
-                <div key={msg.id} className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="font-semibold capitalize text-sm">{msg.role}</span>
-                    <span className="text-muted-foreground text-xs">{msg.tokens} tokens</span>
-                  </div>
-                  {msg.content ? (
-                    <pre className="text-sm whitespace-pre-wrap font-sans text-muted-foreground bg-muted p-3 rounded-md">
-                      {msg.content}
-                    </pre>
-                  ) : (
-                    <p className="text-sm italic text-muted-foreground">Content redacted by privacy mode</p>
-                  )}
-                </div>
+                <li key={msg.id} className="flex items-baseline justify-between gap-4 px-4 py-2.5 text-sm">
+                  <span className="min-w-0 truncate font-medium">{speaker(msg)}</span>
+                  <span className="flex shrink-0 gap-4 text-xs text-muted-foreground tabular-nums">
+                    <span>{msg.tokens} tokens</span>
+                    <time dateTime={msg.created_at}>{formatDateTime(msg.created_at)}</time>
+                  </span>
+                </li>
               ))}
-            </div>
+            </ol>
           )}
-        </div>
+        </section>
       </PageShell>
     </div>
-    );
-  } catch (err) {
-    return notFound();
-  }
+  );
 }

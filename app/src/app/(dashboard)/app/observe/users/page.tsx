@@ -7,6 +7,7 @@ import {
   PageShell,
   StatCard,
   type Column,
+  BreakdownTabs,
 } from "@/components/dashboard";
 import {
   Card,
@@ -21,7 +22,7 @@ import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
 
 export const metadata: Metadata = {
-  title: "Users · Sentinel",
+  title: "Users · Tollseal",
   description: "Who is calling models, and what it costs.",
 };
 
@@ -58,6 +59,7 @@ export default async function UsersPage({
     project_id: typeof params.project_id === "string" ? params.project_id : undefined,
     user_id: typeof params.user_id === "string" ? params.user_id : undefined,
     team_id: typeof params.team_id === "string" ? params.team_id : undefined,
+    service_account_id: typeof params.service_account_id === "string" ? params.service_account_id : undefined,
     provider: typeof params.provider === "string" ? params.provider : undefined,
     model: typeof params.model === "string" ? params.model : undefined,
     status: typeof params.status === "string" ? params.status : undefined,
@@ -109,8 +111,9 @@ export default async function UsersPage({
         title="Users"
         description="Everyone with access to the gateway, and what they are spending."
       >
+        <BreakdownTabs />
         <ObserveFilters />
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
             label="Active users"
             value={formatNumber(active)}
@@ -155,7 +158,7 @@ export default async function UsersPage({
             <CardContent>
               <DonutChart
                 data={spendByRole}
-                centerLabel={formatCompact(totalSpend)}
+                centerLabel="spend"
                 formatValue={formatUsd}
               />
             </CardContent>

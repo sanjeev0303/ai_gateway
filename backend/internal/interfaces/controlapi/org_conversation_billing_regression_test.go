@@ -292,7 +292,8 @@ func TestConversationHistory_SubjectAccessAndPrivacyModes(t *testing.T) {
 	respBob := doJSON(t, srv, http.MethodGet, "/v1/conversations/"+convAlice.String()+"/messages", nil, tenantBearer(st, orgID, userBob, domain.RoleMember))
 	requireEqual(t, respBob.StatusCode, http.StatusForbidden)
 
-	// 2. Alice (owner) requests conversation messages under METADATA_ONLY -> 200 OK with redacted content
+	// 2. Alice (owner) requests conversation messages under METADATA_ONLY -> 200 OK.
+	// The privacy mode no longer hides text: it is never stored, only held briefly in gateway memory.
 	st.orgs.getByID = func(_ context.Context, id uuid.UUID) (domain.Organization, error) {
 		return domain.Organization{ID: id, PrivacyDefault: domain.PrivacyMetadataOnly}, nil
 	}
@@ -311,17 +312,16 @@ func TestConversationHistory_SubjectAccessAndPrivacyModes(t *testing.T) {
 	if len(metaResp.Items) != 2 {
 		t.Fatalf("expected 2 messages, got %d", len(metaResp.Items))
 	}
-	// Under METADATA_ONLY, all turn content MUST be redacted to empty string while tokens remain visible
 	for _, m := range metaResp.Items {
-		if m.Content != "" {
-			t.Errorf("expected empty content under METADATA_ONLY, got %q", m.Content)
+		if m.Content == "" {
+			t.Errorf("expected the transcript under METADATA_ONLY, got an empty %s turn", m.Role)
 		}
 		if m.Tokens == 0 {
 			t.Errorf("expected non-zero token count under METADATA_ONLY")
 		}
 	}
 
-	// 3. Organization with PROMPT_ONLY -> system & user visible, assistant redacted
+	// 3. Organization with PROMPT_ONLY -> every turn visible
 	st.orgs.getByID = func(_ context.Context, id uuid.UUID) (domain.Organization, error) {
 		return domain.Organization{ID: id, PrivacyDefault: domain.PrivacyPromptOnly}, nil
 	}
@@ -338,8 +338,8 @@ func TestConversationHistory_SubjectAccessAndPrivacyModes(t *testing.T) {
 	if promptResp.Items[0].Content != "Can we store credentials in plaintext?" {
 		t.Errorf("expected user prompt to be visible under PROMPT_ONLY, got %q", promptResp.Items[0].Content)
 	}
-	if promptResp.Items[1].Content != "" {
-		t.Errorf("expected assistant turn to be redacted under PROMPT_ONLY, got %q", promptResp.Items[1].Content)
+	if promptResp.Items[1].Content == "" {
+		t.Errorf("expected the assistant turn under PROMPT_ONLY, got none")
 	}
 
 	// 4. Organization with FULL_CONTENT -> all turns visible

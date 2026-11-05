@@ -21,6 +21,9 @@ type StreamUsage struct {
 	CacheWriteTokens int
 	Reported         bool
 	FirstTokenAt     time.Time
+	// Text is the assistant reply as observed, capped at maxObservedText, for
+	// conversation recording. It never influences what is forwarded.
+	Text string
 }
 
 const (
@@ -31,6 +34,8 @@ const (
 	// usage sits at the top level. Non-streaming bodies beyond this fall back to
 	// estimates rather than growing the proxy's memory without bound.
 	maxObservedBody = 1 << 20
+	// maxObservedText bounds the reply text kept for conversation recording.
+	maxObservedText = 64 << 10
 )
 
 // usageObserver watches forwarded bytes for provider-reported usage without
@@ -42,6 +47,7 @@ type usageObserver struct {
 	body    []byte
 	dropped bool
 	usage   StreamUsage
+	text    strings.Builder
 }
 
 // newUsageObserver selects the parsing strategy from the response content type.
@@ -132,6 +138,7 @@ func (o *usageObserver) finish() *StreamUsage {
 		return nil
 	}
 	usage := o.usage
+	usage.Text = o.text.String()
 	return &usage
 }
 
@@ -170,6 +177,33 @@ type wireEvent struct {
 	Usage *wireUsage `json:"usage"`
 	// Gemini uses usageMetadata.
 	UsageMetadata *wireUsage `json:"usageMetadata"`
+
+	// Reply text, read only for conversation recording.
+	// OpenAI: choices[].message.content, or choices[].delta.content when streaming.
+	Choices []struct {
+		Message *struct {
+			Content json.RawMessage `json:"content"`
+		} `json:"message"`
+		Delta *struct {
+			Content json.RawMessage `json:"content"`
+		} `json:"delta"`
+	} `json:"choices"`
+	// Anthropic: content[].text, or delta.text in content_block_delta events.
+	Content []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	} `json:"content"`
+	Delta *struct {
+		Text string `json:"text"`
+	} `json:"delta"`
+	// Gemini: candidates[].content.parts[].text.
+	Candidates []struct {
+		Content struct {
+			Parts []struct {
+				Text string `json:"text"`
+			} `json:"parts"`
+		} `json:"content"`
+	} `json:"candidates"`
 }
 
 // parseEvent extracts usage from one provider payload, ignoring anything it
@@ -179,6 +213,8 @@ func (o *usageObserver) parseEvent(payload []byte) {
 	if err := json.Unmarshal(payload, &event); err != nil {
 		return
 	}
+
+	o.collectText(&event)
 
 	switch {
 	case event.Message != nil && event.Message.Usage != nil:
@@ -276,4 +312,64 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// collectText appends the reply text carried by one event, up to maxObservedText.
+func (o *usageObserver) collectText(event *wireEvent) {
+	add := func(t string) {
+		if t == "" || o.text.Len() >= maxObservedText {
+			return
+		}
+		if room := maxObservedText - o.text.Len(); len(t) > room {
+			t = t[:room]
+		}
+		o.text.WriteString(t)
+	}
+	for _, c := range event.Choices {
+		if c.Message != nil {
+			add(contentText(c.Message.Content))
+		}
+		if c.Delta != nil {
+			add(contentText(c.Delta.Content))
+		}
+	}
+	for _, c := range event.Content {
+		if c.Type == "" || c.Type == "text" {
+			add(c.Text)
+		}
+	}
+	if event.Delta != nil {
+		add(event.Delta.Text)
+	}
+	for _, c := range event.Candidates {
+		for _, part := range c.Content.Parts {
+			add(part.Text)
+		}
+	}
+}
+
+// contentText reads an OpenAI content field, which is either a string or an
+// array of {type, text} parts.
+func contentText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var parts []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(raw, &parts) != nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, p := range parts {
+		if p.Type == "" || p.Type == "text" {
+			b.WriteString(p.Text)
+		}
+	}
+	return b.String()
 }

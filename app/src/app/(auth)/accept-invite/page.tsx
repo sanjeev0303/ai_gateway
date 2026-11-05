@@ -3,8 +3,8 @@ import { getSession } from "@/lib/session";
 import { AcceptInviteClient } from "./accept-invite-client";
 
 export const metadata: Metadata = {
-  title: "Accept Invitation · Sentinel",
-  description: "Join your organization on Sentinel AI Gateway.",
+  title: "Accept Invitation · Tollseal",
+  description: "Join your organization on Tollseal AI Gateway.",
 };
 
 export default async function AcceptInvitePage(props: {

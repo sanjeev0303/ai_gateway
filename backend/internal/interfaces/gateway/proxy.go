@@ -15,6 +15,7 @@ import (
 
 	"ai-governance-saas/backend/internal/domain"
 	"ai-governance-saas/backend/internal/platform/httpx"
+	"ai-governance-saas/backend/internal/platform/netguard"
 	"ai-governance-saas/backend/internal/ports"
 	"ai-governance-saas/backend/internal/ports/repositories"
 	"ai-governance-saas/backend/internal/ports/secrets"
@@ -48,6 +49,9 @@ type ProxyDeps struct {
 	// Client is optional; a streaming-safe default (no overall timeout,
 	// compression disabled) is used when nil.
 	Client *http.Client
+	// AllowPrivateUpstreams disables the SSRF dial guard (dev only; sourced from
+	// cfg.AllowInsecureDev, which prod config rejects).
+	AllowPrivateUpstreams bool
 }
 
 // Proxy forwards /v1/messages* calls to the tenant's active Anthropic
@@ -80,7 +84,7 @@ func NewProxy(deps ProxyDeps) (*Proxy, error) {
 		deps.Log = slog.Default()
 	}
 	if deps.Client == nil {
-		deps.Client = defaultProxyClient()
+		deps.Client = defaultProxyClient(deps.AllowPrivateUpstreams)
 	}
 	baseURL := strings.TrimRight(deps.UpstreamBaseURL, "/")
 	if baseURL == "" {
@@ -92,9 +96,18 @@ func NewProxy(deps ProxyDeps) (*Proxy, error) {
 // defaultProxyClient returns the outbound client for upstream calls. It has
 // no overall timeout: streaming responses may run for minutes. The request
 // context cancels the upstream call when the client disconnects.
-func defaultProxyClient() *http.Client {
+func defaultProxyClient(allowPrivate bool) *http.Client {
 	return &http.Client{
+		// Do not follow upstream redirects: Go keeps custom auth headers
+		// (x-api-key, etc.) on a cross-host redirect, which would leak the
+		// injected provider key. Relay the 3xx to the client instead.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 		Transport: &http.Transport{
+			// SSRF guard: this proxy forwards to the tenant's account.BaseURL
+			// with the tenant key, so block private/metadata targets at dial.
+			DialContext: netguard.GuardedDialContext(allowPrivate),
 			// Forward Accept-Encoding verbatim and never decode upstream
 			// bodies: the gateway is a byte-exact pipe.
 			DisableCompression: true,

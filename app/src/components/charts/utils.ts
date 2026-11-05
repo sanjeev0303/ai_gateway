@@ -76,6 +76,18 @@ export function areaPath(points: readonly Point[], baselineY: number): string {
   return `${linePath(points)} L${last.x.toFixed(2)},${baselineY.toFixed(2)} L${first.x.toFixed(2)},${baselineY.toFixed(2)} Z`;
 }
 
+/**
+ * Axis label for a bucket date. Accepts "2026-10-30", "2026-10-30T09:00" or
+ * "10-30 09:00"; drops the year and a midnight time so daily buckets read
+ * "10-30" instead of every tick reading "00:00".
+ */
+export function axisLabel(date: string): string {
+  let label = date.replace("T", " ");
+  if (/^\d{4}-/.test(label)) label = label.slice(5);
+  label = label.slice(0, 11);
+  return label.endsWith(" 00:00") ? label.slice(0, -6) : label;
+}
+
 /** Thin out x-axis labels so they never overlap. */
 export function labelStride(count: number, maxLabels = 6): number {
   return Math.max(1, Math.ceil(count / maxLabels));

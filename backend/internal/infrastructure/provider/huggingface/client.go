@@ -15,6 +15,10 @@ import (
 	"ai-governance-saas/backend/internal/ports/provider"
 )
 
+// noRedirect stops the client following upstream redirects, which would re-send
+// the API token (carried on a custom header) to the redirect target.
+func noRedirect(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
 // Client talks to Hugging Face Inference API and the Hugging Face Hub.
 type Client struct {
 	baseURL    *url.URL
@@ -48,8 +52,13 @@ func New(rawBaseURL, rawHubURL, userAgent string) (*Client, error) {
 	return &Client{
 		baseURL: bu,
 		hubURL:  hu,
+		// No SSRF dial guard: this client isn't reachable with a tenant base URL
+		// (the HF adapter has no WithBaseURL; dedicated endpoints go through
+		// ValidateHFEndpoint and the live data plane forwards through the guarded
+		// stream proxy). Add netguard.GuardedDialContext if that changes.
 		httpClient: &http.Client{
-			Timeout: defaultTimeout,
+			Timeout:       defaultTimeout,
+			CheckRedirect: noRedirect,
 		},
 		userAgent: userAgent,
 	}, nil
@@ -290,9 +299,14 @@ func (c *Client) CreateMessageStream(ctx context.Context, apiKey string, req *Ch
 		return nil, c.parseError(resp)
 	}
 
+	sc := bufio.NewScanner(resp.Body)
+	// Raise the line cap well above bufio's 64KB default: a single large SSE
+	// "data:" line (big delta or tool-call payload) would otherwise abort the
+	// stream with bufio.ErrTooLong.
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	return &MessageStream{
 		resp:    resp,
-		scanner: bufio.NewScanner(resp.Body),
+		scanner: sc,
 	}, nil
 }
 

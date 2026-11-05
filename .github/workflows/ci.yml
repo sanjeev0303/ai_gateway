@@ -22,3 +22,24 @@ jobs:
       - run: go test -race -shuffle=on -count=1 ./...
       - name: dependency boundaries
         run: bash ../scripts/check-boundaries.sh
+
+  # PR-tier performance regression gate. Runs the micro-benchmark suite and
+  # fails on deterministic allocation/byte regressions vs perf/baseline.json;
+  # ns/op is advisory (noisy across runners). Heavier end-to-end load tests
+  # (cmd/perf) are a separate, scheduled tier — see perf/README.md.
+  #
+  # The committed baseline is environment-specific: record it on a
+  # representative runner with `go run ./cmd/perfgate -update` whenever the
+  # benchmark set or the runner environment materially changes.
+  perf-gate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: backend/go.sum
+      - run: go run ./cmd/perfgate

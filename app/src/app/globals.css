@@ -2,43 +2,25 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* Display serif — editorial weight */
-@import "@fontsource/cormorant-garamond/400.css";
-@import "@fontsource/cormorant-garamond/500.css";
-@import "@fontsource/cormorant-garamond/600.css";
-@import "@fontsource/cormorant-garamond/700.css";
-
-/* Body sans — geometric, neutral */
-@import "@fontsource/dm-sans/300.css";
-@import "@fontsource/dm-sans/400.css";
-@import "@fontsource/dm-sans/500.css";
-
-/* Mono — technical labels */
-@import "@fontsource/fira-code/300.css";
-@import "@fontsource/fira-code/400.css";
-
-/* Geist Mono retained for dashboard (out of scope) */
+/* Display serif: page heroes and marketing headlines only */
+@import "@fontsource-variable/archivo/wdth.css";
+@import "@fontsource/geist-sans/400.css";
+@import "@fontsource/geist-sans/500.css";
+@import "@fontsource/geist-sans/600.css";
 @import "@fontsource/geist-mono/400.css";
 @import "@fontsource/geist-mono/500.css";
-
-/* Google Fonts loaded via @font-face for offline-first build */
-@font-face {
-  font-family: 'Editorial';
-  src: local('Cormorant Garamond');
-  font-display: swap;
-}
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-dm-sans);
-  --font-display: var(--font-cormorant);
-  --font-mono: var(--font-fira-code);
-  --font-heading: var(--font-cormorant);
+  --font-sans: var(--font-ui);
+  --font-display: var(--font-display-face);
+  --font-mono: var(--font-code);
+  /* Card and dialog titles are interface text, not display type */
+  --font-heading: var(--font-ui);
 
-  /* Sidebar tokens (dashboard, out of scope) */
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -52,7 +34,6 @@
   --color-sidebar-muted: var(--sidebar-muted);
   --color-sidebar-active: var(--sidebar-active);
 
-  /* Semantic surface tokens */
   --color-surface: var(--surface);
   --color-surface-secondary: var(--surface-secondary);
   --color-surface-elevated: var(--surface-elevated);
@@ -89,7 +70,7 @@
   --color-brand-primary: var(--brand-primary);
   --color-brand-secondary: var(--brand-secondary);
 
-  /* Sentinel marketing palette */
+  /* Sentinel material palette */
   --color-canvas: var(--canvas);
   --color-canvas-warm: var(--canvas-warm);
   --color-ink: var(--ink);
@@ -98,269 +79,556 @@
   --color-brown: var(--brown);
   --color-brown-light: var(--brown-light);
   --color-brown-dark: var(--brown-dark);
+  --color-copper: var(--copper);
+  --color-copper-soft: var(--copper-soft);
   --color-lavender: var(--lavender);
   --color-lavender-deep: var(--lavender-deep);
+
+  /*
+    Pages use raw Tailwind status families (emerald-500, amber-600, ...).
+    They are remapped once here onto the Sentinel ramps, so every badge, dot
+    and alert speaks the same warm language without per-page edits.
+  */
+  --color-emerald-50: var(--sage-50);
+  --color-emerald-100: var(--sage-100);
+  --color-emerald-200: var(--sage-200);
+  --color-emerald-300: var(--sage-300);
+  --color-emerald-400: var(--sage-400);
+  --color-emerald-500: var(--sage-500);
+  --color-emerald-600: var(--sage-600);
+  --color-emerald-700: var(--sage-700);
+  --color-emerald-800: var(--sage-800);
+  --color-emerald-900: var(--sage-900);
+  --color-emerald-950: var(--sage-950);
+  --color-green-50: var(--sage-50);
+  --color-green-100: var(--sage-100);
+  --color-green-200: var(--sage-200);
+  --color-green-300: var(--sage-300);
+  --color-green-400: var(--sage-400);
+  --color-green-500: var(--sage-500);
+  --color-green-600: var(--sage-600);
+  --color-green-700: var(--sage-700);
+  --color-green-800: var(--sage-800);
+  --color-green-900: var(--sage-900);
+  --color-green-950: var(--sage-950);
+  --color-teal-400: var(--sage-400);
+  --color-teal-500: var(--sage-500);
+  --color-teal-600: var(--sage-600);
+
+  --color-amber-50: var(--honey-50);
+  --color-amber-100: var(--honey-100);
+  --color-amber-200: var(--honey-200);
+  --color-amber-300: var(--honey-300);
+  --color-amber-400: var(--honey-400);
+  --color-amber-500: var(--honey-500);
+  --color-amber-600: var(--honey-600);
+  --color-amber-700: var(--honey-700);
+  --color-amber-800: var(--honey-800);
+  --color-amber-900: var(--honey-900);
+  --color-amber-950: var(--honey-950);
+  --color-yellow-400: var(--honey-400);
+  --color-yellow-500: var(--honey-500);
+  --color-yellow-600: var(--honey-600);
+  --color-orange-400: var(--honey-400);
+  --color-orange-500: var(--honey-500);
+  --color-orange-600: var(--honey-600);
+
+  --color-rose-50: var(--brick-50);
+  --color-rose-100: var(--brick-100);
+  --color-rose-200: var(--brick-200);
+  --color-rose-300: var(--brick-300);
+  --color-rose-400: var(--brick-400);
+  --color-rose-500: var(--brick-500);
+  --color-rose-600: var(--brick-600);
+  --color-rose-700: var(--brick-700);
+  --color-rose-800: var(--brick-800);
+  --color-rose-900: var(--brick-900);
+  --color-rose-950: var(--brick-950);
+  --color-red-50: var(--brick-50);
+  --color-red-100: var(--brick-100);
+  --color-red-200: var(--brick-200);
+  --color-red-300: var(--brick-300);
+  --color-red-400: var(--brick-400);
+  --color-red-500: var(--brick-500);
+  --color-red-600: var(--brick-600);
+  --color-red-700: var(--brick-700);
+  --color-red-800: var(--brick-800);
+  --color-red-900: var(--brick-900);
+  --color-red-950: var(--brick-950);
+
+  --color-blue-50: var(--dusk-50);
+  --color-blue-100: var(--dusk-100);
+  --color-blue-200: var(--dusk-200);
+  --color-blue-300: var(--dusk-300);
+  --color-blue-400: var(--dusk-400);
+  --color-blue-500: var(--dusk-500);
+  --color-blue-600: var(--dusk-600);
+  --color-blue-700: var(--dusk-700);
+  --color-blue-800: var(--dusk-800);
+  --color-blue-900: var(--dusk-900);
+  --color-blue-950: var(--dusk-950);
+  --color-sky-400: var(--dusk-400);
+  --color-sky-500: var(--dusk-500);
+  --color-sky-600: var(--dusk-600);
+  --color-cyan-400: var(--dusk-400);
+  --color-cyan-500: var(--dusk-500);
+  --color-cyan-600: var(--dusk-600);
+
+  --color-violet-400: var(--lav-400);
+  --color-violet-500: var(--lav-500);
+  --color-violet-600: var(--lav-600);
+  --color-purple-400: var(--lav-400);
+  --color-purple-500: var(--lav-500);
+  --color-purple-600: var(--lav-600);
+  --color-indigo-400: var(--lav-400);
+  --color-indigo-500: var(--lav-500);
+  --color-indigo-600: var(--lav-600);
 
   --radius-sm: calc(var(--radius) * 0.5);
   --radius-md: calc(var(--radius) * 0.75);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.5);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 :root {
-  /* === FONT FAMILIES === */
-  --font-cormorant: "Cormorant Garamond", Georgia, "Times New Roman", serif;
-  --font-dm-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-fira-code: "Fira Code", ui-monospace, SFMono-Regular, monospace;
-  --font-geist-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display-face: "Archivo Variable", "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-ui: "Geist Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-code: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-geist-mono: var(--font-code);
 
-  /* === SENTINEL MARKETING PALETTE === */
-  /* 60% — platinum base canvas */
-  --canvas: #E5E4E2;
-  --canvas-warm: #EAE9E6;
-  /* 30% — coffee brown primary */
-  --brown: #6F4E37;
-  --brown-light: #8C6A50;
-  --brown-dark: #4A3224;
-  /* 10% — lavender mist accent */
-  --lavender: #E6E0F0;
-  --lavender-deep: #C5B8E0;
+  /* Status ramps, named for the hues pages already use. Light and dark share
+     hues; the shade picks the contrast. Banknote green, ochre, intaglio red,
+     indigo, and teal iris (the old lavender slot: no violet in this world). */
+  --sage-50: #ecf6f1;
+  --sage-100: #d3ebdf;
+  --sage-200: #a8d6c0;
+  --sage-300: #73bb9b;
+  --sage-400: #45a07b;
+  --sage-500: #278463;
+  --sage-600: #1d6b50;
+  --sage-700: #185642;
+  --sage-800: #154536;
+  --sage-900: #12392d;
+  --sage-950: #08201a;
+  --honey-50: #fbf5e6;
+  --honey-100: #f5e7c2;
+  --honey-200: #ebcd85;
+  --honey-300: #ddb04f;
+  --honey-400: #c9952e;
+  --honey-500: #ad7a19;
+  --honey-600: #8a5f12;
+  --honey-700: #6f4c12;
+  --honey-800: #5a3e13;
+  --honey-900: #4b3413;
+  --honey-950: #2a1c07;
+  --brick-50: #fcefee;
+  --brick-100: #f8dcda;
+  --brick-200: #f0b5b1;
+  --brick-300: #e4857f;
+  --brick-400: #d65a52;
+  --brick-500: #c13a32;
+  --brick-600: #a3271f;
+  --brick-700: #861f19;
+  --brick-800: #6e1c17;
+  --brick-900: #5c1b17;
+  --brick-950: #330b09;
+  --dusk-50: #eef2fb;
+  --dusk-100: #dbe3f6;
+  --dusk-200: #b8c8ee;
+  --dusk-300: #8ea6e0;
+  --dusk-400: #6584d0;
+  --dusk-500: #4166c8;
+  --dusk-600: #3250a8;
+  --dusk-700: #2b4189;
+  --dusk-800: #283870;
+  --dusk-900: #25305c;
+  --dusk-950: #161c38;
+  --lav-400: #3fb3aa;
+  --lav-500: #2a9a91;
+  --lav-600: #1f7f78;
 
-  /* === SEMANTIC INK TOKENS === */
-  --ink: #1C1412;
-  --ink-secondary: #4A3A30;
-  --ink-tertiary: #7A6458;
+  /* Security printing: cool security paper, intaglio indigo ink, banknote
+     green for the action, teal iris, and a foil kept for the prism and seal. */
+  --canvas: #edf1ee;
+  --canvas-warm: #e4ebe7;
+  --brown: #262f5e;
+  --brown-light: #3a4580;
+  --brown-dark: #161d40;
+  --copper: #0f7a76;
+  --copper-soft: #cfe6e2;
+  --lavender: #e2e8f6;
+  --lavender-deep: #4166c8;
+  --foil: linear-gradient(115deg, #2aa39a 0%, #4166c8 48%, #c9a43a 100%);
+  --guilloche: rgba(15, 122, 118, 0.24);
+  --guilloche-soft: rgba(38, 47, 94, 0.09);
 
-  /* === TAILWIND / SHADCN SEMANTIC BRIDGE === */
-  --background: #E5E4E2;
-  --foreground: #1C1412;
-  --card: #ECEBE8;
-  --card-foreground: #1C1412;
-  --popover: #ECEBE8;
-  --popover-foreground: #1C1412;
-  --primary: #6F4E37;
-  --primary-foreground: #F5F3F0;
-  --primary-hover: #4A3224;
-  --primary-muted: #DDD5CC;
-  --secondary: #E0DDD9;
-  --secondary-foreground: #1C1412;
-  --muted: #DAD8D4;
-  --muted-foreground: #7A6458;
-  --accent: #E6E0F0;
-  --accent-foreground: #3D2D5C;
-  --destructive: #B54B2A;
-  --border: rgba(111, 78, 55, 0.14);
-  --border-strong: rgba(111, 78, 55, 0.28);
-  --input: rgba(111, 78, 55, 0.12);
-  --ring: #6F4E37;
-  --radius: 0.5rem;
+  --ink: #141a33;
+  --ink-secondary: #3a4363;
+  --ink-tertiary: #4e5776;
 
-  /* Chart tokens — warm analog scale */
-  --chart-1: #6F4E37;
-  --chart-2: #8C6A50;
-  --chart-3: #C5B8E0;
-  --chart-4: #A8924A;
-  --chart-5: #5C8A6E;
+  --background: #edf1ee;
+  --foreground: #141a33;
+  --card: #f8faf9;
+  --card-foreground: #141a33;
+  --popover: #fcfdfc;
+  --popover-foreground: #141a33;
+  --primary: #0d5c48;
+  --primary-foreground: #f2f8f5;
+  --primary-hover: #0a4a3a;
+  --primary-muted: #d6e7df;
+  --secondary: #e4ebe7;
+  --secondary-foreground: #141a33;
+  --muted: #e4ebe7;
+  --muted-foreground: #4e5776;
+  --accent: #dfe7e3;
+  --accent-foreground: #141a33;
+  --destructive: #a3271f;
+  --border: rgba(20, 26, 51, 0.12);
+  --border-strong: rgba(20, 26, 51, 0.22);
+  --input: rgba(20, 26, 51, 0.2);
+  --ring: #0f7a76;
+  --radius: 0.625rem;
 
-  /* Surface tokens */
-  --surface: #ECEBE8;
-  --surface-secondary: #E0DDD9;
-  --surface-elevated: #F0EEEB;
-  --ai: #6F4E37;
-  --ai-secondary: #8C6A50;
-  --success: #4A7A5A;
-  --warning: #A8924A;
-  --danger: #B54B2A;
-  --info: #5A6A8C;
+  /* Charts: indigo, banknote green, teal, ochre, slate. One hue per question. */
+  --chart-1: #232b5c;
+  --chart-2: #1d7a5f;
+  --chart-3: #2aa39a;
+  --chart-4: #c49a2c;
+  --chart-5: #8a93a8;
 
-  /* Sidebar stays dark navy — dashboard, out of scope */
-  --sidebar-background: #1C1914;
-  --sidebar-foreground: #E5E4E2;
-  --sidebar-muted: #7A6458;
-  --sidebar-active: #2E261E;
+  --surface: #f8faf9;
+  --surface-secondary: #e4ebe7;
+  --surface-elevated: #fcfdfc;
+  --ai: #262f5e;
+  --ai-secondary: #0f7a76;
+  --success: #1d6b50;
+  --warning: #8a5f12;
+  --danger: #a3271f;
+  --info: #3250a8;
+
+  --sidebar-background: #edf1ee;
+  --sidebar-foreground: #141a33;
+  --sidebar-muted: #4e5776;
+  --sidebar-active: #d9e3de;
   --sidebar: var(--sidebar-background);
-  --sidebar-primary: #8C6A50;
-  --sidebar-primary-foreground: #F5F3F0;
-  --sidebar-accent: var(--sidebar-active);
-  --sidebar-accent-foreground: #F5F3F0;
-  --sidebar-border: rgba(229, 228, 226, 0.10);
-  --sidebar-ring: #8C6A50;
+  --sidebar-primary: #0d5c48;
+  --sidebar-primary-foreground: #f2f8f5;
+  --sidebar-accent: #dfe7e3;
+  --sidebar-accent-foreground: #141a33;
+  --sidebar-border: rgba(20, 26, 51, 0.1);
+  --sidebar-ring: #0f7a76;
 
-  /* Brand */
-  --brand-primary: #6F4E37;
-  --brand-secondary: #8C6A50;
+  --brand-primary: #0d5c48;
+  --brand-secondary: #0f7a76;
 
-  /* Motion */
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Indigo-tinted, offset shadows, only for things that float */
+  --shadow-float: 0 1px 2px rgba(20, 26, 51, 0.06), 0 12px 32px -12px rgba(20, 26, 51, 0.2);
+  --shadow-dialog: 0 2px 6px rgba(20, 26, 51, 0.07), 0 32px 64px -24px rgba(20, 26, 51, 0.34);
+
+  /* Iris light behind heroes: teal on one side, indigo-blue on the other */
+  --glow-warm: rgba(42, 163, 154, 0.16);
+  --glow-cool: rgba(65, 102, 200, 0.14);
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-micro: cubic-bezier(0.5, 0, 0.5, 1);
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --motion-fast: 120ms;
-  --motion-base: 240ms;
+  --motion-fast: 140ms;
+  --motion-base: 220ms;
   --motion-slow: 480ms;
 
-  /* Line tokens */
-  --line: rgba(111, 78, 55, 0.10);
-  --line-strong: rgba(111, 78, 55, 0.22);
+  --line: rgba(20, 26, 51, 0.09);
+  --line-strong: rgba(20, 26, 51, 0.2);
+  --scrollbar: rgba(20, 26, 51, 0.2);
+  --scrollbar-hover: rgba(20, 26, 51, 0.36);
 
-  /* Terminal (dark surface for code sections) */
-  --terminal-bg: #1C1412;
-  --terminal-text: #E5E4E2;
-  --terminal-dim: #7A6458;
-  --terminal-ok: #5C8A6E;
-  --terminal-warn: #A8924A;
+  --terminal-bg: #0f1530;
+  --terminal-text: #e3e8f5;
+  --terminal-dim: #97a1c0;
+  --terminal-ok: #45a07b;
+  --terminal-warn: #ddb04f;
 }
 
 .dark {
-  --background: #1C1412;
-  --foreground: #E5E4E2;
-  --card: #241C18;
-  --card-foreground: #E5E4E2;
-  --popover: #241C18;
-  --popover-foreground: #E5E4E2;
-  --primary: #8C6A50;
-  --primary-foreground: #F5F3F0;
-  --primary-hover: #A8845E;
-  --primary-muted: #2E261E;
-  --secondary: #2E261E;
-  --secondary-foreground: #E5E4E2;
-  --muted: #2E261E;
-  --muted-foreground: #7A6458;
-  --accent: #2A2438;
-  --accent-foreground: #C5B8E0;
-  --destructive: #C96040;
-  --border: rgba(229, 228, 226, 0.10);
-  --border-strong: rgba(229, 228, 226, 0.18);
-  --input: rgba(229, 228, 226, 0.12);
-  --ring: #8C6A50;
+  --canvas: #12102a;
+  --canvas-warm: #181537;
+  --brown: #8fa4e6;
+  --brown-light: #a9b9ee;
+  --brown-dark: #6e86d6;
+  --copper: #4fc7bd;
+  --copper-soft: #123b3a;
+  --lavender: #1a2242;
+  --lavender-deep: #84a2f0;
+  --foil: linear-gradient(115deg, #4fc7bd 0%, #84a2f0 48%, #e2c15f 100%);
+  --guilloche: rgba(79, 199, 189, 0.2);
+  --guilloche-soft: rgba(132, 162, 240, 0.08);
 
-  --chart-1: #8C6A50;
-  --chart-2: #A8845E;
-  --chart-3: #C5B8E0;
-  --chart-4: #C8AA5A;
-  --chart-5: #6CA880;
+  --ink: #ecebf8;
+  --ink-secondary: #c9c6e2;
+  --ink-tertiary: #a9a5c9;
 
-  --surface: #241C18;
-  --surface-secondary: #2E261E;
-  --surface-elevated: #2A2018;
-  --ai: #8C6A50;
-  --ai-secondary: #A8845E;
-  --success: #6CA880;
-  --warning: #C8AA5A;
-  --danger: #C96040;
-  --info: #7A8CB0;
+  --background: #12102a;
+  --foreground: #ecebf8;
+  --card: #191736;
+  --card-foreground: #ecebf8;
+  --popover: #1e1b40;
+  --popover-foreground: #ecebf8;
+  --primary: #4cc9a4;
+  --primary-foreground: #052119;
+  --primary-hover: #6ad6b6;
+  --primary-muted: #123a31;
+  --secondary: #1d1a3d;
+  --secondary-foreground: #ecebf8;
+  --muted: #1d1a3d;
+  --muted-foreground: #a9a5c9;
+  --accent: #24204a;
+  --accent-foreground: #ecebf8;
+  --destructive: #f0736a;
+  --border: rgba(236, 235, 248, 0.09);
+  --border-strong: rgba(236, 235, 248, 0.18);
+  --input: rgba(236, 235, 248, 0.15);
+  --ring: #4fc7bd;
 
-  --sidebar-background: #1C1914;
-  --sidebar-foreground: #E5E4E2;
-  --sidebar-muted: #7A6458;
-  --sidebar-active: #2E261E;
+  --chart-1: #8fa4e6;
+  --chart-2: #4cc9a4;
+  --chart-3: #4fc7bd;
+  --chart-4: #e2b24f;
+  --chart-5: #7d87a6;
+
+  --surface: #191736;
+  --surface-secondary: #1d1a3d;
+  --surface-elevated: #1e1b40;
+  --ai: #8fa4e6;
+  --ai-secondary: #4fc7bd;
+  --success: #4cc9a4;
+  --warning: #e2b24f;
+  --danger: #f0736a;
+  --info: #84a2f0;
+
+  --sidebar-background: #12102a;
+  --sidebar-foreground: #ecebf8;
+  --sidebar-muted: #a9a5c9;
+  --sidebar-active: #24204a;
   --sidebar: var(--sidebar-background);
-  --sidebar-primary: #8C6A50;
-  --sidebar-primary-foreground: #F5F3F0;
-  --sidebar-accent: var(--sidebar-active);
-  --sidebar-accent-foreground: #F5F3F0;
-  --sidebar-border: rgba(229, 228, 226, 0.10);
-  --sidebar-ring: #8C6A50;
+  --sidebar-primary: #4cc9a4;
+  --sidebar-primary-foreground: #052119;
+  --sidebar-accent: #1b1839;
+  --sidebar-accent-foreground: #ecebf8;
+  --sidebar-border: rgba(236, 235, 248, 0.08);
+  --sidebar-ring: #4fc7bd;
 
-  --brand-primary: #8C6A50;
-  --brand-secondary: #A8845E;
+  --brand-primary: #4cc9a4;
+  --brand-secondary: #84a2f0;
 
-  --canvas: #1C1412;
-  --canvas-warm: #241C18;
-  --ink: #E5E4E2;
-  --ink-secondary: #C8B8AE;
-  --ink-tertiary: #7A6458;
+  --shadow-float: 0 1px 2px rgba(0, 0, 0, 0.35), 0 16px 40px -16px rgba(0, 0, 0, 0.65);
+  --shadow-dialog: 0 2px 6px rgba(0, 0, 0, 0.4), 0 32px 72px -24px rgba(0, 0, 0, 0.8);
 
-  --line: rgba(229, 228, 226, 0.10);
-  --line-strong: rgba(229, 228, 226, 0.20);
+  --glow-warm: rgba(79, 199, 189, 0.12);
+  --glow-cool: rgba(132, 162, 240, 0.12);
+
+  --line: rgba(236, 235, 248, 0.08);
+  --line-strong: rgba(236, 235, 248, 0.18);
+  --scrollbar: rgba(236, 235, 248, 0.14);
+  --scrollbar-hover: rgba(236, 235, 248, 0.28);
+
+  --terminal-bg: #0c0a1f;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
     scrollbar-width: thin;
-    scrollbar-color: rgba(111, 78, 55, 0.20) transparent;
+    scrollbar-color: var(--scrollbar) transparent;
   }
-  .dark * {
-    scrollbar-color: rgba(229, 228, 226, 0.14) transparent;
+  html {
+    font-family: var(--font-ui);
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
   }
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-dm-sans);
+    font-family: var(--font-ui);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
-  html {
-    font-family: var(--font-dm-sans);
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-ui);
+    letter-spacing: -0.015em;
+    text-wrap: balance;
   }
-
-  /* Display headings use Cormorant */
-  h1, h2, .font-display {
-    font-family: var(--font-cormorant);
-    letter-spacing: -0.03em;
-  }
-  h3, h4, h5, h6 {
-    font-family: var(--font-dm-sans);
+  /* Display: Archivo set wide, like the lettering of a note's denomination */
+  .font-display {
+    font-family: var(--font-display-face);
+    font-weight: 640;
+    font-stretch: 118%;
     letter-spacing: -0.02em;
   }
-  code, pre, .font-mono {
-    font-family: var(--font-fira-code);
+  .marketing h1,
+  .marketing h2 {
+    font-family: var(--font-display-face);
+    font-weight: 640;
+    font-stretch: 118%;
+    letter-spacing: -0.02em;
   }
+  code, pre, kbd, .font-mono {
+    font-family: var(--font-code);
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--copper) 28%, transparent);
+    color: var(--foreground);
+  }
+  input, textarea {
+    caret-color: var(--copper);
+  }
+  a, button, [role="button"], label, summary {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  a {
+    text-underline-offset: 3px;
+  }
+  /* Figures line up wherever numbers are compared */
+  table, [data-slot="stat-value"], .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Floating surfaces (menus, selects, palettes) share one material */
+.glass {
+  background: var(--popover);
+  box-shadow: var(--shadow-float);
+}
+
+/* Ambient light field used by heroes: peach on the left, lavender on the right */
+.ambient {
+  background:
+    radial-gradient(60% 70% at 88% 0%, var(--glow-cool), transparent 70%),
+    radial-gradient(45% 60% at 0% 10%, var(--glow-warm), transparent 70%);
+}
+
+/* The gateway prism: foil plates stacked in perspective under an intaglio cap */
+.gateway-prism {
+  --prism-size: 168px;
+  position: relative;
+  width: calc(var(--prism-size) * 1.6);
+  height: calc(var(--prism-size) * 1.45);
+  display: grid;
+  place-items: center;
+  perspective: 900px;
+}
+.gateway-prism__glow {
+  position: absolute;
+  inset: 18% 6% 2%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--glow-warm), transparent 75%);
+  filter: blur(6px);
+}
+.gateway-prism__float {
+  transform-style: preserve-3d;
+  animation: prism-float 7s ease-in-out infinite;
+}
+.gateway-prism__stack {
+  position: relative;
+  width: var(--prism-size);
+  height: var(--prism-size);
+  transform-style: preserve-3d;
+  transform: rotateX(56deg) rotateZ(-44deg);
+}
+.gateway-prism__plate {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 22%;
+  border: 1px solid color-mix(in oklab, var(--copper) 45%, transparent);
+  background: var(--foil);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 55%, transparent),
+    0 18px 30px -18px rgba(20, 26, 51, 0.4);
+  transform: translateZ(calc(var(--z) * var(--prism-size) * 0.13));
+}
+.gateway-prism__plate:nth-child(1) { opacity: 0.32; }
+.gateway-prism__plate:nth-child(2) { opacity: 0.5; }
+.gateway-prism__plate:nth-child(3) { opacity: 0.7; }
+.gateway-prism__cap {
+  border-color: color-mix(in oklab, #c9a43a 60%, transparent);
+  background:
+    radial-gradient(120% 90% at 20% 10%, rgba(255, 255, 255, 0.16), transparent 55%),
+    #1c2550;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 26px 40px -20px rgba(20, 26, 51, 0.6);
+}
+.dark .gateway-prism__plate {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 18px 30px -18px rgba(0, 0, 0, 0.7);
+}
+.dark .gateway-prism__cap {
+  background:
+    radial-gradient(120% 90% at 20% 10%, rgba(132, 162, 240, 0.25), transparent 55%),
+    #1a2350;
+}
+@keyframes prism-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gateway-prism__float { animation: none; }
 }
 
 /* Modern scrollbars */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(111, 78, 55, 0.18);
+  background: var(--scrollbar);
   border-radius: 9999px;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(111, 78, 55, 0.36); }
-.dark ::-webkit-scrollbar-thumb { background: rgba(229, 228, 226, 0.14); }
-.dark ::-webkit-scrollbar-thumb:hover { background: rgba(229, 228, 226, 0.28); }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
 ::-webkit-scrollbar-corner { background: transparent; }
 ::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 
 /* Sidebar scrollbar */
-.sidebar-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(229, 228, 226, 0.12) transparent; }
+.sidebar-scrollbar { scrollbar-width: thin; scrollbar-color: var(--scrollbar) transparent; }
 .sidebar-scrollbar::-webkit-scrollbar { width: 3px; }
 .sidebar-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .sidebar-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(229, 228, 226, 0.12);
+  background: var(--scrollbar);
   border-radius: 9999px;
 }
-.sidebar-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(229, 228, 226, 0.22); }
+.sidebar-scrollbar:hover::-webkit-scrollbar-thumb { background: var(--scrollbar-hover); }
 .sidebar-scrollbar::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 
 /* Page scrollbar */
 .page-scrollbar {
   scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: rgba(111, 78, 55, 0.18) transparent;
+  scrollbar-color: var(--scrollbar) transparent;
 }
-.dark .page-scrollbar { scrollbar-color: rgba(229, 228, 226, 0.14) transparent; }
 .page-scrollbar::-webkit-scrollbar { width: 4px; }
 .page-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .page-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(111, 78, 55, 0.18);
+  background: var(--scrollbar);
   border-radius: 9999px;
 }
-.page-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(111, 78, 55, 0.32); }
-.dark .page-scrollbar::-webkit-scrollbar-thumb { background: rgba(229, 228, 226, 0.14); }
-.dark .page-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(229, 228, 226, 0.24); }
+.page-scrollbar:hover::-webkit-scrollbar-thumb { background: var(--scrollbar-hover); }
 .page-scrollbar::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 
-/* Sentinel material surface — translucent warm parchment */
+/* Translucent paper surface — translucent warm parchment */
 .sentinel-surface {
-  background: rgba(229, 228, 226, 0.82);
+  background: color-mix(in oklab, var(--card) 82%, transparent);
   backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(111, 78, 55, 0.12);
+  border: 1px solid var(--border);
 }
 
 /* Dark terminal surface for code panels */
 .terminal-surface {
-  background: #1C1412;
-  border: 1px solid rgba(111, 78, 55, 0.30);
+  background: var(--terminal-bg);
+  border: 1px solid var(--border-strong);
 }
 
 /* Text overlapping image utility */
@@ -408,7 +676,7 @@
   top: 0;
   bottom: 0;
   width: 1px;
-  background: linear-gradient(to bottom, transparent, rgba(111,78,55,0.12), transparent);
+  background: linear-gradient(to bottom, transparent, rgba(20,26,51,0.12), transparent);
   pointer-events: none;
 }
 
@@ -477,56 +745,16 @@
   z-index: 1;
 }
 
-/* Cross-hatch weave pattern for section backgrounds */
-.weave {
-  position: relative;
-}
-.weave::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 24px,
-      rgba(111,78,55,0.028) 24px,
-      rgba(111,78,55,0.028) 25px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 24px,
-      rgba(111,78,55,0.028) 24px,
-      rgba(111,78,55,0.028) 25px
-    );
-  z-index: 0;
-  pointer-events: none;
-}
-
-/* Dark inverted section — rich espresso */
-.section-dark {
-  background: #1C1412;
-  color: #E5E4E2;
-}
-.section-dark .text-muted-foreground {
-  color: rgba(229, 228, 226, 0.55);
-}
-.section-dark .border-border\/40 {
-  border-color: rgba(229, 228, 226, 0.10);
-}
-
 /* Stat callout — large tabular numbers with unit label */
 .stat-block dt {
-  font-family: var(--font-fira-code);
+  font-family: var(--font-code);
   font-size: 0.625rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ink-tertiary);
 }
 .stat-block dd {
-  font-family: var(--font-cormorant);
+  font-family: var(--font-display-face);
   font-size: clamp(2.5rem, 5vw, 4rem);
   font-weight: 600;
   line-height: 0.9;
@@ -548,7 +776,7 @@
 /* Shimmer line — horizontal rule with gradient fade */
 .rule-fade {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(111,78,55,0.20), transparent);
+  background: linear-gradient(90deg, transparent, rgba(20,26,51,0.20), transparent);
   border: none;
 }
 
@@ -559,7 +787,7 @@
   top: 0;
   bottom: 0;
   width: 1px;
-  background: linear-gradient(to bottom, transparent, rgba(111,78,55,0.16) 20%, rgba(111,78,55,0.16) 80%, transparent);
+  background: linear-gradient(to bottom, transparent, rgba(20,26,51,0.16) 20%, rgba(20,26,51,0.16) 80%, transparent);
   transform: translateX(-50%);
   pointer-events: none;
 }
@@ -600,10 +828,10 @@
 
 @keyframes hubBeacon {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(111,78,55, 0.25), 0 0 24px -4px rgba(111,78,55, 0.4);
+    box-shadow: 0 0 0 0 rgba(20,26,51,0.25), 0 0 24px -4px rgba(20,26,51,0.4);
   }
   50% {
-    box-shadow: 0 0 0 16px rgba(111,78,55, 0.04), 0 0 36px 4px rgba(111,78,55, 0.25);
+    box-shadow: 0 0 0 16px rgba(20,26,51,0.04), 0 0 36px 4px rgba(20,26,51,0.25);
   }
 }
 
@@ -638,4 +866,113 @@
   .animate-marquee {
     animation-play-state: paused;
   }
+}
+/* Entrance states set before first paint (see MOTION_BOOT in the root layout).
+   The page script animates from here; .motion-done shows everything if it never does. */
+.motion-ok:not(.motion-done) section[aria-labelledby="hero-heading"] [data-guilloche] path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+.motion-ok:not(.motion-done) [data-ledger] [data-stamp] {
+  opacity: 0;
+}
+.motion-ok:not(.motion-done) [data-scroll-step] {
+  opacity: .12;
+}
+.motion-ok:not(.motion-done) [data-scroll-step] [data-connector],
+.motion-ok:not(.motion-done) [data-flow-lines] path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+/* Liquid glass: the floating navigation and controls layer only, never content
+   (lists, tables, panels, text blocks stay solid). A tinted, blurred, saturated
+   pane with a bright top edge where light catches it, and a soft specular sheen.
+   .liquid-glass is the regular weight (bars, controls); .liquid-glass-panel is the
+   thicker one for larger floating surfaces (menus, selects, dialogs, sheets).
+   Write only the standard backdrop-filter: the build adds Safari's prefix, and
+   when both are written it keeps only the prefixed one, which Chrome ignores. */
+.liquid-glass,
+.liquid-glass-panel {
+  --lg-edge: rgba(255, 255, 255, 0.6);
+  --lg-rim: rgba(255, 255, 255, 0.7);
+  --lg-shade: rgba(20, 26, 51, 0.06);
+  border-color: var(--lg-edge);
+  box-shadow:
+    inset 0 1px 0 var(--lg-rim),
+    inset 0 -1px 0 var(--lg-shade),
+    0 1px 2px rgba(20, 26, 51, 0.05),
+    0 10px 28px -14px rgba(20, 26, 51, 0.28);
+}
+.liquid-glass {
+  background:
+    radial-gradient(120% 140% at 12% -20%, rgba(255, 255, 255, 0.42), transparent 55%),
+    color-mix(in oklab, var(--card) 74%, transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+}
+.liquid-glass-panel {
+  background:
+    radial-gradient(140% 120% at 10% -10%, rgba(255, 255, 255, 0.38), transparent 50%),
+    color-mix(in oklab, var(--popover) 76%, transparent);
+  backdrop-filter: blur(28px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 var(--lg-rim),
+    inset 0 -1px 0 var(--lg-shade),
+    var(--shadow-dialog);
+}
+.dark .liquid-glass,
+.dark .liquid-glass-panel {
+  --lg-edge: rgba(236, 235, 248, 0.14);
+  --lg-rim: rgba(236, 235, 248, 0.18);
+  --lg-shade: rgba(0, 0, 0, 0.35);
+}
+.dark .liquid-glass {
+  background:
+    radial-gradient(120% 140% at 12% -20%, rgba(132, 162, 240, 0.16), transparent 55%),
+    color-mix(in oklab, var(--card) 76%, transparent);
+}
+.dark .liquid-glass-panel {
+  background:
+    radial-gradient(140% 120% at 10% -10%, rgba(132, 162, 240, 0.14), transparent 50%),
+    color-mix(in oklab, var(--popover) 80%, transparent);
+}
+/* Glass cannot be read without a backdrop to sample, or by people who asked for less transparency. */
+@supports not (backdrop-filter: blur(1px)) {
+  .liquid-glass, .liquid-glass-panel { background: var(--popover); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .liquid-glass, .liquid-glass-panel {
+    background: var(--popover);
+    backdrop-filter: none;
+  }
+}
+@media (prefers-contrast: more) {
+  .liquid-glass, .liquid-glass-panel {
+    background: var(--popover);
+    backdrop-filter: none;
+    border-color: var(--border-strong);
+  }
+}
+
+/* The pulses that travel along the curves exist only when motion runs. */
+[data-flow-pulses] { display: none; }
+.motion-ok [data-flow-pulses] { display: inline; }
+
+/* Crisp text in floating surfaces. Animate UI leaves a no-op blur filter on them (and on
+   staggered menu items) and a 3D flip transform on dialogs once they have arrived; either
+   moves the surface onto its own layer, where text is rasterised soft. Opacity still fades. */
+[data-slot="dialog-content"],
+[data-slot="sheet-content"],
+[data-slot="dropdown-menu-content"],
+[data-slot="dropdown-menu-sub-content"],
+[data-slot="popover-content"],
+[data-slot="select-content"],
+[data-slot="tabs-content"],
+[data-slot="dropdown-menu-content"] *,
+[data-slot="dropdown-menu-sub-content"] *,
+[data-slot="select-content"] * {
+  filter: none !important;
+}
+[data-slot="dialog-content"] {
+  transform: none !important;
 }

@@ -73,6 +73,9 @@ type GuardrailEvalResult struct {
 	MatchedCategory string
 	GuardrailID     string
 	Detector        domain.GuardrailDetector
+	// Redact masks what the redact guardrails detect; set only when the
+	// strongest match is a redaction.
+	Redact func(string) string
 }
 
 func (g *GuardrailEvaluator) CheckInput(ctx context.Context, payload []byte, orgID, reqID string, cred GatewayCredential) *GuardrailEvalResult {
@@ -146,13 +149,17 @@ func (g *GuardrailEvaluator) CheckInput(ctx context.Context, payload []byte, org
 			slog.Warn("guardrail event queue full, dropping event", "request_id", reqID)
 		}
 
-		return &GuardrailEvalResult{
+		result := &GuardrailEvalResult{
 			Triggered:       true,
 			Action:          res.Action,
 			MatchedCategory: res.MatchedCategory,
 			GuardrailID:     res.GuardrailID,
 			Detector:        res.Detector,
 		}
+		if res.Action == domain.GuardrailActionRedact {
+			result.Redact = func(text string) string { return g.eval.Redact(text, allGuardrails) }
+		}
+		return result
 	}
 
 	return &GuardrailEvalResult{Triggered: false}

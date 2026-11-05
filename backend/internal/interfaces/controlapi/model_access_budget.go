@@ -97,17 +97,38 @@ func toBudgetDTO(b domain.Budget) budgetDTO {
 	}
 }
 
-func toModelAccessEntryDTO(e domain.ModelAccessEntry) modelAccessEntryDTO {
-	return modelAccessEntryDTO{
-		Provider:  e.Provider,
-		Model:     e.Model,
-		Allowed:   e.Allowed,
-		Source:    e.Source,
-		PolicyID:  e.PolicyID.String(),
-		RuleID:    e.RuleID.String(),
-		Priority:  e.Priority,
-		Effective: e.Effective,
+// anyProvider marks a rule that names models without a provider: the gateway
+// applies it to that model whichever provider serves it.
+const anyProvider = "any"
+
+// modelAccessEntriesFor lists the models an allow or block rule covers. Rules
+// from the model access page keep provider and model in their conditions;
+// rules from the policies page keep a "models" list in their parameters.
+func modelAccessEntriesFor(pol domain.Policy, rule domain.PolicyRule) []modelAccessEntryDTO {
+	if rule.RuleType != domain.RuleTypeAllowlist && rule.RuleType != domain.RuleTypeBlocklist {
+		return nil
 	}
+	var cond, param map[string]any
+	_ = json.Unmarshal(rule.Conditions, &cond)
+	_ = json.Unmarshal(rule.Parameters, &param)
+	provider, _ := cond["provider"].(string)
+	if provider == "" {
+		provider = anyProvider
+	}
+	var entries []modelAccessEntryDTO
+	for _, model := range extractModelsFromMap(param, cond) {
+		entries = append(entries, modelAccessEntryDTO{
+			Provider:  provider,
+			Model:     model,
+			Allowed:   rule.RuleType == domain.RuleTypeAllowlist,
+			Source:    rule.RuleType,
+			PolicyID:  pol.ID.String(),
+			RuleID:    rule.ID.String(),
+			Priority:  pol.Priority,
+			Effective: rule.Enabled,
+		})
+	}
+	return entries
 }
 
 func (a *api) listModelAccess(w http.ResponseWriter, r *http.Request) {
@@ -127,28 +148,7 @@ func (a *api) listModelAccess(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		for _, rule := range rules {
-			if rule.RuleType != domain.RuleTypeAllowlist && rule.RuleType != domain.RuleTypeBlocklist {
-				continue
-			}
-			var cond map[string]any
-			if err := json.Unmarshal(rule.Conditions, &cond); err != nil {
-				continue
-			}
-			provider, _ := cond["provider"].(string)
-			model, _ := cond["model"].(string)
-			if provider == "" || model == "" {
-				continue
-			}
-			entries = append(entries, modelAccessEntryDTO{
-				Provider:  provider,
-				Model:     model,
-				Allowed:   rule.RuleType == domain.RuleTypeAllowlist,
-				Source:    rule.RuleType,
-				PolicyID:  pol.ID.String(),
-				RuleID:    rule.ID.String(),
-				Priority:  pol.Priority,
-				Effective: true,
-			})
+			entries = append(entries, modelAccessEntriesFor(pol, rule)...)
 		}
 	}
 
@@ -170,6 +170,7 @@ func (a *api) updateModelAccess(w http.ResponseWriter, r *http.Request) {
 		} `json:"entries"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -245,6 +246,7 @@ func (a *api) previewModelAccess(w http.ResponseWriter, r *http.Request) {
 
 	var in modelAccessPreviewRequest
 	if err := decodeJSON(w, r, &in); err != nil {
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -265,36 +267,20 @@ func (a *api) previewModelAccess(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		for _, rule := range rules {
-			if rule.RuleType != domain.RuleTypeAllowlist && rule.RuleType != domain.RuleTypeBlocklist {
-				continue
-			}
-			var cond map[string]any
-			if err := json.Unmarshal(rule.Conditions, &cond); err != nil {
-				continue
-			}
-			provider, _ := cond["provider"].(string)
-			model, _ := cond["model"].(string)
-			if provider != in.Provider || model != in.Model {
-				continue
-			}
-			entry := toModelAccessEntryDTO(domain.ModelAccessEntry{
-				Provider: provider,
-				Model:    model,
-				Allowed:  rule.RuleType == domain.RuleTypeAllowlist,
-				Source:   rule.RuleType,
-				PolicyID: pol.ID,
-				RuleID:   rule.ID,
-				Priority: pol.Priority,
-			})
-			if rule.RuleType == domain.RuleTypeBlocklist {
-				blockingRules = append(blockingRules, entry)
-				if currentDecision == "" {
-					currentDecision = "block"
+			for _, entry := range modelAccessEntriesFor(pol, rule) {
+				if entry.Model != in.Model || (entry.Provider != anyProvider && entry.Provider != in.Provider) {
+					continue
 				}
-			} else {
-				allowingRules = append(allowingRules, entry)
-				if currentDecision == "" {
-					currentDecision = "allow"
+				if rule.RuleType == domain.RuleTypeBlocklist {
+					blockingRules = append(blockingRules, entry)
+					if currentDecision == "" {
+						currentDecision = "block"
+					}
+				} else {
+					allowingRules = append(allowingRules, entry)
+					if currentDecision == "" {
+						currentDecision = "allow"
+					}
 				}
 			}
 		}
@@ -380,7 +366,10 @@ func (a *api) listBudgets(w http.ResponseWriter, r *http.Request) {
 	for _, b := range budgets {
 		windowStart := startOfMonth
 		windowEnd := endOfMonth
-		if b.Window == domain.BudgetWindowDaily {
+		if b.Window == domain.BudgetWindowHourly {
+			windowStart = now.Truncate(time.Hour)
+			windowEnd = windowStart.Add(time.Hour)
+		} else if b.Window == domain.BudgetWindowDaily {
 			windowStart = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 			windowEnd = windowStart.AddDate(0, 0, 1)
 		} else if b.Window == domain.BudgetWindowWeekly {
@@ -393,8 +382,20 @@ func (a *api) listBudgets(w http.ResponseWriter, r *http.Request) {
 				From: windowStart,
 				To:   windowEnd,
 			}
-			if b.Scope == domain.BudgetScopeProject && b.ScopeID != uuid.Nil {
-				usageFilter.ProjectID = &b.ScopeID
+			// Usage counts only what the budget covers; a team budget showing the
+			// whole organization's requests read as hundreds of percent over.
+			if b.ScopeID != uuid.Nil {
+				scopeID := b.ScopeID
+				switch b.Scope {
+				case domain.BudgetScopeProject:
+					usageFilter.ProjectID = &scopeID
+				case domain.BudgetScopeTeam:
+					usageFilter.TeamID = &scopeID
+				case domain.BudgetScopeGatewayCredential:
+					usageFilter.GatewayCredentialID = &scopeID
+				case domain.BudgetScopeServiceAccount:
+					usageFilter.ServiceAccountID = &scopeID
+				}
 			}
 
 			if summary, err := a.usage.GetSummary(r.Context(), actor, usageFilter); err == nil && summary.Requests > 0 {
@@ -434,6 +435,7 @@ func (a *api) createBudget(w http.ResponseWriter, r *http.Request) {
 		Enabled        bool    `json:"enabled"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -499,6 +501,7 @@ func (a *api) updateBudget(w http.ResponseWriter, r *http.Request) {
 		Enabled        *bool    `json:"enabled"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
+		writeServiceError(w, r, err)
 		return
 	}
 	b, err := a.budget.Update(r.Context(), actor, id, domain.UpdateBudget{

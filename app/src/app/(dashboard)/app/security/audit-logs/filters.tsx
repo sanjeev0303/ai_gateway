@@ -1,9 +1,12 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { loadDirectory } from "@/components/dashboard/directory-actions";
+import { SearchSelect, type SearchSelectOption } from "@/components/dashboard/search-select";
 
 export function AuditFilters() {
   const router = useRouter();
@@ -13,6 +16,13 @@ export function AuditFilters() {
   const [actorId, setActorId] = useState(searchParams.get("actor_id") ?? "");
   const [action, setAction] = useState(searchParams.get("action") ?? "");
   const [resource, setResource] = useState(searchParams.get("resource_type") ?? "");
+
+  const [actors, setActors] = useState<SearchSelectOption[] | null>(null);
+  useEffect(() => {
+    loadDirectory()
+      .then((d) => setActors([...d.users, ...d.serviceAccounts]))
+      .catch(() => setActors([]));
+  }, []);
 
   const apply = useCallback(() => {
     const next = new URLSearchParams(searchParams.toString());
@@ -36,35 +46,40 @@ export function AuditFilters() {
   }, [pathname, router]);
 
   return (
-    <div className="flex flex-wrap items-center gap-3 mb-6 bg-card p-4 rounded-xl border shadow-sm">
-      <div className="flex items-center gap-2">
-        <label className="text-sm font-medium">Actor ID</label>
-        <Input
-          className="w-48 h-9"
-          placeholder="User or service account ID"
+    <div className="grid grid-cols-1 items-end gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-[repeat(3,minmax(0,1fr))_auto]">
+      <div className="grid gap-1.5">
+        <Label htmlFor="audit-actor" className="text-xs font-medium text-muted-foreground">Who</Label>
+        <SearchSelect
+          id="audit-actor"
           value={actorId}
-          onChange={(e) => setActorId(e.target.value)}
+          onChange={setActorId}
+          options={actors ?? []}
+          loading={actors === null}
+          placeholder="Anyone"
+          clearLabel="Anyone"
         />
       </div>
-      <div className="flex items-center gap-2">
-        <label className="text-sm font-medium">Action</label>
+      <div className="grid gap-1.5">
+        <Label htmlFor="audit-action" className="text-xs font-medium text-muted-foreground">Action</Label>
         <Input
-          className="w-48 h-9"
-          placeholder="e.g. policy.create"
+          id="audit-action"
+          placeholder="policy.create…"
+          autoComplete="off"
           value={action}
           onChange={(e) => setAction(e.target.value)}
         />
       </div>
-      <div className="flex items-center gap-2">
-        <label className="text-sm font-medium">Resource</label>
+      <div className="grid gap-1.5">
+        <Label htmlFor="audit-resource" className="text-xs font-medium text-muted-foreground">Resource</Label>
         <Input
-          className="w-48 h-9"
-          placeholder="e.g. policy"
+          id="audit-resource"
+          placeholder="policy…"
+          autoComplete="off"
           value={resource}
           onChange={(e) => setResource(e.target.value)}
         />
       </div>
-      <div className="ml-auto flex items-center gap-2">
+      <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={clear}>Clear</Button>
         <Button size="sm" onClick={apply}>Apply</Button>
       </div>

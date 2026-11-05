@@ -3,7 +3,6 @@ import { DataTable, PageShell, StatCard, type Column } from "@/components/dashbo
 import { getApiClient } from "@/lib/session";
 import { notFound } from "next/navigation";
 import { formatCompact, formatUsd, formatNumber, formatMs, formatDate, formatRelative } from "@/lib/format";
-import type { StatusTone } from "@/types";
 import {
   Card,
   CardContent,
@@ -42,20 +41,7 @@ interface ConversationRow {
   requests: number;
   tokens: number;
   lastActivity: string;
-  privacy: string;
-  privacyTone: StatusTone;
   detailUrl: string;
-}
-
-const PRIVACY: Record<string, { privacy: string; privacyTone: StatusTone }> = {
-  METADATA_ONLY: { privacy: "Metadata only", privacyTone: "success" },
-  PROMPT_ONLY: { privacy: "Prompt only", privacyTone: "info" },
-  FULL_CONTENT: { privacy: "Full content", privacyTone: "warning" },
-  OFF: { privacy: "No redaction", privacyTone: "warning" },
-};
-
-function privacyBadge(state: string): { privacy: string; privacyTone: StatusTone } {
-  return PRIVACY[state] ?? { privacy: state, privacyTone: "neutral" };
 }
 
 const conversationColumns: readonly Column<ConversationRow>[] = [
@@ -64,12 +50,11 @@ const conversationColumns: readonly Column<ConversationRow>[] = [
   { key: "requests", header: "Requests", primary: "requests", format: "number", sort: "requests", align: "right" },
   { key: "tokens", header: "Tokens", primary: "tokens", format: "compact", sort: "tokens", align: "right" },
   { key: "lastActivity", header: "Last activity", primary: "lastActivity", sort: "lastActivity" },
-  { key: "privacy", header: "Privacy", primary: "privacy", tone: "privacyTone", sort: "privacy" },
 ];
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  return { title: `User ${id} · Sentinel` };
+  return { title: `User ${id} · Tollseal` };
 }
 
 export default async function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -143,18 +128,15 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
 
     const now = new Date();
     const convRows: ConversationRow[] = convs.items.map((c) => {
-      const p = privacyBadge(c.privacy_state);
       return {
         id: c.id,
-        title: c.title || "Untitled",
+        title: c.title || "Transcript expired",
         user: c.user_id,
         routing: c.model ? `${c.provider} · ${c.model}` : "Unknown route",
         messages: c.message_count,
         requests: c.request_count,
         tokens: c.total_tokens,
         lastActivity: c.last_activity_at ? formatRelative(c.last_activity_at, now) : "Never",
-        privacy: p.privacy,
-        privacyTone: p.privacyTone,
         detailUrl: `/app/observe/conversations/${encodeURIComponent(c.id)}`,
       };
     });

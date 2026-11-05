@@ -116,3 +116,11 @@ func TestNewLlmRequestFrom_AttributionOnlyForUserSubjects(t *testing.T) {
 	}, "openai", "succeeded")
 	requireTrue(t, service.UserID == nil, "service_account must not be written to user_id")
 }
+
+func TestNewLlmRequestFrom_FailedRequestKeepsStatusAsErrorCode(t *testing.T) {
+	failed := newLlmRequestFrom(UsageRecord{RequestID: "req-429", StatusCode: 429}, "gemini", "failed")
+	requireTrue(t, failed.ErrorCode != nil && *failed.ErrorCode == "429", "failed request must carry its status as error_code, got %v", failed.ErrorCode)
+
+	ok := newLlmRequestFrom(UsageRecord{RequestID: "req-200", StatusCode: 200}, "gemini", "succeeded")
+	requireTrue(t, ok.ErrorCode == nil, "successful request must not carry an error_code")
+}

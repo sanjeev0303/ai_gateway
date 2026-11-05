@@ -34,6 +34,11 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
+import { confirmAction } from "@/components/dashboard/confirm-dialog";
+import { loadDirectory } from "@/components/dashboard/directory-actions";
+import { SearchSelect } from "@/components/dashboard/search-select";
+import type { Directory, DirectoryEntry } from "@/lib/directory";
+import { toast } from "sonner";
 import { fetchBudgetsAction, createBudgetAction, updateBudgetAction, deleteBudgetAction } from "./actions";
 import { BudgetActionsCell } from "./actions-cell";
 import type { Budget, CreateBudgetRequest, UpdateBudgetRequest, BudgetList } from "@ai-governance/api-client";
@@ -57,12 +62,21 @@ export interface BudgetRow {
   createdAt: string;
 }
 
+function scopeOptions(directory: Directory | null, scope: string): readonly DirectoryEntry[] {
+  if (!directory) return [];
+  if (scope === "team") return directory.teams;
+  if (scope === "project") return directory.projects;
+  if (scope === "service_account") return directory.serviceAccounts;
+  if (scope === "gateway_credential") return directory.credentials;
+  return [];
+}
+
 const SCOPE_OPTIONS = [
   { value: "organization", label: "Organization" },
   { value: "team", label: "Team" },
   { value: "project", label: "Project" },
-  { value: "gateway_credential", label: "Gateway Credential" },
-  { value: "service_account", label: "Service Account" },
+  { value: "gateway_credential", label: "Gateway key" },
+  { value: "service_account", label: "Service account" },
 ] as const;
 
 const LIMIT_TYPE_OPTIONS = [
@@ -124,7 +138,7 @@ const COLUMNS: readonly Column<BudgetRow>[] = [
     primary: "percentageUsed",
     render: (row) => (
       <div className="w-full max-w-50">
-        <div className="flex items-center justify-between text-xs mb-1">
+        <div className="mb-1 flex items-center justify-between gap-2 text-xs tabular-nums">
           <span>{row.percentageUsed.toFixed(1)}%</span>
           <span className="text-muted-foreground">
             {row.limitType === "spend"
@@ -136,6 +150,7 @@ const COLUMNS: readonly Column<BudgetRow>[] = [
         </div>
         <Progress
           value={Math.min(row.percentageUsed, 100)}
+          aria-label={`${row.name}: ${row.percentageUsed.toFixed(0)}% of limit used`}
           className={`h-2 ${
             row.percentageUsed >= 100 ? "bg-red-500" :
             row.percentageUsed >= 80 ? "bg-yellow-500" : "bg-green-500"
@@ -158,23 +173,17 @@ const COLUMNS: readonly Column<BudgetRow>[] = [
     primary: "percentageUsed",
     render: (row) => {
       const remaining = row.limitAmount - (row.limitType === "spend" ? row.currentSpend : row.limitType === "tokens" ? row.currentTokens : row.currentRequests);
-      if (row.limitType === "spend") {
-        return `$${remaining.toFixed(2)}`;
+      const amount = row.limitType === "spend" ? `$${Math.abs(remaining).toFixed(2)}` : Math.abs(remaining).toLocaleString();
+      if (remaining < 0) {
+        return <span className="font-medium whitespace-nowrap text-rose-700 dark:text-rose-400">{amount} over limit</span>;
       }
-      return remaining.toLocaleString();
+      return amount;
     },
     align: "right",
   },
   {
-    key: "windowStart",
-    header: "Window start",
-    primary: "windowStart",
-    render: (row) => row.windowStart ? new Date(row.windowStart).toLocaleString() : "—",
-    align: "left",
-  },
-  {
     key: "windowEnd",
-    header: "Window end (rollover)",
+    header: "Resets",
     primary: "windowEnd",
     render: (row) => row.windowEnd ? new Date(row.windowEnd).toLocaleString() : "—",
     align: "left",
@@ -223,6 +232,11 @@ export default function BudgetsPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const [directory, setDirectory] = useState<Directory | null>(null);
+  useEffect(() => {
+    loadDirectory().then(setDirectory).catch(() => setDirectory(null));
+  }, []);
 
   const fetchBudgets = useCallback(async () => {
     setLoading(true);
@@ -280,13 +294,19 @@ export default function BudgetsPage() {
   };
 
   const handleDelete = async (budget: Budget) => {
-    if (!confirm(`Delete budget "${budget.name}"? This cannot be undone.`)) return;
+    const confirmed = await confirmAction({
+      title: `Delete ${budget.name}?`,
+      description: "The gateway stops enforcing this limit straight away. This cannot be undone.",
+      confirmLabel: "Delete budget",
+      destructive: true,
+    });
+    if (!confirmed) return;
     try {
       await deleteBudgetAction(budget.id ?? "");
       await fetchBudgets();
     } catch (err) {
       console.error("Failed to delete budget:", err);
-      alert("Failed to delete budget");
+      toast.error("The budget was not deleted. Check your connection and try again.");
     }
   };
 
@@ -295,7 +315,10 @@ export default function BudgetsPage() {
     setError("");
     try {
       if (isEditing && selectedBudget) {
-        await updateBudgetAction(selectedBudget.id ?? "", formData);
+        // Scope, limit type and window are fixed once a budget exists; the API
+        // rejects a body that names them.
+        const { name, description, limit_amount, alert_threshold, enabled } = formData;
+        await updateBudgetAction(selectedBudget.id ?? "", { name, description, limit_amount, alert_threshold, enabled });
       } else {
         await createBudgetAction(formData);
       }
@@ -307,6 +330,9 @@ export default function BudgetsPage() {
       setSubmitting(false);
     }
   };
+
+  // Anything narrower than the organization needs a target before it can be saved.
+  const scopeReady = formData.scope === "organization" || Boolean(formData.scope_id);
 
   const filteredBudgets = budgets.filter((budget) => {
     const nameStr = budget.name ?? "";
@@ -323,7 +349,9 @@ export default function BudgetsPage() {
   const rows: BudgetRow[] = filteredBudgets.map((budget) => ({
     id: budget.id ?? "",
     name: budget.name ?? "",
-    scope: budget.scope ?? "organization",
+    scope: budget.scope === "organization" || !budget.scope
+      ? "Organization"
+      : (scopeOptions(directory, budget.scope).find((o) => o.id === budget.scope_id)?.name ?? budget.scope),
     scopeId: budget.scope_id ?? "",
     limitType: budget.limit_type ?? "spend",
     limitAmount: budget.limit_amount ?? 0,
@@ -363,147 +391,175 @@ export default function BudgetsPage() {
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
-                <div className="grid gap-4 py-4">
+                <div className="flex flex-col gap-5 pb-5">
                   <div className="grid gap-2">
-                    <Label htmlFor="name">Name *</Label>
+                    <Label htmlFor="name">Name</Label>
                     <Input
                       id="name"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="e.g., Monthly spend cap"
+                      placeholder="Monthly spend cap…"
+                      autoComplete="off"
                       required
                     />
                   </div>
+
+                  <fieldset className="grid gap-3">
+                    <legend className="mb-2 text-sm font-semibold">The limit</legend>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      <div className="grid gap-2">
+                        <Label htmlFor="limit_type">Measure</Label>
+                        <Select
+                          value={formData.limit_type}
+                          disabled={isEditing}
+                          onValueChange={(v) => setFormData({ ...formData, limit_type: v as any })}
+                        >
+                          <SelectTrigger id="limit_type" className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {LIMIT_TYPE_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="limit_amount">Amount</Label>
+                        <Input
+                          id="limit_amount"
+                          type="number"
+                          inputMode="decimal"
+                          step={formData.limit_type === "spend" ? "0.01" : "1"}
+                          min={formData.limit_type === "spend" ? "0.01" : "1"}
+                          value={formData.limit_amount}
+                          onChange={(e) => setFormData({ ...formData, limit_amount: parseFloat(e.target.value) || 0 })}
+                          required
+                        />
+                      </div>
+                      <div className="col-span-2 grid gap-2 sm:col-span-1">
+                        <Label htmlFor="window">Every</Label>
+                        <Select
+                          value={formData.window}
+                          disabled={isEditing}
+                          onValueChange={(v) => setFormData({ ...formData, window: v as any })}
+                        >
+                          <SelectTrigger id="window" className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {WINDOW_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    {isEditing && (
+                      <p className="text-xs text-muted-foreground">
+                        Measure, window and scope are fixed once a budget exists. Create a new budget to change them.
+                      </p>
+                    )}
+                  </fieldset>
+
+                  <fieldset className="grid gap-3">
+                    <legend className="mb-2 text-sm font-semibold">Who it applies to</legend>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label htmlFor="scope">Scope</Label>
+                        <Select
+                          value={formData.scope}
+                          disabled={isEditing}
+                          onValueChange={(v) => setFormData({ ...formData, scope: v as any, scope_id: "" })}
+                        >
+                          <SelectTrigger id="scope" className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SCOPE_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {formData.scope !== "organization" && (
+                        <div className="grid gap-2">
+                          <Label htmlFor="scope_id">{SCOPE_OPTIONS.find((o) => o.value === formData.scope)?.label}</Label>
+                          <SearchSelect
+                            id="scope_id"
+                            value={formData.scope_id ?? ""}
+                            disabled={isEditing}
+                            onChange={(value) => setFormData({ ...formData, scope_id: value })}
+                            options={scopeOptions(directory, formData.scope ?? "organization")}
+                            loading={!directory}
+                            placeholder="Choose…"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </fieldset>
+
+                  <fieldset className="grid gap-3">
+                    <legend className="mb-2 text-sm font-semibold">Alerts</legend>
+                    <div className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)] items-center gap-3">
+                      <div className="relative">
+                        <Input
+                          id="alert_threshold"
+                          aria-label="Alert threshold in percent"
+                          type="number"
+                          inputMode="numeric"
+                          step="5"
+                          min="0"
+                          max="100"
+                          className="pr-8"
+                          value={Math.round((formData.alert_threshold ?? 0) * 100)}
+                          onChange={(e) => setFormData({ ...formData, alert_threshold: (parseFloat(e.target.value) || 0) / 100 })}
+                          required
+                        />
+                        <span aria-hidden className="absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">of the limit raises an alert.</p>
+                    </div>
+                    <label htmlFor="enabled" className="flex cursor-pointer items-center gap-2.5 text-sm">
+                      <input
+                        type="checkbox"
+                        id="enabled"
+                        checked={formData.enabled}
+                        onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
+                        className="size-4 rounded accent-(--primary)"
+                      />
+                      Enforce this budget
+                    </label>
+                  </fieldset>
+
                   <div className="grid gap-2">
-                    <Label htmlFor="description">Description</Label>
+                    <Label htmlFor="description">Note (optional)</Label>
                     <Textarea
                       id="description"
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      placeholder="Optional description"
                       rows={2}
                     />
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="limit_type">Limit type *</Label>
-                    <Select
-                      value={formData.limit_type}
-                      onValueChange={(v) => setFormData({ ...formData, limit_type: v as any })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {LIMIT_TYPE_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="limit_amount">Limit amount *</Label>
-                    <Input
-                      id="limit_amount"
-                      type="number"
-                      step={formData.limit_type === "spend" ? "0.01" : "1"}
-                      min="0.01"
-                      value={formData.limit_amount}
-                      onChange={(e) => setFormData({ ...formData, limit_amount: parseFloat(e.target.value) || 0 })}
-                      placeholder={formData.limit_type === "spend" ? "1000.00" : "100000"}
-                      required
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="window">Time window *</Label>
-                    <Select
-                      value={formData.window}
-                      onValueChange={(v) => setFormData({ ...formData, window: v as any })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {WINDOW_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="scope">Scope *</Label>
-                    <Select
-                      value={formData.scope}
-                      onValueChange={(v) => setFormData({ ...formData, scope: v as any })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {SCOPE_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="scope_id">Scope ID</Label>
-                    <Input
-                      id="scope_id"
-                      value={formData.scope_id}
-                      onChange={(e) => setFormData({ ...formData, scope_id: e.target.value })}
-                      placeholder="UUID (required for team, project, credential, service_account)"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Required when scope is not "organization"
-                    </p>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="alert_threshold">Alert threshold *</Label>
-                    <Input
-                      id="alert_threshold"
-                      type="number"
-                      step="0.05"
-                      min="0"
-                      max="1"
-                      value={formData.alert_threshold}
-                      onChange={(e) => setFormData({ ...formData, alert_threshold: parseFloat(e.target.value) || 0 })}
-                      placeholder="0.8"
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Alert when {((formData.alert_threshold ?? 0) * 100).toFixed(0)}% of limit is reached
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="enabled"
-                      checked={formData.enabled}
-                      onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
-                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                    />
-                    <Label htmlFor="enabled" className="cursor-pointer">
-                      Enabled
-                    </Label>
-                  </div>
+
                   {error && (
-                    <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg">
+                    <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">
                       {error}
-                    </div>
+                    </p>
                   )}
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={submitting}>
-                    {submitting ? "Saving..." : isEditing ? "Update" : "Create"}
+                  <Button type="submit" disabled={submitting || !scopeReady}>
+                    {submitting ? "Saving…" : isEditing ? "Save budget" : "Create budget"}
                   </Button>
                 </DialogFooter>
               </form>
@@ -534,7 +590,7 @@ export default function BudgetsPage() {
                 />
               </div>
               <Select value={scopeFilter} onValueChange={setScopeFilter}>
-                <SelectTrigger className="w-full sm:w-45">
+                <SelectTrigger className="w-full sm:w-45" aria-label="Filter by scope">
                   <SelectValue placeholder="All scopes" />
                 </SelectTrigger>
                 <SelectContent>
@@ -547,7 +603,7 @@ export default function BudgetsPage() {
                 </SelectContent>
               </Select>
               <Select value={limitTypeFilter} onValueChange={setLimitTypeFilter}>
-                <SelectTrigger className="w-full sm:w-40">
+                <SelectTrigger className="w-full sm:w-40" aria-label="Filter by type">
                   <SelectValue placeholder="All types" />
                 </SelectTrigger>
                 <SelectContent>
@@ -560,7 +616,7 @@ export default function BudgetsPage() {
                 </SelectContent>
               </Select>
               <Select value={enabledFilter} onValueChange={(v) => setEnabledFilter(v as any)}>
-                <SelectTrigger className="w-full sm:w-35">
+                <SelectTrigger className="w-full sm:w-35" aria-label="Filter by status">
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>

@@ -45,7 +45,6 @@ function Field({
 export function OrgSettings({ org }: { org: Organization }) {
   const [name, setName] = React.useState(org.name);
   const [slug, setSlug] = React.useState(org.slug);
-  const [privacyDefault, setPrivacyDefault] = React.useState(org.privacyDefault ?? "allow_all");
   const [retentionConversations, setRetentionConversations] = React.useState(String(org.retentionConversationsDays ?? 30));
   const [retentionUsage, setRetentionUsage] = React.useState(String(org.retentionUsageDays ?? 90));
   const [retentionAudits, setRetentionAudits] = React.useState(String(org.retentionAuditsDays ?? 365));
@@ -58,7 +57,6 @@ export function OrgSettings({ org }: { org: Organization }) {
   const dirty =
     name !== org.name ||
     slug !== org.slug ||
-    privacyDefault !== (org.privacyDefault ?? "allow_all") ||
     retentionConversations !== String(org.retentionConversationsDays ?? 30) ||
     retentionUsage !== String(org.retentionUsageDays ?? 90) ||
     retentionAudits !== String(org.retentionAuditsDays ?? 365);
@@ -118,34 +116,16 @@ export function OrgSettings({ org }: { org: Organization }) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Privacy & Data Retention</CardTitle>
+            <CardTitle>Data retention</CardTitle>
             <CardDescription>
-              Governance thresholds for background payload purging and default prompt privacy policies.
+              How long records are kept before they are deleted. Conversation text is never stored.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <Field
-              label="Default Privacy Mode"
-              htmlFor="org-privacy-default"
-              hint="Applied to incoming gateway requests when not overridden by policy"
-            >
-              <select
-                id="org-privacy-default"
-                name="privacy_default"
-                value={privacyDefault}
-                onChange={(e) => setPrivacyDefault(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="METADATA_ONLY">METADATA_ONLY — Redact prompt and response contents</option>
-                <option value="PROMPT_ONLY">PROMPT_ONLY — Record prompts only, withhold outputs</option>
-                <option value="FULL_CONTENT">FULL_CONTENT — Store raw turns verbatim</option>
-                <option value="OFF">OFF — Disable privacy filtering</option>
-              </select>
-            </Field>
-            <Field
               label="Conversation History Retention (days)"
               htmlFor="retention-conversations"
-              hint="Raw prompt and response bodies purged after this age"
+              hint="Conversation records (messages, tokens and times) deleted after this age"
             >
               <Input
                 id="retention-conversations"

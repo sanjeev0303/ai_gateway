@@ -57,16 +57,6 @@ func (tp *TestPostgres) Stop() {
 // distribution bytes are cached under the user cache directory so they are
 // downloaded once. The caller must call Stop when done.
 func StartPostgres(ctx context.Context, seed bool) (*TestPostgres, error) {
-	port, err := freePort()
-	if err != nil {
-		return nil, fmt.Errorf("reserve postgres port: %w", err)
-	}
-
-	dir, err := os.MkdirTemp("", "aigw-test-postgres-*")
-	if err != nil {
-		return nil, fmt.Errorf("create postgres data dir: %w", err)
-	}
-
 	cacheRoot, err := os.UserCacheDir()
 	if err != nil {
 		cacheRoot = os.TempDir()
@@ -74,34 +64,58 @@ func StartPostgres(ctx context.Context, seed bool) (*TestPostgres, error) {
 	cachePath := filepath.Join(cacheRoot, "aigw", "embedded-postgres")
 	binariesPath := filepath.Join(cachePath, "binaries")
 	if err := os.MkdirAll(binariesPath, 0o755); err != nil {
-		_ = os.RemoveAll(dir)
 		return nil, fmt.Errorf("create binaries dir: %w", err)
 	}
 
-	dataPath := filepath.Join(dir, "data")
-	runtimePath := filepath.Join(dir, "runtime")
-	if err := os.MkdirAll(dataPath, 0o755); err != nil {
-		_ = os.RemoveAll(dir)
-		return nil, fmt.Errorf("create data dir: %w", err)
-	}
-	if err := os.MkdirAll(runtimePath, 0o755); err != nil {
-		_ = os.RemoveAll(dir)
-		return nil, fmt.Errorf("create runtime dir: %w", err)
-	}
+	// freePort reserves an ephemeral port and releases it, leaving a brief
+	// window where a parallel package (go test runs packages concurrently)
+	// can grab the same number before embedded-postgres binds it. When a boot
+	// loses that race, retry with a fresh port and data dir.
+	const bootAttempts = 5
+	var (
+		epg  *embeddedpostgres.EmbeddedPostgres
+		dir  string
+		port uint32
+	)
+	for attempt := 1; ; attempt++ {
+		p, err := freePort()
+		if err != nil {
+			return nil, fmt.Errorf("reserve postgres port: %w", err)
+		}
+		d, err := os.MkdirTemp("", "aigw-test-postgres-*")
+		if err != nil {
+			return nil, fmt.Errorf("create postgres data dir: %w", err)
+		}
+		dataPath := filepath.Join(d, "data")
+		runtimePath := filepath.Join(d, "runtime")
+		if err := os.MkdirAll(dataPath, 0o755); err != nil {
+			_ = os.RemoveAll(d)
+			return nil, fmt.Errorf("create data dir: %w", err)
+		}
+		if err := os.MkdirAll(runtimePath, 0o755); err != nil {
+			_ = os.RemoveAll(d)
+			return nil, fmt.Errorf("create runtime dir: %w", err)
+		}
 
-	cfg := embeddedpostgres.DefaultConfig().
-		DataPath(dataPath).
-		RuntimePath(runtimePath).
-		BinariesPath(binariesPath).
-		CachePath(cachePath).
-		Port(port).
-		StartTimeout(5 * time.Minute).
-		Logger(io.Discard)
+		cfg := embeddedpostgres.DefaultConfig().
+			DataPath(dataPath).
+			RuntimePath(runtimePath).
+			BinariesPath(binariesPath).
+			CachePath(cachePath).
+			Port(p).
+			StartTimeout(5 * time.Minute).
+			Logger(io.Discard)
 
-	epg := embeddedpostgres.NewDatabase(cfg)
-	if err := epg.Start(); err != nil {
-		_ = os.RemoveAll(dir)
-		return nil, fmt.Errorf("start embedded postgres: %w", err)
+		e := embeddedpostgres.NewDatabase(cfg)
+		if startErr := e.Start(); startErr != nil {
+			_ = os.RemoveAll(d)
+			if attempt >= bootAttempts {
+				return nil, fmt.Errorf("start embedded postgres after %d attempts: %w", attempt, startErr)
+			}
+			continue
+		}
+		epg, dir, port = e, d, p
+		break
 	}
 	cleanup := func() {
 		_ = epg.Stop()

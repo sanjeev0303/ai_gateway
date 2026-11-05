@@ -13,10 +13,15 @@ import (
 	"time"
 
 	"ai-governance-saas/backend/internal/domain"
+	"ai-governance-saas/backend/internal/platform/netguard"
 	"ai-governance-saas/backend/internal/ports/provider"
 )
 
 const defaultBaseURL = "https://api.openai.com"
+
+// noRedirect stops the client following upstream redirects, which would re-send
+// the API key (carried on a custom header) to the redirect target.
+func noRedirect(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 
 // Client talks to the OpenAI API.
 type Client struct {
@@ -26,8 +31,9 @@ type Client struct {
 	userAgent string
 }
 
-// New creates a new OpenAI client.
-func New(baseAddr, version, userAgent string) (*Client, error) {
+// New creates a new OpenAI client. allowPrivate disables the SSRF dial guard
+// (dev only); the base URL is tenant-controlled for custom/openai accounts.
+func New(baseAddr, version, userAgent string, allowPrivate bool) (*Client, error) {
 	base := baseAddr
 	if base == "" {
 		base = defaultBaseURL
@@ -43,8 +49,15 @@ func New(baseAddr, version, userAgent string) (*Client, error) {
 		version = "2024-08-01-preview"
 	}
 	return &Client{
-		baseURL:   u,
-		client:    &http.Client{Timeout: 120 * time.Second},
+		baseURL: u,
+		client: &http.Client{
+			Timeout:       120 * time.Second,
+			CheckRedirect: noRedirect,
+			Transport: &http.Transport{
+				Proxy:       http.ProxyFromEnvironment,
+				DialContext: netguard.GuardedDialContext(allowPrivate),
+			},
+		},
 		version:   version,
 		userAgent: userAgent,
 	}, nil
@@ -294,7 +307,9 @@ func (c *Client) parseError(resp *http.Response) error {
 
 func (c *Client) do(ctx context.Context, apiKey, path string, body io.Reader) (*http.Response, error) {
 	u := *c.baseURL
-	u.Path = path
+	// Preserve any base-URL path prefix (e.g. a custom "https://host/openai"
+	// endpoint) so validation hits the same host+path that CreateMessage serves.
+	u.Path = strings.TrimRight(u.Path, "/") + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), body)
 	if err != nil {
 		return nil, fmt.Errorf("openai: build request: %w", err)

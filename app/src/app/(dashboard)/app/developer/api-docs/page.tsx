@@ -18,7 +18,7 @@ import {
 import type { StatusTone } from "@/types";
 
 export const metadata: Metadata = {
-  title: "API docs · Sentinel",
+  title: "API reference · Tollseal",
   description: "Gateway endpoints, authentication scopes, and the error contract.",
 };
 
@@ -68,7 +68,7 @@ export default function ApiDocsPage() {
   return (
     <div className="p-4 sm:p-6">
       <PageShell
-        title="API docs"
+        title="API reference"
         description="The gateway is the model data plane. It is a separate service from the control plane the dashboard talks to."
         eyebrow={
           <p className="text-xs text-muted-foreground">

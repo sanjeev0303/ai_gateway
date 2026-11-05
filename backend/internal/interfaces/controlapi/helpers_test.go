@@ -175,20 +175,26 @@ type controlStubs struct {
 
 func newControlStubs() *controlStubs {
 	return &controlStubs{
-		orgs:               &stubOrgs{},
-		users:              &stubUsers{},
-		members:            &stubMembers{},
-		invitations:        &stubInvitations{},
-		projects:           &stubProjects{},
-		teams:              &stubTeams{},
-		teamMembers:        &stubTeamMembers{},
-		projMembers:        &stubProjMembers{},
-		accounts:           &stubAccounts{},
-		credentials:        &stubCredentials{},
-		gatewayCredentials: &stubGatewayCredentials{},
-		audits:             &stubAudits{},
-		issuer:             &stubIssuer{},
-		verifier:           &stubVerifier{},
+		orgs:        &stubOrgs{},
+		users:       &stubUsers{},
+		members:     &stubMembers{},
+		invitations: &stubInvitations{},
+		projects:    &stubProjects{},
+		teams:       &stubTeams{},
+		teamMembers: &stubTeamMembers{},
+		projMembers: &stubProjMembers{},
+		accounts:    &stubAccounts{},
+		credentials: &stubCredentials{},
+		// RevokeServiceAccount cascades over the subject's gateway credentials,
+		// so every server needs List to return something (empty by default).
+		gatewayCredentials: &stubGatewayCredentials{
+			list: func(context.Context, uuid.UUID) ([]domain.GatewayCredential, error) {
+				return nil, nil
+			},
+		},
+		audits:   &stubAudits{},
+		issuer:   &stubIssuer{},
+		verifier: &stubVerifier{},
 		// hasher.hash stays nil so tests can assert a code path never reached
 		// TokenHasher.Hash; the auth helper below installs one on demand.
 		hasher:    &stubHasher{},

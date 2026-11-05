@@ -12,7 +12,7 @@ import (
 )
 
 func TestOpenAIInferenceProvider_MetadataAndCapabilities(t *testing.T) {
-	adapter := NewProviderAdapter()
+	adapter := NewProviderAdapter(true)
 
 	if adapter.Name() != "OpenAI" {
 		t.Errorf("expected name 'OpenAI', got %s", adapter.Name())
@@ -82,8 +82,9 @@ func TestOpenAIInferenceProvider_Execute(t *testing.T) {
 	defer server.Close()
 
 	adapter := &ProviderAdapter{
-		baseURL: server.URL,
-		version: "2024-08-01-preview",
+		baseURL:      server.URL,
+		version:      "2024-08-01-preview",
+		allowPrivate: true,
 	}
 
 	req := provider.NormalizedRequest{
@@ -108,7 +109,7 @@ func TestOpenAIInferenceProvider_Execute(t *testing.T) {
 }
 
 func TestOpenAIInferenceProvider_EstimateTokens(t *testing.T) {
-	adapter := NewProviderAdapter()
+	adapter := NewProviderAdapter(true)
 	req := provider.NormalizedRequest{
 		Model: "gpt-4o",
 		Messages: []provider.Message{

@@ -34,8 +34,8 @@ func TestProviderAdapter_InterfaceSatisfaction(t *testing.T) {
 		{
 			name:     "OpenAI",
 			kind:     domain.ProviderKindOpenAI,
-			provider: openai.NewProviderAdapter(),
-			infer:    openai.NewProviderAdapter(),
+			provider: openai.NewProviderAdapter(true),
+			infer:    openai.NewProviderAdapter(true),
 		},
 		{
 			name:     "Google Gemini",
@@ -69,7 +69,7 @@ func TestProviderAdapter_InterfaceSatisfaction(t *testing.T) {
 func TestProviderAdapter_MetadataContract(t *testing.T) {
 	adapters := []providerclient.InferenceProvider{
 		anthropic.NewProviderAdapter(),
-		openai.NewProviderAdapter(),
+		openai.NewProviderAdapter(true),
 		gemini.NewProviderAdapter(),
 		huggingface.NewProviderAdapter(),
 	}
@@ -122,7 +122,7 @@ func TestProviderAdapter_CapabilityDiscoveryAndValidation(t *testing.T) {
 		},
 		{
 			name:               "OpenAI GPT-4o",
-			adapter:            openai.NewProviderAdapter(),
+			adapter:            openai.NewProviderAdapter(true),
 			model:              "gpt-4o",
 			expectTools:        true,
 			expectVision:       true,
@@ -225,14 +225,14 @@ func TestProviderAdapter_StrictParameterRejection(t *testing.T) {
 		},
 		{
 			name:     "OpenAI rejects thinking",
-			adapter:  openai.NewProviderAdapter(),
+			adapter:  openai.NewProviderAdapter(true),
 			model:    "gpt-4o",
 			alienKey: "thinking",
 			alienVal: map[string]any{"budget_tokens": 1024},
 		},
 		{
 			name:     "OpenAI rejects safety_settings",
-			adapter:  openai.NewProviderAdapter(),
+			adapter:  openai.NewProviderAdapter(true),
 			model:    "gpt-4o",
 			alienKey: "safety_settings",
 			alienVal: "standard",
@@ -422,7 +422,7 @@ func TestProviderAdapter_ParameterPreservationAndToolSemantics(t *testing.T) {
 		}))
 		defer mockServer.Close()
 
-		adapter := openai.NewCustomProviderAdapter(mockServer.URL, "2024-08-01-preview")
+		adapter := openai.NewCustomProviderAdapter(mockServer.URL, "2024-08-01-preview", true)
 		req := providerclient.NormalizedRequest{
 			Model: "o1-preview",
 			Messages: []providerclient.Message{
@@ -586,13 +586,15 @@ func TestProviderAdapter_StreamingConversionContract(t *testing.T) {
 				t.Fatal("expected flusher")
 			}
 
+			// Real Anthropic streaming is Server-Sent Events: an "event:" name
+			// line followed by a "data:" JSON line, separated by a blank line.
 			events := []string{
-				`{"type":"message_start","message":{"id":"msg_stream_100","model":"claude-3-5-sonnet","usage":{"input_tokens":18,"cache_read_input_tokens":6}}}` + "\n",
-				`{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"call_str_1","name":"lookup","input":{}}}` + "\n",
-				`{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"q\":\"val\"}"}}` + "\n",
-				`{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Streaming chunk"}}` + "\n",
-				`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":9}}` + "\n",
-				`{"type":"message_stop"}` + "\n",
+				"event: message_start\n" + `data: {"type":"message_start","message":{"id":"msg_stream_100","model":"claude-3-5-sonnet","usage":{"input_tokens":18,"cache_read_input_tokens":6}}}` + "\n\n",
+				"event: content_block_start\n" + `data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"call_str_1","name":"lookup","input":{}}}` + "\n\n",
+				"event: content_block_delta\n" + `data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"q\":\"val\"}"}}` + "\n\n",
+				"event: content_block_delta\n" + `data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Streaming chunk"}}` + "\n\n",
+				"event: message_delta\n" + `data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":9}}` + "\n\n",
+				"event: message_stop\n" + `data: {"type":"message_stop"}` + "\n\n",
 			}
 
 			for _, ev := range events {
@@ -687,7 +689,7 @@ func TestProviderAdapter_StreamingConversionContract(t *testing.T) {
 		}))
 		defer mockServer.Close()
 
-		adapter := openai.NewCustomProviderAdapter(mockServer.URL, "2024-08-01-preview")
+		adapter := openai.NewCustomProviderAdapter(mockServer.URL, "2024-08-01-preview", true)
 		stream, err := adapter.Stream(ctx, "mock-key", providerclient.NormalizedRequest{
 			Model: "gpt-4o",
 			Messages: []providerclient.Message{
@@ -798,7 +800,7 @@ func TestProviderAdapter_EstimateTokensContract(t *testing.T) {
 
 	// 1. OpenAI and Hugging Face estimate locally
 	localAdapters := []providerclient.InferenceProvider{
-		openai.NewProviderAdapter(),
+		openai.NewProviderAdapter(true),
 		huggingface.NewProviderAdapter(),
 	}
 

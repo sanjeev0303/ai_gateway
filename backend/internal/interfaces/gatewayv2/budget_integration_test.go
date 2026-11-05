@@ -481,14 +481,15 @@ func TestIntegration_GatewayPipeline_BudgetEnforcement(t *testing.T) {
 
 	// Build gateway
 	gateway, err := NewGateway(GatewayDeps{
-		Logger:              slog.Default(),
-		Hasher:              hasher,
-		GatewayCredRepo:     credRepo,
-		ProviderAccounts:    accountRepo,
-		ProviderCredentials: providerCredRepo,
-		Secrets:             &stubSecretStore{values: map[string]string{"vault:ref": "test-secret"}},
-		PolicyRepo:          policyRepo,
-		RuleRepo:            ruleRepo,
+		Logger:                slog.Default(),
+		AllowPrivateUpstreams: true, // test upstream is an httptest server on 127.0.0.1
+		Hasher:                hasher,
+		GatewayCredRepo:       credRepo,
+		ProviderAccounts:      accountRepo,
+		ProviderCredentials:   providerCredRepo,
+		Secrets:               &stubSecretStore{values: map[string]string{"vault:ref": "test-secret"}},
+		PolicyRepo:            policyRepo,
+		RuleRepo:              ruleRepo,
 	})
 	if err != nil {
 		t.Fatalf("new gateway: %v", err)

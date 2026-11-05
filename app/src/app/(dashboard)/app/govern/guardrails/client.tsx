@@ -68,15 +68,27 @@ import type {
 } from "@ai-governance/api-client";
 import { toast } from "sonner";
 import { formatRelative } from "@/lib/format";
+import { confirmAction } from "@/components/dashboard/confirm-dialog";
+import { SearchSelect } from "@/components/dashboard/search-select";
+import type { Directory, DirectoryEntry } from "@/lib/directory";
 
 interface GuardrailsClientProps {
   initialGuardrails: Guardrail[];
   initialEvents: GuardrailEvent[];
+  directory: Directory;
+}
+
+function targetOptions(directory: Directory, target: string): readonly DirectoryEntry[] {
+  if (target === "team") return directory.teams;
+  if (target === "project") return directory.projects;
+  if (target === "gateway_credential") return directory.credentials;
+  return [];
 }
 
 export function GuardrailsClient({
   initialGuardrails,
   initialEvents,
+  directory,
 }: GuardrailsClientProps) {
   const [guardrails, setGuardrails] = React.useState<Guardrail[]>(initialGuardrails);
   const [events, setEvents] = React.useState<GuardrailEvent[]>(initialEvents);
@@ -197,7 +209,14 @@ export function GuardrailsClient({
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this guardrail?")) return;
+    const target = guardrails.find((g) => g.id === id);
+    const confirmed = await confirmAction({
+      title: `Delete ${target?.name ?? "this guardrail"}?`,
+      description: "Requests stop being checked by this rule straight away. Its past events stay on record.",
+      confirmLabel: "Delete guardrail",
+      destructive: true,
+    });
+    if (!confirmed) return;
     const res = await deleteGuardrailAction(id);
     if (res.success) {
       toast.success("Guardrail deleted");
@@ -258,7 +277,7 @@ export function GuardrailsClient({
   return (
     <div className="space-y-6">
       {/* Metrics Row */}
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard
           label="Total Guardrails"
           value={String(totalGuardrails)}
@@ -285,14 +304,14 @@ export function GuardrailsClient({
 
       <Tabs defaultValue="rules" className="space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <TabsList>
+          <TabsList className="max-w-full overflow-x-auto">
             <TabsTrigger value="rules" className="gap-2">
               <ShieldCheck className="h-4 w-4" />
-              Guardrail Rules ({guardrails.length})
+              Rules ({guardrails.length})
             </TabsTrigger>
             <TabsTrigger value="events" className="gap-2">
               <ShieldAlert className="h-4 w-4" />
-              Intervention Events ({events.length})
+              Events ({events.length})
             </TabsTrigger>
           </TabsList>
 
@@ -392,11 +411,13 @@ export function GuardrailsClient({
 
                   {targetType !== "global" && (
                     <div className="space-y-2">
-                      <Label>Target Scope ID</Label>
-                      <Input
-                        placeholder="UUID or identifier"
+                      <Label htmlFor="guardrail-target">Which one</Label>
+                      <SearchSelect
+                        id="guardrail-target"
                         value={targetId}
-                        onChange={(e) => setTargetId(e.target.value)}
+                        onChange={setTargetId}
+                        options={targetOptions(directory, targetType)}
+                        placeholder="Choose…"
                       />
                     </div>
                   )}
@@ -404,7 +425,7 @@ export function GuardrailsClient({
 
                 {/* Detector-specific Configuration */}
                 <div className="rounded-lg border p-3 bg-muted/40 space-y-3">
-                  <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                  <Label className="text-xs font-semibold text-muted-foreground">
                     Detector Parameters
                   </Label>
 
@@ -541,7 +562,7 @@ export function GuardrailsClient({
               />
             </div>
             <Select value={detectorFilter} onValueChange={setDetectorFilter}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="min-w-36 flex-1 sm:w-[180px] sm:flex-none" aria-label="Filter by detector">
                 <SelectValue placeholder="Detector" />
               </SelectTrigger>
               <SelectContent>
@@ -553,7 +574,7 @@ export function GuardrailsClient({
               </SelectContent>
             </Select>
             <Select value={actionFilter} onValueChange={setActionFilter}>
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="min-w-32 flex-1 sm:w-[160px] sm:flex-none" aria-label="Filter by action">
                 <SelectValue placeholder="Action" />
               </SelectTrigger>
               <SelectContent>
@@ -585,7 +606,7 @@ export function GuardrailsClient({
               {filteredGuardrails.map((g) => (
                 <Card key={g.id} className="transition-all hover:border-primary/50">
                   <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                       <div>
                         <div className="flex items-center gap-2">
                           <CardTitle className="text-base font-semibold">
@@ -598,8 +619,8 @@ export function GuardrailsClient({
                           >
                             {g.enabled ? "Active" : "Disabled"}
                           </Badge>
-                          <Badge variant="outline" className="text-xs font-mono">
-                            {g.detector.toUpperCase()}
+                          <Badge variant="outline" className="text-xs">
+                            {g.detector.replace(/_/g, " ")}
                           </Badge>
                         </div>
                         {g.description && (
@@ -625,6 +646,7 @@ export function GuardrailsClient({
                         <Button
                           variant="ghost"
                           size="icon"
+                          aria-label={`Edit ${g.name}`}
                           onClick={() => handleOpenEdit(g)}
                         >
                           <Edit2 className="h-4 w-4" />
@@ -632,6 +654,7 @@ export function GuardrailsClient({
                         <Button
                           variant="ghost"
                           size="icon"
+                          aria-label={`Delete ${g.name}`}
                           onClick={() => handleDelete(g.id)}
                           className="text-destructive hover:text-destructive"
                         >
@@ -648,17 +671,18 @@ export function GuardrailsClient({
                           variant={g.action === "block" ? "destructive" : "outline"}
                           className="ml-1 text-xs"
                         >
-                          {g.action.toUpperCase()}
+                          {g.action.charAt(0).toUpperCase() + g.action.slice(1)}
                         </Badge>
                       </div>
                       <div>
                         <span className="font-medium text-foreground">Scope: </span>
-                        <span className="capitalize">{g.target_type}</span>
-                        {g.target_id && ` (${g.target_id})`}
+                        {g.target_id
+                          ? (targetOptions(directory, g.target_type).find((o) => o.id === g.target_id)?.name ?? `${g.target_id.slice(0, 8)}…`)
+                          : "Whole organization"}
                       </div>
                       <div>
                         <span className="font-medium text-foreground">Config: </span>
-                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                        <code className="text-xs break-all bg-muted px-1.5 py-0.5 rounded">
                           {JSON.stringify(g.configuration)}
                         </code>
                       </div>

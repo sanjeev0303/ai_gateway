@@ -12,10 +12,61 @@ import (
 	uuid "github.com/google/uuid"
 )
 
+const conversationCountsByKey = `-- name: ConversationCountsByKey :many
+SELECT c.user_id,
+       c.credential_id,
+       COUNT(*)::bigint AS conversations,
+       MAX(c.updated_at)::timestamptz AS last_activity_at
+FROM conversations c
+WHERE c.organization_id = $1
+  AND ($2::uuid IS NULL OR c.user_id = $2)
+GROUP BY c.user_id, c.credential_id
+ORDER BY c.user_id, last_activity_at DESC
+`
+
+type ConversationCountsByKeyParams struct {
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	UserID         *uuid.UUID `json:"user_id"`
+}
+
+type ConversationCountsByKeyRow struct {
+	UserID         uuid.UUID  `json:"user_id"`
+	CredentialID   *uuid.UUID `json:"credential_id"`
+	Conversations  int64      `json:"conversations"`
+	LastActivityAt time.Time  `json:"last_activity_at"`
+}
+
+// How many conversations each employee has through each gateway key; a NULL
+// credential_id counts conversations that recorded no key.
+func (q *Queries) ConversationCountsByKey(ctx context.Context, arg ConversationCountsByKeyParams) ([]ConversationCountsByKeyRow, error) {
+	rows, err := q.db.Query(ctx, conversationCountsByKey, arg.OrganizationID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ConversationCountsByKeyRow{}
+	for rows.Next() {
+		var i ConversationCountsByKeyRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.CredentialID,
+			&i.Conversations,
+			&i.LastActivityAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createConversation = `-- name: CreateConversation :one
 INSERT INTO conversations (organization_id, user_id, title, status)
 VALUES ($1, $2, $3, $4)
-RETURNING id, organization_id, user_id, title, status, created_at, updated_at, project_id, model, provider, privacy_state
+RETURNING id, organization_id, user_id, title, status, created_at, updated_at, project_id, model, provider, privacy_state, credential_id
 `
 
 type CreateConversationParams struct {
@@ -45,6 +96,7 @@ func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversation
 		&i.Model,
 		&i.Provider,
 		&i.PrivacyState,
+		&i.CredentialID,
 	)
 	return i, err
 }
@@ -94,8 +146,27 @@ func (q *Queries) CreateConversationMessage(ctx context.Context, arg CreateConve
 	return i, err
 }
 
+const deleteConversation = `-- name: DeleteConversation :execrows
+DELETE FROM conversations
+WHERE organization_id = $1 AND id = $2
+`
+
+type DeleteConversationParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ID             uuid.UUID `json:"id"`
+}
+
+// Removes one conversation; its messages go with it (ON DELETE CASCADE).
+func (q *Queries) DeleteConversation(ctx context.Context, arg DeleteConversationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteConversation, arg.OrganizationID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getConversation = `-- name: GetConversation :one
-SELECT id, organization_id, user_id, title, status, created_at, updated_at, project_id, model, provider, privacy_state FROM conversations
+SELECT id, organization_id, user_id, title, status, created_at, updated_at, project_id, model, provider, privacy_state, credential_id FROM conversations
 WHERE organization_id = $1 AND id = $2
 `
 
@@ -119,6 +190,7 @@ func (q *Queries) GetConversation(ctx context.Context, arg GetConversationParams
 		&i.Model,
 		&i.Provider,
 		&i.PrivacyState,
+		&i.CredentialID,
 	)
 	return i, err
 }
@@ -172,6 +244,7 @@ SELECT c.id,
        c.project_id,
        c.model,
        c.provider,
+       c.credential_id,
        c.privacy_state,
        c.created_at,
        COUNT(m.id)::bigint                                        AS message_count,
@@ -190,17 +263,19 @@ WHERE c.organization_id = $1
   AND ($4::uuid IS NULL OR c.project_id = $4)
   AND ($5::text IS NULL OR c.provider = $5)
   AND ($6::text IS NULL OR c.model = $6)
-  AND ($7::timestamptz IS NULL OR c.created_at >= $7::timestamptz)
-  AND ($8::timestamptz IS NULL OR c.created_at < $8::timestamptz)
-  AND ($9::uuid IS NULL OR EXISTS (
+  AND ($7::uuid IS NULL OR c.credential_id = $7)
+  AND (NOT $8::bool OR c.credential_id IS NULL)
+  AND ($9::timestamptz IS NULL OR c.created_at >= $9::timestamptz)
+  AND ($10::timestamptz IS NULL OR c.created_at < $10::timestamptz)
+  AND ($11::uuid IS NULL OR EXISTS (
         SELECT 1
         FROM team_members tm
-        WHERE tm.team_id = $9
+        WHERE tm.team_id = $11
           AND tm.user_id = c.user_id
           AND tm.organization_id = c.organization_id))
 GROUP BY c.id
 ORDER BY c.created_at DESC, c.id DESC
-LIMIT $11::int OFFSET $10::int
+LIMIT $13::int OFFSET $12::int
 `
 
 type ListConversationsParams struct {
@@ -210,6 +285,8 @@ type ListConversationsParams struct {
 	ProjectID      *uuid.UUID `json:"project_id"`
 	Provider       *string    `json:"provider"`
 	Model          *string    `json:"model"`
+	CredentialID   *uuid.UUID `json:"credential_id"`
+	WithoutKey     bool       `json:"without_key"`
 	FromTs         *time.Time `json:"from_ts"`
 	ToTs           *time.Time `json:"to_ts"`
 	TeamID         *uuid.UUID `json:"team_id"`
@@ -224,6 +301,7 @@ type ListConversationsRow struct {
 	ProjectID      *uuid.UUID `json:"project_id"`
 	Model          *string    `json:"model"`
 	Provider       *string    `json:"provider"`
+	CredentialID   *uuid.UUID `json:"credential_id"`
 	PrivacyState   *string    `json:"privacy_state"`
 	CreatedAt      time.Time  `json:"created_at"`
 	MessageCount   int64      `json:"message_count"`
@@ -244,6 +322,8 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 		arg.ProjectID,
 		arg.Provider,
 		arg.Model,
+		arg.CredentialID,
+		arg.WithoutKey,
 		arg.FromTs,
 		arg.ToTs,
 		arg.TeamID,
@@ -264,6 +344,7 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 			&i.ProjectID,
 			&i.Model,
 			&i.Provider,
+			&i.CredentialID,
 			&i.PrivacyState,
 			&i.CreatedAt,
 			&i.MessageCount,
@@ -298,4 +379,57 @@ func (q *Queries) PurgeExpiredConversations(ctx context.Context, arg PurgeExpire
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const upsertGatewayConversation = `-- name: UpsertGatewayConversation :one
+INSERT INTO conversations (id, organization_id, user_id, title, status, project_id, model, provider, credential_id)
+VALUES ($1, $2, $3, $4, 'active',
+        $5, $6, $7, $8)
+ON CONFLICT (id) DO UPDATE
+SET updated_at = now(), model = EXCLUDED.model, provider = EXCLUDED.provider,
+    credential_id = COALESCE(EXCLUDED.credential_id, conversations.credential_id)
+WHERE conversations.organization_id = EXCLUDED.organization_id
+RETURNING id, organization_id, user_id, title, status, created_at, updated_at, project_id, model, provider, privacy_state, credential_id
+`
+
+type UpsertGatewayConversationParams struct {
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	UserID         uuid.UUID  `json:"user_id"`
+	Title          string     `json:"title"`
+	ProjectID      *uuid.UUID `json:"project_id"`
+	Model          *string    `json:"model"`
+	Provider       *string    `json:"provider"`
+	CredentialID   *uuid.UUID `json:"credential_id"`
+}
+
+// Creates the conversation a gateway request belongs to, or touches it on a later turn.
+// A matching id in another organization is left alone and returns no row.
+func (q *Queries) UpsertGatewayConversation(ctx context.Context, arg UpsertGatewayConversationParams) (Conversation, error) {
+	row := q.db.QueryRow(ctx, upsertGatewayConversation,
+		arg.ID,
+		arg.OrganizationID,
+		arg.UserID,
+		arg.Title,
+		arg.ProjectID,
+		arg.Model,
+		arg.Provider,
+		arg.CredentialID,
+	)
+	var i Conversation
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.UserID,
+		&i.Title,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ProjectID,
+		&i.Model,
+		&i.Provider,
+		&i.PrivacyState,
+		&i.CredentialID,
+	)
+	return i, err
 }

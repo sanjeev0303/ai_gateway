@@ -18,6 +18,10 @@ import (
 
 const defaultBaseURL = "https://generativelanguage.googleapis.com"
 
+// noRedirect stops the client following upstream redirects, which would re-send
+// the API key (carried on a custom header) to the redirect target.
+func noRedirect(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
 // Client talks to the Gemini API.
 type Client struct {
 	baseURL   *url.URL
@@ -43,8 +47,12 @@ func New(baseAddr, version, userAgent string) (*Client, error) {
 		version = defaultVersion
 	}
 	return &Client{
-		baseURL:   u,
-		client:    &http.Client{Timeout: 120 * time.Second},
+		baseURL: u,
+		// No SSRF dial guard: this client isn't reachable with a tenant base URL
+		// (the gemini adapter has no WithBaseURL; the live data plane forwards
+		// through the guarded stream proxy). Add netguard.GuardedDialContext if
+		// that changes.
+		client:    &http.Client{Timeout: 120 * time.Second, CheckRedirect: noRedirect},
 		version:   version,
 		userAgent: userAgent,
 	}, nil
@@ -350,7 +358,8 @@ func (c *Client) parseError(resp *http.Response) error {
 
 func (c *Client) do(ctx context.Context, apiKey, path string, body io.Reader) (*http.Response, error) {
 	u := *c.baseURL
-	u.Path = path
+	// Preserve any base-URL path prefix so validation and inference agree.
+	u.Path = strings.TrimRight(u.Path, "/") + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), body)
 	if err != nil {
 		return nil, fmt.Errorf("gemini: build request: %w", err)

@@ -157,6 +157,7 @@ type SlidingWindowRateLimiter struct {
 	mu      sync.RWMutex
 	windows map[string]*slidingWindow
 	clock   func() time.Time
+	stopCh  chan struct{}
 }
 
 type slidingWindow struct {
@@ -169,10 +170,20 @@ type slidingWindow struct {
 
 // NewSlidingWindowRateLimiter creates a new sliding window rate limiter.
 func NewSlidingWindowRateLimiter() *SlidingWindowRateLimiter {
-	return &SlidingWindowRateLimiter{
+	s := &SlidingWindowRateLimiter{
 		windows: make(map[string]*slidingWindow),
 		clock:   time.Now,
+		stopCh:  make(chan struct{}),
 	}
+	// Prune idle windows in the background so the map cannot grow without
+	// bound under a changing key set (one window per rate-limit key).
+	go s.cleanupLoop()
+	return s
+}
+
+// Close stops the background cleanup goroutine.
+func (s *SlidingWindowRateLimiter) Close() {
+	close(s.stopCh)
 }
 
 // Check performs a sliding window rate limit check.
@@ -238,17 +249,22 @@ func (s *SlidingWindowRateLimiter) cleanupLoop() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		s.mu.Lock()
-		now := s.clock()
-		cutoff := now.Add(-10 * time.Minute)
-		for key, w := range s.windows {
-			w.mu.Lock()
-			if len(w.requests) == 0 || w.requests[len(w.requests)-1].Before(cutoff) {
-				delete(s.windows, key)
+	for {
+		select {
+		case <-s.stopCh:
+			return
+		case <-ticker.C:
+			s.mu.Lock()
+			now := s.clock()
+			cutoff := now.Add(-10 * time.Minute)
+			for key, w := range s.windows {
+				w.mu.Lock()
+				if len(w.requests) == 0 || w.requests[len(w.requests)-1].Before(cutoff) {
+					delete(s.windows, key)
+				}
+				w.mu.Unlock()
 			}
-			w.mu.Unlock()
+			s.mu.Unlock()
 		}
-		s.mu.Unlock()
 	}
 }

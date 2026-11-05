@@ -172,13 +172,14 @@ func newProxyHandler(t *testing.T, upstreamURL string, accounts []domain.Provide
 	t.Helper()
 
 	proxy, err := NewProxy(ProxyDeps{
-		Log:                 slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Hasher:              stubHasher{prefix: "h:"},
-		Credentials:         &stubCredentialRepo{byHash: credsByHash},
-		Accounts:            &stubAccountsRepo{accounts: accounts},
-		ProviderCredentials: &stubProviderCredRepo{creds: creds},
-		Secrets:             &stubSecretStore{values: refs},
-		UpstreamBaseURL:     upstreamURL,
+		Log:                   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Hasher:                stubHasher{prefix: "h:"},
+		Credentials:           &stubCredentialRepo{byHash: credsByHash},
+		Accounts:              &stubAccountsRepo{accounts: accounts},
+		ProviderCredentials:   &stubProviderCredRepo{creds: creds},
+		Secrets:               &stubSecretStore{values: refs},
+		UpstreamBaseURL:       upstreamURL,
+		AllowPrivateUpstreams: true, // test upstreams are httptest servers on 127.0.0.1
 	})
 	if err != nil {
 		t.Fatalf("NewProxy: %v", err)

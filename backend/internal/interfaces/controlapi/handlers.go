@@ -500,6 +500,8 @@ func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
 		appErr = perrors.New(perrors.KindInvalidArgument, "credential_revoked", "provider credential is revoked")
 	case errors.Is(err, provider.ErrDiscoveryUnavailable):
 		appErr = perrors.New(perrors.KindUnavailable, "discovery_unavailable", "model discovery unavailable for this provider")
+	case errors.Is(err, provider.ErrProviderUnreachable):
+		appErr = perrors.New(perrors.KindUnavailable, "provider_unreachable", "could not reach the provider to verify the key; check the base URL and the gateway's network or DNS")
 	case errors.Is(err, repositories.ErrInvalid):
 		appErr = perrors.New(perrors.KindInvalidArgument, "invalid_argument", repositories.ErrInvalid.Error())
 	case errors.Is(err, repositories.ErrNotFound):

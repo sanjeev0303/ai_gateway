@@ -38,11 +38,18 @@ export async function createProviderAccount(
     let validationStatus: ActionState["validationStatus"] = "connected";
 
     if (apiKey) {
-      await providers.createCredential(account.id, {
-        name: `${name} Key`,
-        kind: "api_key",
-        secret: apiKey,
-      });
+      try {
+        await providers.createCredential(account.id, {
+          name: `${name} Key`,
+          kind: "api_key",
+          secret: apiKey,
+        });
+      } catch (error) {
+        // The account was created a moment ago. Without its key it can route nothing, and a
+        // retry would hit a name conflict, so remove it before reporting the failure.
+        await providers.deleteAccount(account.id).catch(() => undefined);
+        return { error: credentialFailureMessage(error) };
+      }
 
       try {
         const valRes = await providers.validateAccount(account.id);
@@ -76,6 +83,19 @@ export async function createProviderAccount(
       error: msg,
     };
   }
+}
+
+function credentialFailureMessage(error: unknown): string {
+  const code = error instanceof ApiError ? error.code : "";
+  if (code === "invalid_provider_credential") {
+    return "The provider rejected this API key. Nothing was saved. Check the key and try again.";
+  }
+  if (code === "provider_unreachable") {
+    return "Couldn't reach the provider to verify the key, so nothing was saved. Check the base URL and that the gateway can reach the internet (network or DNS), then try again.";
+  }
+  return error instanceof ApiError && error.message !== "internal error"
+    ? `${error.message}. Nothing was saved.`
+    : "The key couldn't be verified because of an unexpected server error. Nothing was saved; try again.";
 }
 
 export async function testAccountConnectionAction(accountId: string): Promise<{ valid: boolean; error?: string }> {

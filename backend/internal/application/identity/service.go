@@ -670,8 +670,31 @@ func (s *Service) RevokeServiceAccount(ctx context.Context, actor domain.Actor, 
 	if _, err := s.accounts.Revoke(ctx, actor.OrganizationID, serviceAccountID); err != nil {
 		return err
 	}
+	// Cascade: the gateway hot path resolves a credential without re-checking the
+	// subject's service-account status, so revoke this subject's gateway
+	// credentials too (RevokeGatewayCredential also evicts their caches).
+	creds, err := s.gatewayCredentials.List(ctx, actor.OrganizationID)
+	if err != nil {
+		return err
+	}
+	// Best-effort: revoke every matching credential even if one fails, so a
+	// single transient error can't leave other credentials of a compromised
+	// account live. The revoke SQL is idempotent, so a retry re-runs cleanly.
+	var cascadeErr error
+	for i := range creds {
+		c := creds[i]
+		if c.SubjectType != domain.SubjectTypeServiceAccount || c.SubjectID != serviceAccountID {
+			continue
+		}
+		if c.Status != domain.GatewayCredentialStatusActive {
+			continue
+		}
+		if err := s.RevokeGatewayCredential(ctx, actor, c.ID); err != nil && cascadeErr == nil {
+			cascadeErr = err
+		}
+	}
 	s.audit(ctx, actor, "service_account.revoke", "service_account", &serviceAccountID, nil, nil)
-	return nil
+	return cascadeErr
 }
 
 // CreateCredential creates an API key. Gateway-scoped keys authenticate the
@@ -692,28 +715,10 @@ func (s *Service) CreateCredential(ctx context.Context, actor domain.Actor, name
 		if scope == "control_plane" || scope == "policy_manager" || scope == "read_only" {
 			scope = string(domain.APICredentialScopeControl)
 		}
-		if serviceAccountID == nil {
-			accs, err := s.accounts.List(ctx, actor.OrganizationID)
-			if err == nil && len(accs) > 0 {
-				for _, a := range accs {
-					if a.Status == domain.ServiceAccountStatusActive {
-						saID := a.ID
-						serviceAccountID = &saID
-						break
-					}
-				}
-			}
-			if serviceAccountID == nil {
-				createdSA, err := s.accounts.Create(ctx, actor.OrganizationID, domain.NewServiceAccount{
-					Name:        "Default Automation",
-					Description: "Auto-provisioned default automation service account",
-				})
-				if err == nil {
-					saID := createdSA.ID
-					serviceAccountID = &saID
-				}
-			}
-		}
+		// Control/all keys authenticate a machine identity, so the caller must
+		// name an active service account. We do not silently create one: that
+		// is a surprising side effect of key creation, and the documented
+		// contract (and the tests) is to reject when none is given.
 		if serviceAccountID == nil {
 			return domain.APICredential{}, "", repositories.ErrInvalid
 		}
@@ -939,6 +944,22 @@ func (s *Service) CreateGatewayCredential(ctx context.Context, actor domain.Acto
 		return domain.GatewayCredential{}, "", repositories.ErrInvalid
 	}
 	if !isValidSubjectType(input.SubjectType) {
+		return domain.GatewayCredential{}, "", repositories.ErrInvalid
+	}
+	// A service-account subject must be a real, active account in this org;
+	// otherwise the credential's per-subject rate/budget rules bind to nothing.
+	if input.SubjectType == domain.SubjectTypeServiceAccount {
+		sa, err := s.accounts.Get(ctx, actor.OrganizationID, input.SubjectID)
+		if err != nil {
+			return domain.GatewayCredential{}, "", err
+		}
+		if sa.Status != domain.ServiceAccountStatusActive {
+			return domain.GatewayCredential{}, "", repositories.ErrInvalid
+		}
+	}
+	// Require at least one scope: an empty scope set must mean "no access", not
+	// "unrestricted" (the gateway only honors gateway/all-scoped credentials).
+	if len(input.Scopes) == 0 {
 		return domain.GatewayCredential{}, "", repositories.ErrInvalid
 	}
 	for _, scope := range input.Scopes {

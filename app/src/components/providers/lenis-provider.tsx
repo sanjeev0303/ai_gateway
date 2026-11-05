@@ -28,6 +28,9 @@ export function LenisProvider({ children }: { children: React.ReactNode }) {
   const lenisRef = useRef<Lenis | null>(null);
 
   useEffect(() => {
+    // Smooth scrolling is motion; people who ask for less get the native scroll.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -58,7 +61,7 @@ export function LenisProvider({ children }: { children: React.ReactNode }) {
       const target = document.querySelector(hash);
       if (target) {
         setTimeout(() => {
-          lenis.scrollTo(target as HTMLElement, { offset: -70 });
+          lenis.scrollTo(target as HTMLElement, { offset: 0 });
         }, 300);
       }
     }
@@ -72,7 +75,8 @@ export function LenisProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const scrollTo = useCallback((target: string | number | HTMLElement, options?: { offset?: number; duration?: number; immediate?: boolean }) => {
-    const opts = { offset: -70, ...options };
+    // Sections set their own scroll-margin for the sticky header; adding an offset here doubled it.
+    const opts = { offset: 0, ...options };
     if (lenisRef.current) {
       lenisRef.current.scrollTo(target, opts);
     } else if (typeof window !== "undefined") {

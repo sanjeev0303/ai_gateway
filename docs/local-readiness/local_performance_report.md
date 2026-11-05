@@ -1,6 +1,6 @@
 # Sentinel Local Performance & Resilience Validation Report (Phase 16)
 
-**Execution Date:** 2026-10-18 04:01:42 UTC  
+**Execution Date:** 2026-11-03 13:01:32 UTC  
 **Test Environment:** Linux / 12 CPU Cores / 7.5 GiB RAM (Local Docker Compose stack)
 
 ---
@@ -9,15 +9,15 @@
 
 | Metric | Acceptance Threshold | Measured Value | Result |
 |---|---|---|---|
-| **Gateway Throughput** | >= 10.0 req/s (local mock proxy) | **392.34 req/s** | ✅ PASS |
-| **Gateway Latency (p50)** | <= 250 ms | **13ms** | ✅ PASS |
-| **Gateway Latency (p95)** | <= 1500 ms | **44ms** | ✅ PASS |
-| **Gateway Latency (p99)** | <= 2500 ms | **78ms** | ✅ PASS |
-| **Streaming TTFT (p50)** | <= 500 ms | **14ms** | ✅ PASS |
-| **Streaming TTFT (p95)** | <= 1000 ms | **59ms** | ✅ PASS |
-| **Memory Growth (Sustained)** | < 30.0 MB heap delta | **-0.14 MB** | ✅ PASS |
+| **Gateway Throughput** | >= 10.0 req/s (local mock proxy) | **409.83 req/s** | ✅ PASS |
+| **Gateway Latency (p50)** | <= 250 ms | **14ms** | ✅ PASS |
+| **Gateway Latency (p95)** | <= 1500 ms | **40ms** | ✅ PASS |
+| **Gateway Latency (p99)** | <= 2500 ms | **59ms** | ✅ PASS |
+| **Streaming TTFT (p50)** | <= 500 ms | **13ms** | ✅ PASS |
+| **Streaming TTFT (p95)** | <= 1000 ms | **43ms** | ✅ PASS |
+| **Memory Growth (Sustained)** | < 30.0 MB heap delta | **-0.11 MB** | ✅ PASS |
 | **Goroutine Leak Delta** | <= 5 goroutines | **+0** | ✅ PASS |
-| **Database Connections** | <= 50 concurrent | **35** | ✅ PASS |
+| **Database Connections** | <= 50 concurrent | **36** | ✅ PASS |
 | **Duplicate Usage Events** | Strictly 0 | **0** | ✅ PASS |
 | **SSR Page Latency** | <= 600 ms | **< 250 ms** | ✅ PASS |
 
@@ -28,15 +28,15 @@
 - **Successful Proxied Requests:** 64
 - **Governance / Error Handled Requests:** 16
 - **Failed Requests:** 0
-- **Total Duration:** 204ms
+- **Total Duration:** 195ms
 - **Latency Distribution:**
-  - Min: 6ms
-  - p50: 13ms
-  - p90: 35ms
-  - p95: 44ms
-  - p99: 78ms
-  - Max: 78ms
-  - Mean: 19ms
+  - Min: 8ms
+  - p50: 14ms
+  - p90: 31ms
+  - p95: 40ms
+  - p99: 59ms
+  - Max: 59ms
+  - Mean: 18ms
 
 ---
 

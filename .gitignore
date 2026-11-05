@@ -41,3 +41,13 @@ deploy/terraform/aws/.terraform/
 scratch/
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
+
+# local end-to-end test fixtures (test accounts, gateway keys)
+.e2e/
+deploy/compose/docker-compose.local.yml
+
+# Local encrypted secrets store: provider keys and the key that unlocks them
+backend/data/
+# Built binaries and design-review screenshots
+*.exe
+.impeccable/review/

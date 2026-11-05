@@ -18,8 +18,10 @@ const maxConversationPage = 200
 func registerConversationRoutes(mux *http.ServeMux, deps Deps) {
 	a := newAPI(deps)
 	mux.Handle("GET /v1/conversations", a.requireAuth(a.listConversations))
+	mux.Handle("GET /v1/conversations/by-key", a.requireAuth(a.conversationCountsByKey))
 	mux.Handle("POST /v1/conversations", a.requireAuth(a.createConversation))
 	mux.Handle("GET /v1/conversations/{id}", a.requireAuth(a.getConversation))
+	mux.Handle("DELETE /v1/conversations/{id}", a.requireAuth(a.deleteConversation))
 	mux.Handle("GET /v1/conversations/{id}/messages", a.requireAuth(a.listConversationMessages))
 	mux.Handle("POST /v1/conversations/{id}/messages", a.requireAuth(a.createConversationMessage))
 }
@@ -34,6 +36,7 @@ type conversationSummaryDTO struct {
 	ProjectID      *string `json:"project_id"`
 	Provider       *string `json:"provider"`
 	Model          *string `json:"model"`
+	CredentialID   *string `json:"credential_id"`
 	StartedAt      string  `json:"started_at"`
 	LastActivityAt *string `json:"last_activity_at"`
 	RequestCount   int32   `json:"request_count"`
@@ -101,6 +104,48 @@ func (a *api) getConversation(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, toConversationSummaryDTO(summary))
 }
 
+// conversationCountsByKey lists how many conversations each employee has
+// through each gateway key, for the per-employee history rail.
+func (a *api) conversationCountsByKey(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	counts, err := a.conversations.CountsByKey(r.Context(), actor)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	type item struct {
+		UserID         string  `json:"user_id"`
+		CredentialID   *string `json:"credential_id"`
+		Conversations  int64   `json:"conversations"`
+		LastActivityAt string  `json:"last_activity_at"`
+	}
+	items := make([]item, 0, len(counts))
+	for _, c := range counts {
+		items = append(items, item{
+			UserID:         c.UserID.String(),
+			CredentialID:   uuidPtrString(c.CredentialID),
+			Conversations:  c.Conversations,
+			LastActivityAt: c.LastActivityAt.UTC().Format(time.RFC3339),
+		})
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// deleteConversation removes a whole conversation, its text included.
+func (a *api) deleteConversation(w http.ResponseWriter, r *http.Request) {
+	actor, _ := actorFrom(r.Context())
+	id, err := pathUUID(r, "id")
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	if err := a.conversations.Delete(r.Context(), actor, id); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (a *api) listConversationMessages(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	actor, _ := actorFrom(ctx)
@@ -111,7 +156,7 @@ func (a *api) listConversationMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messages, err := a.conversations.ListMessages(ctx, actor, id)
+	messages, state, err := a.conversations.ListMessages(ctx, actor, id)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -120,7 +165,9 @@ func (a *api) listConversationMessages(w http.ResponseWriter, r *http.Request) {
 	for _, m := range messages {
 		items = append(items, toConversationMessageDTO(m))
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+	// Text lives only in gateway memory; transcript says whether it was shown,
+	// withheld by privacy, or has expired.
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items, "transcript": state})
 }
 
 // parseConversationFilter reads the optional list filters. It deliberately has
@@ -143,6 +190,12 @@ func parseConversationFilter(r *http.Request) (domain.ConversationFilter, error)
 		return filter, err
 	}
 	if filter.ProjectID, err = parseOptionalUUIDParam(r, "project_id"); err != nil {
+		return filter, err
+	}
+	// credential_id=none lists the conversations that recorded no gateway key.
+	if r.URL.Query().Get("credential_id") == "none" {
+		filter.WithoutKey = true
+	} else if filter.CredentialID, err = parseOptionalUUIDParam(r, "credential_id"); err != nil {
 		return filter, err
 	}
 	filter.Provider = parseOptionalString(r, "provider")
@@ -182,6 +235,7 @@ func toConversationSummaryDTO(s domain.ConversationSummary) conversationSummaryD
 		ProjectID:    uuidPtrString(s.ProjectID),
 		Provider:     s.Provider,
 		Model:        s.Model,
+		CredentialID: uuidPtrString(s.CredentialID),
 		StartedAt:    s.StartedAt.UTC().Format(time.RFC3339),
 		RequestCount: s.RequestCount,
 		MessageCount: s.MessageCount,

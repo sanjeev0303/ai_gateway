@@ -5,7 +5,7 @@ import { TeamDetailClient } from "./team-detail-client";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Team Detail · Sentinel",
+  title: "Team Detail · Tollseal",
 };
 
 export default async function TeamDetailPage({

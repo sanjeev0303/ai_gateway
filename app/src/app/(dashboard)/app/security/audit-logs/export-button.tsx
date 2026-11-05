@@ -32,7 +32,7 @@ export function ExportAuditLogsButton({ rows }: { rows: AuditRow[] }) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", `sentinel-audit-logs-${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute("download", `tollseal-audit-logs-${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

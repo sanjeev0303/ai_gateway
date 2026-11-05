@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { SidebarNav } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
+import { ConfirmHost } from "@/components/dashboard/confirm-dialog";
 import { cn } from "@/lib/utils";
 
 interface SidebarContextValue {
@@ -64,21 +65,36 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarContext.Provider value={{ collapsed, setCollapsed, toggleCollapsed }}>
-      <div className="flex h-screen overflow-hidden bg-background">
+      <div className="relative flex h-screen overflow-hidden bg-background">
+        <a
+          href="#dashboard-main"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:rounded-full focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:text-primary-foreground"
+        >
+          Skip to content
+        </a>
+        {/* Iris light behind the top of the console, for the glass to catch */}
+        <div aria-hidden className="ambient pointer-events-none absolute inset-x-0 top-0 h-[520px] opacity-80" />
+        {/* The sidebar floats as a glass panel, the heavier material of the navigation layer */}
         <aside
           className={cn(
-            "hidden shrink-0 border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-out lg:block",
-            collapsed ? "w-18" : "w-64",
+            "relative hidden shrink-0 py-3 pl-3 transition-[width] duration-200 ease-(--ease-out-strong) lg:block",
+            collapsed ? "w-[5.5rem]" : "w-[17.5rem]",
           )}
         >
-          <SidebarNav collapsed={collapsed} onToggleCollapse={toggleCollapsed} />
+          <div className="liquid-glass-panel h-full overflow-hidden rounded-2xl border">
+            <SidebarNav collapsed={collapsed} onToggleCollapse={toggleCollapsed} />
+          </div>
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <Topbar />
-          <main className="min-h-0 flex-1 overflow-y-auto page-scrollbar">{children}</main>
+        <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+          {/* The top bar floats inside the scroll area, so content passes under its glass */}
+          <main id="dashboard-main" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto page-scrollbar outline-none">
+            <Topbar />
+            <div className="mx-auto w-full max-w-[1600px] lg:px-2">{children}</div>
+          </main>
         </div>
       </div>
+      <ConfirmHost />
     </SidebarContext.Provider>
   );
 }

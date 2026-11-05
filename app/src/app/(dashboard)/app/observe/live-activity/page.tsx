@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 
 import { PageShell } from "@/components/dashboard";
+import { getDirectory, nameMap } from "@/lib/directory";
 import { getApiClient } from "@/lib/session";
 
 import { LiveActivityContent } from "./live-activity-content";
 
 export const metadata: Metadata = {
-  title: "Live activity · Sentinel",
+  title: "Live activity · Tollseal",
   description: "Requests streaming through the gateway right now.",
 };
 
@@ -41,8 +42,11 @@ export default async function LiveActivityPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const params = await searchParams;
-  const { events, activeRequests, activeUsers } = await loadActivity();
+  await searchParams;
+  const [{ events, activeRequests, activeUsers }, directory] = await Promise.all([
+    loadActivity(),
+    getDirectory(),
+  ]);
 
   return (
     <div className="p-4 sm:p-6">
@@ -50,11 +54,16 @@ export default async function LiveActivityPage({
         title="Live activity"
         description="Requests the gateway is processing right now, newest first."
       >
-        <ObserveFilters />
+        <ObserveFilters exclude={["service_account_id"]} />
         <LiveActivityContent
           initialEvents={events}
           initialActiveRequests={activeRequests}
           initialActiveUsers={activeUsers}
+          names={{
+            teams: nameMap(directory.teams),
+            projects: nameMap(directory.projects),
+            users: nameMap(directory.users),
+          }}
         />
       </PageShell>
     </div>

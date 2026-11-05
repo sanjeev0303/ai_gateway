@@ -1,0 +1,116 @@
+{
+  "baseline_metadata": {
+    "git_branch": "n/a",
+    "git_commit": "n/a",
+    "go_version": "go1.26.0",
+    "goarch": "amd64",
+    "goos": "windows",
+    "host": "Exuv04",
+    "num_cpu": 8,
+    "recorded_at": "2026-11-03T04:56:53Z"
+  },
+  "current_benchmarks": {
+    "BenchmarkPromptTurn/large_80turns_22490B": {
+      "ns_per_op": 304484.5,
+      "bytes_per_op": 52160,
+      "allocs_per_op": 301
+    },
+    "BenchmarkPromptTurn/multi_10turns_2855B": {
+      "ns_per_op": 47415.5,
+      "bytes_per_op": 6576,
+      "allocs_per_op": 50
+    },
+    "BenchmarkPromptTurn/small_1turn_337B": {
+      "ns_per_op": 8086,
+      "bytes_per_op": 1072,
+      "allocs_per_op": 14
+    }
+  },
+  "generated_at": "2026-11-03T05:04:30Z",
+  "passed": true,
+  "rows": [
+    {
+      "name": "BenchmarkPromptTurn/large_80turns_22490B",
+      "metric": "ns/op",
+      "baseline": 421523,
+      "current": 304484.5,
+      "delta_percent": -27.765626074971,
+      "budget_percent": 25,
+      "violation": false
+    },
+    {
+      "name": "BenchmarkPromptTurn/large_80turns_22490B",
+      "metric": "allocs/op",
+      "baseline": 301,
+      "current": 301,
+      "delta_percent": 0,
+      "budget_percent": 5,
+      "violation": false
+    },
+    {
+      "name": "BenchmarkPromptTurn/large_80turns_22490B",
+      "metric": "B/op",
+      "baseline": 52160,
+      "current": 52160,
+      "delta_percent": 0,
+      "budget_percent": 10,
+      "violation": false
+    },
+    {
+      "name": "BenchmarkPromptTurn/multi_10turns_2855B",
+      "metric": "ns/op",
+      "baseline": 58900,
+      "current": 47415.5,
+      "delta_percent": -19.49830220713073,
+      "budget_percent": 25,
+      "violation": false
+    },
+    {
+      "name": "BenchmarkPromptTurn/multi_10turns_2855B",
+      "metric": "allocs/op",
+      "baseline": 50,
+      "current": 50,
+      "delta_percent": 0,
+      "budget_percent": 5,
+      "violation": false
+    },
+    {
+      "name": "BenchmarkPromptTurn/multi_10turns_2855B",
+      "metric": "B/op",
+      "baseline": 6576,
+      "current": 6576,
+      "delta_percent": 0,
+      "budget_percent": 10,
+      "violation": false
+    },
+    {
+      "name": "BenchmarkPromptTurn/small_1turn_337B",
+      "metric": "ns/op",
+      "baseline": 6468,
+      "current": 8086,
+      "delta_percent": 25.01546072974644,
+      "budget_percent": 25,
+      "violation": false,
+      "warn": true
+    },
+    {
+      "name": "BenchmarkPromptTurn/small_1turn_337B",
+      "metric": "allocs/op",
+      "baseline": 14,
+      "current": 14,
+      "delta_percent": 0,
+      "budget_percent": 5,
+      "violation": false
+    },
+    {
+      "name": "BenchmarkPromptTurn/small_1turn_337B",
+      "metric": "B/op",
+      "baseline": 1072,
+      "current": 1072,
+      "delta_percent": 0,
+      "budget_percent": 10,
+      "violation": false
+    }
+  ],
+  "violations": null
+}

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	httppprof "net/http/pprof"
 	"sync"
 	"time"
 
@@ -41,6 +42,7 @@ import (
 	"ai-governance-saas/backend/internal/infrastructure/provider/huggingface"
 	"ai-governance-saas/backend/internal/infrastructure/provider/openai"
 	"ai-governance-saas/backend/internal/infrastructure/secrets"
+	"ai-governance-saas/backend/internal/infrastructure/transcripts"
 	"ai-governance-saas/backend/internal/interfaces/controlapi"
 	"ai-governance-saas/backend/internal/interfaces/gateway"
 	"ai-governance-saas/backend/internal/interfaces/gatewayv2"
@@ -90,13 +92,14 @@ func RunGateway(ctx context.Context) error {
 		}
 
 		proxy, err := gateway.NewProxy(gateway.ProxyDeps{
-			Log:                 log,
-			Hasher:              auth.NewSHA256TokenHasher(),
-			Credentials:         repositories.NewAPICredentialRepository(store),
-			Accounts:            repositories.NewProviderAccountRepository(store),
-			ProviderCredentials: repositories.NewProviderCredentialRepository(store),
-			Secrets:             secretStore,
-			UpstreamBaseURL:     cfg.Provider.BaseURL,
+			Log:                   log,
+			Hasher:                auth.NewSHA256TokenHasher(),
+			Credentials:           repositories.NewAPICredentialRepository(store),
+			Accounts:              repositories.NewProviderAccountRepository(store),
+			ProviderCredentials:   repositories.NewProviderCredentialRepository(store),
+			Secrets:               secretStore,
+			UpstreamBaseURL:       cfg.Provider.BaseURL,
+			AllowPrivateUpstreams: cfg.AllowInsecureDev,
 		})
 		if err != nil {
 			return fmt.Errorf("gateway: provider proxy: %w", err)
@@ -152,7 +155,7 @@ func RunGatewayV2(ctx context.Context) error {
 
 		var bus usageBus
 		if cfg.Eventbus.Enabled {
-			bus, err = newUsageBus(ctx, &cfg.Eventbus, log)
+			bus, err = newUsageBus(ctx, &cfg.Eventbus, store.Pool(), log)
 			if err != nil {
 				return fmt.Errorf("gateway-v2: %w", err)
 			}
@@ -201,8 +204,9 @@ func RunGatewayV2(ctx context.Context) error {
 
 		// Build gateway v2 with all components
 		gatewayV2, err := gatewayv2.NewGateway(gatewayv2.GatewayDeps{
-			Config: gatewayv2.DefaultGatewayConfig(),
-			Logger: log,
+			Config:                gatewayv2.DefaultGatewayConfig(),
+			Logger:                log,
+			AllowPrivateUpstreams: cfg.AllowInsecureDev,
 
 			Hasher:              auth.NewSHA256TokenHasher(),
 			GatewayCredRepo:     repositories.NewGatewayCredentialRepository(store),
@@ -214,6 +218,7 @@ func RunGatewayV2(ctx context.Context) error {
 			PolicyRepo:          repositories.NewPolicyRepository(store),
 			RuleRepo:            repositories.NewPolicyRuleRepository(store),
 			Guardrails:          repositories.NewGuardrailsRepository(store),
+			Conversations:       repositories.NewGatewayConversationStore(store),
 			EventBus:            bus.EventBus,
 			Activity:            activityTracker,
 			RateLimiter:         rateLimiter,
@@ -281,6 +286,25 @@ func RunGatewayV2(ctx context.Context) error {
 			return fmt.Errorf("gateway-v2: start: %w", err)
 		}
 
+		// Conversation text is kept in this process's memory only; the control
+		// API reads it over a private listener that is never published.
+		if addr := cfg.Conversation.TranscriptAddr; addr != "" {
+			srv := &http.Server{Addr: addr, Handler: gatewayV2.TranscriptHandler(cfg.TranscriptToken()), ReadHeaderTimeout: cfg.Server.ReadHeaderTimeout}
+			jobs.Add(2)
+			go func() {
+				defer jobs.Done()
+				<-ctx.Done()
+				_ = srv.Close()
+			}()
+			go func() {
+				defer jobs.Done()
+				log.Info("transcript listener", "addr", addr)
+				if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+					log.Warn("transcript listener stopped", "error", err)
+				}
+			}()
+		}
+
 		deps.Gateway = gatewayV2
 	}
 
@@ -335,7 +359,7 @@ func RunControlAPI(ctx context.Context) error {
 
 		var bus usageBus
 		if cfg.Eventbus.Enabled {
-			bus, err = newUsageBus(ctx, &cfg.Eventbus, log)
+			bus, err = newUsageBus(ctx, &cfg.Eventbus, store.Pool(), log)
 			if err != nil {
 				return fmt.Errorf("control-api: eventbus: %w", err)
 			}
@@ -406,16 +430,17 @@ func RunControlAPI(ctx context.Context) error {
 		})
 
 		providerSvc := provider.NewService(provider.ServiceDeps{
-			Accounts:       repositories.NewProviderAccountRepository(store),
-			Credentials:    repositories.NewProviderCredentialRepository(store),
-			Models:         repositories.NewModelRepository(store),
-			Health:         repositories.NewProviderHealthRepository(store),
-			Audits:         repositories.NewAuditLogRepository(store),
-			SecurityEvents: securityEventSvc,
-			Secrets:        secretStore,
-			Providers:      providerAdapters(),
-			Invalidator:    redisInvalidator,
-			Log:            log,
+			Accounts:              repositories.NewProviderAccountRepository(store),
+			Credentials:           repositories.NewProviderCredentialRepository(store),
+			Models:                repositories.NewModelRepository(store),
+			Health:                repositories.NewProviderHealthRepository(store),
+			Audits:                repositories.NewAuditLogRepository(store),
+			SecurityEvents:        securityEventSvc,
+			Secrets:               secretStore,
+			Providers:             providerAdapters(cfg.AllowInsecureDev),
+			Invalidator:           redisInvalidator,
+			AllowPrivateUpstreams: cfg.AllowInsecureDev,
+			Log:                   log,
 		})
 
 		activitySvc := activity.NewService(redisClient, log)
@@ -427,10 +452,15 @@ func RunControlAPI(ctx context.Context) error {
 			Log:         log,
 		})
 
+		var transcriptSource conversation.TranscriptSource
+		if u := cfg.Conversation.TranscriptURL; u != "" {
+			transcriptSource = transcripts.New(u, cfg.TranscriptToken())
+		}
 		conversationSvc := conversation.NewService(conversation.ServiceDeps{
 			Organizations: repositories.NewOrganizationRepository(store),
 			Conversations: repositories.NewConversationRepository(store),
 			Messages:      repositories.NewConversationMessageRepository(store),
+			Transcripts:   transcriptSource,
 			Log:           log,
 		})
 
@@ -538,13 +568,13 @@ func RunControlAPI(ctx context.Context) error {
 // domain.ProviderKind* values because Service.CreateCredential dispatches on
 // that same key. Kinds absent here are rejected at credential-create time
 // rather than validated against the wrong upstream.
-func providerAdapters() map[string]providerclient.Provider {
+func providerAdapters(allowPrivate bool) map[string]providerclient.Provider {
 	return map[string]providerclient.Provider{
 		domain.ProviderKindAnthropic:   anthropic.NewProviderAdapter(),
-		domain.ProviderKindOpenAI:      openai.NewProviderAdapter(),
+		domain.ProviderKindOpenAI:      openai.NewProviderAdapter(allowPrivate),
 		domain.ProviderKindGemini:      gemini.NewProviderAdapter(),
 		domain.ProviderKindHuggingFace: huggingface.NewProviderAdapter(),
-		domain.ProviderKindCustom:      openai.NewCustomProviderAdapter("https://api.mistral.ai", ""),
+		domain.ProviderKindCustom:      openai.NewCustomProviderAdapter("https://api.mistral.ai", "", allowPrivate),
 	}
 }
 
@@ -654,7 +684,7 @@ func RunWorker(ctx context.Context) error {
 		}()
 
 		if cfg.Eventbus.Enabled {
-			bus, err := newUsageBus(ctx, &cfg.Eventbus, log)
+			bus, err := newUsageBus(ctx, &cfg.Eventbus, store.Pool(), log)
 			if err != nil {
 				return fmt.Errorf("worker: %w", err)
 			}
@@ -713,12 +743,26 @@ func serveHTTP(ctx context.Context, cfg *config.Config, h http.Handler, name str
 		ReadHeaderTimeout: cfg.Server.ReadHeaderTimeout,
 	}
 
+	// Optional profiling listener, opt-in via AIGW_SERVER_PPROF_ADDR and off by
+	// default. It runs on its own private address so pprof is never served from
+	// the public request handler; shut down alongside the main server.
+	pprofSrv := startPprof(cfg.Server.PprofAddr, name, cfg.Server.ReadHeaderTimeout)
+	stopPprof := func() {
+		if pprofSrv == nil {
+			return
+		}
+		sctx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
+		defer cancel()
+		_ = pprofSrv.Shutdown(sctx)
+	}
+
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 	slog.Info("http server listening", "service", name, "addr", cfg.Server.Addr)
 
 	select {
 	case err := <-errCh:
+		stopPprof()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("%s server: %w", name, err)
 		}
@@ -727,6 +771,7 @@ func serveHTTP(ctx context.Context, cfg *config.Config, h http.Handler, name str
 		slog.Info("shutting down", "service", name, "timeout", cfg.Server.ShutdownTimeout)
 		sctx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 		defer cancel()
+		stopPprof()
 		if err := srv.Shutdown(sctx); err != nil {
 			return fmt.Errorf("%s graceful shutdown: %w", name, err)
 		}
@@ -735,4 +780,28 @@ func serveHTTP(ctx context.Context, cfg *config.Config, h http.Handler, name str
 		}
 		return nil
 	}
+}
+
+// startPprof starts a dedicated net/http/pprof listener on addr, or returns nil
+// when addr is empty. The handlers are registered on their own mux (not the
+// global DefaultServeMux) so nothing else is exposed, and the caller binds a
+// private address — pprof must not be reachable publicly.
+func startPprof(addr, name string, readHeaderTimeout time.Duration) *http.Server {
+	if addr == "" {
+		return nil
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/debug/pprof/", httppprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", httppprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", httppprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", httppprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", httppprof.Trace)
+	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: readHeaderTimeout}
+	go func() {
+		slog.Info("pprof server listening", "service", name, "addr", addr)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Warn("pprof server stopped", "service", name, "error", err)
+		}
+	}()
+	return srv
 }

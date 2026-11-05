@@ -9,6 +9,9 @@
 package config
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -46,6 +49,21 @@ type ConversationConfig struct {
 	// Fail-closed: an unrecognized value is rejected at startup rather than
 	// silently widening what content is readable.
 	PrivacyDefault string `env:"PRIVACY_DEFAULT" envDefault:"METADATA_ONLY"`
+	// TranscriptAddr is the private address gateway-v2 serves its in-memory
+	// conversation text on (e.g. ":8091"). Empty turns it off. Never publish it.
+	TranscriptAddr string `env:"TRANSCRIPT_ADDR"`
+	// TranscriptURL is where the control API reads that text
+	// (e.g. http://gateway-v2:8091). Empty shows metadata only.
+	TranscriptURL string `env:"TRANSCRIPT_URL"`
+}
+
+// TranscriptToken authenticates the control API to the gateway's transcript
+// listener. It is derived from the shared signing key, so it needs no extra
+// setup and the key itself never crosses the network.
+func (c *Config) TranscriptToken() string {
+	mac := hmac.New(sha256.New, []byte(c.Auth.HMACSigningKey))
+	mac.Write([]byte("conversation-transcripts"))
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 // Load parses the environment into a validated Config.
@@ -85,6 +103,12 @@ type ServerConfig struct {
 	RequestTimeout time.Duration `env:"REQUEST_TIMEOUT" envDefault:"30s"`
 	// ShutdownTimeout bounds graceful shutdown drain time.
 	ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"10s"`
+	// PprofAddr, when set, starts a separate net/http/pprof listener on that
+	// address for CPU/heap/goroutine/allocation profiling. Empty (the default)
+	// means off: no profiling listener and no change to the service's surface.
+	// pprof must never be public — bind it to a private address such as
+	// 127.0.0.1:6060.
+	PprofAddr string `env:"PPROF_ADDR" envDefault:""`
 }
 
 // DatabaseConfig describes the Postgres control-plane database. The
@@ -304,6 +328,12 @@ func (c Config) Validate() error {
 		} else if isPlaceholderSecret(c.Secrets.Key) {
 			add(fmt.Errorf("SECRETS_KEY uses a known placeholder secret, prohibited in %s environment", c.Env))
 		}
+		if !c.Redis.Enabled {
+			// The gateway relies on Redis for distributed rate limits and for
+			// timely credential-revocation propagation; without it a revoked key
+			// keeps working until the in-memory cache TTL expires.
+			add(fmt.Errorf("REDIS_ENABLED must be true in %s environment", c.Env))
+		}
 		if c.Redis.Enabled {
 			if c.Redis.Password == "" {
 				add(fmt.Errorf("REDIS_PASSWORD is required in %s environment when REDIS_ENABLED=true", c.Env))
@@ -407,8 +437,13 @@ func (c Config) Validate() error {
 		if !slices.Contains(validEventbusKinds, c.Eventbus.Kind) {
 			add(errors.New("EVENTBUS_KIND must be one of inmemory|nats|postgres|kafka"))
 		}
-		if c.Eventbus.Kind != "inmemory" && c.Eventbus.URL == "" {
-			add(errors.New("EVENTBUS_ENABLED=true requires EVENTBUS_URL"))
+		// Only broker kinds need a URL; inmemory and the postgres outbox do not.
+		if (c.Eventbus.Kind == "nats" || c.Eventbus.Kind == "kafka") && c.Eventbus.URL == "" {
+			add(errors.New("EVENTBUS_URL is required for EVENTBUS_KIND=nats|kafka"))
+		}
+		// The postgres outbox stores events in the application database.
+		if c.Eventbus.Kind == "postgres" && !c.Database.Enabled {
+			add(errors.New("EVENTBUS_KIND=postgres requires DATABASE_ENABLED=true"))
 		}
 	}
 

@@ -27,7 +27,7 @@ import type { StatusTone } from "@/types";
 import { ModelRegistryClient, SyncModelsDialog } from "./client";
 
 export const metadata: Metadata = {
-  title: "Model registry · Sentinel",
+  title: "Model registry · Tollseal",
   description: "Every model the gateway can route to, per provider, with sync capability.",
 };
 
@@ -134,7 +134,7 @@ export default async function ModelRegistryPage() {
         description="Every model the gateway can route to, grouped by the provider that serves it."
         actions={<SyncModelsDialog />}
       >
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
             label="Models registered"
             value={formatNumber(registered)}
@@ -168,7 +168,7 @@ export default async function ModelRegistryPage() {
             <CardContent>
               <DonutChart
                 data={byProvider}
-                centerLabel={formatNumber(registered)}
+                centerLabel="models"
                 formatValue={(value) => `${formatNumber(value)} models`}
               />
             </CardContent>

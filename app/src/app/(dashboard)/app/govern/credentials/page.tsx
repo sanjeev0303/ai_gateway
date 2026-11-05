@@ -21,7 +21,7 @@ import type { StatusTone } from "@/types";
 import { IssueCredentialDialog, CredentialRowActionsWrapper } from "./client";
 
 export const metadata: Metadata = {
-  title: "Credentials · Sentinel",
+  title: "Credentials · Tollseal",
   description: "Control-plane API keys, their scopes, and last use.",
 };
 
@@ -116,7 +116,7 @@ export default async function CredentialsPage() {
         description="Control-plane API keys for administrative automation, policy enforcement, and infrastructure CI/CD. Hashes are securely stored, and secrets are shown only once at creation."
         actions={<IssueCredentialDialog />}
       >
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
             label="Credentials"
             value={formatNumber(total)}
@@ -148,7 +148,7 @@ export default async function CredentialsPage() {
         {total === 0 ? (
           <section className="space-y-6">
             {/* Visual Hero Card for First-Time Setup */}
-            <Card className="border-border/70 shadow-sm overflow-hidden bg-linear-to-br from-card via-card to-muted/20">
+            <Card className="overflow-hidden">
               <CardContent className="p-6 sm:p-8">
                 <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
                   <div className="space-y-3 max-w-2xl">
@@ -186,7 +186,7 @@ export default async function CredentialsPage() {
                       <span className="text-[10px] uppercase font-bold text-muted-foreground">GET /v1/models</span>
                     </div>
                     <pre className="text-muted-foreground leading-relaxed whitespace-pre-wrap break-all text-[11px] select-all bg-background/50 p-2.5 rounded-lg border">
-                      curl https://api.sentinel.io/v1/models \<br />
+                      curl https://gateway.example.com/v1/models \<br />
                       &nbsp;&nbsp;-H &quot;Authorization: Bearer aigw_key_...&quot;
                     </pre>
                     <p className="text-[11px] font-sans text-muted-foreground">
@@ -270,7 +270,7 @@ export default async function CredentialsPage() {
               <CardContent>
                 <DonutChart
                   data={scopeMix}
-                  centerLabel={formatNumber(total)}
+                  centerLabel="total"
                   formatValue={(value) => `${formatNumber(value)} keys`}
                 />
               </CardContent>

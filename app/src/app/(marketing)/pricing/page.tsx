@@ -8,7 +8,7 @@ import { APP_NAME } from "@/lib/constants";
 export const metadata: Metadata = {
   title: `Pricing · ${APP_NAME}`,
   description:
-    "Sentinel is pre-release and not yet priced. What the platform does today, without a made-up price list.",
+    "Tollseal is pre-release and not yet priced. What the platform does today, without a made-up price list.",
 };
 
 export default function PricingPage() {

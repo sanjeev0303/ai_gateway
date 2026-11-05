@@ -18,6 +18,9 @@ type Querier interface {
 	AppendAuditLog(ctx context.Context, arg AppendAuditLogParams) (AuditLog, error)
 	AppendSecurityEvent(ctx context.Context, arg AppendSecurityEventParams) (SecurityEvent, error)
 	BackfillLLMRequestCost(ctx context.Context, arg BackfillLLMRequestCostParams) error
+	// How many conversations each employee has through each gateway key; a NULL
+	// credential_id counts conversations that recorded no key.
+	ConversationCountsByKey(ctx context.Context, arg ConversationCountsByKeyParams) ([]ConversationCountsByKeyRow, error)
 	CountOrgMembersByRole(ctx context.Context, arg CountOrgMembersByRoleParams) (int64, error)
 	CreateAPICredential(ctx context.Context, arg CreateAPICredentialParams) (ApiCredential, error)
 	CreateAlert(ctx context.Context, arg CreateAlertParams) (Alert, error)
@@ -47,6 +50,8 @@ type Querier interface {
 	CreateUserWithPassword(ctx context.Context, arg CreateUserWithPasswordParams) (User, error)
 	DeleteAlert(ctx context.Context, arg DeleteAlertParams) (int64, error)
 	DeleteBudget(ctx context.Context, arg DeleteBudgetParams) error
+	// Removes one conversation; its messages go with it (ON DELETE CASCADE).
+	DeleteConversation(ctx context.Context, arg DeleteConversationParams) (int64, error)
 	DeletePolicy(ctx context.Context, arg DeletePolicyParams) error
 	DeletePolicyRule(ctx context.Context, arg DeletePolicyRuleParams) error
 	DeleteProviderAccount(ctx context.Context, arg DeleteProviderAccountParams) error
@@ -213,6 +218,9 @@ type Querier interface {
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
 	UpdateProviderAccountStatus(ctx context.Context, arg UpdateProviderAccountStatusParams) (ProviderAccount, error)
 	UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error)
+	// Creates the conversation a gateway request belongs to, or touches it on a later turn.
+	// A matching id in another organization is left alone and returns no row.
+	UpsertGatewayConversation(ctx context.Context, arg UpsertGatewayConversationParams) (Conversation, error)
 	UpsertModel(ctx context.Context, arg UpsertModelParams) (Model, error)
 	UpsertModelWithMetadata(ctx context.Context, arg UpsertModelWithMetadataParams) (Model, error)
 	UpsertPricingModel(ctx context.Context, arg UpsertPricingModelParams) (PricingModel, error)

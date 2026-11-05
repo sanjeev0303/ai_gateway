@@ -215,7 +215,7 @@ export function ChangePlanDialog({
                   <div className="border-t border-border/50 my-2" />
 
                   <div className="space-y-1.5">
-                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 mb-0.5">
+                    <div className="text-xs font-semibold text-muted-foreground/80 mb-0.5">
                       Key Capabilities
                     </div>
                     {meta.features.map((feat, idx) => (
@@ -252,7 +252,7 @@ export function ChangePlanDialog({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CreditCard className="size-4 text-primary shrink-0" />
-                <span className="text-xs font-bold uppercase tracking-wider text-foreground">
+                <span className="text-xs font-bold text-foreground">
                   Payment Gateway & Settlement Processor
                 </span>
               </div>

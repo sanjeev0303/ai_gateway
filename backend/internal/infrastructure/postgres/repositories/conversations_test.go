@@ -1,6 +1,7 @@
 package repositories_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 
 	"ai-governance-saas/backend/internal/domain"
 	repos "ai-governance-saas/backend/internal/infrastructure/postgres/repositories"
+	ports "ai-governance-saas/backend/internal/ports/repositories"
 )
 
 // newConversation creates one conversation through the repository, which is the
@@ -23,14 +25,14 @@ func newConversation(t *testing.T, orgID, userID uuid.UUID, title string) domain
 }
 
 // addMessage appends one turn and returns it so a test can assert on the
-// stored timestamp.
-func addMessage(t *testing.T, orgID, userID, conversationID uuid.UUID, role, content string, tokens int32) domain.ConversationMessage {
+// stored timestamp. The text argument only labels the turn for the reader:
+// conversation text is never stored.
+func addMessage(t *testing.T, orgID, userID, conversationID uuid.UUID, role, _ string, tokens int32) domain.ConversationMessage {
 	t.Helper()
 	message, err := repos.NewConversationMessageRepository(testStore).Create(testCtx, orgID, domain.NewConversationMessage{
 		ConversationID: conversationID,
 		UserID:         userID,
 		Role:           role,
-		Content:        content,
 		Tokens:         tokens,
 	})
 	requireNoErr(t, err)
@@ -450,10 +452,12 @@ func TestConversationMessageListIsScopedAndOrdered(t *testing.T) {
 		}
 	}
 
-	// The repository returns raw content; redaction is the service's job, so a
-	// message read here must still carry its stored text.
-	if got[1].Content != "first question" {
-		t.Fatalf("message content = %q, want the stored value unredacted at this layer", got[1].Content)
+	// Conversation text is never stored: the database refuses it outright.
+	_, err = messages.Create(testCtx, orgID, domain.NewConversationMessage{
+		ConversationID: conversation.ID, UserID: userID, Role: domain.MessageRoleUser, Content: "must not be stored",
+	})
+	if err == nil {
+		t.Fatal("storing message text succeeded, want the never-stored constraint to reject it")
 	}
 
 	empty, err := messages.List(testCtx, otherOrg, conversation.ID)
@@ -498,16 +502,71 @@ func TestConversationMessageCarriesToolMetadata(t *testing.T) {
 }
 
 // addMessageWithMetadata appends a turn carrying the optional tool columns.
-func addMessageWithMetadata(t *testing.T, orgID, userID, conversationID uuid.UUID, role, content string, tokens int32, toolName, providerMessageID *string) {
+func addMessageWithMetadata(t *testing.T, orgID, userID, conversationID uuid.UUID, role, _ string, tokens int32, toolName, providerMessageID *string) {
 	t.Helper()
 	_, err := repos.NewConversationMessageRepository(testStore).Create(testCtx, orgID, domain.NewConversationMessage{
 		ConversationID:    conversationID,
 		UserID:            userID,
 		Role:              role,
-		Content:           content,
 		Tokens:            tokens,
 		ToolName:          toolName,
 		ProviderMessageID: providerMessageID,
 	})
 	requireNoErr(t, err)
+}
+
+// Deleting a conversation takes its messages with it, and only within its own
+// organization.
+func TestConversationDelete(t *testing.T) {
+	conversations := repos.NewConversationRepository(testStore)
+	orgID, userID, _ := newTenant(t)
+	otherOrg, _, _ := newTenant(t)
+	conversation := newConversation(t, orgID, userID, "")
+	addMessage(t, orgID, userID, conversation.ID, domain.MessageRoleUser, "hello", 3)
+
+	if err := conversations.Delete(testCtx, otherOrg, conversation.ID); !errors.Is(err, ports.ErrNotFound) {
+		t.Fatalf("another organization's delete = %v, want ErrNotFound", err)
+	}
+	requireNoErr(t, conversations.Delete(testCtx, orgID, conversation.ID))
+	if _, err := conversations.Get(testCtx, orgID, conversation.ID); !errors.Is(err, ports.ErrNotFound) {
+		t.Fatalf("Get after delete = %v, want ErrNotFound", err)
+	}
+	left, err := repos.NewConversationMessageRepository(testStore).List(testCtx, orgID, conversation.ID)
+	requireNoErr(t, err)
+	if len(left) != 0 {
+		t.Fatalf("%d messages outlived their conversation", len(left))
+	}
+}
+
+// Counts group an employee's conversations by gateway key; conversations with
+// no recorded key count under a nil key, and the key filter narrows the list.
+func TestConversationCountsByKey(t *testing.T) {
+	conversations := repos.NewConversationRepository(testStore)
+	orgID, userID, _ := newTenant(t)
+	newConversation(t, orgID, userID, "")
+	newConversation(t, orgID, userID, "")
+
+	counts, err := conversations.CountsByKey(testCtx, orgID, nil)
+	requireNoErr(t, err)
+	if len(counts) != 1 || counts[0].UserID != userID || counts[0].CredentialID != nil || counts[0].Conversations != 2 {
+		t.Fatalf("counts = %+v, want one keyless row of 2 for the employee", counts)
+	}
+	other := uuid.New()
+	none, err := conversations.CountsByKey(testCtx, orgID, &other)
+	requireNoErr(t, err)
+	if len(none) != 0 {
+		t.Fatalf("narrowing to another employee returned %+v", none)
+	}
+
+	key := uuid.New()
+	listed, err := conversations.List(testCtx, orgID, domain.ConversationFilter{CredentialID: &key}, 10, 0)
+	requireNoErr(t, err)
+	if len(listed) != 0 {
+		t.Fatalf("filtering by an unused key listed %d conversations", len(listed))
+	}
+	keyless, err := conversations.List(testCtx, orgID, domain.ConversationFilter{UserID: &userID, WithoutKey: true}, 10, 0)
+	requireNoErr(t, err)
+	if len(keyless) != 2 {
+		t.Fatalf("listing keyless conversations returned %d, want 2", len(keyless))
+	}
 }

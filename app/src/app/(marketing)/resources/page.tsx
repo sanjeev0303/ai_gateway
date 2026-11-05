@@ -8,7 +8,7 @@ import { APP_NAME } from "@/lib/constants";
 export const metadata: Metadata = {
   title: `Resources · ${APP_NAME}`,
   description:
-    "Integration guides, API reference, and changelog for the Sentinel AI control plane.",
+    "Integration guides, API reference, and changelog for the Tollseal AI control plane.",
 };
 
 const RESOURCES = [

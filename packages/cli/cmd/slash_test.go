@@ -330,3 +330,19 @@ func TestProviderBoundSessionScope(t *testing.T) {
 		t.Fatalf("expected error switching to unauthorized openai, got: %v", err)
 	}
 }
+
+func TestSessionKeepsListedModelWithUnfamiliarName(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[
+			{"id":"codestral-2508","provider":"custom"},
+			{"id":"gemma-4-31b-it","provider":"gemini"}
+		]}`))
+	}))
+	defer srv.Close()
+
+	sess := NewSessionState(Config{GatewayURL: srv.URL, Credential: "test-key"}, "gemma-4-31b-it", "", false, 100)
+	if sess.Model != "gemma-4-31b-it" || sess.Provider != "gemini" {
+		t.Fatalf("session = %s/%s, want gemini/gemma-4-31b-it", sess.Provider, sess.Model)
+	}
+}

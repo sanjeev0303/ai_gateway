@@ -17,6 +17,7 @@ export interface LiveRow {
   when: string;
   whenTs: number;
   requestId: string;
+  shortRequest: string;
   who: string;
   project: string;
   team: string;

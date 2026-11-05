@@ -107,18 +107,17 @@ func (a *AuthenticatorImpl) validateCredential(cred *GatewayCredential) error {
 		}
 	}
 
-	// Gateway only accepts gateway/all scoped credentials
-	if cred.Scopes != nil {
-		hasGateway := false
-		for _, s := range cred.Scopes {
-			if s == "gateway" || s == "all" {
-				hasGateway = true
-				break
-			}
+	// Gateway only accepts gateway/all scoped credentials. Empty/nil scopes are
+	// fail-closed (no scope means no access), matching validateCached.
+	hasGateway := false
+	for _, s := range cred.Scopes {
+		if s == "gateway" || s == "all" {
+			hasGateway = true
+			break
 		}
-		if !hasGateway {
-			return ErrWrongScope
-		}
+	}
+	if !hasGateway {
+		return ErrWrongScope
 	}
 
 	// Check expiry

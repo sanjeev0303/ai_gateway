@@ -8,7 +8,7 @@ import { APP_NAME, MARKETING_NAV } from "@/lib/constants";
 export const metadata: Metadata = {
   title: `Company · ${APP_NAME}`,
   description:
-    "Sentinel exists so that enterprise AI usage can be explained, attributed, and audited without slowing anyone down.",
+    "Tollseal exists so that enterprise AI usage can be explained, attributed, and audited without slowing anyone down.",
 };
 
 const PRINCIPLES = [
@@ -43,7 +43,7 @@ export default function CompanyPage() {
     <>
       <Hero
         headline="AI adoption outran AI accountability"
-        subheadline="Teams adopted model providers faster than they adopted controls. Sentinel is the layer that closes the gap, without becoming a bottleneck in the process."
+        subheadline="Teams adopted model providers faster than they adopted controls. Tollseal is the layer that closes the gap, without becoming a bottleneck in the process."
       />
 
       <section className="border-b">

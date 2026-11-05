@@ -28,14 +28,6 @@ func floatPtrToNumeric(f *float64) pgtype.Numeric {
 	return floatToNumeric(*f)
 }
 
-func floatPtrToNumericPtr(f *float64) *pgtype.Numeric {
-	if f == nil {
-		return nil
-	}
-	n := floatToNumeric(*f)
-	return &n
-}
-
 type projectRepo struct {
 	store *postgres.Store
 }

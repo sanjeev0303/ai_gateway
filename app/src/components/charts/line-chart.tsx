@@ -1,14 +1,7 @@
 import type { TimeSeriesPoint } from "@/types";
 import { formatCompact } from "@/lib/format";
-import {
-  labelStride,
-  linePath,
-  linearScale,
-  maxOf,
-  niceMax,
-  niceTicks,
-  type Point,
-} from "./utils";
+import { labelStride, linePath, linearScale, maxOf, niceMax, niceTicks, type Point, axisLabel } from "./utils";
+import { ChartFrame } from "./chart-frame";
 
 interface LineChartProps {
   data: readonly TimeSeriesPoint[];
@@ -55,6 +48,7 @@ export function LineChart({
   const ticks = niceTicks(top);
 
   return (
+    <ChartFrame>
     <svg
       viewBox={`0 0 ${WIDTH} ${height}`}
       className="h-auto w-full"
@@ -77,7 +71,7 @@ export function LineChart({
             y={y.map(tick)}
             textAnchor="end"
             dominantBaseline="middle"
-            className="fill-muted-foreground text-xs font-mono"
+            className="fill-muted-foreground text-xs tabular-nums"
           >
             {formatValue(tick)}
           </text>
@@ -112,12 +106,13 @@ export function LineChart({
             x={point.x}
             y={baseline + 18}
             textAnchor="middle"
-            className="fill-muted-foreground text-xs font-mono"
+            className="fill-muted-foreground text-xs tabular-nums"
           >
-            {data[index]!.date.slice(5)}
+            {axisLabel(data[index]!.date)}
           </text>
         ) : null,
       )}
     </svg>
+    </ChartFrame>
   );
 }

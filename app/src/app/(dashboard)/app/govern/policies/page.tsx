@@ -14,7 +14,7 @@ import { getApiClient } from "@/lib/session";
 import { CreatePolicyDialog } from "./policies-client";
 
 export const metadata: Metadata = {
-  title: "Policies · Sentinel",
+  title: "Policies · Tollseal",
   description: "Global AI gateway policies.",
 };
 

@@ -1,8 +1,6 @@
-"use client";
-
 import Link from "next/link";
 import { Logo } from "@/components/logo";
-import { APP_DESCRIPTION, APP_NAME, APP_TAGLINE } from "@/lib/constants";
+import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
 
 const COLUMNS = [
   {
@@ -45,102 +43,39 @@ const COLUMNS = [
 
 export function MarketingFooter() {
   return (
-    <footer
-      className="border-t border-[rgba(229,228,226,0.08)] grain"
-      style={{ background: "#1C1412" }}
-    >
-      <div className="mx-auto max-w-7xl px-6 sm:px-8 pt-16 pb-10">
-
-        {/* Top: brand + columns */}
+    <footer className="border-t border-border bg-card/50">
+      <div className="mx-auto w-full max-w-[1240px] px-5 pt-16 pb-10 sm:px-8">
         <div className="grid gap-12 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr]">
-
-          {/* Brand column */}
-          <div>
-            <Logo className="text-[#E5E4E2]" />
-            <p
-              className="mt-5 text-sm leading-relaxed max-w-[30ch]"
-              style={{ color: "rgba(229,228,226,0.50)", letterSpacing: "-0.01em" }}
-            >
-              {APP_DESCRIPTION}
-            </p>
-            <p
-              className="mt-3 text-xs font-medium"
-              style={{ color: "rgba(229,228,226,0.35)", fontFamily: "var(--font-fira-code)" }}
-            >
-              {APP_TAGLINE}
-            </p>
-
-            {/* Status badge */}
-            <div
-              className="mt-8 inline-flex items-center gap-2 border px-3 py-1.5"
-              style={{
-                borderColor: "rgba(74,122,90,0.25)",
-                background: "rgba(74,122,90,0.06)",
-              }}
-            >
-              <span
-                className="size-1.5 rounded-full"
-                style={{ background: "#5C8A6E" }}
-                aria-hidden
-              />
-              <span
-                className="text-xs font-medium"
-                style={{ color: "#5C8A6E", fontFamily: "var(--font-fira-code)" }}
-              >
-                All Systems Operational
-              </span>
-            </div>
+          <div className="flex flex-col gap-4">
+            <Logo />
+            <p className="max-w-[34ch] text-sm leading-relaxed text-muted-foreground">{APP_DESCRIPTION}</p>
           </div>
 
-          {/* Nav columns */}
           {COLUMNS.map((column) => (
-            <div key={column.heading}>
-              <h2
-                className="text-xs font-semibold uppercase mb-5"
-                style={{
-                  fontFamily: "var(--font-fira-code)",
-                  letterSpacing: "0.12em",
-                  color: "rgba(229,228,226,0.35)",
-                }}
-              >
-                {column.heading}
-              </h2>
-              <ul className="space-y-3">
+            <nav key={column.heading} aria-label={column.heading} className="flex flex-col gap-4">
+              <h2 className="font-sans text-sm font-semibold tracking-normal text-foreground">{column.heading}</h2>
+              <ul className="flex flex-col gap-2.5">
                 {column.links.map((link) => (
                   <li key={link.href}>
                     <Link
                       href={link.href}
-                      className="text-sm transition-colors duration-150"
-                      style={{ color: "rgba(229,228,226,0.55)", letterSpacing: "-0.01em" }}
-                      onMouseEnter={e => (e.currentTarget.style.color = "#E5E4E2")}
-                      onMouseLeave={e => (e.currentTarget.style.color = "rgba(229,228,226,0.55)")}
+                      className="text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground"
                     >
                       {link.label}
                     </Link>
                   </li>
                 ))}
               </ul>
-            </div>
+            </nav>
           ))}
         </div>
 
-        {/* Bottom rule + copyright */}
-        <div
-          className="mt-16 pt-8 border-t flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-          style={{ borderColor: "rgba(229,228,226,0.07)" }}
-        >
-          <p
-            className="text-xs"
-            style={{ color: "rgba(229,228,226,0.30)", fontFamily: "var(--font-fira-code)" }}
-          >
-            &copy; 2026 {APP_NAME}. Enterprise AI Governance Platform.
-          </p>
-          <p
-            className="text-xs"
-            style={{ color: "rgba(229,228,226,0.22)", fontFamily: "var(--font-fira-code)" }}
-          >
-            Engineered for high-throughput, low-latency enterprise AI.
-          </p>
+        <p aria-hidden className="mt-16 font-display text-[clamp(4rem,14vw,11rem)] leading-[0.8] tracking-[-0.04em] text-foreground/60 select-none">
+          {APP_NAME}
+        </p>
+        <div className="mt-6 flex flex-col gap-2 border-t border-border pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <p>&copy; 2026 {APP_NAME}. AI gateway and governance.</p>
+          <p>Self-hosted. Your keys and your data stay on your infrastructure.</p>
         </div>
       </div>
     </footer>

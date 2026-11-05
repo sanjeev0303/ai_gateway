@@ -130,7 +130,9 @@ type ConversationSummary struct {
 	ProjectID *uuid.UUID
 	Model     *string
 	Provider  *string
-	StartedAt time.Time
+	// CredentialID is the gateway key the conversation came through, if known.
+	CredentialID *uuid.UUID
+	StartedAt    time.Time
 	// LastActivityAt is the newest message timestamp, or nil when the
 	// conversation has no messages.
 	LastActivityAt *time.Time
@@ -155,6 +157,19 @@ type ConversationFilter struct {
 	ProjectID *uuid.UUID
 	Provider  *string
 	Model     *string
+	// CredentialID narrows to one gateway key (aigw_...).
+	CredentialID *uuid.UUID
+	// WithoutKey narrows to conversations that recorded no gateway key.
+	WithoutKey bool
+}
+
+// ConversationKeyCount is how many conversations one employee has through one
+// gateway key. CredentialID is nil for conversations that recorded no key.
+type ConversationKeyCount struct {
+	UserID         uuid.UUID
+	CredentialID   *uuid.UUID
+	Conversations  int64
+	LastActivityAt time.Time
 }
 
 // NewConversation carries the caller-supplied fields for creating a
@@ -174,4 +189,33 @@ type NewConversationMessage struct {
 	Tokens            int32
 	ToolName          *string
 	ProviderMessageID *string
+}
+
+// GatewayConversationTurn is one prompt and its reply as seen by the gateway.
+// UserText is the latest user message actually forwarded (after any guardrail
+// redaction); AssistantText is the provider's reply text. Title, UserText and
+// AssistantText are held in gateway memory only and never persisted.
+type GatewayConversationTurn struct {
+	ConversationID uuid.UUID
+	UserID         uuid.UUID
+	// CredentialID is the gateway key (aigw_...) the request came through.
+	CredentialID  uuid.UUID
+	ProjectID     *uuid.UUID
+	Title         string
+	Model         string
+	Provider      string
+	UserText      string
+	AssistantText string
+	InputTokens   int32
+	OutputTokens  int32
+}
+
+// Transcript is a conversation's text as the gateway holds it in memory for a
+// short while. It is never persisted: the database keeps only each message's
+// role, token count and time.
+type Transcript struct {
+	// Title is the opening user message, cut short.
+	Title string `json:"title"`
+	// Messages maps a message id to its text.
+	Messages map[uuid.UUID]string `json:"messages,omitempty"`
 }

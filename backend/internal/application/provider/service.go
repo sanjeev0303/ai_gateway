@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 
 	"ai-governance-saas/backend/internal/application/securityevent"
 	"ai-governance-saas/backend/internal/domain"
+	"ai-governance-saas/backend/internal/platform/netguard"
 	providerclient "ai-governance-saas/backend/internal/ports/provider"
 	repositories "ai-governance-saas/backend/internal/ports/repositories"
 	"ai-governance-saas/backend/internal/ports/secrets"
@@ -47,6 +49,10 @@ type ServiceDeps struct {
 		Invalidate(orgID uuid.UUID)
 	}
 
+	// AllowPrivateUpstreams disables the SSRF check on provider base URLs so dev
+	// harnesses can target localhost. Must be false in production.
+	AllowPrivateUpstreams bool
+
 	Log *slog.Logger
 	Now func() time.Time
 }
@@ -67,6 +73,8 @@ type Service struct {
 		Invalidate(orgID uuid.UUID)
 	}
 
+	allowPrivateUpstreams bool
+
 	log *slog.Logger
 	now func() time.Time
 }
@@ -83,17 +91,18 @@ func NewService(deps ServiceDeps) *Service {
 		now = time.Now
 	}
 	return &Service{
-		accounts:       deps.Accounts,
-		credentials:    deps.Credentials,
-		models:         deps.Models,
-		health:         deps.Health,
-		audits:         deps.Audits,
-		securityEvents: deps.SecurityEvents,
-		secrets:        deps.Secrets,
-		providers:      deps.Providers,
-		invalidator:    deps.Invalidator,
-		log:            log,
-		now:            now,
+		accounts:              deps.Accounts,
+		credentials:           deps.Credentials,
+		models:                deps.Models,
+		health:                deps.Health,
+		audits:                deps.Audits,
+		securityEvents:        deps.SecurityEvents,
+		secrets:               deps.Secrets,
+		providers:             deps.Providers,
+		invalidator:           deps.Invalidator,
+		allowPrivateUpstreams: deps.AllowPrivateUpstreams,
+		log:                   log,
+		now:                   now,
 	}
 }
 
@@ -126,6 +135,11 @@ func (s *Service) CreateAccount(ctx context.Context, actor domain.Actor, input d
 	input.ProviderKind = kind
 	if !isProviderKind(input.ProviderKind) {
 		return domain.ProviderAccount{}, repositories.ErrInvalid
+	}
+	// SSRF guard: a tenant-set base URL is later forwarded to with the tenant's
+	// upstream key, so reject internal/metadata targets at write time.
+	if err := netguard.ValidateUpstreamURL(input.BaseURL, s.allowPrivateUpstreams); err != nil {
+		return domain.ProviderAccount{}, fmt.Errorf("%w: %v", repositories.ErrInvalid, err)
 	}
 	account, err := s.accounts.Create(ctx, actor.OrganizationID, input)
 	if err != nil {
@@ -220,7 +234,7 @@ func (s *Service) ValidateAccount(ctx context.Context, actor domain.Actor, accou
 	if err != nil {
 		return err
 	}
-	return s.ValidateCredential(ctx, actor, account.ProviderKind, secret)
+	return s.validateWith(ctx, account.ProviderKind, s.accountClient(account), secret)
 }
 
 // CheckAccountHealth runs a health check using the active credential associated with the provider account.
@@ -273,7 +287,7 @@ func (s *Service) SyncAccountModels(ctx context.Context, actor domain.Actor, acc
 	if err != nil {
 		return nil, err
 	}
-	models, err := s.SyncModels(ctx, actor, account.ProviderKind, secret)
+	models, err := s.syncModelsWith(ctx, actor, account.ProviderKind, s.accountClient(account), secret)
 	if err != nil {
 		reason := "discovery_failed"
 		if errors.Is(err, ErrInvalidProviderCredential) || errors.Is(err, providerclient.ErrInvalidCredentials) {
@@ -325,7 +339,7 @@ func (s *Service) CreateCredential(ctx context.Context, actor domain.Actor, acco
 	if account.Status != domain.ProviderStatusActive {
 		return domain.ProviderCredential{}, repositories.ErrConflict
 	}
-	client := s.providers[account.ProviderKind]
+	client := s.accountClient(account)
 	if client == nil {
 		return domain.ProviderCredential{}, repositories.ErrInvalid
 	}
@@ -340,6 +354,9 @@ func (s *Service) CreateCredential(ctx context.Context, actor domain.Actor, acco
 				strings.Contains(strings.ToLower(err.Error()), "unexpected status 401") ||
 				strings.Contains(strings.ToLower(err.Error()), "unexpected status 403") {
 				return domain.ProviderCredential{}, ErrInvalidProviderCredential
+			}
+			if isUnreachable(err) {
+				return domain.ProviderCredential{}, fmt.Errorf("%w: %s: %v", ErrProviderUnreachable, account.ProviderKind, err)
 			}
 			return domain.ProviderCredential{}, err
 		}
@@ -437,7 +454,7 @@ func (s *Service) RotateCredential(ctx context.Context, actor domain.Actor, cred
 	if account.Status != domain.ProviderStatusActive {
 		return domain.ProviderCredential{}, repositories.ErrConflict
 	}
-	client := s.providers[account.ProviderKind]
+	client := s.accountClient(account)
 	if client == nil {
 		return domain.ProviderCredential{}, repositories.ErrInvalid
 	}
@@ -452,6 +469,9 @@ func (s *Service) RotateCredential(ctx context.Context, actor domain.Actor, cred
 				strings.Contains(strings.ToLower(err.Error()), "unexpected status 401") ||
 				strings.Contains(strings.ToLower(err.Error()), "unexpected status 403") {
 				return domain.ProviderCredential{}, ErrInvalidProviderCredential
+			}
+			if isUnreachable(err) {
+				return domain.ProviderCredential{}, fmt.Errorf("%w: %s: %v", ErrProviderUnreachable, account.ProviderKind, err)
 			}
 			return domain.ProviderCredential{}, err
 		}
@@ -679,6 +699,14 @@ func (s *Service) ValidateCredential(ctx context.Context, actor domain.Actor, pr
 	if err != nil {
 		return err
 	}
+	return s.validateWith(ctx, providerKind, client, apiKey)
+}
+
+// validateWith runs the live key check against a specific client.
+func (s *Service) validateWith(ctx context.Context, providerKind string, client providerclient.Provider, apiKey string) error {
+	if client == nil {
+		return repositories.ErrInvalid
+	}
 	if strings.Contains(strings.ToLower(apiKey), "invalid") {
 		return fmt.Errorf("%w: %s", ErrInvalidProviderCredential, providerKind)
 	}
@@ -707,6 +735,14 @@ func (s *Service) SyncModels(ctx context.Context, actor domain.Actor, providerKi
 	client, err := s.clientFor(providerKind, apiKey)
 	if err != nil {
 		return nil, err
+	}
+	return s.syncModelsWith(ctx, actor, providerKind, client, apiKey)
+}
+
+// syncModelsWith lists models through a specific client and upserts them.
+func (s *Service) syncModelsWith(ctx context.Context, actor domain.Actor, providerKind string, client providerclient.Provider, apiKey string) ([]domain.Model, error) {
+	if client == nil || strings.TrimSpace(apiKey) == "" {
+		return nil, repositories.ErrInvalid
 	}
 	remote, err := client.ListModels(ctx, apiKey)
 	if err != nil {
@@ -809,6 +845,21 @@ func (s *Service) SyncModels(ctx context.Context, actor domain.Actor, providerKi
 	return synced, nil
 }
 
+// accountClient returns the upstream client for an account, pointed at the
+// account's own base URL when it has one and the adapter supports that.
+// Without this a custom account was always validated against the adapter's
+// built-in default upstream instead of the endpoint the account names.
+func (s *Service) accountClient(account domain.ProviderAccount) providerclient.Provider {
+	client := s.providers[account.ProviderKind]
+	if client == nil || strings.TrimSpace(account.BaseURL) == "" {
+		return client
+	}
+	if o, ok := client.(providerclient.BaseURLOverrider); ok {
+		return o.WithBaseURL(account.BaseURL)
+	}
+	return client
+}
+
 // clientFor resolves the adapter for a storable provider kind and rejects a
 // blank apiKey, so the validation and health paths share one definition of
 // "usable provider + secret".
@@ -896,4 +947,13 @@ var (
 	ErrDisabledAccount           = errors.New("provider: account is disabled")
 	ErrRevokedCredential         = errors.New("provider: credential is revoked")
 	ErrDiscoveryUnavailable      = errors.New("provider: model discovery unavailable")
+	// ErrProviderUnreachable means the upstream could not be reached at all
+	// (DNS, connection refused, timeout), so the key could not be checked.
+	ErrProviderUnreachable = errors.New("provider: upstream unreachable")
 )
+
+// isUnreachable reports a transport failure rather than an answer from the provider.
+func isUnreachable(err error) bool {
+	var netErr net.Error
+	return errors.As(err, &netErr) || errors.Is(err, context.DeadlineExceeded)
+}

@@ -13,7 +13,7 @@ import {
 import { codeSnippets } from "@/lib/developer-content";
 
 export const metadata: Metadata = {
-  title: "Quick start · Sentinel",
+  title: "Quick start · Tollseal",
   description: "Authenticate, send a first request, and verify it landed in the audit log.",
 };
 

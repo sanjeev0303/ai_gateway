@@ -53,8 +53,8 @@ function DeltaBadge({ delta }: { delta: StatDelta }) {
   }
 
   return (
-    <span className={cn("inline-flex items-center gap-1 text-sm font-semibold", tone)}>
-      <Icon className="size-4" aria-hidden />
+    <span className={cn("inline-flex items-center gap-1 text-[0.8125rem] font-medium tabular-nums", tone)}>
+      <Icon className="size-3.5" aria-hidden />
       {formatDelta(delta.fraction)}
       {delta.label && (
         <span className="font-normal text-muted-foreground">{delta.label}</span>
@@ -77,26 +77,30 @@ export function StatCard({
   className,
 }: StatCardProps) {
   const body = (
-    <CardContent className="flex items-start justify-between gap-4 p-5">
-      <div className="min-w-0 space-y-2">
-        <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground tracking-wide">
-          {Icon && (
-            <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Icon className="size-4" aria-hidden />
-            </span>
-          )}
-          <span className="truncate">{label}</span>
-        </div>
-        <p suppressHydrationWarning className={cn("text-3xl font-bold tracking-tight tabular-nums", TONE_TEXT[tone])}>
-          {value}
-        </p>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5">
-          {delta && <DeltaBadge delta={delta} />}
-          {hint && <span suppressHydrationWarning className="text-sm text-muted-foreground">{hint}</span>}
+    <CardContent className="flex items-start justify-between gap-4 px-5 py-1">
+      <div className="flex min-w-0 items-start gap-3">
+        {Icon && (
+          <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border border-border bg-accent/70 text-copper">
+            <Icon className="size-4" aria-hidden />
+          </span>
+        )}
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="truncate text-[0.8125rem] font-medium text-muted-foreground">{label}</span>
+          <p
+            suppressHydrationWarning
+            data-slot="stat-value"
+            className={cn("text-[1.625rem] leading-tight font-semibold tracking-[-0.02em] tabular-nums", TONE_TEXT[tone])}
+          >
+            {value}
+          </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {delta && <DeltaBadge delta={delta} />}
+            {hint && <span suppressHydrationWarning className="text-[0.8125rem] text-muted-foreground">{hint}</span>}
+          </div>
         </div>
       </div>
       {sparkline && sparkline.length > 1 && (
-        <div className="pt-1">
+        <div className="hidden pt-1 sm:block">
           <Sparkline data={sparkline} label={`${label} trend`} />
         </div>
       )}
@@ -104,16 +108,14 @@ export function StatCard({
   );
 
   const cardClasses = cn(
-    "rounded-2xl transition-all duration-200",
-    neumorphic
-      ? "neu-card border-none"
-      : "border border-border/50 bg-card/80 shadow-xs hover:shadow-sm",
+    "rounded-2xl transition-[border-color,box-shadow] duration-200",
+    neumorphic ? "neu-card border-none" : "border-border bg-card",
     className,
   );
 
   if (href) {
     return (
-      <Card className={cn(cardClasses, "hover:border-primary/40 hover:-translate-y-0.5 cursor-pointer")}>
+      <Card className={cn(cardClasses, "cursor-pointer hover:border-border-strong hover:shadow-(--shadow-float)")}>
         <Link href={href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-2xl">
           {body}
         </Link>

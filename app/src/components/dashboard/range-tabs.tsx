@@ -40,7 +40,7 @@ export function RangeTabs({ className }: { className?: string }) {
       <div
         role="group"
         aria-label="Date range"
-        className="inline-flex items-center rounded-lg border border-border bg-card p-0.5"
+        className="liquid-glass inline-flex h-9 items-center rounded-full border p-[3px]"
       >
         {DATE_RANGES.map((value) => {
           const isSelected = value === selected;
@@ -51,10 +51,10 @@ export function RangeTabs({ className }: { className?: string }) {
               aria-pressed={isSelected}
               onClick={() => select(value)}
               className={cn(
-                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                "h-full rounded-full px-3 text-xs font-medium tabular-nums transition-[color,background-color] duration-150",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 isSelected
-                  ? "bg-foreground text-background"
+                  ? "bg-primary text-primary-foreground shadow-[0_1px_2px_rgba(20,26,51,0.18)]"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >

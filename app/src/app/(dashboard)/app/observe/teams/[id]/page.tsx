@@ -44,7 +44,7 @@ const memberColumns: readonly Column<MemberRow>[] = [
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  return { title: `Team ${id} · Sentinel` };
+  return { title: `Team ${id} · Tollseal` };
 }
 
 export default async function TeamDetailPage({ params }: { params: Promise<{ id: string }> }) {

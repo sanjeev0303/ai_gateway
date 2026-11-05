@@ -18,6 +18,10 @@ type ConversationRepository interface {
 	Detail(ctx context.Context, orgID, id uuid.UUID) (domain.ConversationSummary, error)
 	List(ctx context.Context, orgID uuid.UUID, filter domain.ConversationFilter, limit, offset int32) ([]domain.ConversationSummary, error)
 	PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error)
+	// Delete removes one conversation and its messages.
+	Delete(ctx context.Context, orgID, id uuid.UUID) error
+	// CountsByKey counts conversations per employee and gateway key.
+	CountsByKey(ctx context.Context, orgID uuid.UUID, userID *uuid.UUID) ([]domain.ConversationKeyCount, error)
 }
 
 // ConversationMessageRepository manages the turns of a conversation.
@@ -165,4 +169,11 @@ type AuditLogRepository interface {
 	List(ctx context.Context, orgID uuid.UUID, filter domain.AuditLogFilter, limit, offset int32) ([]domain.AuditLog, error)
 	Get(ctx context.Context, orgID, id uuid.UUID) (domain.AuditLog, error)
 	PurgeExpired(ctx context.Context, orgID uuid.UUID, olderThan time.Time) (int64, error)
+}
+
+// GatewayConversationStore records gateway traffic as conversation turns.
+type GatewayConversationStore interface {
+	// RecordTurn stores the turn's metadata and returns the ids of the user and
+	// assistant messages it created (uuid.Nil when a side had no text).
+	RecordTurn(ctx context.Context, orgID uuid.UUID, turn domain.GatewayConversationTurn) (userMsgID, assistantMsgID uuid.UUID, err error)
 }

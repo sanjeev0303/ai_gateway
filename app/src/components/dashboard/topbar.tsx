@@ -1,9 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { LogOut, Monitor, Moon, Settings, Sun, User as UserIcon, ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { LogOut, Monitor, Moon, Settings, Sun, ChevronRight } from "lucide-react";
 import { usePathname } from "next/navigation";
 
+import { DASHBOARD_NAV } from "@/lib/constants";
 import { MobileNav } from "./mobile-nav";
 import { StatusBadge } from "./status-badge";
 import { signOut } from "@/app/(auth)/signin/actions";
@@ -16,20 +18,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useTheme } from "next-themes";
-import { DATE_RANGES } from "@/lib/constants";
 import { initials } from "@/lib/format";
 import { useSession } from "@/lib/session-context";
 import { ORG_STATUS_LABELS, ORG_STATUS_TONE } from "@/types";
 import { CommandPaletteTrigger } from "./command-palette";
-import { useDateRange } from "@/hooks/use-date-range";
 
 function ThemeToggle() {
   const { theme, resolvedTheme, setTheme } = useTheme();
@@ -37,7 +30,7 @@ function ThemeToggle() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-8 rounded-full" aria-label="Change theme">
+        <Button variant="outline" size="icon" className="bg-card/80" aria-label="Change theme">
           {resolvedTheme === "dark" ? (
             <Moon className="size-4" aria-hidden />
           ) : (
@@ -45,7 +38,7 @@ function ThemeToggle() {
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-36 glass">
+      <DropdownMenuContent align="end" className="w-40">
         <DropdownMenuLabel className="text-xs">Theme</DropdownMenuLabel>
         <DropdownMenuItem onClick={() => setTheme("light")} className="text-sm">
           <Sun className="mr-2 size-4" aria-hidden /> Light
@@ -62,15 +55,26 @@ function ThemeToggle() {
   );
 }
 
-function formatSegment(seg: string): string {
-  return seg
-    .replace(/-/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+/** Sidebar labels by path, so a breadcrumb reads "CLI" and "API reference", not "Cli" and "Api Docs". */
+const NAV_LABELS = new Map<string, string>(
+  DASHBOARD_NAV.flatMap((section) => [
+    [section.href, section.title] as const,
+    ...section.children.map((child) => [child.href, child.label] as const),
+  ]),
+);
+
+function formatSegment(seg: string, index: number, segments: string[]): string {
+  const href = `/app/${segments.slice(0, index + 1).join("/")}`;
+  const known = NAV_LABELS.get(href);
+  if (known) return known;
+  // A section folder ("developer") takes its section's title.
+  const section = index === 0 ? DASHBOARD_NAV.find((s) => s.href.split("/")[2] === seg) : undefined;
+  if (section) return section.title;
+  return seg.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export function Topbar() {
   const pathname = usePathname();
-  const { range, setRange } = useDateRange();
   const session = useSession();
   if (session.status !== "authenticated") return null;
   const { user, organization } = session.session;
@@ -79,53 +83,41 @@ export function Topbar() {
   const breadcrumbs = segments.length > 0 ? segments.map(formatSegment) : ["Overview"];
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border/40 bg-background/80 px-4 backdrop-blur-md sm:px-6">
+    <header className="liquid-glass sticky top-3 z-30 mx-3 mt-3 flex h-14 shrink-0 items-center gap-3 rounded-2xl border px-4 sm:mx-4 sm:px-5 lg:mx-6">
       <MobileNav />
 
-      {/* Breadcrumb path */}
-      <nav aria-label="Breadcrumb" className="hidden sm:flex items-center gap-2 text-sm">
-        <span className="font-semibold text-foreground/80">{organization.name}</span>
-        {breadcrumbs.map((crumb, idx) => (
-          <React.Fragment key={crumb}>
-            <ChevronRight className="size-3.5 text-muted-foreground/60" aria-hidden />
-            <span
-              className={
-                idx === breadcrumbs.length - 1
-                  ? "font-semibold text-foreground"
-                  : "text-muted-foreground"
-              }
-            >
-              {crumb}
-            </span>
-          </React.Fragment>
-        ))}
-      </nav>
+      {/* Where you are: the page, then the path to it */}
+      <div className="hidden min-w-0 sm:flex">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[0.8125rem] text-muted-foreground">
+          <span className="truncate">{organization.name}</span>
+          {breadcrumbs.map((crumb, idx) => (
+            <React.Fragment key={crumb}>
+              <ChevronRight className="size-3.5 shrink-0 opacity-50" aria-hidden />
+              <span
+                aria-current={idx === breadcrumbs.length - 1 ? "page" : undefined}
+                className={idx === breadcrumbs.length - 1 ? "truncate font-medium text-foreground" : "truncate"}
+              >
+                {crumb}
+              </span>
+            </React.Fragment>
+          ))}
+        </nav>
+      </div>
 
       <div className="flex sm:hidden min-w-0 items-center gap-2">
         <span className="truncate text-sm font-semibold">{organization.name}</span>
       </div>
 
-      <div className="hidden md:inline-flex">
-        <StatusBadge tone={ORG_STATUS_TONE[organization.status]}>
-          {ORG_STATUS_LABELS[organization.status]}
-        </StatusBadge>
-      </div>
+      {organization.status !== "active" && (
+        <div className="hidden md:inline-flex">
+          <StatusBadge tone={ORG_STATUS_TONE[organization.status]}>
+            {ORG_STATUS_LABELS[organization.status]}
+          </StatusBadge>
+        </div>
+      )}
 
       <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
         <CommandPaletteTrigger />
-
-        <Select value={range} onValueChange={setRange}>
-          <SelectTrigger className="h-9 w-28 text-sm rounded-lg border-border/60" aria-label="Date range">
-            <SelectValue placeholder="Range" />
-          </SelectTrigger>
-          <SelectContent className="glass">
-            {DATE_RANGES.map((option) => (
-              <SelectItem key={option} value={option} className="text-sm">
-                {option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
 
         <ThemeToggle />
 
@@ -134,15 +126,15 @@ export function Topbar() {
             <Button
               variant="ghost"
               size="icon"
-              className="size-8 rounded-full ring-2 ring-primary/20 hover:ring-primary/40 transition-all"
+              className="size-9 rounded-full p-0"
               aria-label="Account menu"
             >
-              <span className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+              <span className="flex size-9 items-center justify-center rounded-full border border-border bg-accent text-xs font-semibold text-primary transition-[border-color] duration-150 hover:border-border-strong">
                 {initials(user.name)}
               </span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 glass">
+          <DropdownMenuContent align="end" className="w-60">
             <DropdownMenuLabel className="font-normal">
               <span className="block text-sm font-semibold">{user.name}</span>
               <span className="block truncate text-xs text-muted-foreground">
@@ -150,11 +142,10 @@ export function Topbar() {
               </span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-xs">
-              <UserIcon className="mr-2 size-4" aria-hidden /> Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-xs">
-              <Settings className="mr-2 size-4" aria-hidden /> Settings
+            <DropdownMenuItem asChild className="text-xs">
+              <Link href="/app/organization/settings">
+                <Settings className="mr-2 size-4" aria-hidden /> Workspace settings
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <form action={signOut}>

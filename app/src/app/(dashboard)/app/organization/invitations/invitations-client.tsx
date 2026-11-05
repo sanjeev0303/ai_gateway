@@ -172,7 +172,9 @@ export function InviteDialog({ children }: { children: React.ReactNode }) {
 export function InvitationsClient({ initialRows, oldestStr }: { initialRows: InviteRow[], oldestStr: string | null }) {
   const router = useRouter();
   const session = useSession();
-  const isAdmin = session.status === "authenticated" && session.session.user.role === "admin";
+  // Owners manage invitations too; the server allows both roles.
+  const role = session.status === "authenticated" ? session.session.user.role : null;
+  const isAdmin = role === "admin" || role === "owner";
 
   const [rows, setRows] = React.useState(initialRows);
   const [revokeId, setRevokeId] = React.useState<string | null>(null);
@@ -205,8 +207,14 @@ export function InvitationsClient({ initialRows, oldestStr }: { initialRows: Inv
     try {
       setIsUpdating(true);
       await api.invitations.revoke(idToRevoke);
-      await api.invitations.invite({ email, role });
-      toast.success("Invitation reissued");
+      const result = await api.invitations.invite({ email, role });
+      // The token is only returned now, so the new link has to be shown here or it is lost.
+      const link = `${window.location.origin}/accept-invite?token=${result.token}`;
+      toast.success(`Invitation reissued for ${email}`, {
+        description: link,
+        duration: Infinity,
+        action: { label: "Copy link", onClick: () => void navigator.clipboard.writeText(link) },
+      });
       router.refresh();
     } catch (error) {
       toast.error("Failed to reissue invitation");
@@ -216,7 +224,7 @@ export function InvitationsClient({ initialRows, oldestStr }: { initialRows: Inv
   };
 
   function InviteActionsCellWrapper({ row }: { row: InviteRow }) {
-    return <InviteActionsCell row={row} isAdmin={isAdmin} onReissue={handleReissue} onRevoke={handleRevoke} isUpdating={isUpdating} />;
+    return <InviteActionsCell row={row} isAdmin={isAdmin} onReissue={handleReissue} onRevoke={setRevokeId} isUpdating={isUpdating} />;
   }
 
   return (

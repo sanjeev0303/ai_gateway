@@ -57,6 +57,9 @@ COPY --from=builder /app/app/.next/standalone/node_modules ./node_modules
 COPY --from=builder /app/app/.next/standalone/app ./
 COPY --from=builder /app/app/.next/static ./.next/static
 
+# next/image writes optimized images here at runtime.
+RUN mkdir -p .next/cache && chown -R nextjs:nodejs .next/cache
+
 USER nextjs
 EXPOSE 3000
 

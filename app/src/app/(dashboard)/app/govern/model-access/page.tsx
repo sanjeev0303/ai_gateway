@@ -32,8 +32,10 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { loadDirectory } from "@/components/dashboard/directory-actions";
 import { fetchModelAccessAction, updateModelAccessAction, previewModelAccessAction } from "./actions";
 import type { ModelAccessEntry, UpdateModelAccessRequest, ModelAccessPreviewRequest, ModelAccessPreviewResponse } from "@ai-governance/api-client";
+import { toast } from "sonner";
 
 // API response types use snake_case
 interface ModelAccessEntryAPI {
@@ -65,6 +67,7 @@ interface ModelAccessRow {
   allowed: boolean;
   source: string;
   policyId: string;
+  policyName: string;
   ruleId: string;
   priority: number;
   effective: boolean;
@@ -80,6 +83,7 @@ function toRow(entry: ModelAccessEntryAPI): ModelAccessRow {
     allowed: entry.allowed ?? false,
     source: entry.source ?? "",
     policyId: entry.policy_id ?? "",
+    policyName: "",
     ruleId: entry.rule_id ?? "",
     priority: entry.priority ?? 0,
     effective: entry.effective ?? false,
@@ -173,9 +177,9 @@ const COLUMNS: readonly Column<ModelAccessRow>[] = [
   },
   {
     key: "policyId",
-    header: "Policy ID",
-    primary: "policyId",
-    render: (row) => <span className="font-mono text-xs">{row.policyId.slice(0, 8)}...</span>,
+    header: "Policy",
+    primary: "policyName",
+    sort: "policyName",
     align: "left",
   },
 ];
@@ -215,6 +219,15 @@ export default function ModelAccessPage() {
     fetchModelAccess();
   }, [fetchModelAccess]);
 
+  const [policyNames, setPolicyNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    loadDirectory()
+      .then((d) => setPolicyNames(Object.fromEntries(d.policies.map((p) => [p.id, p.name]))))
+      .catch(() => {
+        // The column falls back to a short id.
+      });
+  }, []);
+
   const handlePreview = async (provider: string, model: string, action: "allow" | "block") => {
     setPreviewLoading(true);
     try {
@@ -251,7 +264,7 @@ export default function ModelAccessPage() {
       }));
 
     if (changes.length === 0) {
-      alert(`All filtered models are already ${action}ed.`);
+      toast(`All filtered models are already ${action === "allow" ? "allowed" : "blocked"}.`);
       return;
     }
 
@@ -286,7 +299,7 @@ export default function ModelAccessPage() {
       await fetchModelAccess();
     } catch (err) {
       console.error("Failed to save model access:", err);
-      alert("Failed to save changes");
+      toast.error("Changes were not saved. Check your connection and try again.");
     } finally {
       setSaving(false);
     }
@@ -312,7 +325,10 @@ export default function ModelAccessPage() {
     return matchesSearch && matchesProvider && matchesStatus && matchesSource;
   });
 
-  const rows: ModelAccessRow[] = filteredEntries.map(toRow);
+  const rows: ModelAccessRow[] = filteredEntries.map((entry) => {
+    const row = toRow(entry);
+    return { ...row, policyName: policyNames[row.policyId] ?? `${row.policyId.slice(0, 8)}…` };
+  });
 
   const allowedCount = entries.filter((e) => e.allowed).length;
   const blockedCount = entries.filter((e) => !e.allowed).length;
@@ -487,7 +503,7 @@ export default function ModelAccessPage() {
                 />
               </div>
               <Select value={providerFilter} onValueChange={setProviderFilter}>
-                <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectTrigger className="w-full sm:w-[180px]" aria-label="Filter by provider">
                   <SelectValue placeholder="All providers" />
                 </SelectTrigger>
                 <SelectContent>
@@ -500,7 +516,7 @@ export default function ModelAccessPage() {
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | "allowed" | "blocked")}>
-                <SelectTrigger className="w-full sm:w-[160px]">
+                <SelectTrigger className="w-full sm:w-[160px]" aria-label="Filter by status">
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -510,7 +526,7 @@ export default function ModelAccessPage() {
                 </SelectContent>
               </Select>
               <Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v as "all" | "allowlist" | "blocklist")}>
-                <SelectTrigger className="w-full sm:w-[160px]">
+                <SelectTrigger className="w-full sm:w-[160px]" aria-label="Filter by source">
                   <SelectValue placeholder="All sources" />
                 </SelectTrigger>
                 <SelectContent>

@@ -30,6 +30,7 @@ import {
 import { AlertCircle, CheckCircle2, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { PolicyValidationResult } from "@ai-governance/api-client";
+import { confirmAction } from "@/components/dashboard/confirm-dialog";
 
 export function ValidatePolicyButton({ id }: { id: string }) {
   const api = React.useMemo(() => createApiClient({ baseUrl: CONTROL_API_BASE }), []);
@@ -91,7 +92,7 @@ export function ValidatePolicyButton({ id }: { id: string }) {
 
               {result.errors.length > 0 && (
                 <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 space-y-1.5">
-                  <div className="font-semibold text-xs uppercase tracking-wider text-destructive">
+                  <div className="font-semibold text-xs text-destructive">
                     Errors ({result.errors.length})
                   </div>
                   <ul className="list-disc list-inside text-sm text-destructive space-y-1">
@@ -104,7 +105,7 @@ export function ValidatePolicyButton({ id }: { id: string }) {
 
               {result.warnings.length > 0 && (
                 <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 space-y-1.5">
-                  <div className="font-semibold text-xs uppercase tracking-wider text-amber-500">
+                  <div className="font-semibold text-xs text-amber-500">
                     Warnings ({result.warnings.length})
                   </div>
                   <ul className="list-disc list-inside text-sm text-amber-600 dark:text-amber-400 space-y-1">
@@ -138,7 +139,13 @@ export function RuleActionsCell({ row }: { row: { id: string; policy_id?: string
 
   async function onDelete() {
     if (!row.policy_id) return;
-    if (!confirm("Are you sure you want to remove this rule?")) return;
+    const confirmed = await confirmAction({
+      title: "Remove this rule?",
+      description: "The gateway stops enforcing it as soon as the policy snapshot rebuilds.",
+      confirmLabel: "Remove rule",
+      destructive: true,
+    });
+    if (!confirmed) return;
     setLoading(true);
     try {
       await api.policies.deleteRule(row.policy_id, row.id);
@@ -170,7 +177,13 @@ export function DeletePolicyButton({ id }: { id: string }) {
   const [loading, setLoading] = useState(false);
 
   async function onClick() {
-    if (!confirm("Are you sure you want to delete this policy?")) return;
+    const confirmed = await confirmAction({
+      title: "Delete this policy?",
+      description: "Every rule in it stops being enforced. This cannot be undone.",
+      confirmLabel: "Delete policy",
+      destructive: true,
+    });
+    if (!confirmed) return;
     setLoading(true);
     try {
       await api.policies.delete(id);

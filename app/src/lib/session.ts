@@ -57,6 +57,16 @@ export async function getSession(): Promise<Session | null> {
   }
 }
 
+/**
+ * Whether the visitor is signed in, for public pages. Without a session cookie
+ * there is nothing to check, so the control API is only asked when one exists.
+ */
+export async function isSignedIn(): Promise<boolean> {
+  const jar = await cookies();
+  if (!jar.has(SESSION_COOKIE)) return false;
+  return (await getSession()) !== null;
+}
+
 /** Session or redirect to sign-in. Use at the top of authenticated pages. */
 export async function requireSession(): Promise<Session> {
   const session = await getSession();

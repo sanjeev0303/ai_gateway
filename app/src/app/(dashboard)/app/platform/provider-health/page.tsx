@@ -20,7 +20,7 @@ import type { StatusTone } from "@/types";
 import { ProviderHealthClient, ProbeProviderDialog } from "./client";
 
 export const metadata: Metadata = {
-  title: "Provider health · Sentinel",
+  title: "Provider health · Tollseal",
   description: "Result of the last health probe for each upstream provider, with on-demand checking.",
 };
 
@@ -79,7 +79,7 @@ export default async function ProviderHealthPage() {
         description="Outcome of the most recent probe of each upstream provider, run by the background worker."
         actions={<ProbeProviderDialog />}
       >
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
             label="Providers probed"
             value={formatNumber(probed)}
