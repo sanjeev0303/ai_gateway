@@ -28,13 +28,17 @@ func NewGatewayConversationStore(store *postgres.Store) ports.GatewayConversatio
 // never stored. The gateway keeps the text in memory instead.
 func (s *gatewayConversationStore) RecordTurn(ctx context.Context, orgID uuid.UUID, turn domain.GatewayConversationTurn) (uuid.UUID, uuid.UUID, error) {
 	var ids [2]uuid.UUID
+	var credentialID *uuid.UUID
+	if turn.CredentialID != uuid.Nil {
+		credentialID = &turn.CredentialID
+	}
 	err := s.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
 		conv, err := q.UpsertGatewayConversation(ctx, db.UpsertGatewayConversationParams{
 			ID:             turn.ConversationID,
 			OrganizationID: orgID,
 			UserID:         turn.UserID,
 			ProjectID:      turn.ProjectID,
-			CredentialID:   &turn.CredentialID,
+			CredentialID:   credentialID,
 			Model:          optionalString(turn.Model),
 			Provider:       optionalString(turn.Provider),
 		})

@@ -59,9 +59,13 @@ VALUES (sqlc.arg(conversation_id), sqlc.arg(organization_id), sqlc.arg(user_id),
 RETURNING *;
 
 -- name: ListConversationMessages :many
+-- A gateway turn writes its prompt and reply in one transaction, so both carry
+-- the same created_at; within a turn the prompt comes before the reply.
 SELECT * FROM conversation_messages
 WHERE organization_id = sqlc.arg(organization_id) AND conversation_id = sqlc.arg(conversation_id)
-ORDER BY created_at, id;
+ORDER BY created_at,
+         CASE role WHEN 'system' THEN 0 WHEN 'user' THEN 1 WHEN 'assistant' THEN 2 ELSE 3 END,
+         id;
 
 -- name: DeleteConversation :execrows
 -- Removes one conversation; its messages go with it (ON DELETE CASCADE).

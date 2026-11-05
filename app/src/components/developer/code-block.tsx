@@ -8,8 +8,16 @@ import { cn } from "cn";
 
 const LANGUAGE_LABELS: Record<string, string> = {
   bash: "Shell",
+  sh: "Shell",
   typescript: "TypeScript",
+  ts: "TypeScript",
+  javascript: "JavaScript",
+  js: "JavaScript",
   python: "Python",
+  go: "Go",
+  sql: "SQL",
+  json: "JSON",
+  yaml: "YAML",
 };
 
 export interface CodeBlockProps {

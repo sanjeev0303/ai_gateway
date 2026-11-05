@@ -198,7 +198,9 @@ func (q *Queries) GetConversation(ctx context.Context, arg GetConversationParams
 const listConversationMessages = `-- name: ListConversationMessages :many
 SELECT id, conversation_id, organization_id, user_id, role, content, tokens, provider_message_id, created_at, tool_name FROM conversation_messages
 WHERE organization_id = $1 AND conversation_id = $2
-ORDER BY created_at, id
+ORDER BY created_at,
+         CASE role WHEN 'system' THEN 0 WHEN 'user' THEN 1 WHEN 'assistant' THEN 2 ELSE 3 END,
+         id
 `
 
 type ListConversationMessagesParams struct {
@@ -206,6 +208,8 @@ type ListConversationMessagesParams struct {
 	ConversationID uuid.UUID `json:"conversation_id"`
 }
 
+// A gateway turn writes its prompt and reply in one transaction, so both carry
+// the same created_at; within a turn the prompt comes before the reply.
 func (q *Queries) ListConversationMessages(ctx context.Context, arg ListConversationMessagesParams) ([]ConversationMessage, error) {
 	rows, err := q.db.Query(ctx, listConversationMessages, arg.OrganizationID, arg.ConversationID)
 	if err != nil {

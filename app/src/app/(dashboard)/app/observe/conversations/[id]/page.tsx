@@ -6,6 +6,7 @@ import { getApiClient, requireSession } from "@/lib/session";
 import { formatCompact, formatDate, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { DeleteConversationButton } from "./delete-button";
+import { MessageMarkdown } from "./message-markdown";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -92,11 +93,13 @@ export default async function ConversationDetailPage({ params }: { params: Promi
                     {msg.content ? (
                       <div
                         className={cn(
-                          "max-w-[min(48rem,92%)] rounded-2xl border px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words",
-                          fromUser ? "rounded-tr-md border-primary/20 bg-primary/10" : "rounded-tl-md border-border bg-card",
+                          "min-w-0 rounded-2xl border px-4 py-3 text-sm leading-relaxed break-words",
+                          fromUser
+                            ? "max-w-[min(48rem,92%)] rounded-tr-md border-primary/20 bg-primary/10 whitespace-pre-wrap"
+                            : "max-w-[min(52rem,96%)] rounded-tl-md border-border bg-card",
                         )}
                       >
-                        {msg.content}
+                        {fromUser ? msg.content : <MessageMarkdown text={msg.content} />}
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground italic">Text no longer available</p>

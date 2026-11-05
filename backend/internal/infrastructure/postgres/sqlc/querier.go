@@ -128,6 +128,8 @@ type Querier interface {
 	ListBudgets(ctx context.Context, organizationID uuid.UUID) ([]Budget, error)
 	ListBudgetsByScope(ctx context.Context, arg ListBudgetsByScopeParams) ([]Budget, error)
 	ListBudgetsByScopeType(ctx context.Context, arg ListBudgetsByScopeTypeParams) ([]Budget, error)
+	// A gateway turn writes its prompt and reply in one transaction, so both carry
+	// the same created_at; within a turn the prompt comes before the reply.
 	ListConversationMessages(ctx context.Context, arg ListConversationMessagesParams) ([]ConversationMessage, error)
 	// Aggregates come from conversation_messages because llm_requests has no
 	// conversation key: an assistant turn is the only evidence of a provider

@@ -570,3 +570,31 @@ func TestConversationCountsByKey(t *testing.T) {
 		t.Fatalf("listing keyless conversations returned %d, want 2", len(keyless))
 	}
 }
+
+// A gateway turn saves its prompt and reply in one transaction, so they share a
+// timestamp; the prompt must still come first, turn after turn.
+func TestGatewayTurnListsPromptBeforeReply(t *testing.T) {
+	orgID, userID, _ := newTenant(t)
+	store := repos.NewGatewayConversationStore(testStore)
+	conv := uuid.New()
+	for i := 0; i < 15; i++ {
+		_, _, err := store.RecordTurn(testCtx, orgID, domain.GatewayConversationTurn{
+			ConversationID: conv, UserID: userID, UserText: "question", AssistantText: "answer", InputTokens: 1, OutputTokens: 1,
+		})
+		requireNoErr(t, err)
+	}
+	got, err := repos.NewConversationMessageRepository(testStore).List(testCtx, orgID, conv)
+	requireNoErr(t, err)
+	if len(got) != 30 {
+		t.Fatalf("got %d messages, want 30", len(got))
+	}
+	for i, m := range got {
+		want := domain.MessageRoleUser
+		if i%2 == 1 {
+			want = domain.MessageRoleAssistant
+		}
+		if m.Role != want {
+			t.Fatalf("message %d is %s, want %s: replies must follow their prompts", i, m.Role, want)
+		}
+	}
+}
