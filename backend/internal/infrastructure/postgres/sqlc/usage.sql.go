@@ -262,14 +262,30 @@ WHERE organization_id = $1
   AND created_at >= $2
   AND created_at < $3
   AND model != ''
+  AND ($4::uuid IS NULL OR project_id = $4)
+  AND ($5::uuid IS NULL OR user_id = $5)
+  AND ($6::uuid IS NULL OR team_id = $6)
+  AND ($7::uuid IS NULL OR service_account_id = $7)
+  AND ($8::uuid IS NULL OR gateway_credential_id = $8)
+  AND ($9::text IS NULL OR provider_kind = $9)
+  AND ($10::text IS NULL OR model = $10)
+  AND ($11::text IS NULL OR status = $11)
 GROUP BY model
 ORDER BY total_tokens DESC
 `
 
 type GetUsageByModelParams struct {
-	OrganizationID uuid.UUID `json:"organization_id"`
-	FromTs         time.Time `json:"from_ts"`
-	ToTs           time.Time `json:"to_ts"`
+	OrganizationID      uuid.UUID  `json:"organization_id"`
+	FromTs              time.Time  `json:"from_ts"`
+	ToTs                time.Time  `json:"to_ts"`
+	ProjectID           *uuid.UUID `json:"project_id"`
+	UserID              *uuid.UUID `json:"user_id"`
+	TeamID              *uuid.UUID `json:"team_id"`
+	ServiceAccountID    *uuid.UUID `json:"service_account_id"`
+	GatewayCredentialID *uuid.UUID `json:"gateway_credential_id"`
+	Provider            *string    `json:"provider"`
+	Model               *string    `json:"model"`
+	Status              *string    `json:"status"`
 }
 
 type GetUsageByModelRow struct {
@@ -280,7 +296,19 @@ type GetUsageByModelRow struct {
 }
 
 func (q *Queries) GetUsageByModel(ctx context.Context, arg GetUsageByModelParams) ([]GetUsageByModelRow, error) {
-	rows, err := q.db.Query(ctx, getUsageByModel, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, getUsageByModel,
+		arg.OrganizationID,
+		arg.FromTs,
+		arg.ToTs,
+		arg.ProjectID,
+		arg.UserID,
+		arg.TeamID,
+		arg.ServiceAccountID,
+		arg.GatewayCredentialID,
+		arg.Provider,
+		arg.Model,
+		arg.Status,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -409,14 +437,30 @@ FROM llm_requests
 WHERE organization_id = $1
   AND created_at >= $2
   AND created_at < $3
+  AND ($4::uuid IS NULL OR project_id = $4)
+  AND ($5::uuid IS NULL OR user_id = $5)
+  AND ($6::uuid IS NULL OR team_id = $6)
+  AND ($7::uuid IS NULL OR service_account_id = $7)
+  AND ($8::uuid IS NULL OR gateway_credential_id = $8)
+  AND ($9::text IS NULL OR provider_kind = $9)
+  AND ($10::text IS NULL OR model = $10)
+  AND ($11::text IS NULL OR status = $11)
 GROUP BY provider_kind
 ORDER BY total_tokens DESC
 `
 
 type GetUsageByProviderParams struct {
-	OrganizationID uuid.UUID `json:"organization_id"`
-	FromTs         time.Time `json:"from_ts"`
-	ToTs           time.Time `json:"to_ts"`
+	OrganizationID      uuid.UUID  `json:"organization_id"`
+	FromTs              time.Time  `json:"from_ts"`
+	ToTs                time.Time  `json:"to_ts"`
+	ProjectID           *uuid.UUID `json:"project_id"`
+	UserID              *uuid.UUID `json:"user_id"`
+	TeamID              *uuid.UUID `json:"team_id"`
+	ServiceAccountID    *uuid.UUID `json:"service_account_id"`
+	GatewayCredentialID *uuid.UUID `json:"gateway_credential_id"`
+	Provider            *string    `json:"provider"`
+	Model               *string    `json:"model"`
+	Status              *string    `json:"status"`
 }
 
 type GetUsageByProviderRow struct {
@@ -427,7 +471,19 @@ type GetUsageByProviderRow struct {
 }
 
 func (q *Queries) GetUsageByProvider(ctx context.Context, arg GetUsageByProviderParams) ([]GetUsageByProviderRow, error) {
-	rows, err := q.db.Query(ctx, getUsageByProvider, arg.OrganizationID, arg.FromTs, arg.ToTs)
+	rows, err := q.db.Query(ctx, getUsageByProvider,
+		arg.OrganizationID,
+		arg.FromTs,
+		arg.ToTs,
+		arg.ProjectID,
+		arg.UserID,
+		arg.TeamID,
+		arg.ServiceAccountID,
+		arg.GatewayCredentialID,
+		arg.Provider,
+		arg.Model,
+		arg.Status,
+	)
 	if err != nil {
 		return nil, err
 	}

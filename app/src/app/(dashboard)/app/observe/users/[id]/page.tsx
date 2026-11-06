@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { thirtyDaysAgo } from "@/lib/date-range";
 
 interface UsageRow {
   id: string;
@@ -74,7 +75,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
       convs,
     ] = await Promise.all([
       members.list(),
-      usage.summary({ user_id: id }),
+      usage.summary({ from: thirtyDaysAgo(), user_id: id }),
       usage.byModel({ user_id: id }),
       usage.byProvider({ user_id: id }),
       usage.byProject({ user_id: id }),

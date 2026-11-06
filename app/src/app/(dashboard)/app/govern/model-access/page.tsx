@@ -450,9 +450,8 @@ export default function ModelAccessPage() {
       >
         <div className="grid gap-4 sm:grid-cols-3">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">Total models</CardTitle>
-              <Badge variant="outline">{entries.length}</Badge>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold">{entries.length}</div>
@@ -460,9 +459,8 @@ export default function ModelAccessPage() {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">Allowed</CardTitle>
-              <Badge variant="default">{allowedCount}</Badge>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-green-600">{allowedCount}</div>
@@ -470,9 +468,8 @@ export default function ModelAccessPage() {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">Blocked</CardTitle>
-              <Badge variant="destructive">{blockedCount}</Badge>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-red-600">{blockedCount}</div>
@@ -485,7 +482,10 @@ export default function ModelAccessPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               Model access matrix
-              <Badge variant="outline">{filteredEntries.length} / {entries.length}</Badge>
+              {/* Only while filtering: unfiltered, it would repeat Total models */}
+              {filteredEntries.length !== entries.length && (
+                <Badge variant="outline">{filteredEntries.length} / {entries.length}</Badge>
+              )}
             </CardTitle>
             <CardDescription>
               Manage model allowlist and blocklist rules. Changes are saved to the "Model Access Control" policy.

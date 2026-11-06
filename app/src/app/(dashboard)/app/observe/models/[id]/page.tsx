@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { thirtyDaysAgo } from "@/lib/date-range";
 
 interface UsageBreakdownRow {
   id: string;
@@ -50,8 +51,8 @@ export default async function ModelDetailPage({ params }: { params: Promise<{ id
       teamList,
       memberList,
     ] = await Promise.all([
-      usage.summary({ model: modelSlug }),
-      usage.latency({ model: modelSlug }),
+      usage.summary({ from: thirtyDaysAgo(), model: modelSlug }),
+      usage.latency({ from: thirtyDaysAgo(), model: modelSlug }),
       usage.byProject({ model: modelSlug }),
       usage.byTeam({ model: modelSlug }),
       usage.byUser({ model: modelSlug }),

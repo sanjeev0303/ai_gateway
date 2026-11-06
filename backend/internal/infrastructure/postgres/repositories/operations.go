@@ -753,13 +753,23 @@ func (r *usageRollupRepo) GetByProject(ctx context.Context, orgID uuid.UUID, fil
 	return results, err
 }
 
-func (r *usageRollupRepo) GetByModel(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByModel, error) {
+// GetByModel groups the filtered requests by model; every filter is honoured,
+// so a page scoped to one employee, team or project gets that scope's numbers.
+func (r *usageRollupRepo) GetByModel(ctx context.Context, orgID uuid.UUID, filter domain.UsageFilter) ([]domain.UsageByModel, error) {
 	var results []domain.UsageByModel
 	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
 		rows, err := q.GetUsageByModel(ctx, db.GetUsageByModelParams{
-			OrganizationID: orgID,
-			FromTs:         from.UTC(),
-			ToTs:           to.UTC(),
+			OrganizationID:      orgID,
+			FromTs:              filter.From.UTC(),
+			ToTs:                filter.To.UTC(),
+			ProjectID:           filter.ProjectID,
+			UserID:              filter.UserID,
+			TeamID:              filter.TeamID,
+			ServiceAccountID:    filter.ServiceAccountID,
+			GatewayCredentialID: filter.GatewayCredentialID,
+			Provider:            filter.Provider,
+			Model:               filter.Model,
+			Status:              filter.Status,
 		})
 		if err != nil {
 			return err
@@ -778,13 +788,23 @@ func (r *usageRollupRepo) GetByModel(ctx context.Context, orgID uuid.UUID, from,
 	return results, err
 }
 
-func (r *usageRollupRepo) GetByProvider(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]domain.UsageByProvider, error) {
+// GetByProvider groups the filtered requests by provider; every filter is honoured,
+// so a page scoped to one employee, team or project gets that scope's numbers.
+func (r *usageRollupRepo) GetByProvider(ctx context.Context, orgID uuid.UUID, filter domain.UsageFilter) ([]domain.UsageByProvider, error) {
 	var results []domain.UsageByProvider
 	err := r.store.WithTenantTx(ctx, orgID, func(q *db.Queries) error {
 		rows, err := q.GetUsageByProvider(ctx, db.GetUsageByProviderParams{
-			OrganizationID: orgID,
-			FromTs:         from.UTC(),
-			ToTs:           to.UTC(),
+			OrganizationID:      orgID,
+			FromTs:              filter.From.UTC(),
+			ToTs:                filter.To.UTC(),
+			ProjectID:           filter.ProjectID,
+			UserID:              filter.UserID,
+			TeamID:              filter.TeamID,
+			ServiceAccountID:    filter.ServiceAccountID,
+			GatewayCredentialID: filter.GatewayCredentialID,
+			Provider:            filter.Provider,
+			Model:               filter.Model,
+			Status:              filter.Status,
 		})
 		if err != nil {
 			return err

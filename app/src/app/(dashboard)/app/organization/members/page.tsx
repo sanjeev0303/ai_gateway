@@ -12,7 +12,6 @@ import {
 } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { formatUsd } from "@/lib/format";
 import { getApiClient } from "@/lib/session";
 import { Metadata } from "next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +19,7 @@ import { MembersClient, type MemberRow } from "./members-client";
 
 export const metadata: Metadata = {
   title: "Members · Tollseal",
-  description: "Everyone in the organization, with their role, status, and attributed spend.",
+  description: "Everyone in the organization, with their role and status.",
 };
 
 interface OrgMember {
@@ -35,12 +34,8 @@ interface OrgMember {
 
 
 export default async function MembersPage() {
-  const { members, usage } = await getApiClient();
-  const [memberList, spendByUser] = await Promise.all([members.list(), usage.byUser()]);
-
-  const spendMap = new Map(
-    spendByUser.items.map((row: any) => [row.UserID, formatUsd(row.CostMicros)]),
-  );
+  const { members } = await getApiClient();
+  const memberList = await members.list();
 
   const rows: MemberRow[] = memberList.items.map((member: OrgMember) => ({
     id: member.user.id,
@@ -48,7 +43,6 @@ export default async function MembersPage() {
     email: member.user.email,
     role: member.role,
     status: member.user.status,
-    spend: spendMap.get(member.user.id) ?? "--",
   }));
 
   const active = rows.filter((row) => row.status === "active");
@@ -57,7 +51,7 @@ export default async function MembersPage() {
     <div className="p-4 sm:p-6">
       <PageShell
         title="Members"
-        description="Everyone in the organization, with their role, status, and attributed spend."
+        description="Everyone in the organization, with their role and status."
         actions={
           <Button asChild size="sm">
             <a href="/app/organization/invitations">

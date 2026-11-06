@@ -4,7 +4,6 @@ import {
   DataTable,
   PageShell,
   StatCard,
-  StatusBadge,
   type Column,
 } from "@/components/dashboard";
 import {
@@ -140,23 +139,12 @@ async function loadGatewayCredentials() {
     return at >= now.getTime() && at <= windowEnd;
   });
 
-  const schedule = list.items
-    .filter((credential) => Boolean(credential.expires_at))
-    .sort((a, b) => (a.expires_at ?? "").localeCompare(b.expires_at ?? ""));
-
   return {
     rows,
     total: rows.length,
     active: rows.filter((row) => row.status === "active").length,
     expiring: expiring.length,
     expired: list.items.filter((credential) => credential.status === "expired").length,
-    schedule: schedule.map((credential) => ({
-      id: credential.id,
-      name: credential.name,
-      status: credential.status,
-      tone: toneFor(CREDENTIAL_TONE, credential.status),
-      expires: formatDate(credential.expires_at ?? ""),
-    })),
     members: (memberList.items || []).map((m: any) => ({
       id: m.user.id,
       name: m.user.display_name || m.user.email,
@@ -169,7 +157,7 @@ async function loadGatewayCredentials() {
 }
 
 export default async function GatewayCredentialsPage() {
-  const { rows, total, active, expiring, expired, schedule, members, teams, projects, serviceAccounts } = await loadGatewayCredentials();
+  const { rows, total, active, expiring, expired, members, teams, projects, serviceAccounts } = await loadGatewayCredentials();
 
   return (
     <div className="p-4 sm:p-6">
@@ -241,39 +229,6 @@ export default async function GatewayCredentialsPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Expiry schedule</CardTitle>
-            <CardDescription>
-              Credentials carrying an expiry date, soonest first. Nothing rotates
-              automatically — the control API only records the date.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {schedule.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No gateway credential has an expiry date set.
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {schedule.map((credential) => (
-                  <li
-                    key={credential.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{credential.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        expires {credential.expires}
-                      </p>
-                    </div>
-                    <StatusBadge tone={credential.tone}>{credential.status}</StatusBadge>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
       </PageShell>
     </div>
   );

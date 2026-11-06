@@ -95,9 +95,8 @@ export function OverviewHero({ stored, providerCount, accessRuleCount, keyCount,
 
   return (
     <section aria-label="Your gateway at a glance" className="flex flex-col gap-4">
-      {collapsed ? (
-        band
-      ) : (
+      {/* The compact default shows no band: its counts repeat Health and the setup checklist. */}
+      {collapsed ? null : (
         <>
           <div className="md:hidden">{band}</div>
           <div className="relative hidden overflow-hidden rounded-[20px] border border-border-strong bg-card md:block">

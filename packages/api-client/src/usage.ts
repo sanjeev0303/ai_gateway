@@ -199,9 +199,9 @@ export function createUsageModule(transport: Transport): UsageModule {
         query: filtered(query),
       }),
     byModel: (query, options) =>
-      transport.request<ListResponse<UsageByModel>>("/v1/usage/by-model", { ...options, query: range(query) }),
+      transport.request<ListResponse<UsageByModel>>("/v1/usage/by-model", { ...options, query: filtered(query) }),
     byProvider: (query, options) =>
-      transport.request<ListResponse<UsageByProvider>>("/v1/usage/by-provider", { ...options, query: range(query) }),
+      transport.request<ListResponse<UsageByProvider>>("/v1/usage/by-provider", { ...options, query: filtered(query) }),
     byUser: (query, options) =>
       transport.request<ListResponse<UsageByUser>>("/v1/usage/by-user", { ...options, query: filtered(query) }),
     byTeam: (query, options) =>

@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { thirtyDaysAgo } from "@/lib/date-range";
 
 interface ModelUsageRow {
   id: string;
@@ -60,8 +61,8 @@ export default async function ProviderDetailPage({ params }: { params: Promise<{
       accountsList,
       catalogList,
     ] = await Promise.all([
-      usage.summary({ provider: providerKind }),
-      usage.latency({ provider: providerKind }),
+      usage.summary({ from: thirtyDaysAgo(), provider: providerKind }),
+      usage.latency({ from: thirtyDaysAgo(), provider: providerKind }),
       usage.byModel({ provider: providerKind }),
       providers.listAccounts(),
       models.list(),

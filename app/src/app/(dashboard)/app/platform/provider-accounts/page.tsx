@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 
-import { DonutChart } from "@/components/charts";
 import { DataTable, PageShell, StatCard, type Column } from "@/components/dashboard";
 import {
   Card,
@@ -129,24 +128,15 @@ async function loadProviderAccounts() {
       };
     });
 
-  const kindCounts = new Map<string, number>();
-  for (const row of rows) {
-    kindCounts.set(row.kind, (kindCounts.get(row.kind) ?? 0) + 1);
-  }
-
   return {
     rows,
     total: rows.length,
     active: rows.filter((row) => row.routable).length,
-    kinds: kindCounts.size,
-    kindMix: [...kindCounts.entries()]
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value),
   };
 }
 
 export default async function ProviderAccountsPage() {
-  const { rows, total, active, kinds, kindMix } = await loadProviderAccounts();
+  const { rows, total, active } = await loadProviderAccounts();
 
   return (
     <div className="p-4 sm:p-6">
@@ -155,7 +145,7 @@ export default async function ProviderAccountsPage() {
         description="Every upstream account behind one gateway key."
         actions={<CreateProviderAccountButton />}
       >
-        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <section className="grid gap-3 sm:grid-cols-3 sm:gap-4">
           <StatCard
             label="Connected accounts"
             value={formatNumber(total)}
@@ -168,49 +158,10 @@ export default async function ProviderAccountsPage() {
             hint="Disabled, or no API key attached"
           />
           <StatCard
-            label="Provider kinds"
-            value={formatNumber(kinds)}
-            hint="Distinct upstream providers"
-          />
-          <StatCard
             label="Custom endpoints"
             value={formatNumber(rows.filter((row) => row.baseUrl !== "Provider default").length)}
             hint="Overriding the default base URL"
           />
-        </section>
-
-        <section className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Accounts by provider</CardTitle>
-              <CardDescription>Which upstream each account targets.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DonutChart
-                data={kindMix}
-                centerLabel="total"
-                formatValue={(value) => `${formatNumber(value)} accounts`}
-              />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Reliability and pricing</CardTitle>
-              <CardDescription>Not attributes of a provider account.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <p>
-                A provider account records its kind, base URL, and status. It
-                carries no uptime figure, no latency percentile, and no platform
-                fee, so this page cannot rank accounts by speed or cost.
-              </p>
-              <p>
-                Live probe results are on the provider health page, and the model
-                catalogue is on the model registry page.
-              </p>
-            </CardContent>
-          </Card>
         </section>
 
         <Card>

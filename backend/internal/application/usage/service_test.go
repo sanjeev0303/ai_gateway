@@ -50,7 +50,7 @@ func (f *fakeRollups) Recompute(_ context.Context, orgID uuid.UUID, from, to tim
 	return f.fail[orgID]
 }
 
-func (f *fakeRollups) GetByProvider(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByProvider, error) {
+func (f *fakeRollups) GetByProvider(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByProvider, error) {
 	return nil, nil
 }
 func (f *fakeRollups) GetByUser(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByUser, error) {
@@ -62,7 +62,7 @@ func (f *fakeRollups) GetByServiceAccount(context.Context, uuid.UUID, domain.Usa
 func (f *fakeRollups) GetByTeam(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByTeam, error) {
 	return nil, nil
 }
-func (f *fakeRollups) GetByModel(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByModel, error) {
+func (f *fakeRollups) GetByModel(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByModel, error) {
 	return nil, nil
 }
 func (f *fakeRollups) GetByProject(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByProject, error) {

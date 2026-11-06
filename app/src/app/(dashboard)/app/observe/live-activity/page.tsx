@@ -24,15 +24,13 @@ import { ObserveFilters } from "@/components/dashboard";
 async function loadActivity() {
   const { activity } = await getApiClient();
 
-  const [events, activeRequests, activeUsers] = await Promise.all([
+  const [events, activeUsers] = await Promise.all([
     activity.events(),
-    activity.activeRequests(),
     activity.activeUsers(),
   ]);
 
   return {
     events: events.data,
-    activeRequests: activeRequests.count,
     activeUsers: activeUsers.count,
   };
 }
@@ -43,7 +41,7 @@ export default async function LiveActivityPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   await searchParams;
-  const [{ events, activeRequests, activeUsers }, directory] = await Promise.all([
+  const [{ events, activeUsers }, directory] = await Promise.all([
     loadActivity(),
     getDirectory(),
   ]);
@@ -57,7 +55,6 @@ export default async function LiveActivityPage({
         <ObserveFilters exclude={["service_account_id"]} />
         <LiveActivityContent
           initialEvents={events}
-          initialActiveRequests={activeRequests}
           initialActiveUsers={activeUsers}
           names={{
             teams: nameMap(directory.teams),

@@ -116,34 +116,37 @@ export default async function CredentialsPage() {
         description="Control-plane API keys for administrative automation, policy enforcement, and infrastructure CI/CD. Hashes are securely stored, and secrets are shown only once at creation."
         actions={<IssueCredentialDialog />}
       >
-        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-          <StatCard
-            label="Credentials"
-            value={formatNumber(total)}
-            hint={`${formatNumber(active)} active`}
-            icon={Key}
-          />
-          <StatCard
-            label="Never used"
-            value={formatNumber(neverUsed)}
-            tone={neverUsed > 0 ? "warning" : "neutral"}
-            hint={total > 0 ? "No last-used timestamp yet" : "Zero unused keys"}
-            icon={Clock}
-          />
-          <StatCard
-            label="Scopes"
-            value={formatNumber(scopeMix.length)}
-            hint={scopeMix.length > 0 ? "Distinct scopes" : "Standard defaults ready"}
-            icon={Layers}
-          />
-          <StatCard
-            label="Revoked"
-            value={formatNumber(total - active)}
-            tone={total - active > 0 ? "neutral" : "success"}
-            hint={total - active > 0 ? "No longer usable" : "Zero revoked keys"}
-            icon={ShieldCheck}
-          />
-        </section>
+        {/* With no keys yet the setup card below says so; zero-value stats would repeat it */}
+        {total > 0 && (
+          <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+            <StatCard
+              label="Credentials"
+              value={formatNumber(total)}
+              hint={`${formatNumber(active)} active`}
+              icon={Key}
+            />
+            <StatCard
+              label="Never used"
+              value={formatNumber(neverUsed)}
+              tone={neverUsed > 0 ? "warning" : "neutral"}
+              hint={total > 0 ? "No last-used timestamp yet" : "Zero unused keys"}
+              icon={Clock}
+            />
+            <StatCard
+              label="Scopes"
+              value={formatNumber(scopeMix.length)}
+              hint={scopeMix.length > 0 ? "Distinct scopes" : "Standard defaults ready"}
+              icon={Layers}
+            />
+            <StatCard
+              label="Revoked"
+              value={formatNumber(total - active)}
+              tone={total - active > 0 ? "neutral" : "success"}
+              hint={total - active > 0 ? "No longer usable" : "Zero revoked keys"}
+              icon={ShieldCheck}
+            />
+          </section>
+        )}
 
         {total === 0 ? (
           <section className="space-y-6">
@@ -297,27 +300,28 @@ export default async function CredentialsPage() {
           </section>
         )}
 
-        <Card>
-          <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <CardTitle>All credentials</CardTitle>
-              <CardDescription>
-                Only a short prefix is stored and returned, so a leak of this table is not a leak of your keys.
-              </CardDescription>
-            </div>
-            {total > 0 && <IssueCredentialDialog triggerVariant="outline" triggerLabel="Issue Key" />}
-          </CardHeader>
-          <CardContent>
-            <DataTable
-              columns={credentialColumns}
-              rows={rows}
-              rowKey="id"
-              pageSize={10}
-              emptyMessage="No control-plane credentials issued yet."
-              ActionsComponent={CredentialRowActionsWrapper}
-            />
-          </CardContent>
-        </Card>
+        {total > 0 && (
+          <Card>
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <CardTitle>All credentials</CardTitle>
+                <CardDescription>
+                  Only a short prefix is stored and returned, so a leak of this table is not a leak of your keys.
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                columns={credentialColumns}
+                rows={rows}
+                rowKey="id"
+                pageSize={10}
+                emptyMessage="No control-plane credentials issued yet."
+                ActionsComponent={CredentialRowActionsWrapper}
+              />
+            </CardContent>
+          </Card>
+        )}
       </PageShell>
     </div>
   );

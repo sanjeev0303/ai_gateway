@@ -39,10 +39,10 @@ func (f *fakeUsageRollups) GetTimeSeries(context.Context, uuid.UUID, time.Time, 
 func (f *fakeUsageRollups) GetByProject(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByProject, error) {
 	return f.byProj, nil
 }
-func (f *fakeUsageRollups) GetByModel(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByModel, error) {
+func (f *fakeUsageRollups) GetByModel(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByModel, error) {
 	return f.byModel, nil
 }
-func (f *fakeUsageRollups) GetByProvider(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByProvider, error) {
+func (f *fakeUsageRollups) GetByProvider(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByProvider, error) {
 	return f.byProv, nil
 }
 func (f *fakeUsageRollups) GetByUser(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByUser, error) {

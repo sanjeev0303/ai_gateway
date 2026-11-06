@@ -89,7 +89,7 @@ func (a *api) getUsageByModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := a.usage.GetByModel(ctx, actor, filter.From, filter.To)
+	results, err := a.usage.GetByModel(ctx, actor, filter)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -107,7 +107,7 @@ func (a *api) getUsageByProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := a.usage.GetByProvider(ctx, actor, filter.From, filter.To)
+	results, err := a.usage.GetByProvider(ctx, actor, filter)
 	if err != nil {
 		writeServiceError(w, r, err)
 		return

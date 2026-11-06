@@ -33,14 +33,12 @@ export interface MemberRow {
   email: string;
   role: string;
   status: string;
-  spend: string;
 }
 
 const COLUMNS: readonly Column<MemberRow>[] = [
   { key: "name", header: "Member", primary: "name", secondary: "email", sort: "name" },
   { key: "role", header: "Role", primary: "role" },
   { key: "status", header: "Status", primary: "status" },
-  { key: "spend", header: "Spend (30d)", primary: "spend", align: "right", sort: "spend" },
 ];
 
 export function MembersClient({ initialRows }: { initialRows: MemberRow[] }) {

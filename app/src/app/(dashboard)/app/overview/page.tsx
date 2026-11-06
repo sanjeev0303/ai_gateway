@@ -10,7 +10,6 @@ import {
   Cpu,
   CreditCard,
   HelpCircle,
-  History,
   Server,
   ShieldAlert,
   Users,
@@ -19,9 +18,7 @@ import {
 import type { Alert } from "@ai-governance/api-client";
 
 import {
-  DataTable,
   PageShell,
-  type Column,
 } from "@/components/dashboard";
 import {
   formatCompact,
@@ -41,7 +38,6 @@ import type {
   TrendDirection,
 } from "@/types";
 import { DEFAULT_RANGE, isDateRange, type DateRange } from "@/lib/date-range";
-import { getDirectory, nameFor, nameMap } from "@/lib/directory";
 import { cn } from "@/lib/utils";
 import { GuillocheBand } from "@/components/brand/guilloche";
 import { HeaderActions } from "./header-actions";
@@ -607,75 +603,6 @@ async function AlertsWidget() {
   );
 }
 
-async function RecentRequestsWidget() {
-  const client = await getApiClient();
-  const [recentRequests, directory] = await Promise.all([
-    safeFetch(() => client.usage.requests({ limit: 8 }), "recentRequests"),
-    getDirectory(),
-  ]);
-  const people = { ...nameMap(directory.users), ...nameMap(directory.serviceAccounts) };
-
-  interface RecentRow {
-    id: string;
-    timestamp: string;
-    user: string;
-    provider: string;
-    model: string;
-    status: string;
-    tokens: number;
-    cost: number;
-    latency: string;
-  }
-  const recentColumns: Column<RecentRow>[] = [
-    { key: "timestamp", header: "Time", primary: "timestamp" },
-    { key: "user", header: "Sent by", primary: "user" },
-    { key: "provider", header: "Provider", primary: "provider" },
-    { key: "model", header: "Model", primary: "model" },
-    { key: "status", header: "Status", primary: "status" },
-    { key: "tokens", header: "Tokens", primary: "tokens", align: "right", format: "compact" },
-    { key: "cost", header: "Cost", primary: "cost", align: "right", format: "usd" },
-    { key: "latency", header: "Latency", primary: "latency", align: "right" },
-  ];
-
-  const recentRows: RecentRow[] = (recentRequests?.items || []).map((r) => ({
-    id: r.ID,
-    timestamp: formatDateTime(r.CreatedAt),
-    user: r.UserID ? nameFor(people, r.UserID) : r.APICredentialID ? "Service key" : "System",
-    provider: formatProviderName(r.ProviderKind, r.Model),
-    model: r.Model,
-    status: r.Status,
-    tokens: r.TotalTokens,
-    cost: microsToUsd(r.CostMicros),
-    latency: r.LatencyMs ? `${formatMs(r.LatencyMs)}` : "-",
-  }));
-
-  if (recentRows.length === 0) {
-    return (
-      <EmptyVisualCard
-        icon={History}
-        title="No recent gateway requests"
-        description="Every request flowing through the AI gateway is captured in real-time with latency, tokens, cost, and policy evaluation."
-        actionHref="/app/developer/quick-start"
-        actionLabel="Explore Quick Start Guide"
-        ghostType="list"
-      />
-    );
-  }
-
-  return (
-    <DataTable
-      columns={recentColumns}
-      rows={recentRows}
-      rowKey="id"
-      emptyMessage="No recent requests found."
-    />
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Shell Wrapper & Section Header Helper
-// ---------------------------------------------------------------------------
-
 function SectionHeader({
   id,
   icon: Icon,
@@ -806,12 +733,6 @@ export default async function OverviewPage({
             <UsageWidget timeParams={timeParams} />
           </Suspense>
 
-          <section className="rounded-2xl border border-border bg-card p-5" aria-labelledby="recent-requests-heading">
-            <SectionHeader id="recent-requests-heading" icon={History} title="Recent requests" subtitle="The latest calls through the gateway" badge="Live" />
-            <Suspense fallback={<WidgetSkeleton />}>
-              <RecentRequestsWidget />
-            </Suspense>
-          </section>
         </div>
       </PageShell>
     </div>

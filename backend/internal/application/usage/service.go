@@ -146,19 +146,19 @@ func (s *Service) GetByProject(ctx context.Context, actor domain.Actor, filter d
 }
 
 // GetByModel returns usage grouped by model.
-func (s *Service) GetByModel(ctx context.Context, actor domain.Actor, from, to time.Time) ([]domain.UsageByModel, error) {
+func (s *Service) GetByModel(ctx context.Context, actor domain.Actor, filter domain.UsageFilter) ([]domain.UsageByModel, error) {
 	if err := s.RequirePermission(actor, domain.PermissionUsageRead); err != nil {
 		return nil, err
 	}
-	return s.rollups.GetByModel(ctx, actor.OrganizationID, from, to)
+	return s.rollups.GetByModel(ctx, actor.OrganizationID, filter)
 }
 
 // GetByProvider returns usage grouped by provider.
-func (s *Service) GetByProvider(ctx context.Context, actor domain.Actor, from, to time.Time) ([]domain.UsageByProvider, error) {
+func (s *Service) GetByProvider(ctx context.Context, actor domain.Actor, filter domain.UsageFilter) ([]domain.UsageByProvider, error) {
 	if err := s.RequirePermission(actor, domain.PermissionUsageRead); err != nil {
 		return nil, err
 	}
-	return s.rollups.GetByProvider(ctx, actor.OrganizationID, from, to)
+	return s.rollups.GetByProvider(ctx, actor.OrganizationID, filter)
 }
 
 // GetByUser returns usage grouped by user.

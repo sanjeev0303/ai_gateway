@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 
-import { BarChart } from "@/components/charts";
 import {
   DataTable,
   ObserveFilters,
@@ -16,7 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatNumber, formatPercent, formatUsd, microsToUsd } from "@/lib/format";
+import { formatNumber, formatPercent, microsToUsd } from "@/lib/format";
 import { getApiClient } from "@/lib/session";
 
 export const metadata: Metadata = {
@@ -114,8 +113,6 @@ export default async function TeamsPage({
     (sum, row) => sum + microsToUsd(row.CostMicros),
     0,
   );
-  const totalRequests = teamUsage.items.reduce((sum, row) => sum + row.Requests, 0);
-  const totalTokens = teamUsage.items.reduce((sum, row) => sum + row.TotalTokens, 0);
 
   const rows: TeamRow[] = teamList.items.map((team) => {
     const attributed = spendByTeam.get(team.id);
@@ -135,10 +132,6 @@ export default async function TeamsPage({
     };
   });
 
-  const spendByTeamChart = [...rows]
-    .sort((a, b) => b.spend - a.spend)
-    .map((team) => ({ label: team.name, value: team.spend }));
-
   return (
     <div className="p-4 sm:p-6">
       <PageShell
@@ -147,34 +140,13 @@ export default async function TeamsPage({
       >
         <BreakdownTabs />
         <ObserveFilters />
-        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2">
           <StatCard
             label="Teams"
             value={formatNumber(rows.length)}
             hint="With attributed usage"
           />
-          <StatCard
-            label="Requests"
-            value={formatNumber(totalRequests)}
-            hint="Trailing 30 days"
-          />
-          <StatCard label="Tokens" value={formatNumber(totalTokens)} hint="Trailing 30 days" />
-          <StatCard
-            label="Spend 30d"
-            value={formatUsd(totalSpend)}
-            hint="Across every team"
-          />
         </section>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Spend by team</CardTitle>
-            <CardDescription>Trailing 30 days, highest first.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <BarChart data={spendByTeamChart} formatValue={formatUsd} />
-          </CardContent>
-        </Card>
 
         <Card>
           <CardHeader>

@@ -139,11 +139,11 @@ func (f *fakeBillingRollups) GetByProject(context.Context, uuid.UUID, domain.Usa
 	return nil, errors.New("unused")
 }
 
-func (f *fakeBillingRollups) GetByModel(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByModel, error) {
+func (f *fakeBillingRollups) GetByModel(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByModel, error) {
 	return nil, errors.New("unused")
 }
 
-func (f *fakeBillingRollups) GetByProvider(context.Context, uuid.UUID, time.Time, time.Time) ([]domain.UsageByProvider, error) {
+func (f *fakeBillingRollups) GetByProvider(context.Context, uuid.UUID, domain.UsageFilter) ([]domain.UsageByProvider, error) {
 	return nil, errors.New("unused")
 }
 

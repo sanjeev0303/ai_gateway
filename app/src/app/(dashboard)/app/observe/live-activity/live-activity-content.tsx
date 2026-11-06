@@ -102,7 +102,6 @@ function toRow(event: LiveActivityEvent, now: Date, names: Names): LiveRow {
 interface LiveActivityContentProps {
   /** Server-rendered snapshot so the first paint is populated. */
   initialEvents: readonly LiveActivityEvent[];
-  initialActiveRequests: number;
   initialActiveUsers: number;
   names: Names;
 }
@@ -112,7 +111,6 @@ const STATUS_TO_STATE: Record<string, string> = { succeeded: "completed", failed
 
 export function LiveActivityContent({
   initialEvents,
-  initialActiveRequests,
   initialActiveUsers,
   names,
 }: LiveActivityContentProps) {
@@ -146,12 +144,7 @@ export function LiveActivityContent({
 
   return (
     <>
-      <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
-        <StatCard
-          label="Recent requests"
-          value={formatNumber(rows.length)}
-          hint="Latest in this feed"
-        />
+      <section className="grid gap-3 sm:grid-cols-3 sm:gap-4">
         <StatCard
           label="In flight"
           value={formatNumber(inFlight)}
@@ -161,11 +154,6 @@ export function LiveActivityContent({
         <StatCard
           label="Active users"
           value={formatNumber(initialActiveUsers)}
-          hint="When you opened this page"
-        />
-        <StatCard
-          label="Active requests"
-          value={formatNumber(initialActiveRequests)}
           hint="When you opened this page"
         />
         <StatCard

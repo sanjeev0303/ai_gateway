@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 
-import { DonutChart } from "@/components/charts";
 import { DataTable, PageShell, StatCard, type Column } from "@/components/dashboard";
 import {
   Card,
@@ -63,24 +62,15 @@ async function loadProviderCredentials() {
       created: formatDate(credential.created_at),
     }));
 
-  const kindCounts = new Map<string, number>();
-  for (const row of rows) {
-    kindCounts.set(row.kind, (kindCounts.get(row.kind) ?? 0) + 1);
-  }
-
   return {
     rows,
     total: rows.length,
     active: rows.filter((row) => row.status === "active").length,
-    kinds: kindCounts.size,
-    kindMix: [...kindCounts.entries()]
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value),
   };
 }
 
 export default async function ProviderCredentialsPage() {
-  const { rows, total, active, kinds, kindMix } = await loadProviderCredentials();
+  const { rows, total, active } = await loadProviderCredentials();
 
   return (
     <div className="p-4 sm:p-6">
@@ -88,7 +78,7 @@ export default async function ProviderCredentialsPage() {
         title="Provider credentials"
         description="Credentials for upstream providers. Only a fingerprint and tail are stored."
       >
-        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <section className="grid gap-3 sm:grid-cols-2 sm:gap-4">
           <StatCard
             label="Credentials"
             value={formatNumber(total)}
@@ -100,26 +90,7 @@ export default async function ProviderCredentialsPage() {
             tone={total - active > 0 ? "neutral" : "success"}
             hint="No longer usable"
           />
-          <StatCard
-            label="Provider kinds"
-            value={formatNumber(kinds)}
-            hint="Distinct upstream providers"
-          />
         </section>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Credentials by provider</CardTitle>
-            <CardDescription>Which upstream each credential targets.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DonutChart
-              data={kindMix}
-              centerLabel="total"
-              formatValue={(value) => `${formatNumber(value)} credentials`}
-            />
-          </CardContent>
-        </Card>
 
         <Card>
           <CardHeader>

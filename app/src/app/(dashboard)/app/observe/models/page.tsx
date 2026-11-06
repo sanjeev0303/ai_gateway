@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 
-import { BarChart } from "@/components/charts";
 import {
   DataTable,
   ObserveFilters,
@@ -22,7 +21,6 @@ import {
   formatNumber,
   formatPercent,
   formatProviderName,
-  formatUsd,
   microsToUsd,
 } from "@/lib/format";
 import { getApiClient } from "@/lib/session";
@@ -87,22 +85,6 @@ const modelColumns: readonly Column<ModelUsageRow>[] = [
   },
 ];
 
-interface CatalogRow {
-  id: string;
-  name: string;
-  slug: string;
-  provider: string;
-  active: string;
-  activeTone: StatusTone;
-  detailUrl: string;
-}
-
-const catalogColumns: readonly Column<CatalogRow>[] = [
-  { key: "name", header: "Model", primary: "name", secondary: "slug", sort: "name", href: "detailUrl" },
-  { key: "provider", header: "Provider", primary: "provider", sort: "provider" },
-  { key: "active", header: "Status", primary: "active", tone: "activeTone", sort: "active" },
-];
-
 /** The API exposes activity as a boolean, not a status string. */
 function activeState(isActive: boolean | undefined): { label: string; tone: StatusTone } {
   if (isActive === undefined) return { label: "unlisted", tone: "neutral" };
@@ -164,8 +146,6 @@ export default async function ModelsPage({
     (sum, row) => sum + microsToUsd(row.CostMicros),
     0,
   );
-  const totalRequests = modelUsage.items.reduce((sum, row) => sum + row.Requests, 0);
-  const activeCatalog = catalog.items.filter((model) => model.is_active).length;
 
   const rows: ModelUsageRow[] = modelUsage.items.map((row) => {
     const matched = byIdentifier.get(row.Model);
@@ -188,25 +168,6 @@ export default async function ModelsPage({
     };
   });
 
-  const catalogRows: CatalogRow[] = catalog.items.map((model) => {
-    const { label: active, tone: activeTone } = activeState(model.is_active);
-    return {
-      id: model.id,
-      name: model.display_name,
-      slug: model.model_slug,
-      provider: formatProviderName(model.provider_kind, model.model_slug),
-      active,
-      activeTone,
-      detailUrl: `/app/observe/models/${encodeURIComponent(model.model_slug)}`,
-    };
-  });
-
-  const spendByModel = [...rows]
-    .sort((a, b) => b.spend - a.spend)
-    .map((model) => ({ label: model.name, value: model.spend }));
-
-  const unlisted = rows.filter((model) => model.active === "unlisted").length;
-
   return (
     <div className="p-4 sm:p-6">
       <PageShell
@@ -216,42 +177,13 @@ export default async function ModelsPage({
       >
         <BreakdownTabs />
         <ObserveFilters />
-        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-          <StatCard
-            label="Models in catalog"
-            value={formatNumber(catalog.items.length)}
-            hint={`${formatNumber(activeCatalog)} active`}
-          />
+        <section className="grid gap-4 sm:grid-cols-2">
           <StatCard
             label="Models used"
             value={formatNumber(rows.length)}
-            tone={unlisted > 0 ? "warning" : "neutral"}
-            hint={unlisted > 0 ? `${formatNumber(unlisted)} not in catalog` : RANGE_HINT[range]}
-          />
-          <StatCard
-            label="Requests"
-            value={formatNumber(totalRequests)}
-            hint={RANGE_HINT[range]}
-          />
-          <StatCard
-            label="Spend across models"
-            value={formatUsd(totalSpend)}
             hint={RANGE_HINT[range]}
           />
         </section>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Spend by model</CardTitle>
-            <CardDescription>
-              Trailing 30 days, highest first. A long tail is normal; a single
-              model dominating is a review signal.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <BarChart data={spendByModel} formatValue={formatUsd} />
-          </CardContent>
-        </Card>
 
         <Card>
           <CardHeader>
@@ -267,25 +199,6 @@ export default async function ModelsPage({
               rowKey="id"
               pageSize={10}
               emptyMessage="No model usage recorded."
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Model catalog</CardTitle>
-            <CardDescription>
-              Every model the gateway knows about, including ones with no recent
-              traffic.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DataTable
-              columns={catalogColumns}
-              rows={catalogRows}
-              rowKey="id"
-              pageSize={10}
-              emptyMessage="No models registered."
             />
           </CardContent>
         </Card>

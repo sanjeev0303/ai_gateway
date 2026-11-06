@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { BarChart, DonutChart } from "@/components/charts";
+import { DonutChart } from "@/components/charts";
 import {
   DataTable,
   PageShell,
@@ -18,8 +18,6 @@ import {
   formatCompact,
   formatDate,
   formatNumber,
-  formatUsd,
-  microsToUsd,
 } from "@/lib/format";
 import { toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
@@ -30,8 +28,6 @@ export const metadata: Metadata = {
   title: "Model registry · Tollseal",
   description: "Every model the gateway can route to, per provider, with sync capability.",
 };
-
-const DAY = 24 * 60 * 60 * 1000;
 
 const ACTIVE_TONE: Record<string, StatusTone> = {
   active: "success",
@@ -61,16 +57,7 @@ interface ModelRow {
 
 async function loadModelRegistry() {
   const client = await getApiClient();
-  const from = new Date(Date.now() - 30 * DAY);
-
-  const [registry, usageByModel] = await Promise.all([
-    client.models.list(),
-    client.usage.byModel({ from }),
-  ]);
-
-  // usage_hourly/daily/monthly group by the raw request `model`, which the
-  // pricing join pins to pricing_models.model_slug — so slug is the join key.
-  const usage = new Map(usageByModel.items.map((row) => [row.Model, row]));
+  const registry = await client.models.list();
 
   const rows: ModelRow[] = [...registry.items]
     .sort((a, b) => a.display_name.localeCompare(b.display_name))
@@ -99,21 +86,8 @@ async function loadModelRegistry() {
     );
   }
 
-  const nameBySlug = new Map(
-    registry.items.map((model) => [model.model_slug, model.display_name]),
-  );
-
-  const topSpend = [...usageByModel.items]
-    .sort((a, b) => b.CostMicros - a.CostMicros)
-    .slice(0, 6)
-    .map((row) => ({
-      label: nameBySlug.get(row.Model) ?? row.Model,
-      value: microsToUsd(row.CostMicros),
-    }));
-
   return {
     rows,
-    topSpend,
     registered: rows.length,
     active: rows.filter((row) => row.is_active).length,
     providers: kindCounts.size,
@@ -124,7 +98,7 @@ async function loadModelRegistry() {
 }
 
 export default async function ModelRegistryPage() {
-  const { rows, topSpend, registered, active, providers, byProvider } =
+  const { rows, registered, active, providers, byProvider } =
     await loadModelRegistry();
 
   return (
@@ -159,34 +133,19 @@ export default async function ModelRegistryPage() {
           />
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Catalogue by provider</CardTitle>
-              <CardDescription>Where the registered models come from.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DonutChart
-                data={byProvider}
-                centerLabel="models"
-                formatValue={(value) => `${formatNumber(value)} models`}
-              />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Spend by model</CardTitle>
-              <CardDescription>
-                Top six models by trailing 30-day cost. A model can appear here
-                before it is registered.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <BarChart data={topSpend} formatValue={(value) => formatUsd(value)} />
-            </CardContent>
-          </Card>
-        </section>
+        <Card>
+          <CardHeader>
+            <CardTitle>Catalogue by provider</CardTitle>
+            <CardDescription>Where the registered models come from.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DonutChart
+              data={byProvider}
+              centerLabel="models"
+              formatValue={(value) => `${formatNumber(value)} models`}
+            />
+          </CardContent>
+        </Card>
 
         <ModelRegistryClient initialRows={rows} />
 
@@ -205,8 +164,7 @@ export default async function ModelRegistryPage() {
             <p>
               Derived cost is priced by the worker from the price sheet in force
               at request time, but there is no control API for price sheets, and
-              no policy API governs which tier may call which model. Observed
-              spend is therefore the only cost signal available here.
+              no policy API governs which tier may call which model.
             </p>
           </CardContent>
         </Card>

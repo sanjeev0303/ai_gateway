@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { BarChart, DonutChart } from "@/components/charts";
+import { DonutChart } from "@/components/charts";
 import {
   DataTable,
   ObserveFilters,
@@ -117,7 +117,6 @@ export default async function ProjectsPage({
     (sum, row) => sum + microsToUsd(row.CostMicros),
     0,
   );
-  const totalRequests = projectUsage.items.reduce((sum, row) => sum + row.Requests, 0);
 
   const rows: ProjectRow[] = projectList.items.map((project) => {
     const attributed = spendByProject.get(project.id);
@@ -152,10 +151,6 @@ export default async function ProjectsPage({
     },
   ].filter((datum) => datum.value > 0);
 
-  const spendByProjectChart = [...rows]
-    .sort((a, b) => b.spend - a.spend)
-    .map((project) => ({ label: project.name, value: project.spend }));
-
   return (
     <div className="p-4 sm:p-6">
       <PageShell
@@ -164,21 +159,11 @@ export default async function ProjectsPage({
       >
         <BreakdownTabs />
         <ObserveFilters />
-        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2">
           <StatCard
             label="Active projects"
             value={formatNumber(active.length)}
             hint={`${formatNumber(rows.length)} total`}
-          />
-          <StatCard
-            label="Requests"
-            value={formatNumber(totalRequests)}
-            hint="Trailing 30 days"
-          />
-          <StatCard
-            label="Spend 30d"
-            value={formatUsd(totalSpend)}
-            hint={`${formatUsd(totalSpend / Math.max(1, active.length))} per active project`}
           />
           <StatCard
             label="Avg per project"
@@ -187,33 +172,21 @@ export default async function ProjectsPage({
           />
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Spend by project</CardTitle>
-              <CardDescription>Trailing 30 days, highest first.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <BarChart data={spendByProjectChart} formatValue={formatUsd} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Spend by status</CardTitle>
-              <CardDescription>
-                Archived projects should stop accruing spend entirely.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DonutChart
-                data={spendByStatus}
-                centerLabel="spend"
-                formatValue={formatUsd}
-              />
-            </CardContent>
-          </Card>
-        </section>
+        <Card>
+          <CardHeader>
+            <CardTitle>Spend by status</CardTitle>
+            <CardDescription>
+              Archived projects should stop accruing spend entirely.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DonutChart
+              data={spendByStatus}
+              centerLabel="spend"
+              formatValue={formatUsd}
+            />
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

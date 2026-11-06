@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { BarChart, DonutChart } from "@/components/charts";
+import { DonutChart } from "@/components/charts";
 import {
   DataTable,
   ObserveFilters,
@@ -16,7 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatCompact, formatNumber, formatPercent, formatUsd, microsToUsd } from "@/lib/format";
+import { formatNumber, formatPercent, formatUsd, microsToUsd } from "@/lib/format";
 import { ROLE_ORDER, ROLE_TONE, STATUS_TONE, toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
@@ -93,17 +93,11 @@ export default async function UsersPage({
 
   const active = rows.filter((row) => row.status === "active").length;
   const totalSpend = rows.reduce((sum, row) => sum + row.spend, 0);
-  const totalRequests = rows.reduce((sum, row) => sum + row.requests, 0);
 
   const spendByRole = ROLE_ORDER.map((role) => ({
     label: role,
     value: rows.filter((row) => row.role === role).reduce((sum, row) => sum + row.spend, 0),
   })).filter((datum) => datum.value > 0);
-
-  const topSpenders = [...rows]
-    .sort((a, b) => b.spend - a.spend)
-    .slice(0, 6)
-    .map((row) => ({ label: row.name, value: row.spend }));
 
   return (
     <div className="p-4 sm:p-6">
@@ -113,21 +107,11 @@ export default async function UsersPage({
       >
         <BreakdownTabs />
         <ObserveFilters />
-        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2">
           <StatCard
             label="Active users"
             value={formatNumber(active)}
             hint={`${formatNumber(rows.length)} total accounts`}
-          />
-          <StatCard
-            label="Requests"
-            value={formatCompact(totalRequests)}
-            hint="Trailing 30 days"
-          />
-          <StatCard
-            label="Spend 30d"
-            value={formatUsd(totalSpend)}
-            hint={`${formatUsd(totalSpend / Math.max(1, active))} per active user`}
           />
           <StatCard
             label="Avg spend"
@@ -137,33 +121,21 @@ export default async function UsersPage({
           />
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Top spenders</CardTitle>
-              <CardDescription>Trailing 30 days, highest first.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <BarChart data={topSpenders} formatValue={formatUsd} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Spend by role</CardTitle>
-              <CardDescription>
-                Where spend concentrates by permission level.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DonutChart
-                data={spendByRole}
-                centerLabel="spend"
-                formatValue={formatUsd}
-              />
-            </CardContent>
-          </Card>
-        </section>
+        <Card>
+          <CardHeader>
+            <CardTitle>Spend by role</CardTitle>
+            <CardDescription>
+              Where spend concentrates by permission level.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DonutChart
+              data={spendByRole}
+              centerLabel="spend"
+              formatValue={formatUsd}
+            />
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

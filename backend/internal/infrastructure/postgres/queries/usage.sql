@@ -256,6 +256,14 @@ WHERE organization_id = sqlc.arg(organization_id)
   AND created_at >= sqlc.arg(from_ts)
   AND created_at < sqlc.arg(to_ts)
   AND model != ''
+  AND (sqlc.narg(project_id)::uuid IS NULL OR project_id = sqlc.narg(project_id))
+  AND (sqlc.narg(user_id)::uuid IS NULL OR user_id = sqlc.narg(user_id))
+  AND (sqlc.narg(team_id)::uuid IS NULL OR team_id = sqlc.narg(team_id))
+  AND (sqlc.narg(service_account_id)::uuid IS NULL OR service_account_id = sqlc.narg(service_account_id))
+  AND (sqlc.narg(gateway_credential_id)::uuid IS NULL OR gateway_credential_id = sqlc.narg(gateway_credential_id))
+  AND (sqlc.narg(provider)::text IS NULL OR provider_kind = sqlc.narg(provider))
+  AND (sqlc.narg(model)::text IS NULL OR model = sqlc.narg(model))
+  AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
 GROUP BY model
 ORDER BY total_tokens DESC;
 
@@ -268,6 +276,14 @@ FROM llm_requests
 WHERE organization_id = sqlc.arg(organization_id)
   AND created_at >= sqlc.arg(from_ts)
   AND created_at < sqlc.arg(to_ts)
+  AND (sqlc.narg(project_id)::uuid IS NULL OR project_id = sqlc.narg(project_id))
+  AND (sqlc.narg(user_id)::uuid IS NULL OR user_id = sqlc.narg(user_id))
+  AND (sqlc.narg(team_id)::uuid IS NULL OR team_id = sqlc.narg(team_id))
+  AND (sqlc.narg(service_account_id)::uuid IS NULL OR service_account_id = sqlc.narg(service_account_id))
+  AND (sqlc.narg(gateway_credential_id)::uuid IS NULL OR gateway_credential_id = sqlc.narg(gateway_credential_id))
+  AND (sqlc.narg(provider)::text IS NULL OR provider_kind = sqlc.narg(provider))
+  AND (sqlc.narg(model)::text IS NULL OR model = sqlc.narg(model))
+  AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
 GROUP BY provider_kind
 ORDER BY total_tokens DESC;
 

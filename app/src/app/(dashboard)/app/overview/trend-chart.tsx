@@ -58,9 +58,8 @@ function niceTop(max: number): number {
 }
 
 /**
- * Requests or spend over the selected range, as one smooth area. The headline
- * says what the chart shows (the total and the busiest moment); hovering, or the
- * arrow keys, read any point exactly.
+ * Requests or spend over the selected range, as one smooth area. A short line
+ * names the busiest moment; hovering, or the arrow keys, read any point exactly.
  */
 export function TrendChart({ points }: { points: readonly TrendPoint[] }) {
   const [metric, setMetric] = useState<Metric>("requests");
@@ -111,7 +110,6 @@ export function TrendChart({ points }: { points: readonly TrendPoint[] }) {
   }
 
   const values = points.map((p) => p[metric]);
-  const total = values.reduce((a, b) => a + b, 0);
   const peakIndex = values.indexOf(Math.max(...values));
   const top = niceTop(Math.max(...values));
   const plotW = W - PAD.left - PAD.right;
@@ -135,13 +133,10 @@ export function TrendChart({ points }: { points: readonly TrendPoint[] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="font-display text-[1.75rem] leading-none tabular-nums">{m.format(total)}</p>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            {m.label === "Spend" ? "Spent" : "Requests"} in this range · busiest {full.format(new Date(points[peakIndex]!.at))} ({m.format(values[peakIndex]!)})
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground tabular-nums">
+          Busiest {full.format(new Date(points[peakIndex]!.at))} · {m.format(values[peakIndex]!)}
+        </p>
         <div role="tablist" aria-label="Metric" className="liquid-glass inline-flex h-9 items-center rounded-full border p-[3px]">
           {(Object.keys(METRICS) as Metric[]).map((key) => (
             <button
@@ -167,7 +162,7 @@ export function TrendChart({ points }: { points: readonly TrendPoint[] }) {
           className="h-auto w-full touch-none outline-none focus-visible:ring-3 focus-visible:ring-ring/40 rounded-lg"
           role="img"
           tabIndex={0}
-          aria-label={`${m.label} over the range: ${m.format(total)} in total, busiest at ${full.format(new Date(points[peakIndex]!.at))} with ${m.format(values[peakIndex]!)}. Use the arrow keys to read each point.`}
+          aria-label={`${m.label} over the range, busiest at ${full.format(new Date(points[peakIndex]!.at))} with ${m.format(values[peakIndex]!)}. Use the arrow keys to read each point.`}
           onPointerMove={(e) => pick(e.clientX, e.currentTarget.getBoundingClientRect())}
           onPointerLeave={() => setActive(null)}
           onKeyDown={(e) => {
