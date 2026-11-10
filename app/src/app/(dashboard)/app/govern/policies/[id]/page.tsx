@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Plus } from "lucide-react";
 
 import { DataTable, PageShell, type Column } from "@/components/dashboard";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import {
   Card,
   CardContent,

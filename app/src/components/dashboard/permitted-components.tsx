@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Lock } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import { Permitted, usePermission, usePermissions } from "@/hooks/use-permissions";
 import type { Permission } from "@/lib/permissions";
 

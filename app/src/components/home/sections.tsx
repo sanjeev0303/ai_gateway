@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 import { FlowCurves } from "@/components/brand/flow-curves";
-import { GuillocheBand, GuillocheRosette } from "@/components/brand/guilloche";
+import { GuillocheBand, GuillocheRosette } from "@ai-governance/console-ui/brand/guilloche";
 import { LogoMark } from "@/components/logo";
 import { CodeTabs } from "./code-tabs";
 import { Container, SectionIntro } from "./section";

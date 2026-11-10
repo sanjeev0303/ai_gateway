@@ -16,7 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatNumber, formatPercent, formatUsd, microsToUsd } from "@/lib/format";
+import { formatNumber, formatPercent, formatUsd, microsToUsd } from "@ai-governance/console-ui/lib/format";
 import { ROLE_ORDER, ROLE_TONE, STATUS_TONE, toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";

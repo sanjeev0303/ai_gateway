@@ -1,5 +1,5 @@
 import { LogoMark } from "@/components/logo";
-import { cn } from "@/lib/utils";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 
 /**
  * The gateway as an object: a stack of foil plates (authenticate, guard,

@@ -19,6 +19,7 @@ import (
 	"ai-governance-saas/backend/internal/application/conversation"
 	"ai-governance-saas/backend/internal/application/guardrails"
 	"ai-governance-saas/backend/internal/application/identity"
+	"ai-governance-saas/backend/internal/application/platformadmin"
 	"ai-governance-saas/backend/internal/application/policy"
 	"ai-governance-saas/backend/internal/application/pricing"
 	"ai-governance-saas/backend/internal/application/provider"
@@ -50,6 +51,7 @@ type api struct {
 	policy         *policy.Service
 	guardrails     *guardrails.Service
 	guardrailsEval *guardrails.Evaluator
+	platformAdmin  *platformadmin.Service
 
 	sessionCookieName   string
 	sessionCookieSecure bool
@@ -74,6 +76,7 @@ func newAPI(deps Deps) *api {
 		policy:              deps.Policy,
 		guardrails:          deps.Guardrails,
 		guardrailsEval:      deps.GuardrailsEval,
+		platformAdmin:       deps.PlatformAdmin,
 		sessionCookieName:   deps.SessionCookieName,
 		sessionCookieSecure: deps.SessionCookieSecure,
 		csrfEnabled:         deps.CSRFEnabled,
@@ -486,6 +489,11 @@ func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, identity.ErrUnauthorized):
 		appErr = perrors.New(perrors.KindUnauthenticated, "unauthenticated", "missing or invalid credentials")
+	case errors.Is(err, identity.ErrOrganizationSuspended):
+		appErr = perrors.New(perrors.KindPermissionDenied, "organization_suspended", "this organization has been suspended; contact support")
+	case errors.Is(err, platformadmin.ErrNotPlatformAdmin):
+		// 404, not 403: the admin surface does not admit to existing.
+		appErr = perrors.New(perrors.KindNotFound, "not_found", "not found")
 	case errors.Is(err, identity.ErrInvalidInvitation):
 		appErr = perrors.New(perrors.KindInvalidArgument, "invalid_invitation", identity.ErrInvalidInvitation.Error())
 	case errors.Is(err, identity.ErrInvitationExpired):

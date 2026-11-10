@@ -188,6 +188,13 @@ func (p *PolicyResolverImpl) extractConfigs(
 			key = scope
 		}
 	}
+	// Budget and rate counters share one Redis across all tenants, and rule
+	// JSON is tenant-written. Namespace every key under this org so a rule
+	// can never name (and drain) another org's counter.
+	orgPrefix := "org:" + orgID.String()
+	if key != orgPrefix && !strings.HasPrefix(key, orgPrefix+":") {
+		key = orgPrefix + ":" + key
+	}
 
 	switch ruleType {
 	case "rate_limit":

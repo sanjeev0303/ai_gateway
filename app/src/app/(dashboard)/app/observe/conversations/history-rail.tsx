@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { cn } from "@/lib/utils";
-import { formatNumber } from "@/lib/format";
+import { cn } from "@ai-governance/console-ui/lib/utils";
+import { formatNumber } from "@ai-governance/console-ui/lib/format";
 
 export interface RailKey {
   /** Null groups the conversations that recorded no gateway key. */

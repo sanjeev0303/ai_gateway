@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import { DataTable, PageShell, StatCard, type Column } from "@/components/dashboard";
 import { getApiClient } from "@/lib/session";
 import { notFound } from "next/navigation";
-import { formatCompact, formatUsd, formatNumber, formatMs, formatDate, formatRelative } from "@/lib/format";
+import { formatCompact, formatUsd, formatNumber, formatMs, formatDate, formatRelative } from "@ai-governance/console-ui/lib/format";
 import {
   Card,
   CardContent,
@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { thirtyDaysAgo } from "@/lib/date-range";
+import { thirtyDaysAgo } from "@ai-governance/console-ui/lib/date-range";
 
 interface UsageRow {
   id: string;

@@ -10,8 +10,8 @@ import {
   Check,
   CheckCheck,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@ai-governance/console-ui/ui/badge";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import {
   Card,
   CardContent,
@@ -27,7 +27,7 @@ import {
   markAllNotificationsReadAction,
 } from "./alert-actions";
 import type { AlertEvent, InAppNotification } from "@ai-governance/api-client";
-import { formatRelative } from "@/lib/format";
+import { formatRelative } from "@ai-governance/console-ui/lib/format";
 
 interface IncidentsClientProps {
   initialEvents: AlertEvent[];

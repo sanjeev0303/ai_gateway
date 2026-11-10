@@ -175,8 +175,19 @@ type controlStubs struct {
 
 func newControlStubs() *controlStubs {
 	return &controlStubs{
-		orgs:        &stubOrgs{},
-		users:       &stubUsers{},
+		// requireAuth re-reads the caller's user and organization on every
+		// request (identity.CheckActive), so both default to an active row
+		// with the requested ID. Tests that care set their own getByID.
+		orgs: &stubOrgs{getByID: func(_ context.Context, id uuid.UUID) (domain.Organization, error) {
+			org := testOrg
+			org.ID = id
+			return org, nil
+		}},
+		users: &stubUsers{getByID: func(_ context.Context, id uuid.UUID) (domain.User, error) {
+			user := testUser
+			user.ID = id
+			return user, nil
+		}},
 		members:     &stubMembers{},
 		invitations: &stubInvitations{},
 		projects:    &stubProjects{},

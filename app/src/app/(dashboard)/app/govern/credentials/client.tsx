@@ -2,10 +2,10 @@
 
 import * as React from "react";
 import { Plus, Key, Copy, Check, Trash2, AlertTriangle, ShieldCheck } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@ai-governance/console-ui/ui/button";
+import { Input } from "@ai-governance/console-ui/ui/input";
+import { Label } from "@ai-governance/console-ui/ui/label";
+import { Badge } from "@ai-governance/console-ui/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -14,14 +14,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@ai-governance/console-ui/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ai-governance/console-ui/ui/select";
 import { toast } from "sonner";
 import { createControlCredentialAction, revokeControlCredentialAction } from "./actions";
 import { confirmAction } from "@/components/dashboard/confirm-dialog";

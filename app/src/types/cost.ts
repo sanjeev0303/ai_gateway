@@ -1,4 +1,4 @@
-import type { CategoryDatum, TimeSeriesPoint } from "./common";
+import type { CategoryDatum, TimeSeriesPoint } from "@ai-governance/console-ui/types/common";
 import type { ModelModality } from "./model";
 
 export interface CostForecast {

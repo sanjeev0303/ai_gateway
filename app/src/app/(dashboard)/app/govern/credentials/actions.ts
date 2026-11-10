@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getApiClient } from "@/lib/session";
-import type { CreatedCredential } from "@ai-governance/api-client";
+import type { CreateCredentialInput, CreatedCredential } from "@ai-governance/api-client";
 
 export async function createControlCredentialAction(data: {
   name: string;
@@ -12,7 +12,7 @@ export async function createControlCredentialAction(data: {
     const { credentials } = await getApiClient();
     const res = await credentials.create({
       name: data.name,
-      scope: data.scope || "control_plane",
+      scope: (data.scope || "control_plane") as CreateCredentialInput["scope"],
     });
     revalidatePath("/app/govern/credentials");
     return { success: true, data: res };

@@ -1,68 +1,21 @@
+import type { components } from "@ai-governance/contracts";
 import type { ListResponse, RequestOptions, Transport } from "./client";
 
 /** Control-plane API key. The key hash is never exposed; `key_prefix` is the only hint. */
-export interface Credential {
-  id: string;
-  organization_id: string;
-  name: string;
-  key_prefix: string;
-  scope: string;
-  status: string;
-  service_account_id?: string;
-  last_used_at?: string;
-  created_at: string;
-  updated_at: string;
-}
-
+export type Credential = components["schemas"]["ApiCredential"];
 /** The raw control-plane key, returned exactly once. */
-export interface CreatedCredential {
-  credential: Credential;
-  api_key: string;
-}
-
+export type CreatedCredential = components["schemas"]["CreateApiCredentialResponse"];
+export type CreateCredentialInput = components["schemas"]["CreateApiCredentialRequest"];
 /**
- * Gateway credential. On `create` and `rotate` the server returns this same flat
- * DTO with `key_prefix` holding the *raw* key, so read it immediately; every
- * other response carries only the prefix.
+ * On `create` and `rotate` the server puts the *raw* key in `key_prefix`, so
+ * read it immediately; every other response carries only the prefix.
  */
-export interface GatewayCredential {
-  id: string;
-  organization_id: string;
-  name: string;
-  key_prefix: string;
-  subject_type: string;
-  subject_id: string;
-  team_id?: string;
-  project_id?: string;
-  scopes: string[];
-  status: string;
-  expires_at?: string;
-  last_used_at?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CreateGatewayCredentialInput {
-  name: string;
-  subject_type: string;
-  subject_id: string;
-  team_id?: string;
-  project_id?: string;
-  scopes: string[];
-  expires_at?: string;
-}
-
-export interface RotateGatewayCredentialInput {
-  name?: string;
-  scopes?: string[];
-  expires_at?: string;
-}
+export type GatewayCredential = components["schemas"]["GatewayCredential"];
+export type CreateGatewayCredentialInput = components["schemas"]["CreateGatewayCredentialRequest"];
+export type RotateGatewayCredentialInput = components["schemas"]["RotateGatewayCredentialRequest"];
 
 export interface CredentialsModule {
-  create(
-    input: { name: string; scope: string; service_account_id?: string },
-    options?: RequestOptions,
-  ): Promise<CreatedCredential>;
+  create(input: CreateCredentialInput, options?: RequestOptions): Promise<CreatedCredential>;
   list(options?: RequestOptions): Promise<ListResponse<Credential>>;
   remove(credentialId: string, options?: RequestOptions): Promise<void>;
 

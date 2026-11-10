@@ -586,6 +586,31 @@ func TestBillingApplicationServiceLifecycle(t *testing.T) {
 		}
 	})
 
+	t.Run("VerifyPaymentCallback rejects an order paid in another org", func(t *testing.T) {
+		adminActor, _, subsRepo, invoicesRepo, _, _, _, _, _, svc := setupBillingEnv()
+
+		// A cheap checkout paid in some other org: its order is genuinely
+		// signed, but it is not this org's checkout.
+		_, err := svc.CreateCheckoutSession(context.Background(), adminActor, "razorpay", "pro", "admin@sentinel.dev", "https://sentinel.dev/success", "https://sentinel.dev/cancel")
+		if err != nil {
+			t.Fatalf("failed to create checkout session: %v", err)
+		}
+		otherOrg := adminActor
+		otherOrg.OrganizationID = uuid.New()
+
+		_, err = svc.VerifyPaymentCallback(context.Background(), otherOrg, "razorpay", "order_sess_123", "pay_replay", "valid_sig", "enterprise")
+		if !errors.Is(err, payment.ErrCheckoutNotFound) {
+			t.Fatalf("expected ErrCheckoutNotFound, got %v", err)
+		}
+		if _, err := subsRepo.ActiveWithPlan(context.Background(), otherOrg.OrganizationID); err == nil {
+			t.Error("replaying org got a subscription")
+		}
+		invoices, _ := invoicesRepo.List(context.Background(), otherOrg.OrganizationID)
+		if len(invoices) != 0 {
+			t.Errorf("expected 0 invoices for the replaying org, got %d", len(invoices))
+		}
+	})
+
 	t.Run("VerifyPaymentCallback rejects expired checkout", func(t *testing.T) {
 		adminActor, _, _, _, checkoutsRepo, _, _, _, _, svc := setupBillingEnv()
 

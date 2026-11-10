@@ -18,16 +18,16 @@ import {
   Layers,
   Info,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@ai-governance/console-ui/ui/button";
+import { Input } from "@ai-governance/console-ui/ui/input";
+import { Label } from "@ai-governance/console-ui/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ai-governance/console-ui/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -36,8 +36,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
+} from "@ai-governance/console-ui/ui/dialog";
+import { Badge } from "@ai-governance/console-ui/ui/badge";
 import { toast } from "sonner";
 import {
   Table,
@@ -46,8 +46,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { formatDate } from "@/lib/format";
+} from "@ai-governance/console-ui/ui/table";
+import { formatDate } from "@ai-governance/console-ui/lib/format";
 import type { StatusTone } from "@/types";
 import {
   createPricingModelAction,

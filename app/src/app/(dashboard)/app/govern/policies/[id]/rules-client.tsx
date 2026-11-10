@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import * as React from "react";
 import { createApiClient } from "@ai-governance/api-client";
 import { CONTROL_API_BASE } from "@/lib/control-api";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -15,9 +15,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@ai-governance/console-ui/ui/dialog";
+import { Input } from "@ai-governance/console-ui/ui/input";
+import { Label } from "@ai-governance/console-ui/ui/label";
 
 import {
   Select,
@@ -25,24 +25,27 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ai-governance/console-ui/ui/select";
 
 import { AlertCircle, CheckCircle2, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import type { PolicyValidationResult } from "@ai-governance/api-client";
+import type { CreatePolicyRuleRequest, PolicyValidationResult } from "@ai-governance/api-client";
+
+// The server sends null rather than [] when there are no errors or warnings.
+type ValidationView = PolicyValidationResult & { errors: string[]; warnings: string[] };
 import { confirmAction } from "@/components/dashboard/confirm-dialog";
 
 export function ValidatePolicyButton({ id }: { id: string }) {
   const api = React.useMemo(() => createApiClient({ baseUrl: CONTROL_API_BASE }), []);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<PolicyValidationResult | null>(null);
+  const [result, setResult] = useState<ValidationView | null>(null);
 
   async function onValidate() {
     setLoading(true);
     try {
       const res = await api.policies.validate(id);
-      setResult(res);
+      setResult({ ...res, errors: res.errors ?? [], warnings: res.warnings ?? [] });
       setOpen(true);
       if (res.valid) {
         toast.success("Policy is valid");
@@ -241,7 +244,7 @@ export function CreateRuleDialog({
       }
 
       await api.policies.createRule(policyId, {
-        rule_type: ruleType,
+        rule_type: ruleType as CreatePolicyRuleRequest["rule_type"],
         description,
         enabled,
         conditions,

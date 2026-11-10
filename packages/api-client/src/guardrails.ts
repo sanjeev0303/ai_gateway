@@ -1,63 +1,16 @@
+import type { components } from "@ai-governance/contracts";
 import type { ListResponse, RequestOptions, Transport } from "./client";
 
-export type GuardrailTargetType = "global" | "team" | "project" | "gateway_credential";
-export type GuardrailDetector = "pii" | "secrets" | "unsafe_keywords" | "request_constraints";
-export type GuardrailAction = "allow" | "warn" | "block" | "redact";
+export type GuardrailTargetType = components["schemas"]["Guardrail"]["target_type"];
+export type GuardrailDetector = components["schemas"]["Guardrail"]["detector"];
+export type GuardrailAction = components["schemas"]["Guardrail"]["action"];
 
-export interface Guardrail {
-  id: string;
-  name: string;
-  description: string;
-  target_type: GuardrailTargetType;
-  target_id?: string | null;
-  detector: GuardrailDetector;
-  action: GuardrailAction;
-  configuration: Record<string, unknown>;
-  enabled: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CreateGuardrailInput {
-  name: string;
-  description?: string;
-  target_type: GuardrailTargetType;
-  target_id?: string | null;
-  detector: GuardrailDetector;
-  action: GuardrailAction;
-  configuration: Record<string, unknown>;
-  enabled?: boolean;
-}
-
-export interface UpdateGuardrailInput {
-  name: string;
-  description?: string;
-  action: GuardrailAction;
-  configuration: Record<string, unknown>;
-  enabled: boolean;
-}
-
-export interface GuardrailEvent {
-  id: string;
-  guardrail_id: string;
-  request_id: string;
-  direction: "input" | "output";
-  detector: string;
-  action: string;
-  matched_category: string;
-  timestamp: string;
-}
-
-export interface TestGuardrailInput {
-  payload: string;
-  token_count?: number;
-}
-
-export interface TestGuardrailResponse {
-  triggered: boolean;
-  action?: string;
-  matched_category?: string;
-}
+export type Guardrail = components["schemas"]["Guardrail"];
+export type CreateGuardrailInput = components["schemas"]["CreateGuardrailRequest"];
+export type UpdateGuardrailInput = components["schemas"]["UpdateGuardrailRequest"];
+export type GuardrailEvent = components["schemas"]["GuardrailEvent"];
+export type TestGuardrailInput = components["schemas"]["TestGuardrailRequest"];
+export type TestGuardrailResponse = components["schemas"]["TestGuardrailResponse"];
 
 export interface GuardrailsModule {
   list(options?: RequestOptions): Promise<ListResponse<Guardrail>>;

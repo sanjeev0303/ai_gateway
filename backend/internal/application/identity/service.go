@@ -20,7 +20,6 @@ import (
 	"github.com/google/uuid"
 
 	"ai-governance-saas/backend/internal/domain"
-	"ai-governance-saas/backend/internal/platform/credentialcache"
 	"ai-governance-saas/backend/internal/ports"
 	repositories "ai-governance-saas/backend/internal/ports/repositories"
 )
@@ -59,16 +58,15 @@ type ServiceDeps struct {
 	RefreshTokens      repositories.RefreshTokenRepository
 	Subs               repositories.SubscriptionRepository
 
-	Issuer                 ports.TokenIssuer
-	Verifier               ports.TokenVerifier
-	Hasher                 ports.TokenHasher
-	Passwords              ports.PasswordHasher
-	GatewayCredentialCache *credentialcache.CredentialCache
-	CredentialInvalidator  CredentialInvalidator
-	Log                    *slog.Logger
-	Now                    func() time.Time
-	InviteTTL              time.Duration
-	RefreshTokenTTL        time.Duration
+	Issuer                ports.TokenIssuer
+	Verifier              ports.TokenVerifier
+	Hasher                ports.TokenHasher
+	Passwords             ports.PasswordHasher
+	CredentialInvalidator CredentialInvalidator
+	Log                   *slog.Logger
+	Now                   func() time.Time
+	InviteTTL             time.Duration
+	RefreshTokenTTL       time.Duration
 }
 
 // CredentialInvalidator broadcasts real-time credential revocation across processes.
@@ -78,23 +76,22 @@ type CredentialInvalidator interface {
 
 // Service is the identity application service.
 type Service struct {
-	orgs                   repositories.OrganizationRepository
-	users                  repositories.UserRepository
-	members                repositories.OrgMemberRepository
-	invitations            repositories.InvitationRepository
-	projects               repositories.ProjectRepository
-	teams                  repositories.TeamRepository
-	teamMembers            repositories.TeamMemberRepository
-	projMembers            repositories.ProjectMemberRepository
-	accounts               repositories.ServiceAccountRepository
-	credentials            repositories.APICredentialRepository
-	gatewayCredentials     repositories.GatewayCredentialRepository
-	audits                 repositories.AuditLogRepository
-	auth                   repositories.AuthRepository
-	refreshTokens          repositories.RefreshTokenRepository
-	subs                   repositories.SubscriptionRepository
-	gatewayCredentialCache *credentialcache.CredentialCache
-	credentialInvalidator  CredentialInvalidator
+	orgs                  repositories.OrganizationRepository
+	users                 repositories.UserRepository
+	members               repositories.OrgMemberRepository
+	invitations           repositories.InvitationRepository
+	projects              repositories.ProjectRepository
+	teams                 repositories.TeamRepository
+	teamMembers           repositories.TeamMemberRepository
+	projMembers           repositories.ProjectMemberRepository
+	accounts              repositories.ServiceAccountRepository
+	credentials           repositories.APICredentialRepository
+	gatewayCredentials    repositories.GatewayCredentialRepository
+	audits                repositories.AuditLogRepository
+	auth                  repositories.AuthRepository
+	refreshTokens         repositories.RefreshTokenRepository
+	subs                  repositories.SubscriptionRepository
+	credentialInvalidator CredentialInvalidator
 
 	issuer     ports.TokenIssuer
 	verifier   ports.TokenVerifier
@@ -126,31 +123,30 @@ func NewService(deps ServiceDeps) *Service {
 		refreshTTL = defaultRefreshTokenTTL
 	}
 	return &Service{
-		orgs:                   deps.Orgs,
-		users:                  deps.Users,
-		members:                deps.Members,
-		invitations:            deps.Invitations,
-		projects:               deps.Projects,
-		teams:                  deps.Teams,
-		teamMembers:            deps.TeamMembers,
-		projMembers:            deps.ProjMembers,
-		accounts:               deps.Accounts,
-		credentials:            deps.Credentials,
-		gatewayCredentials:     deps.GatewayCredentials,
-		audits:                 deps.Audits,
-		auth:                   deps.Auth,
-		refreshTokens:          deps.RefreshTokens,
-		subs:                   deps.Subs,
-		gatewayCredentialCache: deps.GatewayCredentialCache,
-		credentialInvalidator:  deps.CredentialInvalidator,
-		issuer:                 deps.Issuer,
-		verifier:               deps.Verifier,
-		hasher:                 deps.Hasher,
-		passwords:              deps.Passwords,
-		log:                    log,
-		now:                    now,
-		inviteTTL:              ttl,
-		refreshTTL:             refreshTTL,
+		orgs:                  deps.Orgs,
+		users:                 deps.Users,
+		members:               deps.Members,
+		invitations:           deps.Invitations,
+		projects:              deps.Projects,
+		teams:                 deps.Teams,
+		teamMembers:           deps.TeamMembers,
+		projMembers:           deps.ProjMembers,
+		accounts:              deps.Accounts,
+		credentials:           deps.Credentials,
+		gatewayCredentials:    deps.GatewayCredentials,
+		audits:                deps.Audits,
+		auth:                  deps.Auth,
+		refreshTokens:         deps.RefreshTokens,
+		subs:                  deps.Subs,
+		credentialInvalidator: deps.CredentialInvalidator,
+		issuer:                deps.Issuer,
+		verifier:              deps.Verifier,
+		hasher:                deps.Hasher,
+		passwords:             deps.Passwords,
+		log:                   log,
+		now:                   now,
+		inviteTTL:             ttl,
+		refreshTTL:            refreshTTL,
 	}
 }
 
@@ -799,6 +795,55 @@ func (s *Service) VerifyToken(ctx context.Context, rawToken string) (domain.Toke
 	return claims, nil
 }
 
+// CheckActive re-reads the caller's standing on every request. Access tokens
+// live for hours, so without it a disabled user or a suspended organization
+// kept working until the token expired.
+// ponytail: two primary-key reads per control-API request; cache them for a
+// few seconds if they ever show up in latency.
+func (s *Service) CheckActive(ctx context.Context, actor domain.Actor) error {
+	if actor.Kind == domain.ActorKindUser {
+		user, err := s.users.GetByID(ctx, actor.UserID)
+		if err != nil {
+			if errors.Is(err, repositories.ErrNotFound) {
+				return ErrUnauthorized
+			}
+			return err
+		}
+		if user.Status != domain.UserStatusActive {
+			return ErrUnauthorized
+		}
+	}
+	if actor.OrganizationID == uuid.Nil {
+		return nil
+	}
+	org, err := s.orgs.GetByID(ctx, actor.OrganizationID)
+	if err != nil {
+		if errors.Is(err, repositories.ErrNotFound) {
+			return ErrUnauthorized
+		}
+		return err
+	}
+	if org.Status == domain.OrgStatusSuspended {
+		return ErrOrganizationSuspended
+	}
+	return nil
+}
+
+// firstActiveOrganization picks the organization a fresh session lands in,
+// skipping suspended ones. A user whose only organizations are suspended
+// cannot sign in.
+func firstActiveOrganization(orgs []domain.UserOrganization) (domain.UserOrganization, error) {
+	if len(orgs) == 0 {
+		return domain.UserOrganization{}, ErrUnauthorized
+	}
+	for _, org := range orgs {
+		if org.Organization.Status != domain.OrgStatusSuspended {
+			return org, nil
+		}
+	}
+	return domain.UserOrganization{}, ErrOrganizationSuspended
+}
+
 // AuthenticateAPIKey resolves a raw API key to a service actor. Only active,
 // non-gateway keys bound to an active service account authenticate.
 func (s *Service) AuthenticateAPIKey(ctx context.Context, rawKey string) (domain.Actor, error) {
@@ -1046,12 +1091,9 @@ func (s *Service) RevokeGatewayCredential(ctx context.Context, actor domain.Acto
 	if err := s.RequirePermission(actor, domain.PermissionCredentialsManage); err != nil {
 		return err
 	}
-	credential, err := s.gatewayCredentials.Revoke(ctx, actor.OrganizationID, credentialID)
+	_, err := s.gatewayCredentials.Revoke(ctx, actor.OrganizationID, credentialID)
 	if err != nil {
 		return err
-	}
-	if s.gatewayCredentialCache != nil {
-		s.gatewayCredentialCache.Invalidate(ctx, s.toCachedCredential(&credential))
 	}
 	if s.credentialInvalidator != nil {
 		s.credentialInvalidator.InvalidateCredential(actor.OrganizationID, credentialID)
@@ -1154,11 +1196,6 @@ func (s *Service) RotateGatewayCredential(ctx context.Context, actor domain.Acto
 		return domain.GatewayCredential{}, "", err
 	}
 
-	// Invalidate old credential from cache
-	if s.gatewayCredentialCache != nil {
-		s.gatewayCredentialCache.Invalidate(ctx, s.toCachedCredential(&existing))
-		s.gatewayCredentialCache.Set(ctx, s.toCachedCredential(&newCred))
-	}
 	if s.credentialInvalidator != nil {
 		s.credentialInvalidator.InvalidateCredential(actor.OrganizationID, credentialID)
 	}
@@ -1171,12 +1208,9 @@ func (s *Service) ExpireGatewayCredential(ctx context.Context, actor domain.Acto
 	if err := s.RequirePermission(actor, domain.PermissionCredentialsManage); err != nil {
 		return err
 	}
-	credential, err := s.gatewayCredentials.UpdateStatus(ctx, actor.OrganizationID, credentialID, domain.GatewayCredentialStatusExpired)
+	_, err := s.gatewayCredentials.UpdateStatus(ctx, actor.OrganizationID, credentialID, domain.GatewayCredentialStatusExpired)
 	if err != nil {
 		return err
-	}
-	if s.gatewayCredentialCache != nil {
-		s.gatewayCredentialCache.Invalidate(ctx, s.toCachedCredential(&credential))
 	}
 	if s.credentialInvalidator != nil {
 		s.credentialInvalidator.InvalidateCredential(actor.OrganizationID, credentialID)
@@ -1201,113 +1235,15 @@ func (s *Service) RestoreGatewayCredential(ctx context.Context, actor domain.Act
 	if credential.ExpiresAt != nil && !credential.ExpiresAt.After(s.now()) {
 		return repositories.ErrInvalid // expired credentials cannot be restored
 	}
-	restored, err := s.gatewayCredentials.UpdateStatus(ctx, actor.OrganizationID, credentialID, domain.GatewayCredentialStatusActive)
-	if err != nil {
+	if _, err := s.gatewayCredentials.UpdateStatus(ctx, actor.OrganizationID, credentialID, domain.GatewayCredentialStatusActive); err != nil {
 		return err
 	}
-	if s.gatewayCredentialCache != nil {
-		s.gatewayCredentialCache.Set(ctx, s.toCachedCredential(&restored))
+	// Gateways may still hold the revoked entry; make them read it again.
+	if s.credentialInvalidator != nil {
+		s.credentialInvalidator.InvalidateCredential(actor.OrganizationID, credentialID)
 	}
 	s.audit(ctx, actor, "gateway_credential.restore", "gateway_credential", &credentialID, nil, nil)
 	return nil
-}
-
-// ResolveGatewayCredential is the hot-path resolver used by the gateway proxy.
-// It checks cache first, then DB, then caches the result.
-func (s *Service) ResolveGatewayCredential(ctx context.Context, rawKey string) (domain.GatewayCredential, error) {
-	hash, err := s.hasher.Hash(ctx, rawKey)
-	if err != nil {
-		return domain.GatewayCredential{}, err
-	}
-
-	// Try cache first
-	if s.gatewayCredentialCache != nil {
-		if cred := s.gatewayCredentialCache.GetByHash(ctx, hash); cred != nil {
-			return s.fromCachedCredential(cred), nil
-		}
-	}
-
-	// Fallback to DB
-	credential, err := s.gatewayCredentials.ResolveByKeyHash(ctx, hash)
-	if err != nil {
-		return domain.GatewayCredential{}, err
-	}
-
-	// Cache the result
-	if s.gatewayCredentialCache != nil {
-		s.gatewayCredentialCache.Set(ctx, s.toCachedCredential(&credential))
-	}
-	return credential, nil
-}
-
-// toCachedCredential converts a domain.GatewayCredential to a platform credentialcache.CachedCredential.
-func (s *Service) toCachedCredential(c *domain.GatewayCredential) *credentialcache.CachedCredential {
-	scopes := make([]string, len(c.Scopes))
-	for i, sc := range c.Scopes {
-		scopes[i] = string(sc)
-	}
-	allowedProviders := make([]string, len(c.AllowedProviders))
-	copy(allowedProviders, c.AllowedProviders)
-	allowedModels := make([]string, len(c.AllowedModels))
-	copy(allowedModels, c.AllowedModels)
-
-	return &credentialcache.CachedCredential{
-		ID:                c.ID,
-		OrganizationID:    c.OrganizationID,
-		Name:              c.Name,
-		KeyPrefix:         c.KeyPrefix,
-		KeyHash:           c.KeyHash,
-		SubjectType:       string(c.SubjectType),
-		SubjectID:         c.SubjectID,
-		TeamID:            c.TeamID,
-		ProjectID:         c.ProjectID,
-		Scopes:            scopes,
-		ProviderAccountID: c.ProviderAccountID,
-		AllowedProviders:  allowedProviders,
-		AllowedModels:     allowedModels,
-		RateLimit:         c.RateLimit,
-		BudgetLimit:       c.BudgetLimit,
-		Status:            string(c.Status),
-		ExpiresAt:         c.ExpiresAt,
-		LastUsedAt:        c.LastUsedAt,
-		CreatedAt:         c.CreatedAt,
-		UpdatedAt:         c.UpdatedAt,
-	}
-}
-
-// fromCachedCredential converts a platform credentialcache.CachedCredential to a domain.GatewayCredential.
-func (s *Service) fromCachedCredential(c *credentialcache.CachedCredential) domain.GatewayCredential {
-	scopes := make([]domain.GatewayCredentialScope, len(c.Scopes))
-	for i, sc := range c.Scopes {
-		scopes[i] = domain.GatewayCredentialScope(sc)
-	}
-	allowedProviders := make([]string, len(c.AllowedProviders))
-	copy(allowedProviders, c.AllowedProviders)
-	allowedModels := make([]string, len(c.AllowedModels))
-	copy(allowedModels, c.AllowedModels)
-
-	return domain.GatewayCredential{
-		ID:                c.ID,
-		OrganizationID:    c.OrganizationID,
-		Name:              c.Name,
-		KeyPrefix:         c.KeyPrefix,
-		KeyHash:           c.KeyHash,
-		SubjectType:       domain.SubjectType(c.SubjectType),
-		SubjectID:         c.SubjectID,
-		TeamID:            c.TeamID,
-		ProjectID:         c.ProjectID,
-		Scopes:            scopes,
-		ProviderAccountID: c.ProviderAccountID,
-		AllowedProviders:  allowedProviders,
-		AllowedModels:     allowedModels,
-		RateLimit:         c.RateLimit,
-		BudgetLimit:       c.BudgetLimit,
-		Status:            domain.GatewayCredentialStatus(c.Status),
-		ExpiresAt:         c.ExpiresAt,
-		LastUsedAt:        c.LastUsedAt,
-		CreatedAt:         c.CreatedAt,
-		UpdatedAt:         c.UpdatedAt,
-	}
 }
 
 // isValidSubjectType reports whether the subject type is valid.

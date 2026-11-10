@@ -4,14 +4,14 @@ import * as React from "react";
 import { Menu } from "lucide-react";
 
 import { SidebarNav } from "./sidebar";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetTitle,
   SheetTrigger,
-} from "@/components/ui/sheet";
+} from "@ai-governance/console-ui/ui/sheet";
 
 /** Hamburger + slide-over that hosts the shared sidebar on small screens. */
 export function MobileNav() {

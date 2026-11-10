@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import { Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/dashboard/status-badge";
+import { Button } from "@ai-governance/console-ui/ui/button";
+import { StatusBadge } from "@ai-governance/console-ui/dashboard/status-badge";
 
 export interface MutationButtonProps<TError = Error> {
   /** Server action to execute for the mutation. */

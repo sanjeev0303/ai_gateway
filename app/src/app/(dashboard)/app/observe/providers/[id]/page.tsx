@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import { DataTable, PageShell, StatCard, type Column } from "@/components/dashboard";
 import { getApiClient } from "@/lib/session";
 import { notFound } from "next/navigation";
-import { formatCompact, formatUsd, formatNumber, formatMs, formatPercent, formatDate, formatRelative, microsToUsd } from "@/lib/format";
+import { formatCompact, formatUsd, formatNumber, formatMs, formatPercent, formatDate, formatRelative, microsToUsd } from "@ai-governance/console-ui/lib/format";
 import type { StatusTone } from "@/types";
 import {
   Card,
@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { thirtyDaysAgo } from "@/lib/date-range";
+import { thirtyDaysAgo } from "@ai-governance/console-ui/lib/date-range";
 
 interface ModelUsageRow {
   id: string;
@@ -81,7 +81,7 @@ export default async function ProviderDetailPage({ params }: { params: Promise<{
     const errorCount = summary?.Errors ?? 0;
     const errorRate = totalRequests > 0 ? errorCount / totalRequests : 0;
 
-    const latencyOverall = latencyData?.items?.find((r: { Model?: string }) => !r.Model) ?? latencyData?.items?.[0];
+    const latencyOverall = latencyData?.items?.find((r: { Model: string | null }) => !r.Model) ?? latencyData?.items?.[0];
     const p95Latency = latencyOverall?.P95TotalMs ?? latencyOverall?.AvgTotalMs;
 
     const modelNameMap = new Map(catalogForProvider.map((m: { model_slug: string; display_name: string }) => [m.model_slug, m.display_name]));

@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import { toast } from "sonner";
-import { microsToUsd } from "@/lib/format";
+import { microsToUsd } from "@ai-governance/console-ui/lib/format";
 
 export function ExportBillingUsageButton({ summary }: { summary: any }) {
   const handleExport = () => {

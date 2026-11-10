@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@ai-governance/console-ui/ui/dialog";
+import { Button } from "@ai-governance/console-ui/ui/button";
 
 export function SecurityEventActions({ event }: { event: any }) {
   const [open, setOpen] = useState(false);

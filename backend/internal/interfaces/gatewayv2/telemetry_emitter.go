@@ -22,14 +22,17 @@ import (
 const (
 	usageFlushTimeout = 5 * time.Second
 	maxRetrySpoolSize = 5000
-	maxSpoolAttempts  = 5
+	// maxSpoolAge is how long a failed usage record keeps being retried. The
+	// spool is flushed every tick (500ms), so an attempt count gave up after
+	// about 2.5s of event-bus outage and lost billing data.
+	maxSpoolAge = 15 * time.Minute
 )
 
 var errMissingRequestID = errors.New("gateway: usage record has no request id")
 
 type spooledRecord struct {
-	record   UsageRecord
-	attempts int
+	record      UsageRecord
+	firstFailed time.Time
 }
 
 // TelemetryEmitterImpl emits usage and error events asynchronously.
@@ -240,7 +243,7 @@ func (e *TelemetryEmitterImpl) flushUsage(batch []UsageRecord) {
 				"error", err,
 			)
 			if len(e.retrySpool) < maxRetrySpoolSize {
-				e.retrySpool = append(e.retrySpool, spooledRecord{record: record, attempts: 1})
+				e.retrySpool = append(e.retrySpool, spooledRecord{record: record, firstFailed: time.Now()})
 			} else {
 				e.logger.Error("telemetry: retry spool full, discarding record", "request_id", record.RequestID)
 			}
@@ -259,12 +262,11 @@ func (e *TelemetryEmitterImpl) flushSpooled() {
 	remaining := make([]spooledRecord, 0, len(e.retrySpool))
 	for _, item := range e.retrySpool {
 		if err := e.writeUsage(ctx, item.record); err != nil {
-			item.attempts++
-			if item.attempts < maxSpoolAttempts {
+			if time.Since(item.firstFailed) < maxSpoolAge {
 				remaining = append(remaining, item)
 			} else {
-				e.logger.Error("telemetry: max retry attempts exceeded for spooled record, discarding",
-					"request_id", item.record.RequestID, "attempts", item.attempts)
+				e.logger.Error("telemetry: spooled record still failing after max age, discarding",
+					"request_id", item.record.RequestID, "failing_for", time.Since(item.firstFailed).String())
 			}
 		}
 	}
@@ -303,23 +305,7 @@ func (e *TelemetryEmitterImpl) writeUsage(ctx context.Context, record UsageRecor
 		status = "failed"
 	}
 	source := "estimated"
-	if record.ProviderMeta != nil {
-		if reported, ok := record.ProviderMeta["tokens_reported"].(bool); ok {
-			if reported {
-				source = "provider_reported"
-			} else {
-				source = "estimated"
-			}
-		} else if isEst, ok := record.ProviderMeta["estimated"].(bool); ok {
-			if isEst {
-				source = "estimated"
-			} else {
-				source = "provider_reported"
-			}
-		} else if providerKind != "unknown" && (record.InputTokens > 0 || record.OutputTokens > 0) {
-			source = "provider_reported"
-		}
-	} else if providerKind != "unknown" && (record.InputTokens > 0 || record.OutputTokens > 0) {
+	if record.TokensReported {
 		source = "provider_reported"
 	}
 

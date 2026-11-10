@@ -19,11 +19,11 @@ import {
   Terminal,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@ai-governance/console-ui/ui/button";
+import { Input } from "@ai-governance/console-ui/ui/input";
+import { Label } from "@ai-governance/console-ui/ui/label";
+import { Badge } from "@ai-governance/console-ui/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ai-governance/console-ui/ui/select";
 import { toast } from "sonner";
 import { createApiClient } from "@ai-governance/api-client";
 import { CONTROL_API_BASE } from "@/lib/control-api";

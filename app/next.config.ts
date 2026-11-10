@@ -17,6 +17,8 @@ const nextConfig: NextConfig = {
   // Workspace packages live outside app/, so trace from the repo root or they
   // are dropped from the standalone bundle.
   outputFileTracingRoot: path.join(appDir, ".."),
+  // Shared design system, shipped as TypeScript source.
+  transpilePackages: ["@ai-governance/console-ui"],
   async rewrites() {
     return [
       // Same-origin proxy to the control API. This is what lets the browser

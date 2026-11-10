@@ -153,8 +153,11 @@ func TestPolicyInvalidation_ImmediateSnapshotBust(t *testing.T) {
 		t.Fatalf("expected cached snapshot to have 1 rule before invalidation, got %d", len(cachedSnap.Rules))
 	}
 
-	// 4. Invalidate policy snapshot via gateway
-	g.InvalidatePolicy(orgID)
+	// 4. Invalidate policy snapshot through the gateway's event stream
+	events := make(chan CacheEvent, 1)
+	events <- CacheEvent{OrganizationID: orgID}
+	close(events)
+	g.Subscribe(ctx, events)
 
 	// 5. Immediately, next GetSnapshot fetches fresh data with 2 rules
 	snap2, err := resolver.GetSnapshot(ctx, orgID)
@@ -259,6 +262,7 @@ func TestCredentialInvalidation_ImmediateRevocation(t *testing.T) {
 
 	g := &Gateway{
 		authenticator: authImpl,
+		credentials:   cache,
 		logger:        discardLogger(),
 	}
 
@@ -286,7 +290,10 @@ func TestCredentialInvalidation_ImmediateRevocation(t *testing.T) {
 	}
 
 	// 4. Invalidate credential cache entry by ID (as triggered by Redis invalidation subscriber)
-	g.InvalidateCredentialByID(ctx, credID.String())
+	events := make(chan CacheEvent, 1)
+	events <- CacheEvent{OrganizationID: orgID, CredentialID: credID.String()}
+	close(events)
+	g.Subscribe(ctx, events)
 
 	// 5. Next authentication misses cache, queries DB, and is immediately rejected
 	_, err = authImpl.Authenticate(ctx, "aigw_prod_valid_token")

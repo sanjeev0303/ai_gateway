@@ -15,7 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatNumber, formatPercent, microsToUsd } from "@/lib/format";
+import { formatNumber, formatPercent, microsToUsd } from "@ai-governance/console-ui/lib/format";
 import { getApiClient } from "@/lib/session";
 
 export const metadata: Metadata = {

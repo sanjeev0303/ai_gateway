@@ -1,46 +1,22 @@
+import type { components } from "@ai-governance/contracts";
 import type { ListResponse, RequestOptions, Transport } from "./client";
 import type { Membership } from "./members";
 
-export interface Project {
-  id: string;
-  organization_id: string;
-  name: string;
-  slug: string;
-  description: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
-
+export type Project = components["schemas"]["Project"];
 /** The row returned when adding a member; membership lists nest `user` instead. */
-export interface ProjectMemberRow {
-  project_id: string;
-  user_id: string;
-  role: string;
-  member_since: string;
-}
-
-export interface ProjectUpdateInput {
-  name?: string;
-  description?: string;
-}
-
-export interface ProjectStatusInput {
-  status: string;
-}
+export type ProjectMemberRow = components["schemas"]["ProjectMemberRow"];
+export type ProjectUpdateInput = components["schemas"]["UpdateProjectRequest"];
+export type ProjectStatusInput = components["schemas"]["SetProjectStatusRequest"];
 
 export interface ProjectsModule {
-  create(
-    input: { name: string; slug: string; description: string },
-    options?: RequestOptions,
-  ): Promise<Project>;
+  create(input: components["schemas"]["CreateProjectRequest"], options?: RequestOptions): Promise<Project>;
   list(options?: RequestOptions): Promise<ListResponse<Project>>;
   get(projectId: string, options?: RequestOptions): Promise<Project>;
   update(projectId: string, input: ProjectUpdateInput, options?: RequestOptions): Promise<Project>;
   setStatus(projectId: string, input: ProjectStatusInput, options?: RequestOptions): Promise<Project>;
   addMember(
     projectId: string,
-    input: { user_id: string; role: string },
+    input: components["schemas"]["AddMembershipRequest"],
     options?: RequestOptions,
   ): Promise<ProjectMemberRow>;
   listMembers(projectId: string, options?: RequestOptions): Promise<ListResponse<Membership>>;
@@ -63,7 +39,7 @@ export function createProjectsModule(transport: Transport): ProjectsModule {
     setStatus: (projectId, input, options) =>
       transport.requestAt<Project>(`/v1/projects/${encodeURIComponent(projectId)}/status`, {
         ...options,
-        method: "POST",
+        method: "PATCH",
         body: input,
       }),
 

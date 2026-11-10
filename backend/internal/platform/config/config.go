@@ -41,6 +41,35 @@ type Config struct {
 	Observability    ObservabilityConfig `envPrefix:"OBSERVABILITY_"`
 	Security         SecurityConfig      `envPrefix:"SECURITY_"`
 	Conversation     ConversationConfig  `envPrefix:"CONVERSATION_"`
+	Monitor          MonitorConfig       `envPrefix:"MONITOR_"`
+	SMTP             SMTPConfig          `envPrefix:"SMTP_"`
+}
+
+// MonitorConfig drives the platform health monitor the worker runs for the
+// admin console.
+type MonitorConfig struct {
+	// Token guards every service's /internal/stats endpoint and is what the
+	// worker presents when polling it. Empty turns the endpoint off.
+	Token string `env:"TOKEN"`
+	// Targets are the services the worker polls, as name=base-url pairs
+	// (e.g. "gateway-v2=http://gateway-v2:8080,control-api=http://control-api:8080").
+	// The worker always samples itself, Postgres and (when enabled) Redis.
+	Targets  []string      `env:"TARGETS" envSeparator:","`
+	Interval time.Duration `env:"INTERVAL" envDefault:"30s"`
+	// MemoryAlertMB raises an alert when a service's resident memory passes it.
+	MemoryAlertMB int `env:"MEMORY_ALERT_MB" envDefault:"1024"`
+	// ConsoleURL is the admin console, linked from alert emails.
+	ConsoleURL string `env:"CONSOLE_URL"`
+}
+
+// SMTPConfig is how platform alerts are emailed to the admins. An empty Host
+// keeps alerts in the console only.
+type SMTPConfig struct {
+	Host     string `env:"HOST"`
+	Port     int    `env:"PORT" envDefault:"587"`
+	Username string `env:"USERNAME"`
+	Password string `env:"PASSWORD"`
+	From     string `env:"FROM" envDefault:"alerts@tollseal.local"`
 }
 
 // ConversationConfig controls how much transcript content the API may return.
@@ -194,6 +223,10 @@ type AuthConfig struct {
 	SessionCookieSecure bool   `env:"SESSION_COOKIE_SECURE" envDefault:"true"`
 	CSRFEnabled         bool   `env:"CSRF_ENABLED" envDefault:"true"`
 	DevLoginEnabled     bool   `env:"DEV_LOGIN_ENABLED" envDefault:"false"`
+	// PlatformAdminEmails lists the users who may open the super-admin
+	// console (/v1/admin). Empty disables it. Register each account before
+	// adding its email here: until then anyone could sign up with it.
+	PlatformAdminEmails []string `env:"PLATFORM_ADMIN_EMAILS" envSeparator:","`
 }
 
 // Explicit billing modes.

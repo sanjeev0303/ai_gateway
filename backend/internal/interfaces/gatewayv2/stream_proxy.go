@@ -18,6 +18,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"ai-governance-saas/backend/internal/domain"
 	"ai-governance-saas/backend/internal/platform/netguard"
 )
 
@@ -409,6 +410,9 @@ func copyResponseHeaders(dst, src http.Header) {
 		"transfer-encoding":   true,
 		"upgrade":             true,
 		"content-length":      true, // Let Go set this
+		// The gateway shares an origin with the dashboard, so an upstream
+		// must never be able to set cookies there.
+		"set-cookie": true,
 	}
 
 	for key, values := range src {
@@ -438,6 +442,9 @@ func copyForwardHeaders(dst, src http.Header) {
 		"x-api-key":           true,
 		"x-goog-api-key":      true,
 		"api-key":             true,
+		// Browser requests carry the dashboard session cookies; they must
+		// never reach a provider.
+		"cookie": true,
 	}
 
 	for key, values := range src {
@@ -482,10 +489,9 @@ func mockUpstreamResponse(h http.Header) *http.Response {
 	isStream := h.Get("x-routing-stream") == "true"
 
 	// OpenAI / Hugging Face / Mistral mock responses
+	modelProvider := domain.ProviderForModel(model)
 	if provider == "openai" || provider == "huggingface" || provider == "custom" || provider == "mistral" ||
-		strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") ||
-		strings.Contains(model, "/") || strings.HasPrefix(model, "mistral") || strings.HasPrefix(model, "open-mistral-") ||
-		strings.HasPrefix(model, "codestral-") || strings.HasPrefix(model, "ministral-") {
+		modelProvider == domain.ProviderKindOpenAI || modelProvider == domain.ProviderKindHuggingFace || modelProvider == domain.ProviderKindCustom {
 		if isStream {
 			pr, pw := io.Pipe()
 			go func() {

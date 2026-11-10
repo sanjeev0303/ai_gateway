@@ -1,6 +1,6 @@
 import type { CategoryDatum } from "@/types";
-import { formatCompact } from "@/lib/format";
-import { chartColor } from "./utils";
+import { formatCompact } from "@ai-governance/console-ui/lib/format";
+import { chartColor } from "@ai-governance/console-ui/charts/utils";
 
 interface DonutChartProps {
   data: readonly CategoryDatum[];

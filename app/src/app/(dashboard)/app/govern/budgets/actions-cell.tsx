@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import type { BudgetRow } from "./page";
 
 interface BudgetActionsCellProps {

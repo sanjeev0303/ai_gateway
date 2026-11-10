@@ -1,4 +1,4 @@
-import type { ID, ISODateString, StatusTone, TimeSeriesPoint } from "./common";
+import type { ID, ISODateString, StatusTone, TimeSeriesPoint } from "@ai-governance/console-ui/types/common";
 
 /** Ingestion and query health for the telemetry pipeline itself. */
 export interface PipelineStatus {

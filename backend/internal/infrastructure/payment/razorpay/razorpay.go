@@ -349,8 +349,17 @@ func (g *Gateway) VerifyAndParseWebhook(ctx context.Context, payload []byte, sig
 		}
 	}
 
+	// subscription.charged carries both a subscription and a payment entity.
+	// The subscription ID is the same every billing cycle, so keying on it
+	// made every renewal after the first look like a duplicate. The payment
+	// ID is unique per charge, so prefer it.
+	payEntity := root.Payload.Payment.Entity
+	payID, _ := payEntity["id"].(string)
+
 	eventID := root.Event
-	if entityID != "" {
+	if payID != "" {
+		eventID = root.Event + "_" + payID
+	} else if entityID != "" {
 		eventID = root.Event + "_" + entityID
 	} else {
 		eventID = fmt.Sprintf("%s_%s_%d", root.Event, root.AccountID, root.CreatedAt)
@@ -384,22 +393,30 @@ func (g *Gateway) VerifyAndParseWebhook(ctx context.Context, payload []byte, sig
 	case "subscription.charged", "payment.captured":
 		evt.EventType = "payment.succeeded"
 		evt.Status = "paid"
-		if id, ok := entity["id"].(string); ok {
+		// The payment, amount and currency belong to the payment entity; the
+		// subscription entity only gives the subscription ID.
+		charge := entity
+		if len(payEntity) > 0 {
+			charge = payEntity
+		}
+		if id, ok := charge["id"].(string); ok {
 			evt.PaymentID = id
 		}
-		if subID, ok := entity["subscription_id"].(string); ok {
+		if subID, ok := charge["subscription_id"].(string); ok && subID != "" {
 			evt.SubscriptionID = subID
 		} else if id, ok := entity["id"].(string); ok && strings.HasPrefix(id, "sub_") {
 			evt.SubscriptionID = id
 		}
-		if custID, ok := entity["customer_id"].(string); ok {
+		if custID, ok := charge["customer_id"].(string); ok {
+			evt.CustomerID = custID
+		} else if custID, ok := entity["customer_id"].(string); ok {
 			evt.CustomerID = custID
 		}
-		if amt, ok := entity["amount"].(float64); ok {
+		if amt, ok := charge["amount"].(float64); ok {
 			// Razorpay amounts are in smallest currency units (e.g. paise: 100 paise = 1 INR = 10,000 micros)
 			evt.AmountMicros = int64(amt) * 10000
 		}
-		if curr, ok := entity["currency"].(string); ok {
+		if curr, ok := charge["currency"].(string); ok {
 			evt.Currency = strings.ToLower(curr)
 		}
 

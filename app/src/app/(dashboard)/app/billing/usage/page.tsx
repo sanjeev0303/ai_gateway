@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatDate, formatUsd, microsToUsd } from "@/lib/format";
+import { formatDate, formatUsd, microsToUsd } from "@ai-governance/console-ui/lib/format";
 import { getApiClient } from "@/lib/session";
 import { ExportBillingUsageButton } from "./export-button";
 

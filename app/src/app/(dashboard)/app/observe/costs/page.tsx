@@ -8,7 +8,7 @@ import {
   RangeTabs,
   StatCard,
 } from "@/components/dashboard";
-import { isDateRange, type DateRange } from "@/lib/date-range";
+import { isDateRange, type DateRange } from "@ai-governance/console-ui/lib/date-range";
 import {
   Card,
   CardContent,
@@ -16,7 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatCompact, formatUsd, formatUsdExact, microsToUsd } from "@/lib/format";
+import { formatCompact, formatUsd, formatUsdExact, microsToUsd } from "@ai-governance/console-ui/lib/format";
 import { getApiClient } from "@/lib/session";
 
 export const metadata: Metadata = {

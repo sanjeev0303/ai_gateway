@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { ApiError } from "@ai-governance/api-client";
+import { ApiError, type CreateGatewayCredentialInput } from "@ai-governance/api-client";
 import { getApiClient } from "@/lib/session";
 
 export interface ActionState {
@@ -43,11 +43,11 @@ export async function createGatewayCredential(
     const { credentials } = await getApiClient();
     const result = await credentials.createGateway({
       name,
-      subject_type: subjectType,
+      subject_type: subjectType as CreateGatewayCredentialInput["subject_type"],
       subject_id: subjectId,
       team_id: teamId || undefined,
       project_id: projectId || undefined,
-      scopes,
+      scopes: scopes as CreateGatewayCredentialInput["scopes"],
       expires_at,
     });
     

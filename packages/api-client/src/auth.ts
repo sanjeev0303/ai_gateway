@@ -1,43 +1,15 @@
+import type { components } from "@ai-governance/contracts";
 import type { RequestOptions, Transport } from "./client";
 
-export interface SessionClaims {
-  subject: string;
-  email: string;
-  display_name: string;
-  organization_id: string;
-  role: string;
-  kind: string;
-  issued_at: string;
-  expires_at: string;
-}
-
 /**
- * Who the caller is. Tokens themselves never appear here: the access and
- * refresh tokens travel only in HttpOnly cookies, and `csrf_token` is present
- * only when CSRF protection is enabled so the browser can echo it in a header.
+ * Who the caller is. Tokens never appear here: the access and refresh tokens
+ * travel only in HttpOnly cookies.
  */
-export interface Session {
-  claims: SessionClaims;
-  csrf_token?: string;
-}
-
-export interface SignUpInput {
-  email: string;
-  display_name: string;
-  organization_name: string;
-  password: string;
-}
-
-export interface SignInInput {
-  email: string;
-  password: string;
-}
-
+export type Session = components["schemas"]["AuthSession"];
+export type SignUpInput = components["schemas"]["SignUpRequest"];
+export type SignInInput = components["schemas"]["SignInRequest"];
 /** Local-development only; enabled by the server's dev-login flag. */
-export interface DevLoginInput {
-  email: string;
-  display_name: string;
-}
+export type DevLoginInput = components["schemas"]["DevLoginRequest"];
 
 export interface AuthModule {
   signUp(input: SignUpInput, options?: RequestOptions): Promise<Session>;

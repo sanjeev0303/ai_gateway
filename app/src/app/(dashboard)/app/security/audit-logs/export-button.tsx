@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import { toast } from "sonner";
 import type { AuditRow } from "./page";
 

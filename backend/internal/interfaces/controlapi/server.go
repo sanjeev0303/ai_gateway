@@ -18,6 +18,7 @@ import (
 	"ai-governance-saas/backend/internal/application/conversation"
 	"ai-governance-saas/backend/internal/application/guardrails"
 	"ai-governance-saas/backend/internal/application/identity"
+	"ai-governance-saas/backend/internal/application/platformadmin"
 	"ai-governance-saas/backend/internal/application/policy"
 	"ai-governance-saas/backend/internal/application/pricing"
 	"ai-governance-saas/backend/internal/application/provider"
@@ -31,21 +32,23 @@ import (
 // be non-nil for the v1 routes to be registered; Providers adds the M4 provider
 // accounts/credentials routes behind the same authentication.
 type Deps struct {
-	Log             *slog.Logger
-	Identity        *identity.Service
-	Providers       *provider.Service
-	Usage           *usage.Service
-	Activity        *activity.Service
-	Conversations   *conversation.Service
-	AuditLogs       *auditlog.Service
-	Alerts          *alert.Service
-	SecurityEvents  *securityevent.Service
-	Billing         *billing.Service
-	Budget          *budget.Service
-	Pricing         *pricing.Service
-	Policy          *policy.Service
-	Guardrails      *guardrails.Service
-	GuardrailsEval  *guardrails.Evaluator
+	Log            *slog.Logger
+	Identity       *identity.Service
+	Providers      *provider.Service
+	Usage          *usage.Service
+	Activity       *activity.Service
+	Conversations  *conversation.Service
+	AuditLogs      *auditlog.Service
+	Alerts         *alert.Service
+	SecurityEvents *securityevent.Service
+	Billing        *billing.Service
+	Budget         *budget.Service
+	Pricing        *pricing.Service
+	Policy         *policy.Service
+	Guardrails     *guardrails.Service
+	GuardrailsEval *guardrails.Evaluator
+	// PlatformAdmin backs the /v1/admin super-admin console; nil disables it.
+	PlatformAdmin   *platformadmin.Service
 	DevLoginEnabled bool
 
 	// SessionCookieName names the HttpOnly auth cookie for the web UI
@@ -87,6 +90,9 @@ func NewHandler(log *slog.Logger, mw *httpx.Middleware, reg *health.Registry, de
 		}
 		if deps.Billing != nil {
 			registerBillingRoutes(mux, deps)
+		}
+		if deps.PlatformAdmin != nil {
+			registerAdminRoutes(mux, deps)
 		}
 		if deps.Pricing != nil {
 			registerPricingRoutes(mux, deps)

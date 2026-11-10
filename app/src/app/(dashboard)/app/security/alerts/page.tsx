@@ -47,9 +47,19 @@ const SEVERITY_TONE: Record<AlertSeverity, StatusTone> = {
 const STATUS_TONE: Record<AlertStatus, StatusTone> = {
   active: "success",
   muted: "neutral",
+  resolved: "info",
 };
 
 const ALERT_TYPE_LABEL: Record<Alert["alert_type"], string> = {
+  spend_limit: "Spend limit",
+  budget_warning: "Budget warning",
+  budget_exhaustion: "Budget exhaustion",
+  rate_limit: "Rate limit",
+  error_rate: "Error rate",
+  anomaly: "Anomaly",
+  usage_spike: "Usage spike",
+  spend_spike: "Spend spike",
+  policy_denial_spike: "Policy denial spike",
   spend_threshold: "Spend threshold",
   spend_exceeded: "Spend exceeded",
   request_rate_spike: "Request rate spike",

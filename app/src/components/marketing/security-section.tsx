@@ -1,5 +1,5 @@
 import { MARKETING_SECURITY } from "@/lib/constants";
-import { cn } from "@/lib/utils";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 
 interface SecuritySectionProps {
   eyebrow?: string;

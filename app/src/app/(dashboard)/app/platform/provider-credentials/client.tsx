@@ -4,7 +4,7 @@ import * as React from "react";
 import { MoreHorizontal, Plus, RotateCcw, Trash2, Copy, Check } from "lucide-react";
 import { CredentialActionsCell } from "./actions-cell";
 import { DataTable, type Column } from "@/components/dashboard";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,7 +12,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@ai-governance/console-ui/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -21,10 +21,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+} from "@ai-governance/console-ui/ui/dialog";
+import { Input } from "@ai-governance/console-ui/ui/input";
+import { Label } from "@ai-governance/console-ui/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ai-governance/console-ui/ui/select";
 import { toast } from "sonner";
 import { createApiClient } from "@ai-governance/api-client";
 import { CONTROL_API_BASE } from "@/lib/control-api";

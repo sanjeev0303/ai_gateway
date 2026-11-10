@@ -4,15 +4,15 @@ import { useState, useEffect, useCallback } from "react";
 import { Search, Filter, Save, Eye, Check, X, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 
 import { DataTable, PageShell, type Column } from "@/components/dashboard";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@ai-governance/console-ui/ui/button";
+import { Input } from "@ai-governance/console-ui/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ai-governance/console-ui/ui/select";
 import {
   Card,
   CardContent,
@@ -20,7 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@ai-governance/console-ui/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -29,8 +29,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+} from "@ai-governance/console-ui/ui/dialog";
+import { Label } from "@ai-governance/console-ui/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { loadDirectory } from "@/components/dashboard/directory-actions";
 import { fetchModelAccessAction, updateModelAccessAction, previewModelAccessAction } from "./actions";
@@ -55,8 +55,8 @@ interface ModelAccessPreviewResponseAPI {
   current_decision?: "allow" | "block";
   preview_decision?: "allow" | "block";
   would_change?: boolean;
-  blocking_rules?: ModelAccessEntryAPI[];
-  allowing_rules?: ModelAccessEntryAPI[];
+  blocking_rules?: ModelAccessEntryAPI[] | null;
+  allowing_rules?: ModelAccessEntryAPI[] | null;
 }
 
 // Internal display types use camelCase

@@ -221,10 +221,29 @@ func TestBillingVerifyPaymentEndpoint(t *testing.T) {
 	razorpayGw := razorpay.New("dummy-rzp-key", razorpayKeySecret, "dummy-wh-secret")
 	stripeGw := stripe.New("dummy-stripe-key", "dummy-wh-secret")
 
+	// The org's own pending checkout for the order the test pays.
+	checkouts := &fakeBillingCheckouts{
+		orgID: testOrgID,
+		orders: map[string]domain.Checkout{
+			"order_test_rzp_99": {
+				OrganizationID:    testOrgID,
+				CheckoutSessionID: "order_test_rzp_99",
+				OrderID:           "order_test_rzp_99",
+				Provider:          "razorpay",
+				PlanCode:          "enterprise",
+				AmountMicros:      499_000_000,
+				Currency:          "usd",
+				Status:            domain.CheckoutStatusPending,
+				ExpiresAt:         time.Now().Add(time.Hour),
+			},
+		},
+	}
+
 	billingSvc := billing.NewService(billing.ServiceDeps{
 		Plans:         plans,
 		Subscriptions: subs,
 		Invoices:      inv,
+		Checkouts:     checkouts,
 		Rollups:       &fakeBillingRollups{},
 		PaymentGateways: map[string]payment.PaymentGateway{
 			"stripe":   stripeGw,

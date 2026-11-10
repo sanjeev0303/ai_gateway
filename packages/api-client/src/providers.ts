@@ -1,81 +1,54 @@
+import type { components } from "@ai-governance/contracts";
 import type { ListResponse, RequestOptions, Transport } from "./client";
+import type { Model } from "./models";
 
-export interface ProviderAccount {
-  id: string;
-  organization_id: string;
-  provider_kind: string;
-  name: string;
-  base_url?: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
-
+export type ProviderAccount = components["schemas"]["ProviderAccount"];
 /** Never carries the secret itself, only a fingerprint and last characters. */
-export interface ProviderCredential {
-  id: string;
-  organization_id: string;
-  provider_account_id: string;
-  name: string;
-  kind: string;
-  fingerprint: string;
-  tail: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ProviderHealth {
-  provider_kind: string;
-  status: string;
-  status_reason?: string;
-  last_error?: string;
-  checked_at: string;
-}
+export type ProviderCredential = components["schemas"]["ProviderCredential"];
+export type ProviderHealth = components["schemas"]["ProviderHealth"];
+export type CreateProviderAccountInput = components["schemas"]["CreateProviderAccountRequest"];
+export type UpdateProviderAccountInput = components["schemas"]["UpdateProviderAccountRequest"];
+export type CreateProviderCredentialInput = components["schemas"]["CreateProviderCredentialRequest"];
+export type RotateProviderCredentialInput = components["schemas"]["RotateProviderCredentialRequest"];
+export type ProviderValidationResult = components["schemas"]["ProviderValidationResult"];
 
 /**
  * A live probe. The secret is used for the upstream call only: it is never
  * stored, returned, or logged. Persist a credential instead if you need it kept.
  */
-export interface ProviderProbeInput {
-  provider_kind: string;
-  api_key: string;
-}
+export type ProviderProbeInput = components["schemas"]["ProviderProbeRequest"];
 
 export interface ProvidersModule {
   createAccount(
-    input: { provider_kind: string; name: string; base_url?: string },
+    input: CreateProviderAccountInput,
     options?: RequestOptions,
   ): Promise<ProviderAccount>;
   listAccounts(options?: RequestOptions): Promise<ListResponse<ProviderAccount>>;
   getAccount(accountId: string, options?: RequestOptions): Promise<ProviderAccount>;
   updateAccount(
     accountId: string,
-    input: { status: string },
+    input: UpdateProviderAccountInput,
     options?: RequestOptions,
   ): Promise<ProviderAccount>;
   deleteAccount(accountId: string, options?: RequestOptions): Promise<void>;
-  validateAccount(accountId: string, options?: RequestOptions): Promise<{ valid: boolean }>;
+  validateAccount(accountId: string, options?: RequestOptions): Promise<ProviderValidationResult>;
   checkAccountHealth(accountId: string, options?: RequestOptions): Promise<ProviderHealth>;
-  syncAccountModels(
-    accountId: string,
-    options?: RequestOptions,
-  ): Promise<{ models_created: number; models_updated: number; total: number }>;
+  syncAccountModels(accountId: string, options?: RequestOptions): Promise<ListResponse<Model>>;
 
   createCredential(
     accountId: string,
-    input: { name: string; kind: string; secret: string },
+    input: CreateProviderCredentialInput,
     options?: RequestOptions,
   ): Promise<ProviderCredential>;
   listCredentials(options?: RequestOptions): Promise<ListResponse<ProviderCredential>>;
   getCredential(credentialId: string, options?: RequestOptions): Promise<ProviderCredential>;
   rotateCredential(
     credentialId: string,
-    input: { secret: string },
+    input: RotateProviderCredentialInput,
     options?: RequestOptions,
   ): Promise<ProviderCredential>;
   removeCredential(credentialId: string, options?: RequestOptions): Promise<void>;
-  validate(input: ProviderProbeInput, options?: RequestOptions): Promise<{ valid: boolean }>;
+  validate(input: ProviderProbeInput, options?: RequestOptions): Promise<ProviderValidationResult>;
 
   health(options?: RequestOptions): Promise<ListResponse<ProviderHealth>>;
   check(input: ProviderProbeInput, options?: RequestOptions): Promise<ProviderHealth>;
@@ -105,7 +78,7 @@ export function createProvidersModule(transport: Transport): ProvidersModule {
         method: "DELETE",
       }),
     validateAccount: (accountId, options) =>
-      transport.requestAt<{ valid: boolean }>(
+      transport.requestAt<ProviderValidationResult>(
         `/v1/provider-accounts/${encodeURIComponent(accountId)}/validate`,
         { ...options, method: "POST" },
       ),
@@ -115,7 +88,7 @@ export function createProvidersModule(transport: Transport): ProvidersModule {
         { ...options, method: "POST" },
       ),
     syncAccountModels: (accountId, options) =>
-      transport.requestAt<{ models_created: number; models_updated: number; total: number }>(
+      transport.requestAt<ListResponse<Model>>(
         `/v1/provider-accounts/${encodeURIComponent(accountId)}/sync`,
         { ...options, method: "POST" },
       ),
@@ -143,7 +116,7 @@ export function createProvidersModule(transport: Transport): ProvidersModule {
         method: "DELETE",
       }),
     validate: (input, options) =>
-      transport.request<{ valid: boolean }>("/v1/provider-credentials/validate", {
+      transport.request<ProviderValidationResult>("/v1/provider-credentials/validate", {
         ...options,
         method: "POST",
         body: input,

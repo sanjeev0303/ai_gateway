@@ -1,4 +1,4 @@
-import type { ID, ISODateString, StatusTone } from "./common";
+import type { ID, ISODateString, StatusTone } from "@ai-governance/console-ui/types/common";
 
 export type BudgetPeriod = "daily" | "weekly" | "monthly";
 

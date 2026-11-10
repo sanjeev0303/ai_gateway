@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ScrollReveal } from "@/components/landing/scroll-reveal";
 import { Container, SectionLabel } from "@/components/landing/section";
 import { ATTRIBUTION, type AttributionMetric } from "@/lib/landing-data";
-import { cn } from "@/lib/utils";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 
 export function Attribution() {
   const metrics = ATTRIBUTION.metrics;

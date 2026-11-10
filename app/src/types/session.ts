@@ -1,4 +1,4 @@
-import type { ID, ISODateString } from "./common";
+import type { ID, ISODateString } from "@ai-governance/console-ui/types/common";
 
 /**
  * Session-derived identity for the dashboard chrome.

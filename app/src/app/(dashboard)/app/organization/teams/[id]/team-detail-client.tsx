@@ -4,7 +4,7 @@ import * as React from "react";
 import { MoreHorizontal, Plus, Settings } from "lucide-react";
 import { DataTable, type Column } from "@/components/dashboard";
 import { TeamMemberActionsCell } from "./team-member-actions-cell";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,7 +12,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@ai-governance/console-ui/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -20,16 +20,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+} from "@ai-governance/console-ui/ui/dialog";
+import { Input } from "@ai-governance/console-ui/ui/input";
+import { Label } from "@ai-governance/console-ui/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ai-governance/console-ui/ui/select";
 import { toast } from "sonner";
-import { createApiClient } from "@ai-governance/api-client";
+import { createApiClient, type Membership } from "@ai-governance/api-client";
 import { CONTROL_API_BASE } from "@/lib/control-api";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { formatDate } from "@/lib/format";
+import { formatDate } from "@ai-governance/console-ui/lib/format";
 
 export interface MemberRow {
   id: string;
@@ -106,7 +106,7 @@ export function TeamDetailClient({
     e.preventDefault();
     try {
       setIsUpdating(true);
-      await api.teams.addMember(team.id, { user_id: addUserId, role: addRole });
+      await api.teams.addMember(team.id, { user_id: addUserId, role: addRole as Membership["role"] });
       toast.success("Member added");
       setAddOpen(false);
       router.refresh();

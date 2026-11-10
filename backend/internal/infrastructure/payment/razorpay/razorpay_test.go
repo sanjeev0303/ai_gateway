@@ -208,6 +208,55 @@ func TestVerifyAndParseWebhook(t *testing.T) {
 		}
 	})
 
+	t.Run("subscription.charged renewals are distinct events", func(t *testing.T) {
+		charge := func(paymentID string) *payment.WebhookEvent {
+			payload := fmt.Appendf(nil, `{
+				"event": "subscription.charged",
+				"payload": {
+					"subscription": {
+						"entity": {
+							"id": "sub_rzp_renew",
+							"customer_id": "cust_rzp_222",
+							"notes": {"organization_id": "%s", "plan_code": "pro"}
+						}
+					},
+					"payment": {
+						"entity": {
+							"id": "%s",
+							"subscription_id": "sub_rzp_renew",
+							"amount": 490000,
+							"currency": "INR"
+						}
+					}
+				}
+			}`, orgID.String(), paymentID)
+			evt, err := gw.VerifyAndParseWebhook(context.Background(), payload, makeRazorpaySignature(payload, secret))
+			if err != nil {
+				t.Fatalf("webhook verify failed: %v", err)
+			}
+			return evt
+		}
+
+		month1 := charge("pay_month_1")
+		month2 := charge("pay_month_2")
+
+		if month1.EventID == month2.EventID {
+			t.Fatalf("two billing cycles share event ID %q, so the renewal would be dropped as a duplicate", month1.EventID)
+		}
+		if month2.PaymentID != "pay_month_2" {
+			t.Errorf("expected payment ID pay_month_2, got %s", month2.PaymentID)
+		}
+		if month2.SubscriptionID != "sub_rzp_renew" {
+			t.Errorf("expected subscription sub_rzp_renew, got %s", month2.SubscriptionID)
+		}
+		if month2.AmountMicros != 4900000000 {
+			t.Errorf("expected 4900000000 micros from the payment entity, got %d", month2.AmountMicros)
+		}
+		if month2.OrganizationID != orgID || month2.PlanCode != "pro" {
+			t.Errorf("expected org and plan from subscription notes, got %s / %s", month2.OrganizationID, month2.PlanCode)
+		}
+	})
+
 	t.Run("subscription.cancelled", func(t *testing.T) {
 		payload := fmt.Appendf(nil, `{
 			"event": "subscription.cancelled",

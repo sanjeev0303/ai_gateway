@@ -9,7 +9,7 @@ import {
   type Column,
   BreakdownTabs,
 } from "@/components/dashboard";
-import { isDateRange, type DateRange } from "@/lib/date-range";
+import { isDateRange, type DateRange } from "@ai-governance/console-ui/lib/date-range";
 import {
   Card,
   CardContent,
@@ -22,7 +22,7 @@ import {
   formatPercent,
   formatProviderName,
   microsToUsd,
-} from "@/lib/format";
+} from "@ai-governance/console-ui/lib/format";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
 

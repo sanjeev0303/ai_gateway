@@ -1,7 +1,7 @@
 import type { TimeSeriesPoint } from "@/types";
-import { formatCompact } from "@/lib/format";
-import { labelStride, linePath, linearScale, maxOf, niceMax, niceTicks, type Point, axisLabel } from "./utils";
-import { ChartFrame } from "./chart-frame";
+import { formatCompact } from "@ai-governance/console-ui/lib/format";
+import { labelStride, linePath, linearScale, maxOf, niceMax, niceTicks, type Point, axisLabel } from "@ai-governance/console-ui/charts/utils";
+import { ChartFrame } from "@ai-governance/console-ui/charts/chart-frame";
 
 interface LineChartProps {
   data: readonly TimeSeriesPoint[];

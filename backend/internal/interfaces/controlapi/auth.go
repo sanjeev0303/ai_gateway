@@ -77,6 +77,12 @@ func (a *api) requireAuth(next http.HandlerFunc) http.Handler {
 			writeServiceError(w, r, perrors.New(perrors.KindPermissionDenied, "csrf_token_invalid", "missing or invalid CSRF token"))
 			return
 		}
+		// A valid token is not enough: the user may since have been disabled
+		// or the organization suspended by a platform admin.
+		if err := a.svc.CheckActive(r.Context(), actor); err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
 		ctx := withActor(r.Context(), actor)
 		if claims.Subject != "" {
 			ctx = withClaims(ctx, claims)

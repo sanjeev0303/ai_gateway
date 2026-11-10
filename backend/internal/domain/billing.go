@@ -424,6 +424,26 @@ type ProviderPricingSpec struct {
 	DeepContextOutputRatePerM float64 `json:"deep_context_output_rate_per_m"`
 }
 
+// CanonicalPricingSpecs is the model list the pricing page shows when an
+// organization has no rate sheets of its own. Its rates must match what
+// LookupCanonicalPricing bills; a test holds them together.
+var CanonicalPricingSpecs = []ProviderPricingSpec{
+	{ProviderKind: "openai", ModelSlug: "gpt-4o", DisplayName: "GPT-4o", InputRatePerM: 2.50, OutputRatePerM: 10.00, CachedReadRatePerM: 1.25, SupportsCaching: true},
+	{ProviderKind: "openai", ModelSlug: "gpt-4o-mini", DisplayName: "GPT-4o Mini", InputRatePerM: 0.15, OutputRatePerM: 0.60, CachedReadRatePerM: 0.075, SupportsCaching: true},
+	{ProviderKind: "openai", ModelSlug: "o1", DisplayName: "o1", InputRatePerM: 15.00, OutputRatePerM: 60.00, CachedReadRatePerM: 7.50, SupportsCaching: true},
+	{ProviderKind: "anthropic", ModelSlug: "claude-3-5-sonnet", DisplayName: "Claude 3.5 Sonnet", InputRatePerM: 3.00, OutputRatePerM: 15.00, CachedReadRatePerM: 0.30, SupportsCaching: true},
+	{ProviderKind: "anthropic", ModelSlug: "claude-3-5-haiku", DisplayName: "Claude 3.5 Haiku", InputRatePerM: 0.80, OutputRatePerM: 4.00, CachedReadRatePerM: 0.08, SupportsCaching: true},
+	{ProviderKind: "anthropic", ModelSlug: "claude-3-opus", DisplayName: "Claude 3 Opus", InputRatePerM: 15.00, OutputRatePerM: 75.00, CachedReadRatePerM: 1.50, SupportsCaching: true},
+	{ProviderKind: "gemini", ModelSlug: "gemini-2.5-flash", DisplayName: "Gemini 2.5 Flash", InputRatePerM: 0.075, OutputRatePerM: 0.30, CachedReadRatePerM: 0.01875, SupportsCaching: true},
+	{ProviderKind: "gemini", ModelSlug: "gemini-2.5-pro", DisplayName: "Gemini 2.5 Pro", InputRatePerM: 1.25, OutputRatePerM: 5.00, CachedReadRatePerM: 0.3125, SupportsCaching: true},
+	{ProviderKind: "gemini", ModelSlug: "gemini-1.5-flash", DisplayName: "Gemini 1.5 Flash", InputRatePerM: 0.075, OutputRatePerM: 0.30, CachedReadRatePerM: 0.01875, SupportsCaching: true},
+	{ProviderKind: "gemini", ModelSlug: "gemini-1.5-pro", DisplayName: "Gemini 1.5 Pro", InputRatePerM: 1.25, OutputRatePerM: 5.00, CachedReadRatePerM: 0.3125, SupportsCaching: true},
+	{ProviderKind: "huggingface", ModelSlug: "meta-llama/Llama-3.3-70B-Instruct", DisplayName: "Llama 3.3 70B Instruct", InputRatePerM: 0.40, OutputRatePerM: 0.40, CachedReadRatePerM: 0.40, SupportsCaching: false},
+	{ProviderKind: "huggingface", ModelSlug: "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B", DisplayName: "DeepSeek R1 Distill", InputRatePerM: 0.15, OutputRatePerM: 0.60, CachedReadRatePerM: 0.15, SupportsCaching: false},
+	{ProviderKind: "huggingface", ModelSlug: "mistralai/Mistral-7B-Instruct-v0.3", DisplayName: "Mistral 7B Instruct", InputRatePerM: 0.05, OutputRatePerM: 0.05, CachedReadRatePerM: 0.05, SupportsCaching: false},
+	{ProviderKind: "huggingface", ModelSlug: "Qwen/Qwen2.5-72B-Instruct", DisplayName: "Qwen 2.5 72B", InputRatePerM: 0.40, OutputRatePerM: 0.40, CachedReadRatePerM: 0.40, SupportsCaching: false},
+}
+
 // LookupCanonicalPricing returns the authoritative provider pricing specification for a model.
 func LookupCanonicalPricing(providerKind, modelSlug string) (ProviderPricingSpec, bool) {
 	provider := strings.ToLower(strings.TrimSpace(providerKind))
@@ -535,7 +555,7 @@ func LookupCanonicalPricing(providerKind, modelSlug string) (ProviderPricingSpec
 	}
 
 	// 5. Mistral models, usually connected as a custom OpenAI-compatible provider
-	if provider == "mistral" || isMistralSlug(slug) {
+	if provider == "mistral" || IsMistralModel(slug) {
 		spec := ProviderPricingSpec{ProviderKind: "mistral", ModelSlug: modelSlug, SupportsCaching: false}
 		switch {
 		case strings.Contains(slug, "large") || strings.Contains(slug, "pixtral"):
@@ -560,15 +580,6 @@ func LookupCanonicalPricing(providerKind, modelSlug string) (ProviderPricingSpec
 	}
 
 	return ProviderPricingSpec{}, false
-}
-
-func isMistralSlug(slug string) bool {
-	for _, family := range []string{"mistral", "codestral", "ministral", "magistral", "pixtral", "devstral"} {
-		if strings.Contains(slug, family) {
-			return true
-		}
-	}
-	return false
 }
 
 // CalculateProviderTokenCost calculates the exact cost in micro-dollars based on provider-specific pricing rules.

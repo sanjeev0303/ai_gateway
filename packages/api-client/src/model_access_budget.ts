@@ -6,6 +6,7 @@ export type ModelAccessList = components["schemas"]["ModelAccessList"];
 export type UpdateModelAccessRequest = components["schemas"]["UpdateModelAccessRequest"];
 export type ModelAccessPreviewRequest = components["schemas"]["ModelAccessPreviewRequest"];
 export type ModelAccessPreviewResponse = components["schemas"]["ModelAccessPreviewResponse"];
+export type ModelAccessUpdateResponse = components["schemas"]["ModelAccessUpdateResponse"];
 
 export type Budget = components["schemas"]["Budget"];
 export type BudgetList = components["schemas"]["BudgetList"];
@@ -13,8 +14,8 @@ export type CreateBudgetRequest = components["schemas"]["CreateBudgetRequest"];
 export type UpdateBudgetRequest = components["schemas"]["UpdateBudgetRequest"];
 
 export interface ModelAccessModule {
-  list(options?: RequestOptions): Promise<ListResponse<ModelAccessEntry>>;
-  update(data: UpdateModelAccessRequest, options?: RequestOptions): Promise<{ status: string }>;
+  list(options?: RequestOptions): Promise<ModelAccessList>;
+  update(data: UpdateModelAccessRequest, options?: RequestOptions): Promise<ModelAccessUpdateResponse>;
   preview(data: ModelAccessPreviewRequest, options?: RequestOptions): Promise<ModelAccessPreviewResponse>;
 }
 
@@ -29,9 +30,9 @@ export interface BudgetsModule {
 export function createModelAccessModule(t: Transport): ModelAccessModule {
   return {
     list: (opts) =>
-      t.request<ListResponse<ModelAccessEntry>>("/v1/model-access", opts),
+      t.request<ModelAccessList>("/v1/model-access", opts),
     update: (data, opts) =>
-      t.request<{ status: string }>("/v1/model-access", { ...opts, method: "PUT", body: data }),
+      t.request<ModelAccessUpdateResponse>("/v1/model-access", { ...opts, method: "PUT", body: data }),
     preview: (data, opts) =>
       t.requestAt<ModelAccessPreviewResponse>("/v1/model-access/preview", { ...opts, method: "POST", body: data }),
   };

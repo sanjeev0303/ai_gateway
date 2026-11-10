@@ -4,7 +4,7 @@ import * as React from "react";
 import { Copy, MoreHorizontal, MailPlus, Check } from "lucide-react";
 import { DataTable, type Column } from "@/components/dashboard";
 import { InviteActionsCell } from "./invite-actions-cell";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,7 +12,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@ai-governance/console-ui/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -21,12 +21,12 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@ai-governance/console-ui/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ai-governance/console-ui/ui/select";
+import { Input } from "@ai-governance/console-ui/ui/input";
+import { Label } from "@ai-governance/console-ui/ui/label";
 import { toast } from "sonner";
-import { createApiClient } from "@ai-governance/api-client";
+import { createApiClient, type Invitation } from "@ai-governance/api-client";
 import { CONTROL_API_BASE } from "@/lib/control-api";
 import { useSession } from "@/lib/session-context";
 import { useRouter } from "next/navigation";
@@ -67,7 +67,7 @@ export function InviteDialog({ children }: { children: React.ReactNode }) {
     e.preventDefault();
     try {
       setIsSubmitting(true);
-      const res = await api.invitations.invite({ email, role });
+      const res = await api.invitations.invite({ email, role: role as Invitation["role"] });
       setResult({ token: res.token, email });
       router.refresh();
     } catch (error) {
@@ -207,7 +207,7 @@ export function InvitationsClient({ initialRows, oldestStr }: { initialRows: Inv
     try {
       setIsUpdating(true);
       await api.invitations.revoke(idToRevoke);
-      const result = await api.invitations.invite({ email, role });
+      const result = await api.invitations.invite({ email, role: role as Invitation["role"] });
       // The token is only returned now, so the new link has to be shown here or it is lost.
       const link = `${window.location.origin}/accept-invite?token=${result.token}`;
       toast.success(`Invitation reissued for ${email}`, {

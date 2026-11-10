@@ -16,7 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatDate, formatNumber } from "@/lib/format";
+import { formatDate, formatNumber } from "@ai-governance/console-ui/lib/format";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
 import {
@@ -170,7 +170,7 @@ export default async function SubscriptionPage({
         )}
 
         {/* Payment Failure Warning Banner */}
-        {subscription && (subscription.status === "past_due" || subscription.status === "unpaid") && (
+        {subscription && subscription.status === "past_due" && (
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl border border-destructive bg-destructive/10 text-destructive mb-4 shadow-xs">
             <div className="flex items-center gap-3">
               <AlertTriangle className="size-6 shrink-0 text-destructive" />

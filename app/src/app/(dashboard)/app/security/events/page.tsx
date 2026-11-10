@@ -50,6 +50,7 @@ const SEVERITY_TONE: Record<SecurityEventSeverity, StatusTone> = {
 const CATEGORY_LABEL: Record<SecurityEventCategory, string> = {
   provider_incident: "Provider incident",
   pipeline_failure: "Pipeline failure",
+  policy_violation: "Policy violation",
 };
 
 /**

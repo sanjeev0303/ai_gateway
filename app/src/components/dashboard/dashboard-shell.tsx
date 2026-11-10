@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { SidebarNav } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
 import { ConfirmHost } from "@/components/dashboard/confirm-dialog";
-import { cn } from "@/lib/utils";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 
 interface SidebarContextValue {
   collapsed: boolean;

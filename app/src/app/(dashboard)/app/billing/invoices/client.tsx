@@ -2,10 +2,10 @@
 
 import * as React from "react";
 import { Download, Printer, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import { toast } from "sonner";
 import type { Invoice } from "@ai-governance/api-client";
-import { formatDate, formatUsd, microsToUsd } from "@/lib/format";
+import { formatDate, formatUsd, microsToUsd } from "@ai-governance/console-ui/lib/format";
 
 export function ExportAllInvoicesButton({ invoices }: { invoices: Invoice[] }) {
   const handleExport = () => {

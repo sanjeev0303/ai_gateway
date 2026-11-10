@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Check, Minus, ShieldAlert, X } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 
 type StageState = "pass" | "redact" | "stop" | "skip";
 

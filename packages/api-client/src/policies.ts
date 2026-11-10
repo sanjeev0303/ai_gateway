@@ -8,36 +8,9 @@ export type UpdatePolicyRequest = components["schemas"]["UpdatePolicyRequest"];
 export type CreatePolicyRuleRequest = components["schemas"]["CreatePolicyRuleRequest"];
 export type UpdatePolicyRuleRequest = components["schemas"]["UpdatePolicyRuleRequest"];
 
-export interface PolicyValidationResult {
-  valid: boolean;
-  policy_id: string;
-  name: string;
-  enforcement: string;
-  rules_count: number;
-  errors: string[];
-  warnings: string[];
-}
-
-export interface PolicyPreviewRequest {
-  model: string;
-  provider?: string;
-  input_tokens?: number;
-  output_tokens?: number;
-  team_id?: string;
-  project_id?: string;
-  user_id?: string;
-  service_account_id?: string;
-  credential_id?: string;
-  scopes?: string[];
-}
-
-export interface PolicyPreviewResponse {
-  allowed: boolean;
-  decision: "allow" | "deny";
-  reason: string;
-  effective_scope: string;
-  matched_rules: PolicyRule[];
-}
+export type PolicyValidationResult = components["schemas"]["PolicyValidationResult"];
+export type PolicyPreviewRequest = components["schemas"]["PolicyPreviewRequest"];
+export type PolicyPreviewResponse = components["schemas"]["PolicyPreviewResponse"];
 
 export interface PoliciesModule {
   list(options?: RequestOptions): Promise<ListResponse<Policy>>;

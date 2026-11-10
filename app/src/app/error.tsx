@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { AlertCircle, RefreshCw, Home } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 
 interface ErrorProps {
   error: Error & { digest?: string };

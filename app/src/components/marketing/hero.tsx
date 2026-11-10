@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Check, ShieldCheck } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { APP_DESCRIPTION, APP_NAME, APP_TAGLINE } from "@/lib/constants";
 

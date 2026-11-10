@@ -1,5 +1,5 @@
 import { MARKETING_FEATURES } from "@/lib/constants";
-import { cn } from "@/lib/utils";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 
 interface FeatureGridProps {
   /** Optional section heading; omit to render the grid alone. */

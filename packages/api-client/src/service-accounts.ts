@@ -1,17 +1,10 @@
+import type { components } from "@ai-governance/contracts";
 import type { ListResponse, RequestOptions, Transport } from "./client";
 
-export interface ServiceAccount {
-  id: string;
-  organization_id: string;
-  name: string;
-  description: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
+export type ServiceAccount = components["schemas"]["ServiceAccount"];
 
 export interface ServiceAccountsModule {
-  create(input: { name: string; description: string }, options?: RequestOptions): Promise<ServiceAccount>;
+  create(input: components["schemas"]["CreateServiceAccountRequest"], options?: RequestOptions): Promise<ServiceAccount>;
   list(options?: RequestOptions): Promise<ListResponse<ServiceAccount>>;
   remove(serviceAccountId: string, options?: RequestOptions): Promise<void>;
 }

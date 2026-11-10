@@ -1,97 +1,15 @@
+import type { components } from "@ai-governance/contracts";
 import type { ListResponse, RequestOptions, Transport } from "./client";
 
-/**
- * Alert-rule payloads are the snake_case DTOs declared in
- * `backend/api/openapi/openapi.yaml`, mirrored here so a consumer of this
- * package does not need `@ai-governance/contracts` at the type level.
- *
- * Nothing evaluates alert rules yet. `last_triggered_at` therefore stays null,
- * and `test()` validates a rule's configuration without reporting whether it
- * would fire and without sending a notification.
- */
-
-export type AlertType =
-  | "spend_threshold"
-  | "spend_exceeded"
-  | "request_rate_spike"
-  | "error_rate_spike"
-  | "provider_failure"
-  | "credential_failure"
-  | "policy_violation"
-  | "rate_limit_spike"
-  | "usage_anomaly";
-
-export type AlertSeverity = "info" | "warning" | "critical";
-
-export type AlertStatus = "active" | "muted";
-
-export interface Alert {
-  id: string;
-  alert_type: AlertType;
-  name: string;
-  severity: AlertSeverity;
-  /** Rule thresholds and options; `{}` when unset. */
-  configuration: Record<string, unknown>;
-  status: AlertStatus;
-  /** Always null today, because nothing evaluates alert rules. */
-  last_triggered_at?: string | null;
-  /** RFC3339. */
-  created_at: string;
-  /** RFC3339. */
-  updated_at: string;
-}
-
-export interface CreateAlertInput {
-  name: string;
-  alert_type: AlertType;
-  severity: AlertSeverity;
-  configuration: Record<string, unknown>;
-}
-
-/** Full replacement of an alert rule's mutable fields; all four are required. */
-export interface UpdateAlertInput {
-  name: string;
-  severity: AlertSeverity;
-  configuration: Record<string, unknown>;
-  status: AlertStatus;
-}
-
-export interface AlertTestResult {
-  alert_id: string;
-  alert_type: AlertType;
-  severity: AlertSeverity;
-  status: AlertStatus;
-  configuration: Record<string, unknown>;
-  /** True when the rule is muted and so would not be reported. */
-  status_is_muted: boolean;
-  /** Always false; no notifier is invoked. */
-  notification_sent: boolean;
-  message: string;
-}
-
-export interface AlertEvent {
-  id: string;
-  alert_id: string;
-  alert_type: string;
-  severity: string;
-  status: string;
-  message: string;
-  context: Record<string, unknown>;
-  triggered_at: string;
-  resolved_at?: string | null;
-  created_at: string;
-}
-
-export interface InAppNotification {
-  id: string;
-  alert_id?: string | null;
-  alert_event_id?: string | null;
-  title: string;
-  message: string;
-  severity: string;
-  read: boolean;
-  created_at: string;
-}
+export type AlertType = components["schemas"]["AlertRuleType"];
+export type AlertSeverity = components["schemas"]["Alert"]["severity"];
+export type AlertStatus = components["schemas"]["Alert"]["status"];
+export type Alert = components["schemas"]["Alert"];
+export type CreateAlertInput = components["schemas"]["CreateAlertRequest"];
+export type UpdateAlertInput = components["schemas"]["UpdateAlertRequest"];
+export type AlertTestResult = components["schemas"]["AlertTestResult"];
+export type AlertEvent = components["schemas"]["AlertEvent"];
+export type InAppNotification = components["schemas"]["InAppNotification"];
 
 export interface AlertsModule {
   list(options?: RequestOptions): Promise<ListResponse<Alert>>;

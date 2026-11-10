@@ -1,44 +1,8 @@
+import type { components } from "@ai-governance/contracts";
 import type { RequestOptions, Transport } from "./client";
 
-export interface OrganizationPlan {
-  code: string;
-  name: string;
-}
-
-export interface OrganizationBilling {
-  status: "active" | "trialing";
-  /** RFC3339 timestamp, or an empty string when the stored column is NULL. */
-  current_period_start: string;
-  /** RFC3339 timestamp, or an empty string when the stored column is NULL. */
-  current_period_end: string;
-  cancel_at_period_end: boolean;
-}
-
-export interface Organization {
-  id: string;
-  name: string;
-  slug: string;
-  status: "active" | "suspended";
-  created_at: string;
-  updated_at: string;
-  plan: OrganizationPlan | null;
-  billing: OrganizationBilling | null;
-  privacy_default?: string;
-  retention_conversations_days?: number;
-  retention_usage_days?: number;
-  retention_audits_days?: number;
-  retention_billing_days?: number;
-}
-
-export interface OrganizationUpdateInput {
-  name?: string;
-  slug?: string;
-  privacy_default?: string;
-  retention_conversations_days?: number;
-  retention_usage_days?: number;
-  retention_audits_days?: number;
-  retention_billing_days?: number;
-}
+export type Organization = components["schemas"]["Organization"];
+export type OrganizationUpdateInput = components["schemas"]["UpdateOrganizationRequest"];
 
 export interface OrganizationModule {
   get(options?: RequestOptions): Promise<Organization>;

@@ -1,6 +1,8 @@
 import type { ApiClientOptions, Transport } from "./client";
 import { createTransport } from "./client";
 import type { ActivityModule } from "./activity";
+import type { AdminModule } from "./admin";
+import { createAdminModule } from "./admin";
 import { createActivityModule } from "./activity";
 import type { AuthModule } from "./auth";
 import { createAuthModule } from "./auth";
@@ -61,6 +63,7 @@ export type {
 } from "./client";
 
 export * from "./activity";
+export * from "./admin";
 export * from "./auth";
 export * from "./alerts";
 export * from "./audit-logs";
@@ -112,6 +115,7 @@ export interface ApiClient extends Transport {
   readonly alerts: AlertsModule;
   readonly activity: ActivityModule;
   readonly search: SearchModule;
+  readonly admin: AdminModule;
 }
 
 export function createApiClient(options: ApiClientOptions): ApiClient {
@@ -141,6 +145,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     alerts: createAlertsModule(transport),
     activity: createActivityModule(transport),
     search: createSearchModule(transport),
+    admin: createAdminModule(transport),
   };
 }
 
