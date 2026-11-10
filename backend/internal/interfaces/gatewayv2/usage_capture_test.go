@@ -76,7 +76,8 @@ func TestUsageObserver_AnthropicSSE(t *testing.T) {
 
 	requireTrue(t, got != nil, "anthropic stream should report usage")
 	requireTrue(t, got.Provider == "anthropic", "provider mismatch: %s", got.Provider)
-	requireTrue(t, got.InputTokens == 1200, "input mismatch: %d", got.InputTokens)
+	// 1200 uncached + 300 cache read + 50 cache write.
+	requireTrue(t, got.InputTokens == 1550, "input mismatch: %d", got.InputTokens)
 	requireTrue(t, got.OutputTokens == 450, "output mismatch: %d", got.OutputTokens)
 	requireTrue(t, got.CacheReadTokens == 300, "cache read mismatch: %d", got.CacheReadTokens)
 	requireTrue(t, got.CacheWriteTokens == 50, "cache write mismatch: %d", got.CacheWriteTokens)
@@ -183,6 +184,7 @@ func TestSink_PublishesRequestAndTokenUsage(t *testing.T) {
 		CacheReadTokens: 300,
 		StatusCode:      200,
 		LatencyMs:       42,
+		TokensReported:  true,
 		ProviderMeta:    map[string]any{"provider": "anthropic"},
 	})
 

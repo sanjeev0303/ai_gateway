@@ -1,29 +1,10 @@
+import type { components } from "@ai-governance/contracts";
 import type { RequestOptions, Transport } from "./client";
 
-export interface ActivityEvent {
-  request_id: string;
-  organization_id: string;
-  user_id?: string;
-  user_name?: string;
-  service_account?: string;
-  project_id?: string;
-  project_name?: string;
-  team_id?: string;
-  provider: string;
-  model: string;
-  status: string;
-  started_at: string;
-  current_state: string;
-}
-
+export type ActivityEvent = components["schemas"]["ActivityEvent"];
 /** Activity responses wrap the payload in `data`, not `items`. */
-export interface ActivityData {
-  data: ActivityEvent[];
-}
-
-export interface ActivityCount {
-  count: number;
-}
+export type ActivityData = components["schemas"]["ActivityEventListResponse"];
+export type ActivityCount = components["schemas"]["ActivityCount"];
 
 export interface ActivityModule {
   events(options?: RequestOptions): Promise<ActivityData>;

@@ -48,7 +48,6 @@ export interface CheckoutActionState {
   checkoutUrl?: string;
   sessionId?: string;
   paymentProvider?: string;
-  publishableKey?: string;
   orderId?: string;
   keyId?: string;
 }
@@ -75,10 +74,9 @@ export async function createCheckoutSessionAction(
 
     return {
       success: true,
-      checkoutUrl: session.checkout_url,
+      checkoutUrl: session.url,
       sessionId: session.session_id,
-      paymentProvider: session.payment_provider,
-      publishableKey: session.publishable_key,
+      paymentProvider: session.provider,
       orderId: session.order_id,
       keyId: session.key_id,
     };

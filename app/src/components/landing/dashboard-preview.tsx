@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 
 const KPIS = [
   { label: "Requests 24h", value: "12,446" },

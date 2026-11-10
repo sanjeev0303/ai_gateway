@@ -1,6 +1,6 @@
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { SessionProvider } from "@/lib/session-context";
-import { ThemeProvider } from "@/components/providers/theme-provider";
+import { ThemeProvider } from "@ai-governance/console-ui/providers/theme-provider";
 import { requireDashboardSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 
 const ONE_YEAR = 60 * 60 * 24 * 365;
 

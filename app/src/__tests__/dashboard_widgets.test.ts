@@ -9,7 +9,7 @@ import {
   formatPercent,
   formatMs,
   formatDate,
-} from "../lib/format.js";
+} from "@ai-governance/console-ui/lib/format";
 
 test("Dashboard Widgets: currency and micros formatting", () => {
   assert.equal(microsToUsd(1_000_000), 1.0);

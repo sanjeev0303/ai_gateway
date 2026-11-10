@@ -28,11 +28,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@ai-governance/console-ui/ui/button";
+import { Input } from "@ai-governance/console-ui/ui/input";
+import { Label } from "@ai-governance/console-ui/ui/label";
+import { Badge } from "@ai-governance/console-ui/ui/badge";
+import { Textarea } from "@ai-governance/console-ui/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -41,14 +41,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@ai-governance/console-ui/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ai-governance/console-ui/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatCard } from "@/components/dashboard/stat-card";
 import {
@@ -67,7 +67,7 @@ import type {
   TestGuardrailResponse,
 } from "@ai-governance/api-client";
 import { toast } from "sonner";
-import { formatRelative } from "@/lib/format";
+import { formatRelative } from "@ai-governance/console-ui/lib/format";
 import { confirmAction } from "@/components/dashboard/confirm-dialog";
 import { SearchSelect } from "@/components/dashboard/search-select";
 import type { Directory, DirectoryEntry } from "@/lib/directory";

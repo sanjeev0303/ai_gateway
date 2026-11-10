@@ -114,22 +114,13 @@ type stubGatewayBudgetGuard struct {
 
 var _ BudgetGuard = (*stubGatewayBudgetGuard)(nil)
 
-func (s *stubGatewayBudgetGuard) Check(_ context.Context, key string, limit float64, window time.Duration, cost float64) BudgetResult {
-	s.lastKey = key
-	s.lastLimit = limit
-	s.lastWindow = window
-	s.lastCost = cost
-	return s.result
-}
+func (s *stubGatewayBudgetGuard) SyncFromSnapshot(PolicySnapshot) {}
 func (s *stubGatewayBudgetGuard) Reserve(_ context.Context, key string, limit float64, window time.Duration, cost float64, reqID string) (BudgetResult, BudgetReleaseFunc) {
 	s.lastKey = key
 	s.lastLimit = limit
 	s.lastWindow = window
 	s.lastCost = cost
 	return s.result, func(_ float64, _ error) {}
-}
-func (s *stubGatewayBudgetGuard) RecordUsage(_ context.Context, _ string, _ float64) error {
-	return nil
 }
 
 type stubGatewayRequestInspector struct {
@@ -527,7 +518,7 @@ func TestExecutePipeline_BudgetExceeded(t *testing.T) {
 	requireTrue(t, res.Context != nil && !res.Context.BudgetResult.Allowed, "BudgetResult not preserved")
 
 	cred := gatewayCredFixture()
-	requireTrue(t, stubs.budget.lastKey == "service_account:"+cred.SubjectID.String(), "budget key mismatch: %s", stubs.budget.lastKey)
+	requireTrue(t, stubs.budget.lastKey == "org:"+cred.OrganizationID.String(), "budget key mismatch: %s", stubs.budget.lastKey)
 	requireTrue(t, stubs.budget.lastLimit == DefaultGatewayConfig().DefaultBudgetLimit, "budget limit mismatch")
 	requireTrue(t, stubs.budget.lastWindow == DefaultGatewayConfig().DefaultBudgetWindow, "budget window mismatch")
 
@@ -657,34 +648,29 @@ func TestExtractAPIKey(t *testing.T) {
 	requireTrue(t, g.extractAPIKey(req) == "", "expected empty key")
 }
 
-// TestBuildPipelineKeys verifies the rate/budget key derivation.
+// TestBuildPipelineKeys verifies the rate key derivation.
 func TestBuildPipelineKeys(t *testing.T) {
 	g, _ := newGatewayForPipeline()
 	cred := gatewayCredFixture()
 
 	rateKey := g.buildRateLimitKey(cred, ResolvedUpstream{})
 	requireTrue(t, rateKey == "org:"+cred.OrganizationID.String()+":cred:"+cred.ID.String(), "rate key mismatch: %s", rateKey)
-
-	budgetKey := g.buildBudgetKey(cred, ResolvedUpstream{})
-	requireTrue(t, budgetKey == "service_account:"+cred.SubjectID.String(), "budget key mismatch: %s", budgetKey)
 }
 
 // estimateCostForFixture returns the expected cost for the fixture hints
-// (1000 input, 2000 output): 0.01 + 0.06.
+// (claude-sonnet-4-5, 1000 input, 2000 output) at Sonnet's $3/$15 per million.
 func estimateCostForFixture() float64 {
-	return 1000.0/1000*0.01 + 2000.0/1000*0.03
+	return 1000.0*3/1e6 + 2000.0*15/1e6
 }
 
-// TestEstimateCost validates the token cost model.
+// TestEstimateCost checks the reservation estimate uses the billed rates.
 func TestEstimateCost(t *testing.T) {
-	g, _ := newGatewayForPipeline()
-
-	cost := g.estimateCost(InspectorHints{EstimatedInputTokens: 1000, EstimatedOutputTokens: 2000})
+	cost := estimateCost(InspectorHints{Model: "claude-sonnet-4-5", EstimatedInputTokens: 1000, EstimatedOutputTokens: 2000})
 	if math.Abs(cost-estimateCostForFixture()) > 1e-9 {
 		t.Fatalf("cost mismatch: got %v, want %v", cost, estimateCostForFixture())
 	}
 
-	zero := g.estimateCost(InspectorHints{})
+	zero := estimateCost(InspectorHints{})
 	requireTrue(t, zero == 0, "empty hints must cost zero")
 }
 

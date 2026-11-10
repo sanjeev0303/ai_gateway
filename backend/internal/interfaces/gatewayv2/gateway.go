@@ -58,7 +58,9 @@ type Gateway struct {
 	telemetry        TelemetryEmitter
 	activity         *ActivityTracker
 	guardrails       *GuardrailEvaluator // Wrapper for the domain evaluator
+	credentials      *InMemoryCredentialCache
 	modelRepo        repositories.ModelRepository
+	models           *modelCatalog
 	projectRepo      repositories.ProjectRepository
 	conversations    repositories.GatewayConversationStore
 	transcripts      *transcriptCache
@@ -167,11 +169,6 @@ func NewGateway(deps GatewayDeps) (*Gateway, error) {
 	tenantResolver := NewTenantResolver(deps.ProviderAccounts, deps.ProviderCredentials, deps.Secrets)
 	policyResolver := NewPolicyResolver(deps.PolicyRepo, deps.RuleRepo)
 
-	// Update budget guard with policy resolver for snapshot sync
-	if bg, ok := budgetGuard.(*BudgetGuardImpl); ok {
-		bg.policyResolver = policyResolver
-	}
-
 	requestInspector := NewRequestInspector()
 	providerRouter := NewProviderRouter("", "") // will use defaults
 	streamProxy := NewStreamProxy(defaultHTTPClient(deps.AllowPrivateUpstreams), deps.Logger, deps.AllowPrivateUpstreams)
@@ -180,6 +177,7 @@ func NewGateway(deps GatewayDeps) (*Gateway, error) {
 		config:           config,
 		logger:           deps.Logger,
 		authenticator:    authenticator,
+		credentials:      credCache,
 		tenantResolver:   tenantResolver,
 		policyResolver:   policyResolver,
 		rateLimiter:      rateLimiter,
@@ -190,6 +188,7 @@ func NewGateway(deps GatewayDeps) (*Gateway, error) {
 		telemetry:        telemetry,
 		guardrails:       NewGuardrailEvaluator(deps.Guardrails),
 		modelRepo:        deps.ModelRepo,
+		models:           newModelCatalog(deps.ModelRepo),
 		projectRepo:      deps.ProjectRepo,
 		conversations:    deps.Conversations,
 		transcripts:      newTranscriptCache(),
@@ -201,16 +200,20 @@ func NewGateway(deps GatewayDeps) (*Gateway, error) {
 // ServeHTTP is the main entry point for the gateway.
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	reqID := strings.TrimSpace(r.Header.Get("x-request-id"))
-	if reqID == "" {
-		reqID = strings.TrimSpace(r.Header.Get("x-correlation-id"))
-	}
-	if reqID == "" {
-		reqID = uuid.New().String()
-	}
-
-	// Add request ID to response headers
+	// The request ID is the ledger's dedupe key and the budget reservation
+	// ID, so it is always ours. A client-chosen one let a fixed header drop
+	// every later request from billing and skip budget reservations.
+	reqID := uuid.New().String()
 	w.Header().Set("x-request-id", reqID)
+
+	// Echo the caller's own ID back so they can still correlate.
+	clientReqID := strings.TrimSpace(r.Header.Get("x-request-id"))
+	if clientReqID == "" {
+		clientReqID = strings.TrimSpace(r.Header.Get("x-correlation-id"))
+	}
+	if clientReqID != "" {
+		w.Header().Set("x-client-request-id", clientReqID)
+	}
 
 	// Model listing endpoint
 	if r.Method == http.MethodGet && (r.URL.Path == "/v1/models" || strings.HasSuffix(r.URL.Path, "/models")) {
@@ -248,8 +251,8 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		defer func() {
-			if result.Context != nil && result.Context.BudgetRelease != nil {
-				result.Context.BudgetRelease(0, errors.New("request terminated"))
+			if result.Context != nil {
+				result.Context.Budget.Release(errors.New("request terminated"))
 			}
 		}()
 
@@ -452,21 +455,7 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 	// Determine requested provider
 	providerKind := hints.Provider
 	if providerKind == "" && hints.Model != "" {
-		switch {
-		case strings.HasPrefix(hints.Model, "claude-"):
-			providerKind = domain.ProviderKindAnthropic
-		case strings.HasPrefix(hints.Model, "gpt-") || strings.HasPrefix(hints.Model, "o1") || strings.HasPrefix(hints.Model, "o3") || strings.HasPrefix(hints.Model, "text-embedding") || strings.HasPrefix(hints.Model, "dall-e"):
-			providerKind = domain.ProviderKindOpenAI
-		case strings.HasPrefix(hints.Model, "gemini-"):
-			providerKind = domain.ProviderKindGemini
-		case strings.HasPrefix(hints.Model, "mistral") || strings.HasPrefix(hints.Model, "codestral-") || strings.HasPrefix(hints.Model, "ministral-") || strings.HasPrefix(hints.Model, "voxtral-") || strings.HasPrefix(hints.Model, "magistral-") || strings.HasPrefix(hints.Model, "open-mistral-"):
-			providerKind = domain.ProviderKindCustom
-		case strings.HasPrefix(hints.Model, "meta-llama/") || strings.HasPrefix(hints.Model, "mistralai/") || strings.HasPrefix(hints.Model, "Qwen/") || strings.HasPrefix(hints.Model, "deepseek-ai/") || strings.HasPrefix(hints.Model, "hf-") || strings.Contains(hints.Model, "/"):
-			providerKind = domain.ProviderKindHuggingFace
-		}
-	}
-	if providerKind == "" && hints.Model != "" {
-		providerKind = g.registryProviderFor(ctx, hints.Model)
+		providerKind = g.models.ProviderFor(ctx, hints.Model)
 	}
 	if providerKind == "" {
 		if p := r.Header.Get("x-provider"); p != "" {
@@ -520,11 +509,6 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 		return g.pipelineError("policy_resolver", err, http.StatusServiceUnavailable, "policy_unavailable")
 	}
 
-	// Sync budget configurations from policy snapshot
-	if bg, ok := g.budgetGuard.(*BudgetGuardImpl); ok {
-		bg.SyncFromSnapshot(policy)
-	}
-
 	reqCtx := &RequestContext{
 		Credential:     cred,
 		PolicySnapshot: policy,
@@ -560,7 +544,7 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 	}
 
 	// Validate model is supported and active
-	if hints.Model != "" && !g.isModelSupported(ctx, providerKind, hints.Model) {
+	if hints.Model != "" && !g.models.Supported(ctx, providerKind, hints.Model) {
 		res := g.pipelineError("model_resolver", fmt.Errorf("model %q is not supported or is inactive", hints.Model), http.StatusBadRequest, "unsupported_model")
 		res.Context = reqCtx
 		return res
@@ -641,63 +625,12 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 		}
 	}
 
-	// Stage 7: Budget check across all applicable scopes (spend and token budgets)
 	// Stage 7: Budgets (atomic reservation preventing concurrent overspend)
-	applicableBudgets := policy.applicableBudgets(cred)
-	var finalBudgetResult BudgetResult
-	var releaseFuncs []BudgetReleaseFunc
-	var limitTypes []string
-
-	if len(applicableBudgets) == 0 {
-		budgetKey := g.buildBudgetKey(cred, upstream)
-		estimatedCost := g.estimateCost(hints)
-		budgetCfg, budgetWindow := g.config.DefaultBudgetLimit, g.config.DefaultBudgetWindow
-		if cfg, ok := policy.budgetFor("organization"); ok {
-			budgetCfg, budgetWindow = cfg.Limit, cfg.Window
-		}
-		bResult, release := g.budgetGuard.Reserve(ctx, budgetKey, budgetCfg, budgetWindow, estimatedCost, reqID)
-		if !bResult.Allowed {
-			return g.budgetExceededResult(bResult, reqCtx)
-		}
-		finalBudgetResult = bResult
-		releaseFuncs = append(releaseFuncs, release)
-		limitTypes = append(limitTypes, "spend")
-	} else {
-		for _, cfg := range applicableBudgets {
-			budgetKey := cfg.Key
-			if budgetKey == "" {
-				budgetKey = cfg.Scope
-			}
-			estimatedTokens := hints.EstimatedInputTokens + hints.EstimatedOutputTokens
-			if estimatedTokens <= 0 {
-				estimatedTokens = 1
-			}
-			checkCost := budgetUnits(cfg.LimitType, g.estimateCost(hints), estimatedTokens)
-			bResult, release := g.budgetGuard.Reserve(ctx, budgetKey, cfg.Limit, cfg.Window, checkCost, reqID)
-			if !bResult.Allowed {
-				// Rollback already acquired reservations for this request
-				for _, rFn := range releaseFuncs {
-					rFn(0, errors.New("budget_exceeded"))
-				}
-				return g.budgetExceededResult(bResult, reqCtx)
-			}
-			finalBudgetResult = bResult
-			releaseFuncs = append(releaseFuncs, release)
-			limitTypes = append(limitTypes, cfg.LimitType)
-		}
+	ticket, budgetResult, ok := g.admitBudgets(ctx, policy, cred, hints, reqID)
+	if !ok {
+		return g.budgetExceededResult(budgetResult, reqCtx)
 	}
-
-	combinedRelease := func(actualCost float64, err error) {
-		for _, rFn := range releaseFuncs {
-			rFn(actualCost, err)
-		}
-	}
-	reqCtx.BudgetRelease = combinedRelease
-	reqCtx.BudgetCommit = func(cost float64, tokens int) {
-		for i, rFn := range releaseFuncs {
-			rFn(budgetUnits(limitTypes[i], cost, tokens), nil)
-		}
-	}
+	reqCtx.Budget = ticket
 
 	// Stage 8: Route to provider
 	upstreamURL, upstreamHeaders, err := g.providerRouter.Route(ctx, upstream, hints)
@@ -709,7 +642,7 @@ func (g *Gateway) executePipeline(ctx context.Context, r *http.Request, reqID st
 
 	// Enrich request context for downstream
 	reqCtx.RateLimit = finalRateLimitResult
-	reqCtx.BudgetResult = finalBudgetResult
+	reqCtx.BudgetResult = budgetResult
 	reqCtx.UpstreamURL = upstreamURL
 	reqCtx.UpstreamHeaders = upstreamHeaders
 
@@ -786,52 +719,25 @@ func (g *Gateway) buildRateLimitScopedKey(cred GatewayCredential, cfg RateLimitC
 	case "credential", "gateway_credential":
 		return fmt.Sprintf("org:%s:cred:%s", cred.OrganizationID, cred.ID)
 	default:
-		if cfg.Key != "" {
-			if strings.HasPrefix(cfg.Key, "org:") {
-				return cfg.Key
-			}
-			return fmt.Sprintf("org:%s:%s", cred.OrganizationID, cfg.Key)
+		orgPrefix := "org:" + cred.OrganizationID.String()
+		if cfg.Key == "" {
+			return orgPrefix
 		}
-		return "org:" + cred.OrganizationID.String()
+		// Only this org's own keys pass through; a bare "org:" prefix could
+		// name another tenant's bucket.
+		if strings.HasPrefix(cfg.Key, orgPrefix+":") {
+			return cfg.Key
+		}
+		return orgPrefix + ":" + cfg.Key
 	}
 }
 
-// buildBudgetKey constructs the budget key from credential and upstream.
-// The key format matches the budget rule key: scope:scope_id
-func (g *Gateway) buildBudgetKey(cred GatewayCredential, upstream ResolvedUpstream) string {
-	// Budget by credential scope - supports organization, team, project, service_account
-	if cred.TeamID != nil {
-		return "team:" + cred.TeamID.String()
-	}
-	if cred.ProjectID != nil {
-		return "project:" + cred.ProjectID.String()
-	}
-	if cred.SubjectType == "service_account" {
-		return "service_account:" + cred.SubjectID.String()
-	}
-	// Default to organization scope
-	return "org:" + cred.OrganizationID.String()
-}
-
-// budgetUnits converts a request into what a budget counts. A request budget
-// counts the request itself; charging it dollars let a cap of 3 requests
-// behave like $3.
-func budgetUnits(limitType string, cost float64, tokens int) float64 {
-	switch limitType {
-	case "tokens":
-		return float64(tokens)
-	case "requests":
-		return 1
-	}
-	return cost
-}
-
-// estimateCost provides a rough cost estimate for the request.
-func (g *Gateway) estimateCost(hints InspectorHints) float64 {
-	// Rough estimate: $0.01 per 1K input tokens, $0.03 per 1K output tokens
-	inputCost := float64(hints.EstimatedInputTokens) / 1000 * 0.01
-	outputCost := float64(hints.EstimatedOutputTokens) / 1000 * 0.03
-	return inputCost + outputCost
+// estimateCost prices the request's estimated tokens with the same rates the
+// finished request is billed at, so a budget reservation and the final charge
+// agree.
+func estimateCost(hints InspectorHints) float64 {
+	micros := domain.ResolveAndCalculateModelCost(hints.Provider, hints.Model, int64(hints.EstimatedInputTokens), int64(hints.EstimatedOutputTokens), 0)
+	return float64(micros) / 1_000_000
 }
 
 // rateLimitedResult creates a rate limited response.
@@ -1004,6 +910,7 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 			usage.OutputTokens = observed.OutputTokens
 			usage.CacheReadTokens = observed.CacheReadTokens
 			usage.CacheWriteTokens = observed.CacheWriteTokens
+			usage.TokensReported = true
 			meta := map[string]any{"provider": upstreamProvider, "tokens_reported": true, "estimated": false}
 			if observed.ReasoningTokens > 0 {
 				meta["reasoning_tokens"] = observed.ReasoningTokens
@@ -1063,28 +970,9 @@ func (g *Gateway) emitTelemetry(ctx context.Context, reqID string, result Pipeli
 		// Actual tokens are charged for successful requests (status < 400) or client disconnects (499) with partial tokens.
 		// Failed/rejected requests release their reservation with zero charge.
 		if actualStatusCode < 400 || (actualStatusCode == 499 && (usage.InputTokens > 0 || usage.OutputTokens > 0)) {
-			if result.Context != nil && result.Context.BudgetCommit != nil {
-				result.Context.BudgetCommit(cost, usage.InputTokens+usage.OutputTokens)
-			} else {
-				appBudgets := result.Context.PolicySnapshot.applicableBudgets(result.Context.Credential)
-				if len(appBudgets) == 0 {
-					budgetKey := g.buildBudgetKey(result.Context.Credential, result.Context.Upstream)
-					if err := g.budgetGuard.RecordUsage(ctx, budgetKey, cost); err != nil {
-						g.logger.Warn("failed to record local budget usage", "error", err, "key", budgetKey)
-					}
-				} else {
-					for _, cfg := range appBudgets {
-						usageAmt := budgetUnits(cfg.LimitType, cost, usage.InputTokens+usage.OutputTokens)
-						if err := g.budgetGuard.RecordUsage(ctx, cfg.Key, usageAmt); err != nil {
-							g.logger.Warn("failed to record local budget usage", "error", err, "key", cfg.Key)
-						}
-					}
-				}
-			}
+			result.Context.Budget.Charge(cost, usage.InputTokens+usage.OutputTokens)
 		} else {
-			if result.Context != nil && result.Context.BudgetRelease != nil {
-				result.Context.BudgetRelease(0, fmt.Errorf("request failed with status %d", actualStatusCode))
-			}
+			result.Context.Budget.Release(fmt.Errorf("request failed with status %d", actualStatusCode))
 		}
 
 		g.telemetry.EmitUsage(ctx, usage)
@@ -1233,27 +1121,6 @@ func (g *Gateway) Start() error {
 	return nil
 }
 
-// InvalidatePolicy immediately evicts the cached policy snapshot for an organization.
-func (g *Gateway) InvalidatePolicy(orgID uuid.UUID) {
-	if g.policyResolver != nil {
-		g.policyResolver.Invalidate(orgID)
-	}
-}
-
-// InvalidateCredentialByID immediately evicts a cached credential by ID.
-func (g *Gateway) InvalidateCredentialByID(ctx context.Context, id string) {
-	if authImpl, ok := g.authenticator.(*AuthenticatorImpl); ok {
-		authImpl.InvalidateByID(ctx, id)
-	}
-}
-
-// InvalidateUpstream immediately evicts cached upstream connections for an organization.
-func (g *Gateway) InvalidateUpstream(orgID uuid.UUID) {
-	if g.tenantResolver != nil {
-		g.tenantResolver.Invalidate(orgID)
-	}
-}
-
 // handleListModels serves GET /v1/models, returning permitted models for the authenticated credential.
 func (g *Gateway) handleListModels(w http.ResponseWriter, r *http.Request, reqID string) {
 	cred, err := g.authenticate(r.Context(), r)
@@ -1391,57 +1258,6 @@ func (g *Gateway) handleListModels(w http.ResponseWriter, r *http.Request, reqID
 		"data":   permitted,
 		"items":  permitted,
 	})
-}
-
-// isModelSupported checks whether a requested model matches known provider patterns or catalog entries and is active.
-// registryProviderFor finds the provider that serves a synced model whose name
-// alone does not say, such as Gemini's "gemma-" models.
-func (g *Gateway) registryProviderFor(ctx context.Context, model string) string {
-	if g.modelRepo == nil {
-		return ""
-	}
-	models, err := g.modelRepo.List(ctx)
-	if err != nil {
-		return ""
-	}
-	for _, m := range models {
-		if m.ModelSlug == model && m.IsActive {
-			return m.ProviderKind
-		}
-	}
-	return ""
-}
-
-func (g *Gateway) isModelSupported(ctx context.Context, providerKind, model string) bool {
-	if model == "" {
-		return true
-	}
-	if g.modelRepo != nil {
-		if m, err := g.modelRepo.GetBySlug(ctx, providerKind, model); err == nil {
-			return m.IsActive && m.Status != "inactive"
-		}
-		if models, err := g.modelRepo.List(ctx); err == nil {
-			for _, m := range models {
-				if (m.ModelSlug == model || m.DisplayName == model) && (providerKind == "" || m.ProviderKind == providerKind) {
-					return m.IsActive && m.Status != "inactive"
-				}
-			}
-		}
-	}
-	if strings.HasPrefix(model, "claude-") ||
-		strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") ||
-		strings.HasPrefix(model, "text-embedding") || strings.HasPrefix(model, "dall-e") ||
-		strings.HasPrefix(model, "gemini-") ||
-		strings.HasPrefix(model, "mistral") || strings.HasPrefix(model, "codestral-") ||
-		strings.HasPrefix(model, "ministral-") || strings.HasPrefix(model, "voxtral-") ||
-		strings.HasPrefix(model, "magistral-") || strings.HasPrefix(model, "open-mistral-") ||
-		strings.HasPrefix(model, "meta-llama/") || strings.HasPrefix(model, "mistralai/") ||
-		strings.HasPrefix(model, "Qwen/") || strings.HasPrefix(model, "deepseek-ai/") ||
-		strings.HasPrefix(model, "hf-") || strings.Contains(model, "/") ||
-		providerKind == domain.ProviderKindCustom {
-		return true
-	}
-	return false
 }
 
 func sliceContainsFold(slice []string, val string) bool {

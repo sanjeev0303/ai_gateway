@@ -3,7 +3,7 @@ import { ArrowRight, Check } from "lucide-react";
 
 import { FlowCurves } from "@/components/brand/flow-curves";
 import { GatewayPrism } from "@/components/brand/gateway-prism";
-import { GuillocheBand, GuillocheRosette } from "@/components/brand/guilloche";
+import { GuillocheBand, GuillocheRosette } from "@ai-governance/console-ui/brand/guilloche";
 import { LogoMark } from "@/components/logo";
 import { Container } from "./section";
 

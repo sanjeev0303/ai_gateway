@@ -4,7 +4,7 @@ import * as React from "react";
 import { MoreHorizontal } from "lucide-react";
 import { DataTable, type Column } from "@/components/dashboard";
 import { MemberActionsCell } from "./member-actions-cell";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,7 +12,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@ai-governance/console-ui/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -20,9 +20,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@ai-governance/console-ui/ui/dialog";
 import { toast } from "sonner";
-import { createApiClient } from "@ai-governance/api-client";
+import { createApiClient, type OrgMember } from "@ai-governance/api-client";
 import { CONTROL_API_BASE } from "@/lib/control-api";
 import { useSession } from "@/lib/session-context";
 import { useRouter } from "next/navigation";
@@ -57,7 +57,7 @@ export function MembersClient({ initialRows }: { initialRows: MemberRow[] }) {
   const handleRoleChange = async (id: string, newRole: string) => {
     try {
       setIsUpdating(true);
-      await api.members.setRole(id, { role: newRole });
+      await api.members.setRole(id, { role: newRole as OrgMember["role"] });
       setRows((prev) => prev.map((r) => (r.id === id ? { ...r, role: newRole } : r)));
       toast.success("Role updated successfully");
       router.refresh();

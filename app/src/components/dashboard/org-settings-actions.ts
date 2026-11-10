@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { ApiError } from "@ai-governance/api-client";
+import { ApiError, type Organization } from "@ai-governance/api-client";
 
 import { getApiClient } from "@/lib/session";
 
@@ -38,7 +38,7 @@ export async function updateOrganization(
     await organization.update({
       name,
       slug,
-      ...(privacyDefault ? { privacy_default: privacyDefault } : {}),
+      ...(privacyDefault ? { privacy_default: privacyDefault as Organization["privacy_default"] } : {}),
       ...(retentionConversations ? { retention_conversations_days: Number(retentionConversations) } : {}),
       ...(retentionUsage ? { retention_usage_days: Number(retentionUsage) } : {}),
       ...(retentionAudits ? { retention_audits_days: Number(retentionAudits) } : {}),

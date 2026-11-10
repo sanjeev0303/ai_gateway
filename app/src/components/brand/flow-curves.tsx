@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 
 /*
  * Long hairline curves behind a section: the path a request takes, drawn as

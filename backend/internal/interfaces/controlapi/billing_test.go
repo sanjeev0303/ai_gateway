@@ -92,6 +92,43 @@ func (f *fakeBillingSubs) UpdatePaymentDetails(_ context.Context, _ uuid.UUID, p
 	return nil
 }
 
+// fakeBillingCheckouts holds checkouts for one org, keyed by order ID.
+type fakeBillingCheckouts struct {
+	orgID  uuid.UUID
+	orders map[string]domain.Checkout
+}
+
+func (f *fakeBillingCheckouts) Create(context.Context, uuid.UUID, domain.NewCheckout) (domain.Checkout, error) {
+	return domain.Checkout{}, errors.New("unused")
+}
+
+func (f *fakeBillingCheckouts) Get(context.Context, uuid.UUID, string) (domain.Checkout, error) {
+	return domain.Checkout{}, errors.New("unused")
+}
+
+func (f *fakeBillingCheckouts) GetByOrderID(_ context.Context, orgID uuid.UUID, orderID string) (domain.Checkout, error) {
+	c, ok := f.orders[orderID]
+	if !ok || orgID != f.orgID {
+		return domain.Checkout{}, repositories.ErrNotFound
+	}
+	return c, nil
+}
+
+func (f *fakeBillingCheckouts) UpdateStatus(_ context.Context, _ uuid.UUID, sessionID, status, paymentID string) error {
+	for orderID, c := range f.orders {
+		if c.CheckoutSessionID == sessionID {
+			c.Status = status
+			c.PaymentID = paymentID
+			f.orders[orderID] = c
+		}
+	}
+	return nil
+}
+
+func (f *fakeBillingCheckouts) ExpirePending(context.Context, time.Time) (int64, error) {
+	return 0, nil
+}
+
 type fakeBillingInvoices struct{ invoices []domain.Invoice }
 
 func (f *fakeBillingInvoices) List(context.Context, uuid.UUID) ([]domain.Invoice, error) {

@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@ai-governance/console-ui/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@ai-governance/console-ui/ui/dialog";
+import { Label } from "@ai-governance/console-ui/ui/label";
+import { Input } from "@ai-governance/console-ui/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ai-governance/console-ui/ui/select";
 import { createAlert, updateAlert, deleteAlert, testAlert } from "./alert-actions";
 import { AlertSeverity, AlertStatus, AlertType } from "@ai-governance/api-client";
-import { Textarea } from "@/components/ui/textarea";
+import { Textarea } from "@ai-governance/console-ui/ui/textarea";
 import { useRouter } from "next/navigation";
 import { confirmAction } from "@/components/dashboard/confirm-dialog";
 import { toast } from "sonner";

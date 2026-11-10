@@ -7,9 +7,9 @@ import { usePathname } from "next/navigation";
 
 import { DASHBOARD_NAV } from "@/lib/constants";
 import { MobileNav } from "./mobile-nav";
-import { StatusBadge } from "./status-badge";
+import { StatusBadge } from "@ai-governance/console-ui/dashboard/status-badge";
 import { signOut } from "@/app/(auth)/signin/actions";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,9 +17,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@ai-governance/console-ui/ui/dropdown-menu";
 import { useTheme } from "next-themes";
-import { initials } from "@/lib/format";
+import { initials } from "@ai-governance/console-ui/lib/format";
 import { useSession } from "@/lib/session-context";
 import { ORG_STATUS_LABELS, ORG_STATUS_TONE } from "@/types";
 import { CommandPaletteTrigger } from "./command-palette";

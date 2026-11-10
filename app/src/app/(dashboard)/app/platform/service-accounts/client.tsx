@@ -4,15 +4,15 @@ import * as React from "react";
 import { MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@ai-governance/console-ui/ui/button";
+import { Input } from "@ai-governance/console-ui/ui/input";
+import { Label } from "@ai-governance/console-ui/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@ai-governance/console-ui/ui/dropdown-menu";
 import { ActionDialog, FormDialog } from "@/components/dashboard/dialogs";
 import { createServiceAccount, removeServiceAccount } from "./actions";
 

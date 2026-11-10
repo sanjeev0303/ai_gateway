@@ -267,6 +267,7 @@ func TestMultiOrgModelDiscoveryAndIsolation(t *testing.T) {
 		streamProxy:      &stubGatewayStreamProxy{},
 		telemetry:        &stubGatewayTelemetry{},
 		modelRepo:        modelRepo,
+		models:           newModelCatalog(modelRepo),
 	}
 
 	t.Run("Org A sees only Anthropic models, never OpenAI or inactive models", func(t *testing.T) {

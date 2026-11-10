@@ -4,16 +4,16 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 import { ChevronDown, SlidersHorizontal, X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Button } from "@ai-governance/console-ui/ui/button";
+import { Label } from "@ai-governance/console-ui/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+} from "@ai-governance/console-ui/ui/select";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 import type { Directory } from "@/lib/directory";
 import { loadDirectory } from "./directory-actions";
 import { SearchSelect } from "./search-select";

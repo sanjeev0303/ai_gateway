@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { ScrollReveal } from "@/components/landing/scroll-reveal";
 import { Container, SectionLabel } from "@/components/landing/section";
 import { USE_CASES } from "@/lib/landing-data";
-import { cn } from "@/lib/utils";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 
 export function UseCases() {
   const cases = USE_CASES.cases;

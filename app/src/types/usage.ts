@@ -1,4 +1,4 @@
-import type { CategoryDatum, ID, TimeSeriesPoint } from "./common";
+import type { CategoryDatum, ID, TimeSeriesPoint } from "@ai-governance/console-ui/types/common";
 
 export type UsageGranularity = "hour" | "day" | "week" | "month";
 

@@ -283,7 +283,7 @@ func (p PolicySnapshot) applicableRateLimits(cred GatewayCredential) []RateLimit
 
 	// Direct credential-level rate limit override if configured
 	if cred.RateLimit != nil && *cred.RateLimit > 0 {
-		key := "credential_direct:" + cred.ID.String()
+		key := "org:" + cred.OrganizationID.String() + ":credential_direct:" + cred.ID.String()
 		out = append(out, RateLimitConfig{
 			Key:     key,
 			Limit:   *cred.RateLimit,
@@ -344,7 +344,7 @@ func (p PolicySnapshot) applicableBudgets(cred GatewayCredential) []BudgetConfig
 
 	// Direct credential-level budget limit override if configured
 	if cred.BudgetLimit != nil && *cred.BudgetLimit > 0 {
-		key := "credential_direct:" + cred.ID.String()
+		key := "org:" + cred.OrganizationID.String() + ":credential_direct:" + cred.ID.String()
 		out = append(out, BudgetConfig{
 			Key:       key,
 			Limit:     *cred.BudgetLimit,

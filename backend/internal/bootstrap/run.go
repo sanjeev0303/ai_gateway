@@ -5,7 +5,6 @@ package bootstrap
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -14,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
 	"ai-governance-saas/backend/internal/application/activity"
@@ -25,6 +24,7 @@ import (
 	"ai-governance-saas/backend/internal/application/conversation"
 	"ai-governance-saas/backend/internal/application/guardrails"
 	"ai-governance-saas/backend/internal/application/identity"
+	"ai-governance-saas/backend/internal/application/platformadmin"
 	"ai-governance-saas/backend/internal/application/policy"
 	"ai-governance-saas/backend/internal/application/pricing"
 	"ai-governance-saas/backend/internal/application/provider"
@@ -48,12 +48,13 @@ import (
 	"ai-governance-saas/backend/internal/interfaces/gatewayv2"
 	"ai-governance-saas/backend/internal/interfaces/worker"
 	"ai-governance-saas/backend/internal/platform/config"
-	"ai-governance-saas/backend/internal/platform/credentialcache"
+	"ai-governance-saas/backend/internal/platform/dblog"
 	"ai-governance-saas/backend/internal/platform/health"
 	"ai-governance-saas/backend/internal/platform/httpx"
 	"ai-governance-saas/backend/internal/platform/logging"
 	"ai-governance-saas/backend/internal/ports/payment"
 	providerclient "ai-governance-saas/backend/internal/ports/provider"
+	ports "ai-governance-saas/backend/internal/ports/repositories"
 )
 
 // RunGateway starts the data-plane HTTP server and blocks until ctx is
@@ -129,6 +130,7 @@ func RunGatewayV2(ctx context.Context) error {
 	reg := health.NewRegistry()
 
 	var deps gatewayv2.Deps
+	var statsPool *pgxpool.Pool
 	if cfg.Database.Enabled {
 		store, err := postgres.NewStore(ctx, cfg.Database.URL,
 			postgres.WithMaxConns(int32(cfg.Database.MaxOpenConns)),
@@ -140,6 +142,10 @@ func RunGatewayV2(ctx context.Context) error {
 		}
 		defer store.Close()
 		reg.Register("postgres", store.Pool().Ping)
+		// Warnings and errors also go to service_logs for the admin console.
+		log = dblog.NewSink(ctx, store.Pool(), "gateway-v2").Wrap(log)
+		slog.SetDefault(log)
+		statsPool = store.Pool()
 
 		secretStore, err := secrets.New(secrets.Options{
 			Provider:  cfg.Secrets.Provider,
@@ -232,34 +238,7 @@ func RunGatewayV2(ctx context.Context) error {
 			jobs.Add(1)
 			go func() {
 				defer jobs.Done()
-				pubsub := redisClient.Subscribe(ctx, invalidation.PolicyInvalidationChannel, invalidation.CredentialInvalidationChannel)
-				defer pubsub.Close()
-				ch := pubsub.Channel()
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case msg, ok := <-ch:
-						if !ok {
-							return
-						}
-						switch msg.Channel {
-						case invalidation.PolicyInvalidationChannel:
-							var payload invalidation.PolicyInvalidationPayload
-							if err := json.Unmarshal([]byte(msg.Payload), &payload); err == nil {
-								if orgID, err := uuid.Parse(payload.OrganizationID); err == nil {
-									gatewayV2.InvalidatePolicy(orgID)
-									gatewayV2.InvalidateUpstream(orgID)
-								}
-							}
-						case invalidation.CredentialInvalidationChannel:
-							var payload invalidation.CredentialInvalidationPayload
-							if err := json.Unmarshal([]byte(msg.Payload), &payload); err == nil {
-								gatewayV2.InvalidateCredentialByID(ctx, payload.CredentialID)
-							}
-						}
-					}
-				}
+				gatewayV2.Subscribe(ctx, redisCacheEvents(ctx, redisClient))
 			}()
 		}
 
@@ -310,7 +289,14 @@ func RunGatewayV2(ctx context.Context) error {
 
 	// The gateway is the streaming data plane: no per-request deadline.
 	h := gatewayv2.NewHandler(log, newGatewayMiddleware(log, cfg), reg, deps)
-	err = serveHTTP(ctx, cfg, h, "gateway-v2")
+	err = serveHTTP(ctx, cfg, withInternalStats(h, cfg.Monitor.Token, statsPool), "gateway-v2")
+	// The HTTP drain alone leaves streams running and usage records queued
+	// in memory; without this every deploy lost them.
+	if deps.Gateway != nil {
+		if shutdownErr := deps.Gateway.Shutdown(cfg.Server.ShutdownTimeout); shutdownErr != nil {
+			log.Error("gateway shutdown", "error", shutdownErr)
+		}
+	}
 	cancel()
 	jobs.Wait()
 	return err
@@ -331,6 +317,7 @@ func RunControlAPI(ctx context.Context) error {
 	reg := health.NewRegistry()
 
 	var deps controlapi.Deps
+	var statsPool *pgxpool.Pool
 	if cfg.Database.Enabled {
 		if cfg.Auth.HMACSigningKey == "" {
 			return fmt.Errorf("control-api: DATABASE_ENABLED=true requires AUTH_HMAC_SIGNING_KEY")
@@ -346,6 +333,10 @@ func RunControlAPI(ctx context.Context) error {
 		defer store.Close()
 
 		reg.Register("postgres", store.Pool().Ping)
+		// Warnings and errors also go to service_logs for the admin console.
+		log = dblog.NewSink(ctx, store.Pool(), "control-api").Wrap(log)
+		slog.SetDefault(log)
+		statsPool = store.Pool()
 
 		prevKeys := make([][]byte, 0, len(cfg.Auth.HMACPreviousKeys))
 		for _, k := range cfg.Auth.HMACPreviousKeys {
@@ -396,9 +387,8 @@ func RunControlAPI(ctx context.Context) error {
 			Credentials: repositories.NewAPICredentialRepository(store),
 			Audits:      repositories.NewAuditLogRepository(store),
 
-			GatewayCredentials:     repositories.NewGatewayCredentialRepository(store),
-			GatewayCredentialCache: credentialcache.NewCredentialCache(redisClient, 5*time.Minute),
-			CredentialInvalidator:  redisInvalidator,
+			GatewayCredentials:    repositories.NewGatewayCredentialRepository(store),
+			CredentialInvalidator: redisInvalidator,
 
 			Auth:            repositories.NewAuthRepository(store),
 			RefreshTokens:   repositories.NewRefreshTokenRepository(store),
@@ -536,6 +526,23 @@ func RunControlAPI(ctx context.Context) error {
 			Audits:          repositories.NewAuditLogRepository(store),
 		})
 
+		platformAdminSvc := platformadmin.NewService(platformadmin.ServiceDeps{
+			Repo:               repositories.NewPlatformAdminRepository(store),
+			Monitor:            repositories.NewPlatformMonitorRepository(store),
+			Users:              repositories.NewUserRepository(store),
+			Plans:              repositories.NewPlanRepository(store),
+			Subscriptions:      repositories.NewSubscriptionRepository(store),
+			GatewayCredentials: repositories.NewGatewayCredentialRepository(store),
+			RefreshTokens:      repositories.NewRefreshTokenRepository(store),
+			Models:             repositories.NewModelRepository(store),
+			ProviderHealth:     repositories.NewProviderHealthRepository(store),
+			Audits:             repositories.NewAuditLogRepository(store),
+			Invalidator:        redisInvalidator,
+			AdminEmails:        cfg.Auth.PlatformAdminEmails,
+			Log:                log,
+		})
+		warnUnclaimedAdminEmails(ctx, log, repositories.NewUserRepository(store), platformAdminSvc.AdminEmails())
+
 		deps = controlapi.Deps{
 			Log:                 log,
 			Identity:            svc,
@@ -552,6 +559,7 @@ func RunControlAPI(ctx context.Context) error {
 			Policy:              policySvc,
 			Guardrails:          guardrailsSvc,
 			GuardrailsEval:      guardrailsEval,
+			PlatformAdmin:       platformAdminSvc,
 			DevLoginEnabled:     cfg.Auth.DevLoginEnabled,
 			SessionCookieName:   cfg.Auth.SessionCookieName,
 			SessionCookieSecure: cfg.Auth.SessionCookieSecure,
@@ -560,7 +568,22 @@ func RunControlAPI(ctx context.Context) error {
 	}
 
 	h := controlapi.NewHandler(log, newMiddleware(log, cfg), reg, deps)
-	return serveHTTP(ctx, cfg, h, "control-api")
+	return serveHTTP(ctx, cfg, withInternalStats(h, cfg.Monitor.Token, statsPool), "control-api")
+}
+
+// warnUnclaimedAdminEmails logs every platform admin email that no account
+// holds yet. Sign-up does not verify email ownership, so such an address can
+// be claimed by whoever registers it first, and that person becomes a
+// platform admin.
+func warnUnclaimedAdminEmails(ctx context.Context, log *slog.Logger, users ports.UserRepository, emails []string) {
+	for _, email := range emails {
+		_, err := users.GetByEmail(ctx, email)
+		if errors.Is(err, ports.ErrNotFound) {
+			log.Warn("platform admin email has no account yet; register it now, before anyone else can", "email", email)
+		} else if err != nil {
+			log.Warn("could not check platform admin email", "email", email, "error", err)
+		}
+	}
 }
 
 // providerAdapters returns the upstream client for every provider kind the
@@ -593,6 +616,7 @@ func RunWorker(ctx context.Context) error {
 
 	var jobs sync.WaitGroup
 	reg := health.NewRegistry()
+	var statsPool *pgxpool.Pool
 	if cfg.Database.Enabled {
 		store, err := postgres.NewStore(ctx, cfg.Database.URL,
 			postgres.WithMaxConns(int32(cfg.Database.MaxOpenConns)),
@@ -605,6 +629,10 @@ func RunWorker(ctx context.Context) error {
 		defer store.Close()
 
 		reg.Register("postgres", store.Pool().Ping)
+		// Warnings and errors also go to service_logs for the admin console.
+		log = dblog.NewSink(ctx, store.Pool(), "worker").Wrap(log)
+		slog.SetDefault(log)
+		statsPool = store.Pool()
 
 		rollups := usage.NewService(usage.ServiceDeps{
 			Orgs:        repositories.NewOrganizationRepository(store),
@@ -683,6 +711,16 @@ func RunWorker(ctx context.Context) error {
 			}
 		}()
 
+		monitor, err := newPlatformMonitor(cfg, store, log)
+		if err != nil {
+			return fmt.Errorf("worker: %w", err)
+		}
+		jobs.Add(1)
+		go func() {
+			defer jobs.Done()
+			monitor.Run(ctx)
+		}()
+
 		if cfg.Eventbus.Enabled {
 			bus, err := newUsageBus(ctx, &cfg.Eventbus, store.Pool(), log)
 			if err != nil {
@@ -709,7 +747,7 @@ func RunWorker(ctx context.Context) error {
 	}
 
 	h := worker.NewHandler(log, newMiddleware(log, cfg), reg)
-	err = serveHTTP(ctx, cfg, h, "worker")
+	err = serveHTTP(ctx, cfg, withInternalStats(h, cfg.Monitor.Token, statsPool), "worker")
 	cancel()
 	jobs.Wait()
 	return err

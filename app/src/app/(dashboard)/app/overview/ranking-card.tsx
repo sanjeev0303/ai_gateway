@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { formatCompact, formatUsd } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { formatCompact, formatUsd } from "@ai-governance/console-ui/lib/format";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 
 export interface RankRow {
   name: string;

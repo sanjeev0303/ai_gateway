@@ -19,7 +19,7 @@ import {
   formatNumber,
   formatPercent,
   microsToUsd,
-} from "@/lib/format";
+} from "@ai-governance/console-ui/lib/format";
 import { toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";

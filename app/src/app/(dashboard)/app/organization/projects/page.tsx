@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Plus } from "lucide-react";
 
 import { DataTable, PageShell, StatCard, type Column } from "@/components/dashboard";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import {
   Card,
   CardContent,

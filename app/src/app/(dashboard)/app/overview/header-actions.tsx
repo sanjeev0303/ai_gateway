@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { RangeTabs } from "@/components/dashboard/range-tabs";
+import { Button } from "@ai-governance/console-ui/ui/button";
+import { RangeTabs } from "@ai-governance/console-ui/dashboard/range-tabs";
 import * as React from "react";
 import { Suspense, useEffect, useState } from "react";
 

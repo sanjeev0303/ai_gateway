@@ -10,7 +10,7 @@ import {
   StatusBadge,
   type Column,
 } from "@/components/dashboard";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import { toast } from "sonner";
 import { getApiClient } from "@/lib/session";
 import { Metadata } from "next";

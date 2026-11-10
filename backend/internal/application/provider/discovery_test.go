@@ -64,11 +64,9 @@ func TestDynamicModelDiscovery(t *testing.T) {
 		requireEqual(t, upsertedModels[0].Status, "active")
 		requireEqual(t, upsertedModels[0].IsActive, true)
 
-		// Verify stale cleanup call
-		requireEqual(t, markedInactiveProvider, domain.ProviderKindAnthropic)
-		requireEqual(t, len(markedInactiveSlugs), 2)
-		requireEqual(t, markedInactiveSlugs[0], "claude-3-5-sonnet")
-		requireEqual(t, markedInactiveSlugs[1], "claude-3-opus")
+		// One tenant's sync must not retire models in the shared catalog.
+		requireEqual(t, markedInactiveProvider, "")
+		requireEqual(t, len(markedInactiveSlugs), 0)
 	})
 
 	t.Run("mock provider populates rich metadata across providers", func(t *testing.T) {
@@ -236,8 +234,8 @@ func TestDiscovery_EmptyModelLists(t *testing.T) {
 	requireNoErr(t, err)
 	// Must return 0 models — NO hardcoded fallback models!
 	requireEqual(t, len(synced), 0)
-	// MarkInactiveExcept must be called with empty list to retire existing models
-	requireEqual(t, markedInactiveProvider, domain.ProviderKindAnthropic)
+	// An empty list from one tenant must not retire the shared catalog.
+	requireEqual(t, markedInactiveProvider, "")
 	requireEqual(t, len(markedInactiveSlugs), 0)
 }
 
@@ -445,10 +443,9 @@ func TestDiscovery_StaleModels(t *testing.T) {
 	requireNoErr(t, err)
 	requireEqual(t, len(synced), 1)
 
-	// Verify that MarkInactiveExcept was called with only active models, marking older models stale
-	requireEqual(t, markedInactiveProvider, domain.ProviderKindAnthropic)
-	requireEqual(t, len(markedInactiveSlugs), 1)
-	requireEqual(t, markedInactiveSlugs[0], "claude-3-5-sonnet")
+	// Models this tenant's key no longer lists stay in the shared catalog.
+	requireEqual(t, markedInactiveProvider, "")
+	requireEqual(t, len(markedInactiveSlugs), 0)
 }
 
 func TestDiscovery_CatalogSuggestionNotTreatedAsConfirmedAvailable(t *testing.T) {
@@ -474,7 +471,6 @@ func TestDiscovery_CatalogSuggestionNotTreatedAsConfirmedAvailable(t *testing.T)
 	requireEqual(t, len(synced), 1)
 	requireEqual(t, synced[0].ModelSlug, "gpt-3.5-turbo")
 
-	// Verify that catalog models (like gpt-4o) not returned by this credential are not in activeSlugs
-	requireEqual(t, len(retiredSlugs), 1)
-	requireEqual(t, retiredSlugs[0], "gpt-3.5-turbo")
+	// A limited key must not retire models (like gpt-4o) for every other org.
+	requireEqual(t, len(retiredSlugs), 0)
 }

@@ -14,7 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatDate, formatNumber, formatRelative } from "@/lib/format";
+import { formatDate, formatNumber, formatRelative } from "@ai-governance/console-ui/lib/format";
 import { toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
@@ -104,7 +104,7 @@ import {
   Layers,
   FileCode,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 
 export default async function CredentialsPage() {
   const { rows, total, active, neverUsed, scopeMix } = await loadCredentials();

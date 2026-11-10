@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { ScrollReveal } from "@/components/landing/scroll-reveal";
 import { Container, SectionLabel } from "@/components/landing/section";
 import { REQUEST_INSPECTOR } from "@/lib/landing-data";
-import { cn } from "@/lib/utils";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 
 function formatCost(cost: number) {
   return `$${cost.toFixed(4)}`;

@@ -29,7 +29,7 @@ import {
   formatProviderName,
   formatUsd,
   microsToUsd,
-} from "@/lib/format";
+} from "@ai-governance/console-ui/lib/format";
 
 import { getApiClient } from "@/lib/session";
 import type {
@@ -37,9 +37,9 @@ import type {
   StatusTone,
   TrendDirection,
 } from "@/types";
-import { DEFAULT_RANGE, isDateRange, type DateRange } from "@/lib/date-range";
-import { cn } from "@/lib/utils";
-import { GuillocheBand } from "@/components/brand/guilloche";
+import { DEFAULT_RANGE, isDateRange, type DateRange } from "@ai-governance/console-ui/lib/date-range";
+import { cn } from "@ai-governance/console-ui/lib/utils";
+import { GuillocheBand } from "@ai-governance/console-ui/brand/guilloche";
 import { HeaderActions } from "./header-actions";
 import { RankingCard, type RankRow } from "./ranking-card";
 import { TrendChart, type TrendPoint } from "./trend-chart";
@@ -503,7 +503,7 @@ async function HealthWidget() {
         let Icon = HelpCircle;
         let color = "text-muted-foreground";
         let statusBadge = "bg-muted text-muted-foreground border-border";
-        if (h.status === "healthy" || h.status === "ok") {
+        if (h.status === "healthy") {
           Icon = CheckCircle;
           color = "text-emerald-400";
           statusBadge = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
@@ -511,7 +511,7 @@ async function HealthWidget() {
           Icon = AlertTriangle;
           color = "text-amber-400";
           statusBadge = "bg-amber-500/10 text-amber-400 border-amber-500/20";
-        } else if (h.status === "down" || h.status === "error") {
+        } else if (h.status === "unhealthy") {
           Icon = XCircle;
           color = "text-rose-400";
           statusBadge = "bg-rose-500/10 text-rose-400 border-rose-500/20";

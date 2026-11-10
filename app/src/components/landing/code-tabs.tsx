@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ScrollReveal } from "@/components/landing/scroll-reveal";
 import { Container, SectionLabel } from "@/components/landing/section";
 import { CODE_TABS } from "@/lib/landing-data";
-import { cn } from "@/lib/utils";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 
 export function CodeTabs() {
   const samples = CODE_TABS.samples;

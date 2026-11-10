@@ -14,7 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatNumber, formatRelative } from "@/lib/format";
+import { formatNumber, formatRelative } from "@ai-governance/console-ui/lib/format";
 import { getApiClient } from "@/lib/session";
 import { HistoryPicker } from "./history-picker";
 import { HistoryRail, type RailEmployee } from "./history-rail";

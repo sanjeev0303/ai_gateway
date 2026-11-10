@@ -71,10 +71,8 @@ type RequestContext struct {
 	PolicySnapshot PolicySnapshot
 	RateLimit      RateLimitResult
 	BudgetResult   BudgetResult
-	BudgetRelease  BudgetReleaseFunc
-	// BudgetCommit charges a finished request to every reserved budget in
-	// that budget's own unit: dollars, tokens or one request.
-	BudgetCommit    func(cost float64, tokens int)
+	// Budget holds the request's reservations until it settles.
+	Budget          *budgetTicket
 	InspectorHints  InspectorHints
 	StartTime       time.Time
 	UpstreamURL     string
@@ -203,9 +201,9 @@ type BudgetReleaseFunc func(actualCost float64, err error)
 
 // BudgetGuard enforces budget limits and manages reservation lifecycles.
 type BudgetGuard interface {
-	Check(ctx context.Context, key string, limit float64, window time.Duration, estimatedCost float64) BudgetResult
+	// SyncFromSnapshot applies the organization's current budget settings.
+	SyncFromSnapshot(snapshot PolicySnapshot)
 	Reserve(ctx context.Context, key string, limit float64, window time.Duration, estimatedCost float64, reqID string) (BudgetResult, BudgetReleaseFunc)
-	RecordUsage(ctx context.Context, key string, cost float64) error
 }
 
 // RequestInspector validates and extracts routing hints from requests.
@@ -265,7 +263,10 @@ type UsageRecord struct {
 	CostStatus         string
 	PolicyDecision     *string
 	DenialReason       *string
-	ProviderMeta       map[string]any
+	// TokensReported is true when the provider supplied the token counts and
+	// false when they are the gateway's estimate.
+	TokensReported bool
+	ProviderMeta   map[string]any
 }
 
 // ErrorRecord represents an error event for telemetry.

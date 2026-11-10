@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { AlertTriangle, RefreshCw, ArrowLeft, Home } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useRouter, usePathname } from "next/navigation";
 

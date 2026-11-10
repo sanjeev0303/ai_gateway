@@ -1,27 +1,14 @@
+import type { components } from "@ai-governance/contracts";
 import type { ListResponse, RequestOptions, Transport } from "./client";
-import type { ProviderProbeInput } from "./providers";
 
-export interface Model {
-  id: string;
-  provider_kind: string;
-  model_slug: string;
-  display_name: string;
-  capabilities?: string[];
-  context_limit?: number;
-  supports_streaming?: boolean;
-  supports_tools?: boolean;
-  supports_reasoning?: boolean;
-  status?: string;
-  pricing_version?: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
+export type Model = components["schemas"]["CatalogModel"];
+/** Both fields are optional: provider_kind alone syncs that kind's active account, an empty body syncs every active account. */
+export type SyncModelsInput = components["schemas"]["SyncCatalogModelsRequest"];
 
 export interface ModelsModule {
   list(options?: RequestOptions): Promise<ListResponse<Model>>;
-  /** Live sync against the provider; the API key is probed, never stored. */
-  sync(input: ProviderProbeInput, options?: RequestOptions): Promise<ListResponse<Model>>;
+  /** Live sync against the provider; an API key, if given, is probed, never stored. */
+  sync(input: SyncModelsInput, options?: RequestOptions): Promise<ListResponse<Model>>;
 }
 
 export function createModelsModule(transport: Transport): ModelsModule {

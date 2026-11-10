@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import type { ConversationMessage, TranscriptState } from "@ai-governance/api-client";
 import { PageShell, StatCard } from "@/components/dashboard";
 import { getApiClient, requireSession } from "@/lib/session";
-import { formatCompact, formatDate, formatDateTime } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { formatCompact, formatDate, formatDateTime } from "@ai-governance/console-ui/lib/format";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 import { DeleteConversationButton } from "./delete-button";
 import { MessageMarkdown } from "./message-markdown";
 

@@ -2,10 +2,10 @@
 
 import * as React from "react";
 import { WifiOff, RefreshCw, Lock, FileX, Inbox, Search, AlertCircle, Home, ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import { Card, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 
 interface NetworkFailureProps {
   message?: string;

@@ -1,36 +1,11 @@
+import type { components } from "@ai-governance/contracts";
 import type { ListResponse, RequestOptions, Transport } from "./client";
 
-/**
- * Audit-log payloads are the snake_case DTOs declared in
- * `backend/api/openapi/openapi.yaml`, mirrored here so a consumer of this
- * package does not need `@ai-governance/contracts` at the type level.
- *
- * Audit records are append-only: this module exposes no way to edit or delete
- * one, and the server exposes none either.
- */
+/** Audit records are append-only: neither this module nor the server can edit or delete one. */
+export type AuditLog = components["schemas"]["AuditLog"];
 
+/** Filter value; a returned record's actor_type can also be "" when no actor is recorded. */
 export type AuditActorType = "user" | "service_account";
-
-export interface AuditLog {
-  id: string;
-  /** Reports which of the two actor id columns is populated. */
-  actor_type: AuditActorType;
-  actor_user_id?: string | null;
-  actor_service_account_id?: string | null;
-  /** Dotted action name, e.g. `organization.update`. */
-  action: string;
-  resource_type: string;
-  resource_id?: string | null;
-  /** State before the change; `{}` when not recorded. */
-  before: Record<string, unknown>;
-  /** State after the change; `{}` when not recorded. */
-  after: Record<string, unknown>;
-  ip_address?: string | null;
-  /** Correlates the record with gateway and server logs. */
-  request_id?: string | null;
-  /** RFC3339. */
-  created_at: string;
-}
 
 export interface AuditLogQuery {
   /** Matches either actor id column; combine with `actor_type` to disambiguate. */

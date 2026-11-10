@@ -7,7 +7,7 @@ import { LayoutDashboard, Moon, Sun, Monitor, Menu, X } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Logo } from "@/components/logo";
 import { MARKETING_NAV } from "@/lib/constants";
-import { cn } from "@/lib/utils";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 import { useLenis } from "@/components/providers/lenis-provider";
 import {
   DropdownMenu,
@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@ai-governance/console-ui/ui/dropdown-menu";
 
 const emptySubscribe = () => () => {};
 

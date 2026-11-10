@@ -4,7 +4,7 @@ import * as React from "react";
 import { useState, useTransition } from "react";
 import { Check, Sparkles, AlertTriangle, ArrowRight, X, CreditCard } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@ai-governance/console-ui/ui/dialog";
 import {
   Card,
   CardContent,
@@ -22,7 +22,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@ai-governance/console-ui/ui/badge";
 import { changeSubscriptionPlan, cancelSubscriptionAction, createCheckoutSessionAction } from "./actions";
 
 interface Plan {

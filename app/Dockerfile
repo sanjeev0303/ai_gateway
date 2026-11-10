@@ -12,8 +12,11 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/api-client/package.json packages/api-client/
+COPY packages/console-ui/package.json packages/console-ui/
 COPY packages/cli/package.json packages/cli/
 COPY app/package.json app/
+# The lockfile also lists the admin workspace; npm ci needs its manifest.
+COPY admin/package.json admin/
 RUN --mount=type=cache,target=/root/.npm npm ci --ignore-scripts --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000
 
 # ── builder ───────────────────────────────────────────────────────────────────

@@ -890,7 +890,7 @@ func TestMultiProvider_08_TokenUsageExtraction(t *testing.T) {
 		obsAnth.feed([]byte("event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":500,\"cache_read_input_tokens\":150,\"cache_creation_input_tokens\":25}}}\n\n"))
 		obsAnth.feed([]byte("event: message_delta\ndata: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":200}}\n\n"))
 		usageAnth := obsAnth.finish()
-		if usageAnth == nil || usageAnth.InputTokens != 500 || usageAnth.OutputTokens != 200 || usageAnth.CacheReadTokens != 150 || usageAnth.CacheWriteTokens != 25 {
+		if usageAnth == nil || usageAnth.InputTokens != 675 || usageAnth.OutputTokens != 200 || usageAnth.CacheReadTokens != 150 || usageAnth.CacheWriteTokens != 25 {
 			t.Errorf("anthropic cache token extraction failed: %+v", usageAnth)
 		}
 

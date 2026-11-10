@@ -8,7 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatDate, formatNumber } from "@/lib/format";
+import { formatDate, formatNumber } from "@ai-governance/console-ui/lib/format";
 import { toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import { ProviderCredentialsClient, type CredentialRow } from "./client";

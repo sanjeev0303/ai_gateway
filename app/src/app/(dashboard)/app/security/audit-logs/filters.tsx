@@ -2,9 +2,9 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Input } from "@ai-governance/console-ui/ui/input";
+import { Button } from "@ai-governance/console-ui/ui/button";
+import { Label } from "@ai-governance/console-ui/ui/label";
 import { loadDirectory } from "@/components/dashboard/directory-actions";
 import { SearchSelect, type SearchSelectOption } from "@/components/dashboard/search-select";
 

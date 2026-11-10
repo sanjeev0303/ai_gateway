@@ -8,8 +8,8 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
+} from "@ai-governance/console-ui/ui/sheet";
+import { Button } from "@ai-governance/console-ui/ui/button";
 
 export interface LiveRow {
   id: string;

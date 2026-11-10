@@ -149,16 +149,17 @@ func (s *Service) Authenticate(ctx context.Context, email, password string) (Ses
 	if err != nil {
 		return Session{}, err
 	}
-	if len(orgs) == 0 {
-		return Session{}, ErrUnauthorized
+	home, err := firstActiveOrganization(orgs)
+	if err != nil {
+		return Session{}, err
 	}
 	s.audit(ctx, domain.Actor{
-		OrganizationID: orgs[0].Organization.ID,
+		OrganizationID: home.Organization.ID,
 		UserID:         credential.User.ID,
 		Kind:           domain.ActorKindUser,
-		Role:           orgs[0].Role,
+		Role:           home.Role,
 	}, "auth.login_success", "user", &credential.User.ID, nil, nil)
-	return s.issueSession(ctx, credential.User, orgs[0].Organization.ID, orgs[0].Role)
+	return s.issueSession(ctx, credential.User, home.Organization.ID, home.Role)
 }
 
 // Refresh rotates a refresh token. The presented token is retired and a new
@@ -213,10 +214,11 @@ func (s *Service) Refresh(ctx context.Context, presented string) (Session, error
 	if err != nil {
 		return Session{}, err
 	}
-	if len(orgs) == 0 {
-		return Session{}, ErrUnauthorized
+	home, err := firstActiveOrganization(orgs)
+	if err != nil {
+		return Session{}, err
 	}
-	return s.issueSession(ctx, user, orgs[0].Organization.ID, orgs[0].Role)
+	return s.issueSession(ctx, user, home.Organization.ID, home.Role)
 }
 
 // RevokeRefresh retires one refresh token. An unknown or already-retired
@@ -246,6 +248,13 @@ func (s *Service) SwitchOrganization(ctx context.Context, userID uuid.UUID, orgI
 	member, err := s.members.Get(ctx, orgID, userID)
 	if err != nil {
 		return Session{}, ErrUnauthorized
+	}
+	org, err := s.orgs.GetByID(ctx, orgID)
+	if err != nil {
+		return Session{}, ErrUnauthorized
+	}
+	if org.Status == domain.OrgStatusSuspended {
+		return Session{}, ErrOrganizationSuspended
 	}
 	return s.issueSession(ctx, user, orgID, member.Role)
 }

@@ -143,7 +143,7 @@ func TestBudgetGuard_NoResetWithinWindow(t *testing.T) {
 		limit:       100,
 		window:      time.Minute,
 		spent:       40,
-		windowStart: now.Add(-30 * time.Second),
+		windowStart: computeWindowStart(now, time.Minute),
 		alertAt:     80,
 	}
 	bg.mu.Unlock()

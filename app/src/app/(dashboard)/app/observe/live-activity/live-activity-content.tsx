@@ -15,7 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatNumber, formatRelative } from "@/lib/format";
+import { formatNumber, formatRelative } from "@ai-governance/console-ui/lib/format";
 import { toneFor } from "@/lib/org-tones";
 import { useLiveActivity, type LiveActivityEvent } from "@/hooks/use-live-activity";
 import { LiveActivityDrawer, type LiveRow } from "./live-activity-drawer";

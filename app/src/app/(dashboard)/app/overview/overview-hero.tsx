@@ -2,9 +2,9 @@ import Link from "next/link";
 import { Activity, ArrowRight, CheckCircle2, KeyRound, Route, ShieldCheck } from "lucide-react";
 
 import { GatewayPrism } from "@/components/brand/gateway-prism";
-import { GuillocheRosette } from "@/components/brand/guilloche";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { GuillocheRosette } from "@ai-governance/console-ui/brand/guilloche";
+import { Button } from "@ai-governance/console-ui/ui/button";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 import { HeroToggle } from "./hero-toggle";
 
 export const HERO_COOKIE = "sentinel_overview_hero";

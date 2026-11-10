@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { DataTable, type Column } from "@/components/dashboard";
 import { ProviderCredentialActionsCell } from "./provider-credential-actions-cell";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -29,25 +29,25 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@ai-governance/console-ui/ui/dialog";
+import { Input } from "@ai-governance/console-ui/ui/input";
+import { Label } from "@ai-governance/console-ui/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+} from "@ai-governance/console-ui/ui/select";
+import { Badge } from "@ai-governance/console-ui/ui/badge";
 import { toast } from "sonner";
 import { createApiClient } from "@ai-governance/api-client";
 import { CONTROL_API_BASE } from "@/lib/control-api";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatDate, formatNumber, formatUsd, microsToUsd } from "@/lib/format";
-import { StatusBadge } from "@/components/dashboard/status-badge";
+import { formatDate, formatNumber, formatUsd, microsToUsd } from "@ai-governance/console-ui/lib/format";
+import { StatusBadge } from "@ai-governance/console-ui/dashboard/status-badge";
 
 export interface CredentialRow {
   id: string;
@@ -323,7 +323,7 @@ export function ProviderDetailClient({
       setCheckHealthLoading(true);
       const res = await api.providers.checkAccountHealth(currentAccount.id);
       setHealthData([res]);
-      if (res.status === "healthy" || res.status === "ok") {
+      if (res.status === "healthy") {
         setValidationState("connected");
       } else {
         const errStr = `${res.status_reason || ""} ${res.last_error || ""}`.toLowerCase();
@@ -351,7 +351,7 @@ export function ProviderDetailClient({
       setModelList(refreshedModels.items || []);
       setValidationState("connected");
       toast.success(
-        `Model catalog synced: ${res.total} models accessible (${res.models_created} new, ${res.models_updated} updated)`,
+        `Model catalog synced: ${res.items.length} models`,
       );
     } catch (err: any) {
       const errStr = `${err?.message || ""}`.toLowerCase();

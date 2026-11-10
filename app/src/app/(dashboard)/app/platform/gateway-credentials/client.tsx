@@ -3,16 +3,16 @@
 import * as React from "react";
 import { Copy, MoreHorizontal, Plus } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@ai-governance/console-ui/ui/button";
+import { Input } from "@ai-governance/console-ui/ui/input";
+import { Label } from "@ai-governance/console-ui/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@ai-governance/console-ui/ui/dropdown-menu";
 import { ActionDialog, FormDialog, OneTimeSecretDialog } from "@/components/dashboard";
 import { toast } from "sonner";
 import {
@@ -146,7 +146,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ai-governance/console-ui/ui/select";
 
 export interface CreateCredentialButtonProps {
   members?: Array<{ id: string; name: string; email: string }>;

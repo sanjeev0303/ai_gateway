@@ -108,22 +108,17 @@ func (t *budgetTracker) checkRollover(now time.Time) {
 	if t.window <= 0 {
 		return
 	}
-	shouldReset := false
-	if t.window == 24*time.Hour || t.window == 86400*time.Second || t.window == 30*24*time.Hour || t.window == 2592000*time.Second || t.window == 7*24*time.Hour || t.window == 604800*time.Second {
-		winStart := computeWindowStart(now, t.window)
-		if !t.windowStart.IsZero() && winStart.After(t.windowStart) {
-			shouldReset = true
-		}
-	}
-	if !t.windowStart.IsZero() && now.Sub(t.windowStart) > t.window {
-		shouldReset = true
-	}
-	if shouldReset {
+	// Every window has a deterministic start (a calendar day, Monday, the 1st,
+	// or now truncated to the window), so a newer start is the only rollover
+	// signal. Elapsed time is not: a calendar month is longer than 30 days, and
+	// counting elapsed days wiped month-to-date spend on every 31st.
+	winStart := computeWindowStart(now, t.window)
+	if t.windowStart.IsZero() || winStart.After(t.windowStart) {
 		t.spent = 0
 		t.reserved = 0
 		t.reservations = make(map[string]*budgetReservation)
 		t.finalized = make(map[string]bool)
-		t.windowStart = now
+		t.windowStart = winStart
 	}
 }
 
@@ -373,7 +368,7 @@ if windowMs > 0 and windowStartMs > 0 then
     local storedWinStart = tonumber(redis.call('GET', winStartKey) or '0')
     if storedWinStart == 0 then
         redis.call('SET', winStartKey, tostring(windowStartMs))
-    elseif windowStartMs > storedWinStart or (nowMs - storedWinStart) > windowMs then
+    elseif windowStartMs > storedWinStart then
         redis.call('SET', spentKey, '0')
         redis.call('SET', winStartKey, tostring(windowStartMs))
     end
@@ -430,7 +425,7 @@ if windowMs > 0 and windowStartMs > 0 then
     local storedWinStart = tonumber(redis.call('GET', winStartKey) or '0')
     if storedWinStart == 0 then
         redis.call('SET', winStartKey, tostring(windowStartMs))
-    elseif windowStartMs > storedWinStart or (nowMs - storedWinStart) > windowMs then
+    elseif windowStartMs > storedWinStart then
         redis.call('SET', spentKey, '0')
         redis.call('SET', winStartKey, tostring(windowStartMs))
     end
@@ -922,7 +917,8 @@ func (b *BudgetGuardImpl) SyncFromSnapshot(snapshot PolicySnapshot) {
 			tracker.window = config.Window
 			tracker.alertAt = config.AlertAt
 			tracker.scope = config.Scope
-			tracker.windowStart = winStart
+			// windowStart is left alone: checkRollover must see that a new
+			// window began, and moving it here hid every rollover.
 			tracker.mu.Unlock()
 		} else {
 			tracker := &budgetTracker{

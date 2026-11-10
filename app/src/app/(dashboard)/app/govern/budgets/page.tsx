@@ -5,15 +5,15 @@ import type { Metadata } from "next";
 import { Plus, Search, Filter, Trash2, Edit, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 
 import { DataTable, PageShell, type Column } from "@/components/dashboard";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@ai-governance/console-ui/ui/button";
+import { Input } from "@ai-governance/console-ui/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@ai-governance/console-ui/ui/select";
 import {
   Card,
   CardContent,
@@ -21,7 +21,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@ai-governance/console-ui/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -30,9 +30,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+} from "@ai-governance/console-ui/ui/dialog";
+import { Label } from "@ai-governance/console-ui/ui/label";
+import { Textarea } from "@ai-governance/console-ui/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { confirmAction } from "@/components/dashboard/confirm-dialog";
 import { loadDirectory } from "@/components/dashboard/directory-actions";

@@ -59,6 +59,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * List live gateway activity
+         * @description Returns the in-flight requests tracked in Redis for the caller's organization. When none are in flight it falls back to the 50 most recent completed requests (current_state completed or failed). Any authenticated member may call it; no permission is checked. Unlike most lists the payload is wrapped in data, not items.
+         */
         get: operations["getv1activity"];
         put?: never;
         post?: never;
@@ -75,6 +79,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Count users with in-flight requests
+         * @description Counts distinct user_id values among in-flight requests. Requests made by service accounts are not counted. No permission is checked.
+         */
         get: operations["getv1activityactiveusers"];
         put?: never;
         post?: never;
@@ -91,6 +99,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Count in-flight requests
+         * @description No permission is checked.
+         */
         get: operations["getv1activityactiverequests"];
         put?: never;
         post?: never;
@@ -107,6 +119,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Stream live gateway activity
+         * @description Server-sent events. The stream opens with one `event: ping` frame whose data is `{}`. Every later frame is an unnamed `data:` frame carrying one ActivityEvent as JSON. Events are dropped, not queued, for a slow reader. Without Redis the stream closes right after the ping. No permission is checked.
+         */
         get: operations["getv1activitystream"];
         put?: never;
         post?: never;
@@ -125,6 +141,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Create an account and its organization
+         * @description Registered only when the deployment uses session cookies. The access, refresh and CSRF cookies are set on the response; no token appears in the body. Not behind requireAuth.
+         */
         post: operations["postv1authsignup"];
         delete?: never;
         options?: never;
@@ -141,6 +161,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Sign in with email and password
+         * @description Registered only when the deployment uses session cookies. Rate limited to 10 attempts a minute per client IP plus email. Session cookies are set on success.
+         */
         post: operations["postv1authsignin"];
         delete?: never;
         options?: never;
@@ -157,6 +181,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Rotate the refresh cookie
+         * @description Authenticates on the refresh cookie alone and requires the X-CSRF-Token header to match the CSRF cookie. Issues fresh access, refresh and CSRF cookies. On a rejected refresh token every session cookie is cleared.
+         */
         post: operations["postv1authrefresh"];
         delete?: never;
         options?: never;
@@ -173,6 +201,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Sign out
+         * @description Retires the refresh token server-side, if the cookie is present, and clears every session cookie. Requires the CSRF header; no access token is needed.
+         */
         post: operations["postv1authlogout"];
         delete?: never;
         options?: never;
@@ -187,6 +219,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Get the caller's session
+         * @description Reports the verified claims and the CSRF token. Never re-issues the access or refresh cookie; only the CSRF cookie is set, and only when it is missing. API-key callers have no claims and get 401.
+         */
         get: operations["getv1authsession"];
         put?: never;
         post?: never;
@@ -205,7 +241,31 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Passwordless local-development sign-in
+         * @description Registered only when the dev-login flag is on. Creates the user on first use. Sets session cookies when the deployment uses them.
+         */
         post: operations["postv1authdevlogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/switch-org": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Switch the session to another organization
+         * @description Re-issues the session cookies scoped to an organization the caller is a member of. Only user actors may switch.
+         */
+        post: operations["postv1authswitchorg"];
         delete?: never;
         options?: never;
         head?: never;
@@ -251,7 +311,7 @@ export interface paths {
         head?: never;
         /**
          * Update the caller's organization
-         * @description Updates the writable organization fields. Only name and slug are mutable. plan and billing come back null because this write path does not re-read the subscription.
+         * @description Partial update; omitted fields are left unchanged. plan and billing come back null because this write path does not re-read the subscription. Requires org.update (owner only).
          */
         patch: operations["patchv1organization"];
         trace?: never;
@@ -263,6 +323,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * List organization members
+         * @description Requires members.read. Not paginated.
+         */
         get: operations["getv1members"];
         put?: never;
         post?: never;
@@ -285,6 +349,10 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /**
+         * Change a member's role
+         * @description Requires members.manage. A caller cannot change their own role, granting owner or admin requires the caller to be an owner, and the last owner cannot be demoted.
+         */
         patch: operations["patchv1membersuserIDrole"];
         trace?: never;
     };
@@ -298,6 +366,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /**
+         * Remove a member from the organization
+         * @description Requires members.manage.
+         */
         delete: operations["deletev1membersuserID"];
         options?: never;
         head?: never;
@@ -311,8 +383,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List invitations */
         get: operations["getv1invitations"];
         put?: never;
+        /**
+         * Invite someone to the organization
+         * @description Requires members.manage; inviting as owner or admin requires the caller to be an owner. The raw token is returned only here.
+         */
         post: operations["postv1invitations"];
         delete?: never;
         options?: never;
@@ -329,6 +406,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Accept an invitation
+         * @description Adds the calling user to the inviting organization. When session cookies are in use, the session is also switched to that organization and fresh cookies are set (the CSRF token is then only in the cookie).
+         */
         post: operations["postv1invitationsaccept"];
         delete?: never;
         options?: never;
@@ -346,6 +427,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Revoke an invitation */
         delete: operations["deletev1invitationsid"];
         options?: never;
         head?: never;
@@ -359,8 +441,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * List projects
+         * @description Requires projects.read. Not paginated.
+         */
         get: operations["getv1projects"];
         put?: never;
+        /**
+         * Create a project
+         * @description Requires projects.manage.
+         */
         post: operations["postv1projects"];
         delete?: never;
         options?: never;
@@ -375,13 +465,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get a project */
         get: operations["getv1projectsid"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update a project
+         * @description Partial update of name and description. Requires projects.manage.
+         */
+        patch: operations["patchv1projectsid"];
         trace?: never;
     };
     "/v1/projects/{id}/members": {
@@ -391,8 +486,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List a project's members */
         get: operations["getv1projectsidmembers"];
         put?: never;
+        /**
+         * Add a user to a project
+         * @description Requires projects.manage. Returns the flat membership row, not the user-nested shape the list returns.
+         */
         post: operations["postv1projectsidmembers"];
         delete?: never;
         options?: never;
@@ -410,10 +510,31 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Remove a user from a project */
         delete: operations["deletev1projectsidmembersuserID"];
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Archive or unarchive a project
+         * @description Requires projects.manage.
+         */
+        patch: operations["patchv1projectsidstatus"];
         trace?: never;
     };
     "/v1/teams": {
@@ -423,8 +544,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * List teams
+         * @description Requires teams.read. Not paginated.
+         */
         get: operations["getv1teams"];
         put?: never;
+        /**
+         * Create a team
+         * @description Requires teams.manage.
+         */
         post: operations["postv1teams"];
         delete?: never;
         options?: never;
@@ -439,13 +568,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get a team */
         get: operations["getv1teamsid"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update a team
+         * @description Partial update of name and description. Requires teams.manage.
+         */
+        patch: operations["patchv1teamsid"];
         trace?: never;
     };
     "/v1/teams/{id}/members": {
@@ -455,8 +589,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List a team's members */
         get: operations["getv1teamsidmembers"];
         put?: never;
+        /**
+         * Add a user to a team
+         * @description Requires teams.manage. Returns the flat membership row, not the user-nested shape the list returns.
+         */
         post: operations["postv1teamsidmembers"];
         delete?: never;
         options?: never;
@@ -474,6 +613,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Remove a user from a team */
         delete: operations["deletev1teamsidmembersuserID"];
         options?: never;
         head?: never;
@@ -487,8 +627,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List service accounts */
         get: operations["getv1serviceaccounts"];
         put?: never;
+        /**
+         * Create a service account
+         * @description Requires credentials.manage.
+         */
         post: operations["postv1serviceaccounts"];
         delete?: never;
         options?: never;
@@ -506,6 +651,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /**
+         * Revoke a service account
+         * @description Marks the account revoked; it is not deleted.
+         */
         delete: operations["deletev1serviceaccountsid"];
         options?: never;
         head?: never;
@@ -519,8 +668,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List API keys */
         get: operations["getv1credentials"];
         put?: never;
+        /**
+         * Create an API key
+         * @description Requires credentials.manage. control and all keys need an active service_account_id; for gateway keys it is ignored. The raw key is returned only here.
+         */
         post: operations["postv1credentials"];
         delete?: never;
         options?: never;
@@ -538,6 +692,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Revoke an API key */
         delete: operations["deletev1credentialsid"];
         options?: never;
         head?: never;
@@ -551,8 +706,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List gateway credentials */
         get: operations["getv1gatewaycredentials"];
         put?: never;
+        /**
+         * Create a gateway credential
+         * @description Requires credentials.manage. Quirk: in this response key_prefix holds the full raw key, returned only once; every other response carries only the prefix. A malformed subject_id, team_id, project_id, provider_account_id or expires_at currently yields 500, not 400.
+         */
         post: operations["postv1gatewaycredentials"];
         delete?: never;
         options?: never;
@@ -567,9 +727,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get a gateway credential */
         get: operations["getv1gatewaycredentialsid"];
         put?: never;
         post?: never;
+        /**
+         * Revoke a gateway credential
+         * @description Sets the status to revoked; a revoked, unexpired credential can be restored.
+         */
         delete: operations["deletev1gatewaycredentialsid"];
         options?: never;
         head?: never;
@@ -585,6 +750,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Rotate a gateway credential
+         * @description Revokes the credential and creates a replacement with a new id and key, copying every field the body does not override. Only active credentials rotate. Quirk: key_prefix in the response holds the full raw key. A malformed provider_account_id or expires_at currently yields 500.
+         */
         post: operations["postv1gatewaycredentialsidrotate"];
         delete?: never;
         options?: never;
@@ -601,6 +770,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Expire a gateway credential
+         * @description Sets the status to expired. Expired credentials cannot be restored.
+         */
         post: operations["postv1gatewaycredentialsidexpire"];
         delete?: never;
         options?: never;
@@ -617,6 +790,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Restore a revoked gateway credential
+         * @description Only a revoked credential whose expires_at has not passed can be restored.
+         */
         post: operations["postv1gatewaycredentialsidrestore"];
         delete?: never;
         options?: never;
@@ -631,8 +808,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * List provider accounts
+         * @description Requires providers.read.
+         */
         get: operations["getv1provideraccounts"];
         put?: never;
+        /**
+         * Connect a provider account
+         * @description Requires providers.manage. provider_kind is lower-cased and trimmed, and google is accepted as an alias for gemini. base_url is checked against internal and metadata addresses.
+         */
         post: operations["postv1provideraccounts"];
         delete?: never;
         options?: never;
@@ -647,13 +832,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Get one provider account
+         * @description Requires providers.read.
+         */
         get: operations["getv1provideraccountsid"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete a provider account
+         * @description Requires providers.manage. Revokes every credential on the account and deletes their stored secrets first.
+         */
+        delete: operations["deleteProviderAccount"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Enable or disable a provider account
+         * @description Requires providers.manage. Only status can change; it is lower-cased and trimmed before the check.
+         */
+        patch: operations["updateProviderAccount"];
         trace?: never;
     };
     "/v1/provider-accounts/{id}/credentials": {
@@ -665,7 +862,71 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Add a key to a provider account
+         * @description Requires credentials.manage. The secret is validated live against the provider, then stored only in the secret store; it is never returned. Only api_key credentials exist, and kind values such as empty, apikey, key or a provider kind are normalised to api_key.
+         */
         post: operations["postv1provideraccountsidcredentials"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/provider-accounts/{id}/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate a provider account's stored key
+         * @description Requires providers.manage. Probes the provider with the account's first stored credential. A key the provider rejects is reported as valid=false with 200, not as an error. Takes no request body.
+         */
+        post: operations["validateProviderAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/provider-accounts/{id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync the model catalog from a provider account
+         * @description Requires providers.manage. Lists models upstream with the account's first non-revoked credential, upserts them into the global catalog and returns the synced models. The outcome is also recorded as the provider's health. Takes no request body.
+         */
+        post: operations["syncProviderAccountModels"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/provider-accounts/{id}/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a health check for a provider account
+         * @description Requires providers.read. Probes the provider with the account's first stored credential and records the result. An upstream failure is returned as status unhealthy with 200. Takes no request body.
+         */
+        post: operations["checkProviderAccountHealth"];
         delete?: never;
         options?: never;
         head?: never;
@@ -679,6 +940,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * List provider credentials
+         * @description Requires credentials.read. Includes revoked credentials.
+         */
         get: operations["getv1providercredentials"];
         put?: never;
         post?: never;
@@ -695,9 +960,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Get one provider credential
+         * @description Requires credentials.read.
+         */
         get: operations["getv1providercredentialsid"];
         put?: never;
         post?: never;
+        /**
+         * Revoke a provider credential
+         * @description Requires credentials.manage. Marks the credential revoked and deletes its stored secret; the row stays listed.
+         */
         delete: operations["deletev1providercredentialsid"];
         options?: never;
         head?: never;
@@ -713,6 +986,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Rotate a provider credential
+         * @description Requires credentials.manage. Creates a new active credential named "<name> (rotated)" with the new secret, then revokes the old one, so traffic keeps flowing. Returns the new credential, which has a new id.
+         */
         post: operations["postv1providercredentialsidrotate"];
         delete?: never;
         options?: never;
@@ -727,6 +1004,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * List catalog models
+         * @description Requires providers.read. Returns catalog models only for providers that have an active account with at least one active credential in the caller's organization. By default only active models are listed.
+         */
         get: operations["getv1models"];
         put?: never;
         post?: never;
@@ -745,6 +1026,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Sync the model catalog from providers
+         * @description Requires providers.manage. The body is optional and a malformed body is ignored. With provider_kind and api_key the key is used for this probe only and never stored. With provider_kind alone the first active account of that kind is synced. With neither, every active account is synced and per-account failures are skipped silently. Returns the synced models.
+         */
         post: operations["postv1modelssync"];
         delete?: never;
         options?: never;
@@ -761,6 +1046,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Validate a provider key without storing it
+         * @description Requires providers.manage. The api_key is used for the probe only; it is never stored, returned or logged. A key the provider rejects is reported as valid=false with 200.
+         */
         post: operations["postv1providercredentialsvalidate"];
         delete?: never;
         options?: never;
@@ -777,6 +1066,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Run a provider health check
+         * @description Requires providers.read. Probes provider_kind with api_key (never stored) and records the result as that provider kind's current health. An upstream failure is returned as status unhealthy with 200.
+         */
         post: operations["postv1providerhealthcheck"];
         delete?: never;
         options?: never;
@@ -791,6 +1084,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * List provider health
+         * @description Requires providers.read. Returns the last observed state of each provider kind. Health is global, not per organization.
+         */
         get: operations["getv1providerhealth"];
         put?: never;
         post?: never;
@@ -807,6 +1104,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Get the usage summary
+         * @description Requires usage.read. Fields are PascalCase because the Go struct has no JSON tags. Returns a bare object, not a list. Default window is the last 24 hours.
+         */
         get: operations["getv1usagesummary"];
         put?: never;
         post?: never;
@@ -823,6 +1124,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Get usage over time
+         * @description Requires usage.read. Fields are PascalCase because the Go struct has no JSON tags. One zero-filled point per UTC day from from to to. Only from, to and project_id narrow the series; the other usage filters are validated but not applied. Default window is the last 7 days.
+         */
         get: operations["getv1usagetimeseries"];
         put?: never;
         post?: never;
@@ -839,6 +1144,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Get usage grouped by project
+         * @description Requires usage.read. Fields are PascalCase because the Go struct has no JSON tags. Default window is the last 30 days.
+         */
         get: operations["getv1usagebyproject"];
         put?: never;
         post?: never;
@@ -855,6 +1164,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Get usage grouped by model
+         * @description Requires usage.read. Fields are PascalCase because the Go struct has no JSON tags. Default window is the last 30 days.
+         */
         get: operations["getv1usagebymodel"];
         put?: never;
         post?: never;
@@ -871,6 +1184,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Get usage grouped by provider
+         * @description Requires usage.read. Fields are PascalCase because the Go struct has no JSON tags. Default window is the last 30 days.
+         */
         get: operations["getv1usagebyprovider"];
         put?: never;
         post?: never;
@@ -887,6 +1204,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Get usage grouped by user
+         * @description Requires usage.read. Fields are PascalCase because the Go struct has no JSON tags. Default window is the last 30 days.
+         */
         get: operations["getv1usagebyuser"];
         put?: never;
         post?: never;
@@ -903,6 +1224,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Get usage grouped by service account
+         * @description Requires usage.read. Fields are PascalCase because the Go struct has no JSON tags. Default window is the last 30 days.
+         */
         get: operations["getv1usagebyserviceaccount"];
         put?: never;
         post?: never;
@@ -919,6 +1244,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Get usage grouped by team
+         * @description Requires usage.read. Fields are PascalCase because the Go struct has no JSON tags. Default window is the last 30 days. Team totals are not additive: a request counts toward every team its user belongs to.
+         */
         get: operations["getv1usagebyteam"];
         put?: never;
         post?: never;
@@ -935,6 +1264,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Get latency percentiles
+         * @description Requires usage.read. Fields are PascalCase because the Go struct has no JSON tags. Percentiles are computed in Postgres. Without group_by the list holds exactly one overall row with null Provider and Model. Default window is the last 24 hours.
+         */
         get: operations["getv1usagelatency"];
         put?: never;
         post?: never;
@@ -951,6 +1284,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * List the most recent requests
+         * @description Requires usage.read. Fields are PascalCase because the Go struct has no JSON tags. Returns the organization's 50 most recent requests and takes no query parameters.
+         */
         get: operations["getv1usagerecent"];
         put?: never;
         post?: never;
@@ -967,6 +1304,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * List requests
+         * @description Requires usage.read. Fields are PascalCase because the Go struct has no JSON tags. Offset-paginated; has_more is always present. Default window is the last 24 hours.
+         */
         get: operations["getv1usagerequests"];
         put?: never;
         post?: never;
@@ -985,9 +1326,33 @@ export interface paths {
         };
         /**
          * List conversations
-         * @description Returns conversations in the caller's organization with the aggregates derived from their messages. No query parameter influences how much transcript content is returned.
+         * @description Returns conversations in the caller's organization with the aggregates derived from their messages. Requires the usage.read permission. Roles other than owner, admin and auditor only see their own conversations, whatever user_id says.
          */
         get: operations["getv1conversations"];
+        put?: never;
+        /**
+         * Create a conversation for the caller
+         * @description A blank or omitted title becomes "New Conversation". Requires the usage.read permission.
+         */
+        post: operations["createConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/conversations/by-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Conversation counts per employee and gateway key (members see only their own)
+         * @description Requires the usage.read permission.
+         */
+        get: operations["getv1conversationsbykey"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1003,11 +1368,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get one conversation */
+        /**
+         * Get one conversation
+         * @description Requires the usage.read permission. Roles other than owner, admin and auditor get 403 for another user's conversation.
+         */
         get: operations["getv1conversationsid"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete one conversation, its text included (owners and admins) */
+        delete: operations["deletev1conversationsid"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1022,11 +1391,15 @@ export interface paths {
         };
         /**
          * List the turns of one conversation
-         * @description content is omitted from a turn whose content the effective privacy mode withholds, so a redacted turn carries no content key at all.
+         * @description Text is never stored; each turn's content is filled from gateway memory while the gateway still holds it, and the key is omitted otherwise. The privacy mode does not hide text here. Requires the usage.read permission; roles other than owner, admin and auditor get 403 for another user's conversation.
          */
         get: operations["getv1conversationsidmessages"];
         put?: never;
-        post?: never;
+        /**
+         * Record a turn's metadata
+         * @description Stores the role and token count only. content is accepted but discarded, because conversation text is never stored. Requires the usage.read permission; roles other than owner, admin and auditor get 403 for another user's conversation.
+         */
+        post: operations["createConversationMessage"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1082,7 +1455,7 @@ export interface paths {
         };
         /**
          * List security events
-         * @description Returns the caller's organization security feed, newest first. Events are produced by the platform rather than by any user action and are append-only: this API exposes no way to modify or remove one. Two categories exist — provider_incident for a provider's observed reachability changing, and pipeline_failure for a background job failing — so the feed covers the platform itself, not gateway request activity. Requires the security_events.read permission.
+         * @description Returns the caller's organization security feed, newest first. Events are produced by the platform rather than by any user action and are append-only: this API exposes no way to modify or remove one. Categories are provider_incident (a provider's observed reachability changing), pipeline_failure (a background job failing) and policy_violation (a gateway request denied by a policy rule, budget or rate limit). Requires the security_events.read permission.
          */
         get: operations["getv1securityevents"];
         put?: never;
@@ -1102,11 +1475,15 @@ export interface paths {
         };
         /**
          * List alert rules
-         * @description Returns the caller's organization alert rules. Listing a rule reports only its configuration; no rule is evaluated by this API. Requires the alerts.read permission.
+         * @description Returns the caller's organization alert rules, oldest first. Requires the alerts.read permission.
          */
         get: operations["getvalerts"];
         put?: never;
-        post?: never;
+        /**
+         * Create an alert rule
+         * @description Creates an active rule. The aliases spend_exceeded and spend_threshold are stored as spend_limit, request_rate_spike as rate_limit, error_rate_spike as error_rate and usage_anomaly as anomaly. severity defaults to warning. status is accepted but ignored; a new rule is always active. Requires the alerts.manage permission.
+         */
+        post: operations["createAlert"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1127,7 +1504,7 @@ export interface paths {
         get: operations["getvalertsid"];
         /**
          * Replace an alert rule
-         * @description Replaces the mutable fields of an alert rule in full; every field is required. alert_type is fixed at creation and cannot be changed. The configuration must be a JSON object. Requires the alerts.manage permission.
+         * @description Replaces the mutable fields of an alert rule. alert_type is fixed at creation and cannot be changed. An omitted configuration is stored as an empty object. Requires the alerts.manage permission.
          */
         put: operations["putvalertsid"];
         post?: never;
@@ -1151,10 +1528,30 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Validate an alert rule's configuration
-         * @description Returns the rule's declared configuration and whether it is muted. No evaluator is wired to any alert rule type, so this never reports whether a rule would fire and never sends a notification: notification_sent is always false. Requires the alerts.manage permission.
+         * Evaluate an alert rule now
+         * @description Runs the rule's evaluator once and reports the outcome. It records no alert event and delivers no notification; notification_sent only says whether the condition is currently met on an unmuted rule. Requires the alerts.manage permission.
          */
         post: operations["postvalertsidtest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/alerts/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the events of one alert rule
+         * @description Returns the 50 most recent events of the rule, newest first. There is no paging. An unknown rule id yields an empty list, not 404. Requires the alerts.read permission.
+         */
+        get: operations["listAlertEventsByAlert"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1170,7 +1567,7 @@ export interface paths {
         };
         /**
          * List sellable plans
-         * @description Returns every plan in the catalog. Plans are global, so this list is identical for all organizations. No price is returned because no price is stored anywhere in this service. Requires the billing.read permission.
+         * @description Returns every plan in the catalog. Plans are global, so this list is identical for all organizations. Requires the billing.read permission.
          */
         get: operations["getv1billingplans"];
         put?: never;
@@ -1190,12 +1587,20 @@ export interface paths {
         };
         /**
          * Get the organization's current plan and billing cycle
-         * @description Returns the organization's stored subscription. An organization with no subscription is reported as not found rather than as an empty object. Requires the billing.read permission.
+         * @description Returns the organization's stored subscription plus the server's billing mode. An organization with no subscription is reported as not found rather than as an empty object. Requires the billing.read permission.
          */
         get: operations["getv1billingsubscription"];
-        put?: never;
+        /**
+         * Switch the organization to another plan
+         * @description Sets the organization's plan directly, without a payment. Requires the billing.manage permission or the admin role.
+         */
+        put: operations["updateBillingSubscription"];
         post?: never;
-        delete?: never;
+        /**
+         * Cancel the subscription at period end
+         * @description Marks the active subscription to cancel at the end of the current period and returns it. Requires the billing.manage permission or the admin role.
+         */
+        delete: operations["cancelBillingSubscription"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1210,7 +1615,7 @@ export interface paths {
         };
         /**
          * Get recorded cost and request totals for a window
-         * @description Returns the same aggregated usage summary as /v1/usage/summary, scoped to the caller's organization. All values are measured from recorded requests; nothing here is estimated or forecast. Requires the billing.read permission.
+         * @description Returns the same aggregated usage summary as /v1/usage/summary, scoped to the caller's organization and accepting the same filters. All values are measured from recorded requests. Requires the billing.read permission.
          */
         get: operations["getv1billingusage"];
         put?: never;
@@ -1230,11 +1635,91 @@ export interface paths {
         };
         /**
          * List the organization's invoices
-         * @description Returns the organization's invoices newest issued first, each with its itemisation lines. These are locally computed statements only: no payment processor is integrated, so no invoice is ever marked paid and no field references a charge, payment, or PDF. Requires the billing.read permission.
+         * @description Returns the organization's invoices newest issued first, each with its itemisation lines. Requires the billing.read permission.
          */
         get: operations["getv1billinginvoices"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a payment checkout session
+         * @description Creates a checkout session with Stripe or Razorpay for a plan and stores a server-side checkout record with the authoritative price. Requires the billing.manage permission or the admin role. An unknown provider is reported as an internal error.
+         */
+        post: operations["createBillingCheckout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/verify-payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify a client-side payment callback
+         * @description Verifies the provider's payment signature against the stored checkout for this organization and applies the paid plan. Refused in simulation mode. Requires the billing.manage permission or the admin role.
+         */
+        post: operations["verifyBillingPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/webhooks/stripe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Receive a Stripe webhook
+         * @description Unauthenticated. The raw request body is verified against the Stripe-Signature header before it is parsed, so it must be forwarded byte for byte. Events already ingested are acknowledged without reprocessing.
+         */
+        post: operations["handleStripeWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/webhooks/razorpay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Receive a Razorpay webhook
+         * @description Unauthenticated. The raw request body is verified against the X-Razorpay-Signature header before it is parsed, so it must be forwarded byte for byte. Events already ingested are acknowledged without reprocessing.
+         */
+        post: operations["handleRazorpayWebhook"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1250,13 +1735,13 @@ export interface paths {
         };
         /**
          * List all pricing models for the organization
-         * @description Returns every configured pricing model alongside its latest version. Requires billing.read or providers.read permission.
+         * @description Returns every configured pricing model alongside its latest version. Note the list key is data, not items. Requires billing.read or providers.read.
          */
         get: operations["listPricingModels"];
         put?: never;
         /**
          * Create or upsert a pricing model
-         * @description Creates or updates a pricing model entry. Requires billing.manage permission.
+         * @description Upserts by model_slug; returns 201 for both a new and an existing model. provider_kind is lowercased and currency uppercased. display_name defaults to the slug. Requires billing.manage.
          */
         post: operations["createPricingModel"];
         delete?: never;
@@ -1269,15 +1754,12 @@ export interface paths {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description Model ID (UUID) or model slug */
-                idOrSlug: string;
-            };
+            path?: never;
             cookie?: never;
         };
         /**
          * Get pricing model and complete version history
-         * @description Returns model details and all historical pricing versions. Requires billing.read or providers.read permission.
+         * @description Returns model details and all historical pricing versions, newest first. A slug with no stored model but a built-in canonical price is answered from the built-in table. Requires billing.read or providers.read.
          */
         get: operations["getPricingModel"];
         put?: never;
@@ -1292,17 +1774,14 @@ export interface paths {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description Model ID (UUID) or model slug */
-                idOrSlug: string;
-            };
+            path?: never;
             cookie?: never;
         };
         get?: never;
         put?: never;
         /**
          * Append a new versioned price sheet
-         * @description Appends a new immutable pricing version with input, output, and optional cached token rates. Requires billing.manage permission.
+         * @description Appends a new immutable pricing version. effective_from defaults to now. Requires billing.manage.
          */
         post: operations["createPricingVersion"];
         delete?: never;
@@ -1315,17 +1794,12 @@ export interface paths {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description Model ID (UUID) or model slug */
-                idOrSlug: string;
-                /** @description Positive version number */
-                version: number;
-            };
+            path?: never;
             cookie?: never;
         };
         /**
          * Get a specific historical pricing version
-         * @description Retrieves a single pricing version. Requires billing.read or providers.read permission.
+         * @description Requires billing.read or providers.read.
          */
         get: operations["getPricingVersion"];
         put?: never;
@@ -1347,7 +1821,7 @@ export interface paths {
         put?: never;
         /**
          * Calculate token cost for a model
-         * @description Computes total micro-dollar cost for prompt, completion, and cached input tokens using specified or effective pricing version.
+         * @description Computes the micro-unit cost for prompt, completion and cached input tokens using the requested version, the version effective at effective_at, or the current one. Falls back to the built-in canonical price table for a slug with no stored model. Requires billing.read or providers.read.
          */
         post: operations["calculateCost"];
         delete?: never;
@@ -1363,8 +1837,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * List policies
+         * @description Open to every authenticated member of the organization.
+         */
         get: operations["listPolicies"];
         put?: never;
+        /**
+         * Create a policy
+         * @description Requires the owner or admin role.
+         */
         post: operations["createPolicy"];
         delete?: never;
         options?: never;
@@ -1376,17 +1858,27 @@ export interface paths {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                id: string;
-            };
+            path?: never;
             cookie?: never;
         };
+        /**
+         * Get a policy
+         * @description Open to every authenticated member of the organization.
+         */
         get: operations["getPolicy"];
         put?: never;
         post?: never;
+        /**
+         * Delete a policy and its rules
+         * @description Requires the owner or admin role.
+         */
         delete: operations["deletePolicy"];
         options?: never;
         head?: never;
+        /**
+         * Update a policy
+         * @description Only the fields sent are changed. Requires the owner or admin role.
+         */
         patch: operations["updatePolicy"];
         trace?: never;
     };
@@ -1394,13 +1886,19 @@ export interface paths {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                id: string;
-            };
+            path?: never;
             cookie?: never;
         };
+        /**
+         * List a policy's rules
+         * @description Open to every authenticated member of the organization.
+         */
         get: operations["listPolicyRules"];
         put?: never;
+        /**
+         * Add a rule to a policy
+         * @description Requires the owner or admin role.
+         */
         post: operations["createPolicyRule"];
         delete?: never;
         options?: never;
@@ -1412,18 +1910,23 @@ export interface paths {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                id: string;
-                ruleId: string;
-            };
+            path?: never;
             cookie?: never;
         };
         get?: never;
         put?: never;
         post?: never;
+        /**
+         * Delete a policy rule
+         * @description Requires the owner or admin role.
+         */
         delete: operations["deletePolicyRule"];
         options?: never;
         head?: never;
+        /**
+         * Update a policy rule
+         * @description Only the fields sent are changed. Requires the owner or admin role.
+         */
         patch: operations["updatePolicyRule"];
         trace?: never;
     };
@@ -1436,6 +1939,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Preview the allow/deny decision for a model
+         * @description Evaluates the enabled allowlist and blocklist rules of active policies against the model and the scope ids sent, most specific scope first. Read-only; open to every authenticated member.
+         */
         post: operations["previewPolicy"];
         delete?: never;
         options?: never;
@@ -1447,13 +1954,15 @@ export interface paths {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                id: string;
-            };
+            path?: never;
             cookie?: never;
         };
         get?: never;
         put?: never;
+        /**
+         * Check a policy and its rules for errors
+         * @description Reports unsupported rule types, malformed rule parameters and allowlist/blocklist conflicts. Takes no body. Open to every authenticated member.
+         */
         post: operations["validatePolicy"];
         delete?: never;
         options?: never;
@@ -1468,8 +1977,36 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * List the model allow/block matrix
+         * @description Flattens every allowlist and blocklist rule of every policy into one entry per model. Open to every authenticated member.
+         */
         get: operations["listModelAccess"];
+        /**
+         * Allow or block models
+         * @description Upserts one rule per provider/model in the auto-created "Model Access Control" policy. Owner role only. Failures on individual entries are ignored, so a 200 does not guarantee every entry was stored.
+         */
         put: operations["updateModelAccess"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/model-access/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview the effect of allowing or blocking a model
+         * @description Read-only. Owner role only.
+         */
         post: operations["previewModelAccess"];
         delete?: never;
         options?: never;
@@ -1484,8 +2021,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * List budgets with current usage
+         * @description Open to every authenticated member. Usage figures are recomputed for the current window of each budget. An unparseable scope_id is ignored rather than rejected; enabled matches only the literal "true".
+         */
         get: operations["listBudgets"];
         put?: never;
+        /**
+         * Create a budget
+         * @description Owner role only. Also writes the matching policy budget rule the gateway enforces. Invalid values (empty name, limit_amount <= 0, alert_threshold outside 0..1) currently surface as a 500 internal error, not a 400.
+         */
         post: operations["createBudget"];
         delete?: never;
         options?: never;
@@ -1497,18 +2042,760 @@ export interface paths {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                id: string;
-            };
+            path?: never;
             cookie?: never;
         };
+        /**
+         * Get a budget
+         * @description Open to every authenticated member. Unlike the list, usage figures are not recomputed here.
+         */
         get: operations["getBudget"];
         put?: never;
         post?: never;
+        /**
+         * Delete a budget
+         * @description Owner role only.
+         */
         delete: operations["deleteBudget"];
         options?: never;
         head?: never;
+        /**
+         * Update a budget
+         * @description Only the fields sent are changed. Owner role only. Invalid values currently surface as a 500 internal error.
+         */
         patch: operations["updateBudget"];
+        trace?: never;
+    };
+    "/v1/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search across the organization
+         * @description Case-insensitive substring match over the entity types the caller can read. Types the caller cannot read are skipped silently rather than failing the request. An empty q returns no results.
+         */
+        get: operations["getv1search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the signed-in platform admin
+         * @description Every /v1/admin route answers 404 (not 401 or 403) to anyone who is not a platform admin, signed in or not. Unlike tenant routes, an admin whose own organization is suspended is still admitted.
+         */
+        get: operations["getAdminMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Platform-wide headline stats */
+        get: operations["getAdminOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every organization */
+        get: operations["listAdminOrganizations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/organizations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one organization with its members and gateway keys */
+        get: operations["getAdminOrganization"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/organizations/{id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suspend an organization
+         * @description Its gateway keys stop resolving and its members' console requests are refused. Data and key rows are untouched, so reactivation restores them.
+         */
+        post: operations["suspendAdminOrganization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/organizations/{id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reactivate a suspended organization */
+        post: operations["reactivateAdminOrganization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/organizations/{id}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Move an organization to another plan */
+        put: operations["setAdminOrganizationPlan"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/organizations/{id}/revoke-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke every active gateway key of an organization
+         * @description Permanent, unlike suspension; the keys must be reissued.
+         */
+        post: operations["revokeAdminOrganizationKeys"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every user */
+        get: operations["listAdminUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable a user
+         * @description Signs the user out everywhere and stops their gateway keys resolving. An admin cannot disable their own account (cannot_disable_self).
+         */
+        post: operations["disableAdminUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-enable a disabled user */
+        post: operations["enableAdminUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Platform traffic by day, provider, model and organization */
+        get: operations["getAdminUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/billing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Subscriptions per plan and recent invoices */
+        get: operations["getAdminBilling"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the plan catalog */
+        get: operations["listAdminPlans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Outbox backlog and provider health */
+        get: operations["getAdminSystem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the shared model catalog, active and inactive */
+        get: operations["listAdminModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/models/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Switch a catalog model on or off for every organization */
+        patch: operations["setAdminModelActive"];
+        trace?: never;
+    };
+    "/v1/admin/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List platform admin actions, newest first */
+        get: operations["listAdminAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/tenant-audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List organizations' own audit logs across the platform */
+        get: operations["listAdminTenantAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/security-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List security events across every organization */
+        get: operations["listAdminSecurityEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Latest health sample per service and the last hour of samples */
+        get: operations["getAdminServices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List platform monitor alerts */
+        get: operations["listAdminAlerts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/alerts/{id}/acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acknowledge a platform alert
+         * @description Takes no body. The alert stays listed until the monitor sees the problem clear and resolves it.
+         */
+        post: operations["acknowledgeAdminAlert"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List warning and error lines written by the services */
+        get: operations["listAdminLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/revenue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Money actually taken, from paid invoices
+         * @description monthly covers the last 12 months; customers lists up to 100 paying organizations.
+         */
+        get: operations["getAdminRevenue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List paid invoices */
+        get: operations["listAdminPayments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/alert-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List alert events
+         * @description Returns the organization's 50 most recent alert events across all rules, newest first. There is no paging. Requires the alerts.read permission.
+         */
+        get: operations["listAlertEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/alert-events/{id}/acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acknowledge an alert event
+         * @description Sets the event status to acknowledged. Requires the alerts.manage permission.
+         */
+        post: operations["acknowledgeAlertEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/alert-events/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve an alert event
+         * @description Sets the event status to resolved, stamps resolved_at and marks its rule resolved. Requires the alerts.manage permission.
+         */
+        post: operations["resolveAlertEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List in-app notifications
+         * @description Returns the organization's 50 most recent in-app notifications, newest first. Notifications are shared by the organization, not per user. There is no paging. Requires the alerts.read permission.
+         */
+        get: operations["listNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Mark one notification read
+         * @description Requires the alerts.read permission.
+         */
+        patch: operations["markNotificationRead"];
+        trace?: never;
+    };
+    "/v1/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark every notification read
+         * @description Requires the alerts.read permission.
+         */
+        post: operations["markAllNotificationsRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/audit/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List audit records (alias of /v1/audit-logs)
+         * @description Same handler, query parameters and response as GET /v1/audit-logs. Requires the audit.read permission.
+         */
+        get: operations["listAuditLogsAlias"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/security/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List security events (alias of /v1/security-events)
+         * @description Same handler, query parameters and response as GET /v1/security-events. Requires the security_events.read permission.
+         */
+        get: operations["listSecurityEventsAlias"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/guardrails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List guardrails
+         * @description Requires guardrails.read or the owner, admin or auditor role.
+         */
+        get: operations["listGuardrails"];
+        put?: never;
+        /**
+         * Create a guardrail
+         * @description Requires guardrails.manage or the owner or admin role. An empty target_id is stored as null. The response echoes the stored fields; its created_at and updated_at are not read back from the database and come back as the zero time.
+         */
+        post: operations["createGuardrail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/guardrails/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List guardrail trigger events
+         * @description Requires guardrails.read or the owner, admin or auditor role.
+         */
+        get: operations["listGuardrailEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/guardrails/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a guardrail
+         * @description Requires guardrails.read or the owner, admin or auditor role.
+         */
+        get: operations["getGuardrail"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a guardrail
+         * @description Requires guardrails.manage or the owner or admin role.
+         */
+        delete: operations["deleteGuardrail"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a guardrail
+         * @description Despite the PATCH verb this overwrites name, description, action, configuration and enabled with the values sent; an omitted field is stored as its zero value. target_type, target_id and detector cannot be changed. Requires guardrails.manage or the owner or admin role.
+         */
+        patch: operations["updateGuardrail"];
+        trace?: never;
+    };
+    "/v1/guardrails/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dry-run a guardrail against a payload
+         * @description Evaluates only this guardrail against the payload; nothing is recorded. Requires guardrails.read or the owner, admin or auditor role.
+         */
+        post: operations["testGuardrail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
 }
@@ -1531,28 +2818,34 @@ export interface components {
             };
         };
         /**
-         * @description How much transcript content may be returned for a conversation. A conversation's own privacy_state always wins; otherwise the server applies AIGW_CONVERSATION_PRIVACY_DEFAULT and fails closed to METADATA_ONLY when that is unset or unrecognized. No query parameter can widen this.
+         * @description The conversation's effective privacy mode. A conversation's own override wins; otherwise the organization's privacy default applies, and the server fails closed to METADATA_ONLY when either is unrecognized.
          * @enum {string}
          */
-        ConversationPrivacyMode: false | "METADATA_ONLY" | "PROMPT_ONLY" | "FULL_CONTENT";
+        ConversationPrivacyMode: "OFF" | "METADATA_ONLY" | "PROMPT_ONLY" | "FULL_CONTENT";
         /** @description One conversation plus the aggregates derived from its messages. request_count counts assistant turns, not messages, so it can be lower than message_count. */
         ConversationSummary: {
             /** Format: uuid */
             id: string;
+            /** @description The opening prompt while the gateway still holds it, otherwise the stored title. */
             title: string;
             /** Format: uuid */
             user_id: string;
             /** Format: uuid */
-            project_id?: string | null;
-            provider?: string | null;
-            model?: string | null;
+            project_id: string | null;
+            provider: string | null;
+            model: string | null;
+            /**
+             * Format: uuid
+             * @description The gateway key the conversation came through; null when none was recorded.
+             */
+            credential_id: string | null;
             /** Format: date-time */
             started_at: string;
             /**
              * Format: date-time
              * @description Null when the conversation has no messages.
              */
-            last_activity_at?: string | null;
+            last_activity_at: string | null;
             /** Format: int32 */
             request_count: number;
             /** Format: int32 */
@@ -1563,47 +2856,57 @@ export interface components {
              * Format: int64
              * @description Always null today: conversation_messages carries no link to llm_requests, so per-conversation spend cannot be derived. The field is present so cost can be filled in without a breaking change.
              */
-            cost_micros?: number | null;
+            cost_micros: number | null;
             privacy_state: components["schemas"]["ConversationPrivacyMode"];
         };
-        /** @description One stored turn. content is deliberately not required: a turn whose content the effective privacy mode withholds carries no content key at all rather than an empty string, so a client can tell redacted from genuinely empty. */
+        /** @description One stored turn. content is not required: text is never stored, so the key is present only while the gateway still holds the turn's text in memory. */
         ConversationMessage: {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
             conversation_id: string;
-            /** @description system, user, assistant, or tool. PROMPT_ONLY keeps content only for system and user turns. */
+            /** @description system, user, assistant, or tool. */
             role: string;
-            /** @description Absent when the effective privacy mode withholds it. */
+            /** @description Absent when the gateway no longer holds the text. */
             content?: string;
             /** Format: int32 */
             tokens: number;
-            tool_name?: string | null;
-            provider_message_id?: string | null;
+            tool_name: string | null;
+            provider_message_id: string | null;
             /** Format: date-time */
             created_at: string;
         };
         ConversationListResponse: {
             items: components["schemas"]["ConversationSummary"][];
+            /** @description True when another page exists past offset + limit. */
+            has_more: boolean;
         };
         ConversationMessagesResponse: {
             items: components["schemas"]["ConversationMessage"][];
+            /**
+             * @description available when at least one turn carries text; expired when the gateway no longer holds any of it (or the conversation has no turns).
+             * @enum {string}
+             */
+            transcript: "available" | "expired";
         };
         /** @description One immutable audit record. Audit records are written by the server and can never be edited or deleted through the API. actor_type reports which of the two actor id columns is populated. */
         AuditLog: {
             /** Format: uuid */
             id: string;
-            /** @enum {string} */
-            actor_type: "user" | "service_account";
+            /**
+             * @description Empty when neither actor id is set, e.g. a record written by a background worker or one whose actor was since deleted.
+             * @enum {string}
+             */
+            actor_type: "user" | "service_account" | "";
             /** Format: uuid */
-            actor_user_id?: string | null;
+            actor_user_id: string | null;
             /** Format: uuid */
-            actor_service_account_id?: string | null;
+            actor_service_account_id: string | null;
             /** @description Dotted action name, e.g. organization.update. */
             action: string;
             resource_type: string;
             /** Format: uuid */
-            resource_id?: string | null;
+            resource_id: string | null;
             /** @description State before the change; an empty object when not recorded. */
             before: {
                 [key: string]: unknown;
@@ -1612,20 +2915,22 @@ export interface components {
             after: {
                 [key: string]: unknown;
             };
-            ip_address?: string | null;
-            request_id?: string | null;
+            ip_address: string | null;
+            request_id: string | null;
             /** Format: date-time */
             created_at: string;
         };
         AuditLogListResponse: {
             items: components["schemas"]["AuditLog"][];
+            /** @description True when another page exists past offset + limit. */
+            has_more: boolean;
         };
-        /** @description One platform-originated security event. Events are written by background jobs and health probes, never by a user request, and can never be edited or deleted through the API. */
+        /** @description One platform-originated security event. Events are written by background jobs, health probes and the gateway's policy enforcement, never by a user request through this API, and can never be edited or deleted through the API. */
         SecurityEvent: {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            category: "provider_incident" | "pipeline_failure";
+            category: "provider_incident" | "pipeline_failure" | "policy_violation";
             /** @enum {string} */
             severity: "info" | "warning" | "critical";
             /** @description Short human-readable summary of what changed. */
@@ -1642,12 +2947,11 @@ export interface components {
         SecurityEventListResponse: {
             items: components["schemas"]["SecurityEvent"][];
         };
-        /** @description One configured alert rule. Reading a rule exposes only what it declares: no evaluator is wired to any rule type, so last_triggered_at stays null and nothing here implies the rule fires. */
+        /** @description One configured alert rule. A background evaluator checks active rules; last_triggered_at is set when it records an event. */
         Alert: {
             /** Format: uuid */
             id: string;
-            /** @enum {string} */
-            alert_type: "spend_limit" | "rate_limit" | "error_rate" | "anomaly";
+            alert_type: components["schemas"]["AlertRuleType"];
             name: string;
             /** @enum {string} */
             severity: "info" | "warning" | "critical";
@@ -1656,10 +2960,10 @@ export interface components {
                 [key: string]: unknown;
             };
             /** @enum {string} */
-            status: "active" | "muted";
+            status: "active" | "muted" | "resolved";
             /**
              * Format: date-time
-             * @description Always null today, because nothing evaluates alert rules.
+             * @description Null until the evaluator first records an event for the rule.
              */
             last_triggered_at: string | null;
             /** Format: date-time */
@@ -1670,33 +2974,34 @@ export interface components {
         AlertListResponse: {
             items: components["schemas"]["Alert"][];
         };
-        /** @description Full replacement of an alert rule's mutable fields; all four are required. alert_type is not writable. */
+        /** @description Replacement of an alert rule's mutable fields. alert_type is not writable. */
         UpdateAlertRequest: {
             name: string;
             /** @enum {string} */
             severity: "info" | "warning" | "critical";
-            configuration: {
+            /** @description Must be a JSON object; omitted means an empty object. */
+            configuration?: {
                 [key: string]: unknown;
             };
             /** @enum {string} */
-            status: "active" | "muted";
+            status: "active" | "muted" | "resolved";
         };
-        /** @description The outcome of validating a rule's configuration. There is deliberately no would-fire field: no evaluator exists to produce one. */
+        /** @description The outcome of evaluating a rule once. Nothing is recorded or delivered by the test. */
         AlertTestResult: {
             /** Format: uuid */
             alert_id: string;
-            /** @enum {string} */
-            alert_type: "spend_limit" | "rate_limit" | "error_rate" | "anomaly";
+            alert_type: components["schemas"]["AlertRuleType"];
             /** @enum {string} */
             severity: "info" | "warning" | "critical";
             /** @enum {string} */
-            status: "active" | "muted";
+            status: "active" | "muted" | "resolved";
             configuration: {
                 [key: string]: unknown;
             };
             status_is_muted: boolean;
-            /** @description Always false; no notifier is invoked. */
+            /** @description True when the condition is currently met and the rule is not muted. Despite the name, the test itself sends nothing. */
             notification_sent: boolean;
+            /** @description The evaluator's human-readable verdict. */
             message: string;
         };
         /** @description An organization. Only persisted columns are exposed. MRR, seat counts, billing contact email and region are deliberately absent because no such data is stored for an organization. */
@@ -1711,9 +3016,18 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
-            /** @description Null when the organization has no active or trialing subscription. */
+            /**
+             * @description Organization-wide default for how much conversation content is stored.
+             * @enum {string}
+             */
+            privacy_default: "OFF" | "METADATA_ONLY" | "PROMPT_ONLY" | "FULL_CONTENT";
+            retention_conversations_days: number;
+            retention_usage_days: number;
+            retention_audits_days: number;
+            retention_billing_days: number;
+            /** @description Null when the organization has no active or trialing subscription, and always null in the PATCH response. */
             plan: components["schemas"]["OrganizationPlan"] | null;
-            /** @description Null when the organization has no active or trialing subscription. */
+            /** @description Null when the organization has no active or trialing subscription, and always null in the PATCH response. */
             billing: components["schemas"]["OrganizationBilling"] | null;
         };
         /** @description The plan on the organization's active or trialing subscription. */
@@ -1734,12 +3048,22 @@ export interface components {
             current_period_end: string;
             cancel_at_period_end: boolean;
         };
-        /** @description Writable organization fields. Both are optional; a blank name or slug is rejected. status is read-only. */
+        /** @description Writable organization fields, all optional; omitted fields are unchanged. A blank name or slug is rejected and slug is lower-cased. status is read-only. Unknown fields are rejected. */
         UpdateOrganizationRequest: {
             name?: string;
             slug?: string;
+            /** @enum {string} */
+            privacy_default?: "OFF" | "METADATA_ONLY" | "PROMPT_ONLY" | "FULL_CONTENT";
+            /** Format: int32 */
+            retention_conversations_days?: number;
+            /** Format: int32 */
+            retention_usage_days?: number;
+            /** Format: int32 */
+            retention_audits_days?: number;
+            /** Format: int32 */
+            retention_billing_days?: number;
         };
-        /** @description One sellable plan from the global catalog. No price, seat count, or billing contact is included because none is stored in this service. */
+        /** @description One plan from the global catalog. Prices are kept server-side and are not part of this body. */
         Plan: {
             /** Format: uuid */
             id: string;
@@ -1756,20 +3080,30 @@ export interface components {
         PlanListResponse: {
             items: components["schemas"]["Plan"][];
         };
-        /** @description The organization's current plan and billing cycle, built from stored columns only. */
+        /** @description The organization's current plan and billing cycle, plus the server's billing mode. */
         Subscription: {
             plan_code: string;
             plan_name: string;
-            /**
-             * @description Mirrors the stored subscription status; not narrowed to the states the organization endpoint surfaces.
-             * @enum {string}
-             */
+            /** @enum {string} */
             status: "active" | "trialing" | "canceled" | "past_due" | "incomplete";
             /** Format: date-time */
             current_period_start: string | null;
             /** Format: date-time */
             current_period_end: string | null;
             cancel_at_period_end: boolean;
+            /** @description Absent when no payment provider is linked. */
+            payment_provider?: string;
+            /** @description Absent when no provider customer is linked. */
+            provider_customer_id?: string;
+            /** @description Absent when no provider subscription is linked. */
+            provider_subscription_id?: string;
+            /**
+             * @description The server's billing mode. Always set by the subscription endpoints.
+             * @enum {string}
+             */
+            billing_mode?: "disabled" | "simulation" | "test" | "live";
+            /** @description False only when billing_mode is disabled. */
+            billing_enabled: boolean;
         };
         /** @description One itemisation row behind an invoice total. */
         InvoiceLine: {
@@ -1786,7 +3120,7 @@ export interface components {
             /** Format: int64 */
             amount_micros: number;
         };
-        /** @description One locally computed invoice statement. There is deliberately no paid status, charge id, processor reference, or PDF URL, because no payment processor is integrated and no field here may imply money moved. */
+        /** @description One invoice statement with its itemisation lines. */
         Invoice: {
             /** Format: uuid */
             id: string;
@@ -1795,7 +3129,7 @@ export interface components {
             /** @description Human-readable invoice reference. */
             number: string;
             /** @enum {string} */
-            status: "open" | "void";
+            status: "open" | "void" | "paid" | "draft" | "uncollectible";
             currency: string;
             /**
              * Format: int64
@@ -1808,12 +3142,21 @@ export interface components {
             period_end: string;
             /** Format: date-time */
             issued_at: string;
+            /** @description Absent unless the invoice was settled through a provider. */
+            payment_provider?: string;
+            /** @description Provider payment reference; absent when unpaid. */
+            payment_id?: string;
+            /**
+             * Format: date-time
+             * @description Absent when unpaid.
+             */
+            paid_at?: string;
             lines: components["schemas"]["InvoiceLine"][];
         };
         InvoiceListResponse: {
             items: components["schemas"]["Invoice"][];
         };
-        /** @description Recorded usage totals for a window, identical to the body of /v1/usage/summary. Field names are the Go field names the handler serializes today; averages and last activity stay null or zero when the window held no requests, so no fabricated measurement is reported. */
+        /** @description Recorded usage totals for a window, identical to the body of /v1/usage/summary. Field names are the Go field names the handler serializes today. */
         BillingUsageSummary: {
             /** Format: int64 */
             Requests: number;
@@ -1823,6 +3166,10 @@ export interface components {
             OutputTokens: number;
             /** Format: int64 */
             CachedTokens: number;
+            /** Format: int64 */
+            ReasoningTokens: number;
+            /** Format: int64 */
+            ToolTokens: number;
             /** Format: int64 */
             TotalTokens: number;
             /**
@@ -1837,6 +3184,8 @@ export interface components {
              * @description Null when the window held no requests.
              */
             AvgLatencyMs: number | null;
+            /** Format: int64 */
+            ActiveUsers: number;
             /**
              * Format: date-time
              * @description Zero time when the window held no requests.
@@ -1845,54 +3194,65 @@ export interface components {
         };
         Policy: {
             /** Format: uuid */
-            id?: string;
+            id: string;
             /** Format: uuid */
-            organization_id?: string;
-            name?: string;
-            description?: string;
+            organization_id: string;
+            name: string;
+            description: string;
             /** @enum {string} */
-            enforcement?: "active" | "disabled" | "permissive";
-            priority?: number;
+            enforcement: "active" | "disabled" | "permissive";
+            /** Format: int32 */
+            priority: number;
             /** Format: date-time */
-            created_at?: string;
+            created_at: string;
             /** Format: date-time */
-            updated_at?: string;
+            updated_at: string;
         };
         PolicyRule: {
             /** Format: uuid */
-            id?: string;
+            id: string;
             /** Format: uuid */
-            policy_id?: string;
+            policy_id: string;
             /** Format: uuid */
-            organization_id?: string;
-            rule_type?: string;
-            description?: string;
-            conditions?: {
+            organization_id: string;
+            /** @enum {string} */
+            rule_type: "rate_limit" | "token_budget" | "blocklist" | "allowlist" | "content_filter" | "budget";
+            description: string;
+            /** @description Null when the rule was created without conditions. */
+            conditions: {
                 [key: string]: unknown;
-            };
-            parameters?: {
+            } | null;
+            /** @description Null when the rule was created without parameters. */
+            parameters: {
                 [key: string]: unknown;
-            };
-            enabled?: boolean;
+            } | null;
+            enabled: boolean;
             /** Format: date-time */
-            created_at?: string;
+            created_at: string;
         };
         CreatePolicyRequest: {
+            /** @description Unique within the organization. */
             name: string;
             description?: string;
             /** @enum {string} */
             enforcement: "active" | "disabled" | "permissive";
-            priority: number;
+            /**
+             * Format: int32
+             * @description Defaults to 0.
+             */
+            priority?: number;
         };
         UpdatePolicyRequest: {
             name?: string;
             description?: string;
             /** @enum {string} */
             enforcement?: "active" | "disabled" | "permissive";
+            /** Format: int32 */
             priority?: number;
         };
         CreatePolicyRuleRequest: {
-            rule_type: string;
+            /** @enum {string} */
+            rule_type: "rate_limit" | "token_budget" | "blocklist" | "allowlist" | "content_filter" | "budget";
             description?: string;
             conditions?: {
                 [key: string]: unknown;
@@ -1900,7 +3260,8 @@ export interface components {
             parameters?: {
                 [key: string]: unknown;
             };
-            enabled: boolean;
+            /** @description Defaults to false when omitted. */
+            enabled?: boolean;
         };
         UpdatePolicyRuleRequest: {
             description?: string;
@@ -1913,31 +3274,45 @@ export interface components {
             enabled?: boolean;
         };
         PolicyList: {
-            items?: components["schemas"]["Policy"][];
+            items: components["schemas"]["Policy"][];
         };
         PolicyRuleList: {
-            items?: components["schemas"]["PolicyRule"][];
+            items: components["schemas"]["PolicyRule"][];
         };
         ModelAccessEntry: {
-            provider?: string;
-            model?: string;
-            allowed?: boolean;
-            source?: string;
+            /** @description Provider name, or "any" when the rule names only models. */
+            provider: string;
+            model: string;
+            allowed: boolean;
+            /**
+             * @description The rule type the entry came from.
+             * @enum {string}
+             */
+            source: "allowlist" | "blocklist";
             /** Format: uuid */
-            policy_id?: string;
+            policy_id: string;
             /** Format: uuid */
-            rule_id?: string;
-            priority?: number;
-            effective?: boolean;
+            rule_id: string;
+            /**
+             * Format: int32
+             * @description The owning policy's priority.
+             */
+            priority: number;
+            /** @description Whether the rule is enabled. */
+            effective: boolean;
         };
         ModelAccessList: {
-            items?: components["schemas"]["ModelAccessEntry"][];
+            /** @description Null when no allowlist or blocklist rule exists. */
+            items: components["schemas"]["ModelAccessEntry"][] | null;
         };
         UpdateModelAccessRequest: {
             entries: {
                 provider: string;
                 model: string;
-                /** @enum {string} */
+                /**
+                 * @description Any value other than allow is treated as block.
+                 * @enum {string}
+                 */
                 action: "allow" | "block";
             }[];
         };
@@ -1948,62 +3323,31 @@ export interface components {
             action: "allow" | "block";
         };
         ModelAccessPreviewResponse: {
-            provider?: string;
-            model?: string;
+            provider: string;
+            model: string;
             /** @enum {string} */
-            current_decision?: "allow" | "block";
+            current_decision: "allow" | "block";
             /** @enum {string} */
-            preview_decision?: "allow" | "block";
-            would_change?: boolean;
-            blocking_rules?: components["schemas"]["ModelAccessEntry"][];
-            allowing_rules?: components["schemas"]["ModelAccessEntry"][];
+            preview_decision: "allow" | "block";
+            would_change: boolean;
+            /** @description Null when no blocklist rule matches. */
+            blocking_rules: components["schemas"]["ModelAccessEntry"][] | null;
+            /** @description Null when no allowlist rule matches. */
+            allowing_rules: components["schemas"]["ModelAccessEntry"][] | null;
         };
         Budget: {
             /** Format: uuid */
-            id?: string;
+            id: string;
             /** Format: uuid */
-            organization_id?: string;
-            name?: string;
-            description?: string;
-            /** @enum {string} */
-            scope?: "organization" | "team" | "project" | "gateway_credential" | "service_account";
-            /** Format: uuid */
-            scope_id?: string;
-            /** @enum {string} */
-            limit_type?: "spend" | "tokens" | "requests";
-            /** Format: double */
-            limit_amount?: number;
-            /** @enum {string} */
-            window?: "hourly" | "daily" | "weekly" | "monthly";
-            /** Format: double */
-            alert_threshold?: number;
-            enabled?: boolean;
-            /** Format: date-time */
-            created_at?: string;
-            /** Format: date-time */
-            updated_at?: string;
-            /** Format: double */
-            current_spend?: number;
-            /** Format: int64 */
-            current_tokens?: number;
-            /** Format: int64 */
-            current_requests?: number;
-            /** Format: date-time */
-            window_start?: string;
-            /** Format: date-time */
-            window_end?: string;
-            /** Format: double */
-            percentage_used?: number;
-        };
-        BudgetList: {
-            items?: components["schemas"]["Budget"][];
-        };
-        CreateBudgetRequest: {
+            organization_id: string;
             name: string;
-            description?: string;
+            description: string;
             /** @enum {string} */
             scope: "organization" | "team" | "project" | "gateway_credential" | "service_account";
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The nil UUID (all zeros) when the budget has no specific scope id.
+             */
             scope_id: string;
             /** @enum {string} */
             limit_type: "spend" | "tokens" | "requests";
@@ -2011,8 +3355,69 @@ export interface components {
             limit_amount: number;
             /** @enum {string} */
             window: "hourly" | "daily" | "weekly" | "monthly";
-            /** Format: double */
+            /**
+             * Format: double
+             * @description Fraction of the limit, 0..1.
+             */
+            alert_threshold: number;
+            enabled: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /**
+             * Format: double
+             * @description Spend in the current window in major currency units.
+             */
+            current_spend: number;
+            /** Format: int64 */
+            current_tokens: number;
+            /** Format: int64 */
+            current_requests: number;
+            /**
+             * Format: date-time
+             * @description Computed by the list endpoint; may be the zero time from the single-budget endpoints.
+             */
+            window_start: string;
+            /**
+             * Format: date-time
+             * @description Computed by the list endpoint; may be the zero time from the single-budget endpoints.
+             */
+            window_end: string;
+            /**
+             * Format: double
+             * @description Usage against limit_amount for the limit_type, as a percentage.
+             */
+            percentage_used: number;
+        };
+        BudgetList: {
+            items: components["schemas"]["Budget"][];
+        };
+        CreateBudgetRequest: {
+            name: string;
+            description?: string;
+            /** @enum {string} */
+            scope: "organization" | "team" | "project" | "gateway_credential" | "service_account";
+            /**
+             * Format: uuid
+             * @description Omit or send an empty string for no specific scope id.
+             */
+            scope_id?: string;
+            /** @enum {string} */
+            limit_type: "spend" | "tokens" | "requests";
+            /**
+             * Format: double
+             * @description Must be greater than 0.
+             */
+            limit_amount: number;
+            /** @enum {string} */
+            window: "hourly" | "daily" | "weekly" | "monthly";
+            /**
+             * Format: double
+             * @description Fraction 0..1. Defaults to 0 when omitted.
+             */
             alert_threshold?: number;
+            /** @description Defaults to false when omitted. */
             enabled?: boolean;
         };
         UpdateBudgetRequest: {
@@ -2029,6 +3434,7 @@ export interface components {
             id: string;
             /** Format: uuid */
             pricing_model_id: string;
+            /** Format: int32 */
             version: number;
             /** Format: int64 */
             input_unit_price_micros: number;
@@ -2038,8 +3444,11 @@ export interface components {
             cache_read_input_token_price_micros: number;
             /** Format: date-time */
             effective_from: string;
-            /** Format: date-time */
-            effective_to?: string | null;
+            /**
+             * Format: date-time
+             * @description Absent when the version has no end.
+             */
+            effective_to?: string;
             /** Format: date-time */
             created_at: string;
         };
@@ -2050,7 +3459,8 @@ export interface components {
             provider_kind: string;
             display_name: string;
             currency: string;
-            status: string;
+            /** @enum {string} */
+            status: "active" | "inactive";
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -2077,7 +3487,10 @@ export interface components {
             output_unit_price_micros: number;
             /** Format: int64 */
             cache_read_input_token_price_micros?: number;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Defaults to now.
+             */
             effective_from?: string;
             /** Format: date-time */
             effective_to?: string;
@@ -2091,6 +3504,7 @@ export interface components {
             completion_tokens: number;
             /** Format: int64 */
             cached_input_tokens?: number;
+            /** Format: int32 */
             version?: number;
             /** Format: date-time */
             effective_at?: string;
@@ -2098,6 +3512,19 @@ export interface components {
         CalculateCostResponse: {
             /** Format: int64 */
             cost_micros: number;
+            /** Format: int64 */
+            input_cost_micros: number;
+            /** Format: int64 */
+            output_cost_micros: number;
+            /** Format: int64 */
+            cached_input_cost_micros: number;
+            /**
+             * Format: int64
+             * @description Saved by cached-token pricing versus the full input rate.
+             */
+            savings_micros: number;
+            /** @description Human-readable description of the rate sheet used; may be absent. */
+            pricing_model_formula?: string;
             currency: string;
             pricing_version: components["schemas"]["PricingVersion"];
             /** Format: int64 */
@@ -2106,6 +3533,1489 @@ export interface components {
             completion_tokens: number;
             /** Format: int64 */
             cached_input_tokens: number;
+        };
+        /** @description The verified claims of the caller's access token. */
+        AuthSessionClaims: {
+            /** @description The subject's id; the user id for user tokens. */
+            subject: string;
+            email: string;
+            display_name: string;
+            /** Format: uuid */
+            organization_id: string;
+            /**
+             * @description An organization role, or service for machine identities.
+             * @enum {string}
+             */
+            role: "owner" | "admin" | "member" | "auditor" | "billing_admin" | "service";
+            /** @enum {string} */
+            kind: "user" | "service";
+            /** Format: date-time */
+            issued_at: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        /** @description Who the caller is, never how to authenticate as them. The access and refresh tokens travel only in HttpOnly cookies. */
+        AuthSession: {
+            claims: components["schemas"]["AuthSessionClaims"];
+            /** @description Present whenever the deployment uses session cookies; echo it in the X-CSRF-Token header on state-changing requests. */
+            csrf_token?: string;
+        };
+        SignUpRequest: {
+            email: string;
+            display_name: string;
+            organization_name: string;
+            /** Format: password */
+            password: string;
+        };
+        SignInRequest: {
+            email: string;
+            /** Format: password */
+            password: string;
+        };
+        DevLoginRequest: {
+            email: string;
+            display_name?: string;
+        };
+        SwitchOrganizationRequest: {
+            /** Format: uuid */
+            organization_id: string;
+        };
+        IdentityUser: {
+            /** Format: uuid */
+            id: string;
+            email: string;
+            display_name: string;
+            /** @enum {string} */
+            status: "active" | "disabled";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /**
+             * Format: date-time
+             * @description Absent when the user has never signed in.
+             */
+            last_login_at?: string;
+        };
+        /** @enum {string} */
+        OrganizationRole: "owner" | "admin" | "member" | "auditor" | "billing_admin";
+        /** @description One organization member. */
+        OrgMember: {
+            user: components["schemas"]["IdentityUser"];
+            role: components["schemas"]["OrganizationRole"];
+            /** Format: date-time */
+            member_since: string;
+        };
+        OrgMemberListResponse: {
+            items: components["schemas"]["OrgMember"][];
+        };
+        SetMemberRoleRequest: {
+            role: components["schemas"]["OrganizationRole"];
+        };
+        Invitation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            email: string;
+            role: components["schemas"]["OrganizationRole"];
+            /** @enum {string} */
+            status: "pending" | "accepted" | "revoked" | "expired";
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: uuid */
+            invited_by?: string;
+            /** Format: uuid */
+            accepted_by?: string;
+            /** Format: date-time */
+            accepted_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        InvitationListResponse: {
+            items: components["schemas"]["Invitation"][];
+        };
+        CreateInvitationRequest: {
+            email: string;
+            role: components["schemas"]["OrganizationRole"];
+        };
+        CreateInvitationResponse: {
+            invitation: components["schemas"]["Invitation"];
+            /** @description The raw invitation token; returned only on creation. */
+            token: string;
+        };
+        AcceptInvitationRequest: {
+            token: string;
+        };
+        Project: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            name: string;
+            slug: string;
+            description: string;
+            /** @enum {string} */
+            status: "active" | "archived";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ProjectListResponse: {
+            items: components["schemas"]["Project"][];
+        };
+        CreateProjectRequest: {
+            name: string;
+            /** @description Derived from name when blank. */
+            slug?: string;
+            description?: string;
+        };
+        /** @description Partial update; omitted fields are unchanged. */
+        UpdateProjectRequest: {
+            name?: string;
+            description?: string;
+        };
+        SetProjectStatusRequest: {
+            /** @enum {string} */
+            status: "active" | "archived";
+        };
+        /**
+         * @description Role within a project or team.
+         * @enum {string}
+         */
+        MembershipRole: "admin" | "member";
+        AddMembershipRequest: {
+            /** Format: uuid */
+            user_id: string;
+            role: components["schemas"]["MembershipRole"];
+        };
+        /** @description A project or team member with the user's profile. */
+        Membership: {
+            user: components["schemas"]["IdentityUser"];
+            role: components["schemas"]["MembershipRole"];
+            /** Format: date-time */
+            member_since: string;
+        };
+        MembershipListResponse: {
+            items: components["schemas"]["Membership"][];
+        };
+        ProjectMemberRow: {
+            /** Format: uuid */
+            project_id: string;
+            /** Format: uuid */
+            user_id: string;
+            role: components["schemas"]["MembershipRole"];
+            /** Format: date-time */
+            member_since: string;
+        };
+        Team: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            name: string;
+            description: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        TeamListResponse: {
+            items: components["schemas"]["Team"][];
+        };
+        CreateTeamRequest: {
+            name: string;
+            description?: string;
+        };
+        /** @description Partial update; omitted fields are unchanged. */
+        UpdateTeamRequest: {
+            name?: string;
+            description?: string;
+        };
+        TeamMemberRow: {
+            /** Format: uuid */
+            team_id: string;
+            /** Format: uuid */
+            user_id: string;
+            role: components["schemas"]["MembershipRole"];
+            /** Format: date-time */
+            member_since: string;
+        };
+        ServiceAccount: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            name: string;
+            description: string;
+            /** @enum {string} */
+            status: "active" | "revoked";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ServiceAccountListResponse: {
+            items: components["schemas"]["ServiceAccount"][];
+        };
+        CreateServiceAccountRequest: {
+            name: string;
+            description?: string;
+        };
+        /** @description A control-plane API key. The key hash is never exposed; key_prefix is the only hint. */
+        ApiCredential: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            name: string;
+            key_prefix: string;
+            /** @enum {string} */
+            scope: "gateway" | "control" | "all";
+            /** @enum {string} */
+            status: "active" | "revoked";
+            /**
+             * Format: uuid
+             * @description Absent for gateway keys.
+             */
+            service_account_id?: string;
+            /** Format: date-time */
+            last_used_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ApiCredentialListResponse: {
+            items: components["schemas"]["ApiCredential"][];
+        };
+        CreateApiCredentialRequest: {
+            name: string;
+            /**
+             * @description control_plane, policy_manager and read_only are accepted as legacy aliases and stored as control.
+             * @enum {string}
+             */
+            scope: "gateway" | "control" | "all" | "control_plane" | "policy_manager" | "read_only";
+            /**
+             * Format: uuid
+             * @description Required for control and all keys; ignored for gateway keys. An empty string is treated as absent.
+             */
+            service_account_id?: string;
+        };
+        CreateApiCredentialResponse: {
+            credential: components["schemas"]["ApiCredential"];
+            /** @description The raw key; returned only on creation. */
+            api_key: string;
+        };
+        /** @enum {string} */
+        GatewayCredentialScope: "gateway" | "control" | "all";
+        /** @description A gateway credential. On create and rotate key_prefix holds the full raw key; everywhere else it is only the prefix. */
+        GatewayCredential: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            name: string;
+            key_prefix: string;
+            /** @enum {string} */
+            subject_type: "user" | "service_account";
+            /** Format: uuid */
+            subject_id: string;
+            /** Format: uuid */
+            team_id?: string;
+            /** Format: uuid */
+            project_id?: string;
+            scopes: components["schemas"]["GatewayCredentialScope"][];
+            /** Format: uuid */
+            provider_account_id?: string;
+            /** @description Absent when empty. */
+            allowed_providers?: string[];
+            /** @description Absent when empty. */
+            allowed_models?: string[];
+            rate_limit?: number;
+            /** Format: double */
+            budget_limit?: number;
+            /** @enum {string} */
+            status: "active" | "revoked" | "expired";
+            /** Format: date-time */
+            expires_at?: string;
+            /** Format: date-time */
+            last_used_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        GatewayCredentialListResponse: {
+            items: components["schemas"]["GatewayCredential"][];
+        };
+        CreateGatewayCredentialRequest: {
+            name: string;
+            /** @enum {string} */
+            subject_type: "user" | "service_account";
+            /** Format: uuid */
+            subject_id: string;
+            /** Format: uuid */
+            team_id?: string;
+            /** Format: uuid */
+            project_id?: string;
+            scopes: components["schemas"]["GatewayCredentialScope"][];
+            /** Format: uuid */
+            provider_account_id?: string;
+            allowed_providers?: string[];
+            allowed_models?: string[];
+            rate_limit?: number;
+            /** Format: double */
+            budget_limit?: number;
+            /**
+             * Format: date-time
+             * @description Must be in the future.
+             */
+            expires_at?: string;
+        };
+        /** @description Overrides for the replacement credential; every field is optional and an omitted or empty one keeps the old value. Subject, team and project cannot be changed here. */
+        RotateGatewayCredentialRequest: {
+            name?: string;
+            scopes?: components["schemas"]["GatewayCredentialScope"][];
+            /** Format: uuid */
+            provider_account_id?: string;
+            allowed_providers?: string[];
+            allowed_models?: string[];
+            rate_limit?: number;
+            /** Format: double */
+            budget_limit?: number;
+            /**
+             * Format: date-time
+             * @description Must be in the future.
+             */
+            expires_at?: string;
+        };
+        /** @enum {string} */
+        SearchResultType: "request" | "user" | "team" | "project" | "policy" | "model" | "provider" | "conversation" | "gateway_credential";
+        SearchResultItem: {
+            type: components["schemas"]["SearchResultType"];
+            id: string;
+            name: string;
+            description?: string;
+            /** @description Console route for the result, e.g. /observe/teams/{id}. */
+            url: string;
+        };
+        SearchResponse: {
+            results: components["schemas"]["SearchResultItem"][];
+            /** @description The number of results returned (capped at limit), not the total number of matches. */
+            total: number;
+        };
+        /** @description One gateway request as seen by the live activity feed. */
+        ActivityEvent: {
+            request_id: string;
+            /** Format: uuid */
+            organization_id: string;
+            /** Format: uuid */
+            user_id?: string;
+            user_name?: string;
+            /**
+             * Format: uuid
+             * @description The service account id, when a service account made the request.
+             */
+            service_account?: string;
+            /** Format: uuid */
+            project_id?: string;
+            project_name?: string;
+            /** Format: uuid */
+            team_id?: string;
+            provider: string;
+            model: string;
+            /** @description Free-form outcome reported by the gateway; for the recent-requests fallback it is the llm_requests status (succeeded, failed, cancelled). */
+            status: string;
+            /** Format: date-time */
+            started_at: string;
+            /** @enum {string} */
+            current_state: "active" | "idle" | "completed" | "failed";
+        };
+        ActivityEventListResponse: {
+            data: components["schemas"]["ActivityEvent"][];
+        };
+        ActivityCount: {
+            count: number;
+        };
+        /** @description A connection to an upstream AI provider. */
+        ProviderAccount: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            /** @enum {string} */
+            provider_kind: "openai" | "anthropic" | "gemini" | "azure_openai" | "huggingface" | "custom";
+            name: string;
+            /** @description Omitted when the account uses the provider's default URL. */
+            base_url?: string;
+            /** @enum {string} */
+            status: "active" | "disabled";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ProviderAccountListResponse: {
+            items: components["schemas"]["ProviderAccount"][];
+        };
+        CreateProviderAccountRequest: {
+            /** @description One of openai, anthropic, gemini, azure_openai, huggingface or custom; case-insensitive, and google is accepted for gemini. */
+            provider_kind: string;
+            name: string;
+            /** @description Optional upstream URL; internal and metadata addresses are rejected. */
+            base_url?: string;
+        };
+        UpdateProviderAccountRequest: {
+            /** @description active or disabled, case-insensitive. */
+            status: string;
+        };
+        /** @description An upstream key stored for a provider account. The secret itself is never returned; only its fingerprint and last characters. */
+        ProviderCredential: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            /** Format: uuid */
+            provider_account_id: string;
+            name: string;
+            /** @enum {string} */
+            kind: "api_key" | "oauth";
+            fingerprint: string;
+            tail: string;
+            /** @enum {string} */
+            status: "active" | "revoked";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ProviderCredentialListResponse: {
+            items: components["schemas"]["ProviderCredential"][];
+        };
+        CreateProviderCredentialRequest: {
+            name: string;
+            /** @description Only api_key is supported. Empty, apikey, key or a provider kind are treated as api_key. */
+            kind?: string;
+            /** @description The raw upstream key. Validated live, stored only in the secret store, never returned. */
+            secret: string;
+        };
+        RotateProviderCredentialRequest: {
+            secret: string;
+        };
+        /** @description A secret for a one-off live probe. It is never stored, returned or logged. */
+        ProviderProbeRequest: {
+            provider_kind: string;
+            api_key: string;
+        };
+        /** @description Both fields are optional; see the operation for how they combine. */
+        SyncCatalogModelsRequest: {
+            provider_kind?: string;
+            /** @description Used for this sync only and never stored. */
+            api_key?: string;
+        };
+        ProviderValidationResult: {
+            valid: boolean;
+        };
+        /** @description The last observed connectivity state of one provider kind. Health is global, not per organization. */
+        ProviderHealth: {
+            provider_kind: string;
+            /** @enum {string} */
+            status: "unknown" | "healthy" | "degraded" | "unhealthy";
+            /** @description Stable reason code, e.g. credentials_rejected, health_check_failed, discovery_succeeded. Omitted when empty. */
+            status_reason?: string;
+            /** @description Human-readable detail of the last failure. Omitted when empty. */
+            last_error?: string;
+            /** Format: date-time */
+            checked_at: string;
+        };
+        ProviderHealthListResponse: {
+            items: components["schemas"]["ProviderHealth"][];
+        };
+        /** @description One entry of the global model catalog. */
+        CatalogModel: {
+            /** Format: uuid */
+            id: string;
+            provider_kind: string;
+            model_slug: string;
+            display_name: string;
+            /** @description Omitted when empty. */
+            capabilities?: string[];
+            /** @description Omitted when unknown (zero). */
+            context_limit?: number;
+            supports_streaming: boolean;
+            supports_tools: boolean;
+            supports_reasoning: boolean;
+            /**
+             * @description Falls back to active or inactive from is_active when the catalog row has no status.
+             * @enum {string}
+             */
+            status: "active" | "inactive";
+            /** @description Omitted when empty. */
+            pricing_version?: string;
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CatalogModelListResponse: {
+            items: components["schemas"]["CatalogModel"][];
+        };
+        /** @description Aggregated usage for a window. PascalCase on the wire (Go struct without JSON tags). Cost is in micro-dollars. */
+        UsageSummary: {
+            /** Format: int64 */
+            Requests: number;
+            /** Format: int64 */
+            InputTokens: number;
+            /** Format: int64 */
+            OutputTokens: number;
+            /** Format: int64 */
+            CachedTokens: number;
+            /** Format: int64 */
+            ReasoningTokens: number;
+            /** Format: int64 */
+            ToolTokens: number;
+            /** Format: int64 */
+            TotalTokens: number;
+            /** Format: int64 */
+            TotalCostMicros: number;
+            /** Format: int64 */
+            Errors: number;
+            /** @description Null when the window held no requests. */
+            AvgLatencyMs: number | null;
+            /** Format: int64 */
+            ActiveUsers: number;
+            /**
+             * Format: date-time
+             * @description 0001-01-01T00:00:00Z (Go zero time) when the window held no requests.
+             */
+            LastActivityAt: string;
+        };
+        /** @description One UTC day of usage. PascalCase on the wire. */
+        UsageTimeSeriesPoint: {
+            /** Format: date-time */
+            BucketStart: string;
+            /** Format: int64 */
+            Requests: number;
+            /** Format: int64 */
+            TotalTokens: number;
+            /** Format: int64 */
+            CostMicros: number;
+        };
+        UsageTimeSeriesResponse: {
+            items: components["schemas"]["UsageTimeSeriesPoint"][];
+        };
+        /** @description Metrics shared by the entity breakdowns. The Go struct is embedded, so these fields sit flat beside the entity's own fields. PascalCase on the wire. */
+        UsageTotals: {
+            /** Format: int64 */
+            Requests: number;
+            /** Format: int64 */
+            InputTokens: number;
+            /** Format: int64 */
+            OutputTokens: number;
+            /** Format: int64 */
+            TotalTokens: number;
+            /** Format: int64 */
+            CostMicros: number;
+            /** Format: int64 */
+            Errors: number;
+            /** @description Null when the group recorded no latency sample. */
+            AvgLatencyMs: number | null;
+            /** Format: date-time */
+            LastActivityAt: string;
+        };
+        UsageByProject: {
+            /** Format: uuid */
+            ProjectID: string;
+            Name: string;
+        } & components["schemas"]["UsageTotals"];
+        UsageByProjectListResponse: {
+            items: components["schemas"]["UsageByProject"][];
+        };
+        /** @description PascalCase on the wire. */
+        UsageByModel: {
+            Model: string;
+            /** Format: int64 */
+            Requests: number;
+            /** Format: int64 */
+            TotalTokens: number;
+            /** Format: int64 */
+            CostMicros: number;
+        };
+        UsageByModelListResponse: {
+            items: components["schemas"]["UsageByModel"][];
+        };
+        /** @description PascalCase on the wire. */
+        UsageByProvider: {
+            Provider: string;
+            /** Format: int64 */
+            Requests: number;
+            /** Format: int64 */
+            TotalTokens: number;
+            /** Format: int64 */
+            CostMicros: number;
+        };
+        UsageByProviderListResponse: {
+            items: components["schemas"]["UsageByProvider"][];
+        };
+        UsageByUser: {
+            /** Format: uuid */
+            UserID: string;
+            Email: string;
+            DisplayName: string;
+        } & components["schemas"]["UsageTotals"];
+        UsageByUserListResponse: {
+            items: components["schemas"]["UsageByUser"][];
+        };
+        UsageByServiceAccount: {
+            /** Format: uuid */
+            ServiceAccountID: string;
+            Name: string;
+        } & components["schemas"]["UsageTotals"];
+        UsageByServiceAccountListResponse: {
+            items: components["schemas"]["UsageByServiceAccount"][];
+        };
+        UsageByTeam: {
+            /** Format: uuid */
+            TeamID: string;
+            Name: string;
+        } & components["schemas"]["UsageTotals"];
+        UsageByTeamListResponse: {
+            items: components["schemas"]["UsageByTeam"][];
+        };
+        /** @description Percentile timings computed in Postgres. PascalCase on the wire. Time-to-first-token and total latency are sampled separately, so each family is null only when it has no sample. */
+        UsageLatency: {
+            /** @description Null on the single overall row. */
+            Provider: string | null;
+            /** @description Null on the single overall row. */
+            Model: string | null;
+            /** Format: int64 */
+            TtftSamples: number;
+            /** Format: int64 */
+            TotalSamples: number;
+            AvgTTFTMs: number | null;
+            P50TTFTMs: number | null;
+            P95TTFTMs: number | null;
+            P99TTFTMs: number | null;
+            AvgTotalMs: number | null;
+            P50TotalMs: number | null;
+            P95TotalMs: number | null;
+            P99TotalMs: number | null;
+        };
+        UsageLatencyListResponse: {
+            items: components["schemas"]["UsageLatency"][];
+        };
+        /** @description One recorded gateway request. PascalCase on the wire (Go struct without JSON tags); pointer fields are always present and null when unset. */
+        LlmRequest: {
+            /** Format: uuid */
+            ID: string;
+            /** Format: uuid */
+            OrganizationID: string;
+            /** Format: uuid */
+            ProjectID: string | null;
+            /** Format: uuid */
+            UserID: string | null;
+            /** Format: uuid */
+            ServiceAccountID: string | null;
+            /** Format: uuid */
+            TeamID: string | null;
+            /** Format: uuid */
+            GatewayCredentialID: string | null;
+            RequestID: string;
+            ProviderRequestID: string | null;
+            ProviderKind: string;
+            Model: string;
+            /** @enum {string} */
+            Status: "succeeded" | "failed" | "cancelled";
+            ErrorCode: string | null;
+            /** Format: int32 */
+            PromptTokens: number;
+            /** Format: int32 */
+            CompletionTokens: number;
+            /** Format: int32 */
+            CachedInputTokens: number;
+            /** Format: int32 */
+            ReasoningTokens: number;
+            /** Format: int32 */
+            ToolTokens: number;
+            /** Format: int32 */
+            TotalTokens: number;
+            /** Format: int32 */
+            LatencyMs: number;
+            /** Format: int64 */
+            CostMicros: number;
+            /** Format: int32 */
+            PricingVersion: number | null;
+            /** @enum {string} */
+            CostStatus: "calculated" | "unavailable" | "free" | "estimated";
+            /** @enum {string|null} */
+            PolicyDecision: "allowed" | "denied" | "none" | null;
+            DenialReason: string | null;
+            /** Format: date-time */
+            CreatedAt: string;
+            /** Format: date-time */
+            RequestStartedAt: string | null;
+            /** Format: date-time */
+            FirstTokenAt: string | null;
+            /** Format: date-time */
+            CompletedAt: string | null;
+            /** Format: int32 */
+            TimeToFirstTokenMs: number | null;
+            /** Format: int32 */
+            TotalLatencyMs: number | null;
+        };
+        LlmRequestListResponse: {
+            items: components["schemas"]["LlmRequest"][];
+        };
+        LlmRequestPageResponse: {
+            items: components["schemas"]["LlmRequest"][];
+            has_more: boolean;
+        };
+        AdminMe: {
+            /** Format: uuid */
+            id: string;
+            email: string;
+            display_name: string;
+        };
+        /** @description Headline platform counts. Traffic and cost cover the requested window; money is in micro-dollars. */
+        AdminOverviewStats: {
+            /** Format: int64 */
+            orgs_total: number;
+            /** Format: int64 */
+            orgs_suspended: number;
+            /** Format: int64 */
+            users_total: number;
+            /** Format: int64 */
+            users_disabled: number;
+            /** Format: int64 */
+            requests: number;
+            /** Format: int64 */
+            failed_requests: number;
+            /** Format: int64 */
+            tokens: number;
+            /** Format: int64 */
+            cost_micros: number;
+            /** Format: int64 */
+            active_keys: number;
+            /** Format: int64 */
+            paid_subscriptions: number;
+            /** Format: int64 */
+            mrr_micros: number;
+        };
+        /** @description Backlog of the durable event outbox. */
+        AdminOutbox: {
+            /** Format: int64 */
+            pending: number;
+            /** Format: int64 */
+            retrying: number;
+            /**
+             * Format: date-time
+             * @description Absent when the queue is empty.
+             */
+            oldest_pending?: string;
+            /**
+             * Format: int64
+             * @description Age of the oldest waiting event on the database clock; 0 when empty.
+             */
+            oldest_age_seconds: number;
+            last_error?: string;
+        };
+        AdminUsageDay: {
+            /**
+             * Format: date
+             * @description UTC day, YYYY-MM-DD.
+             */
+            day: string;
+            /** Format: int64 */
+            requests: number;
+            /** Format: int64 */
+            failed_requests: number;
+            /** Format: int64 */
+            tokens: number;
+            /** Format: int64 */
+            cost_micros: number;
+        };
+        /** @description Traffic grouped by one dimension (provider, model or organization). */
+        AdminUsageRow: {
+            key: string;
+            label: string;
+            /** Format: int64 */
+            requests: number;
+            /** Format: int64 */
+            tokens: number;
+            /** Format: int64 */
+            cost_micros: number;
+            /** Format: int64 */
+            avg_latency_ms: number;
+        };
+        /** @description Live subscriptions on one plan. */
+        AdminPlanSummary: {
+            plan_code: string;
+            plan_name: string;
+            /** Format: int64 */
+            price_micros: number;
+            currency: string;
+            /** Format: int64 */
+            subscriptions: number;
+        };
+        /** @description One platform admin action. */
+        AdminAuditEntry: {
+            /** Format: uuid */
+            id: string;
+            actor_email: string;
+            /** @description e.g. platform.organization_suspended. */
+            action: string;
+            target_type: string;
+            /** Format: uuid */
+            target_id?: string;
+            /** Format: uuid */
+            organization_id?: string;
+            organization_name?: string;
+            reason: string;
+            /** @description An empty object when unset. */
+            detail: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            created_at: string;
+        };
+        AdminAuditListResponse: {
+            items: components["schemas"]["AdminAuditEntry"][];
+            /** Format: int64 */
+            total: number;
+        };
+        AdminOverview: {
+            window_hours: number;
+            stats: components["schemas"]["AdminOverviewStats"];
+            outbox: components["schemas"]["AdminOutbox"];
+            provider_health: components["schemas"]["ProviderHealth"][];
+            daily: components["schemas"]["AdminUsageDay"][];
+            top_orgs: components["schemas"]["AdminUsageRow"][];
+            plans: components["schemas"]["AdminPlanSummary"][];
+            recent_actions: components["schemas"]["AdminAuditEntry"][];
+            /**
+             * Format: int64
+             * @description Platform alerts not yet resolved.
+             */
+            live_alerts: number;
+        };
+        /** @description One organization as the platform sees it. requests and cost_micros cover the requested window. */
+        AdminOrganization: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            /** @enum {string} */
+            status: "active" | "suspended";
+            /** Format: date-time */
+            created_at: string;
+            plan_code: string;
+            plan_name: string;
+            subscription_status: string;
+            /** Format: int64 */
+            members: number;
+            /** Format: int64 */
+            active_keys: number;
+            /** Format: int64 */
+            requests: number;
+            /** Format: int64 */
+            cost_micros: number;
+            /** Format: date-time */
+            last_request_at?: string;
+        };
+        AdminOrganizationListResponse: {
+            items: components["schemas"]["AdminOrganization"][];
+            /** Format: int64 */
+            total: number;
+        };
+        /** @description A member of an organization, with the user's own account status. */
+        AdminMember: {
+            /** Format: uuid */
+            user_id: string;
+            email: string;
+            display_name: string;
+            role: string;
+            /** @enum {string} */
+            status: "active" | "disabled";
+            /** Format: date-time */
+            joined_at: string;
+            /** Format: date-time */
+            last_login_at?: string;
+        };
+        AdminOrganizationDetail: {
+            organization: components["schemas"]["AdminOrganization"];
+            members: components["schemas"]["AdminMember"][];
+            keys: components["schemas"]["GatewayCredential"][];
+        };
+        /** @description One user across all their organizations. */
+        AdminUser: {
+            /** Format: uuid */
+            id: string;
+            email: string;
+            display_name: string;
+            /** @enum {string} */
+            status: "active" | "disabled";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_login_at?: string;
+            /** Format: int64 */
+            org_count: number;
+            /** @description Comma-separated organization names. */
+            org_names: string;
+        };
+        AdminUserListResponse: {
+            items: components["schemas"]["AdminUser"][];
+            /** Format: int64 */
+            total: number;
+        };
+        AdminUsage: {
+            window_hours: number;
+            daily: components["schemas"]["AdminUsageDay"][];
+            by_provider: components["schemas"]["AdminUsageRow"][];
+            by_model: components["schemas"]["AdminUsageRow"][];
+            by_org: components["schemas"]["AdminUsageRow"][];
+        };
+        /** @description An invoice with its organization's name. */
+        AdminInvoice: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            organization_name: string;
+            number: string;
+            status: string;
+            currency: string;
+            /** Format: int64 */
+            total_micros: number;
+            /** Format: date-time */
+            issued_at: string;
+        };
+        AdminBilling: {
+            plans: components["schemas"]["AdminPlanSummary"][];
+            invoices: components["schemas"]["AdminInvoice"][];
+        };
+        AdminSystem: {
+            outbox: components["schemas"]["AdminOutbox"];
+            provider_health: components["schemas"]["ProviderHealth"][];
+        };
+        AdminModelListResponse: {
+            items: components["schemas"]["CatalogModel"][];
+        };
+        /** @description One row of some organization's own audit log. */
+        AdminTenantAuditEntry: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            organization_name: string;
+            actor_email: string;
+            action: string;
+            resource_type: string;
+            /** Format: uuid */
+            resource_id?: string;
+            /** @description An empty object when unset. */
+            after: {
+                [key: string]: unknown;
+            };
+            ip_address?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AdminTenantAuditListResponse: {
+            items: components["schemas"]["AdminTenantAuditEntry"][];
+            /** Format: int64 */
+            total: number;
+        };
+        /** @description A security event with its organization's name. */
+        AdminSecurityEvent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            organization_name: string;
+            category: string;
+            severity: string;
+            title: string;
+            /** @description An empty object when unset. */
+            detail: {
+                [key: string]: unknown;
+            };
+            source: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AdminSecurityEventListResponse: {
+            items: components["schemas"]["AdminSecurityEvent"][];
+            /** Format: int64 */
+            total: number;
+        };
+        /** @description One poll of one service by the platform monitor. */
+        AdminServiceSample: {
+            service: string;
+            /** Format: date-time */
+            sampled_at: string;
+            up: boolean;
+            error?: string;
+            /**
+             * Format: double
+             * @description Share of the machine's whole CPU capacity, 0-100. Absent when not measured.
+             */
+            cpu_percent?: number;
+            /** Format: int64 */
+            rss_bytes?: number;
+            /** Format: int64 */
+            heap_bytes?: number;
+            goroutines?: number;
+            /** @description An empty object when unset. */
+            detail: {
+                [key: string]: unknown;
+            };
+        };
+        AdminServices: {
+            latest: components["schemas"]["AdminServiceSample"][];
+            /** @description Every sample of the last hour. */
+            series: components["schemas"]["AdminServiceSample"][];
+        };
+        /** @description A problem the platform monitor found with a service or the worker. It stays one row while the problem lasts and resolves itself when it clears. */
+        AdminAlert: {
+            /** Format: uuid */
+            id: string;
+            kind: string;
+            service: string;
+            /** @enum {string} */
+            severity: "warning" | "critical";
+            title: string;
+            detail: string;
+            /** @enum {string} */
+            status: "open" | "acknowledged" | "resolved";
+            /** Format: date-time */
+            opened_at: string;
+            /** Format: date-time */
+            last_seen_at: string;
+            /** Format: date-time */
+            acknowledged_at?: string;
+            /** @description Email of the admin who acknowledged it. */
+            acknowledged_by?: string;
+            /** Format: date-time */
+            resolved_at?: string;
+            /** @description Whether the alert email went out. */
+            emailed: boolean;
+        };
+        AdminAlertListResponse: {
+            items: components["schemas"]["AdminAlert"][];
+            /** Format: int64 */
+            total: number;
+        };
+        /** @description A warning or error line a service wrote. */
+        AdminServiceLog: {
+            /** Format: int64 */
+            id: number;
+            service: string;
+            /** @enum {string} */
+            level: "WARN" | "ERROR";
+            message: string;
+            /** @description An empty object when unset. */
+            attrs: {
+                [key: string]: unknown;
+            };
+            /**
+             * Format: date-time
+             * @description RFC 3339 with nanoseconds.
+             */
+            logged_at: string;
+        };
+        AdminServiceLogListResponse: {
+            items: components["schemas"]["AdminServiceLog"][];
+            /** Format: int64 */
+            total: number;
+        };
+        AdminRevenueSummary: {
+            /** Format: int64 */
+            lifetime_micros: number;
+            /** Format: int64 */
+            last_30d_micros: number;
+            /** Format: int64 */
+            this_month_micros: number;
+            /** Format: int64 */
+            payments: number;
+            /** Format: int64 */
+            paying_orgs: number;
+        };
+        AdminRevenueMonth: {
+            /** @description YYYY-MM. */
+            month: string;
+            /** Format: int64 */
+            revenue_micros: number;
+            /** Format: int64 */
+            payments: number;
+        };
+        /** @description An organization that has paid at least once. */
+        AdminPayingCustomer: {
+            /** Format: uuid */
+            organization_id: string;
+            organization_name: string;
+            plan_name: string;
+            /** Format: int64 */
+            lifetime_micros: number;
+            /** Format: int64 */
+            payments: number;
+            /** Format: date-time */
+            last_paid_at: string;
+        };
+        AdminRevenue: {
+            summary: components["schemas"]["AdminRevenueSummary"];
+            monthly: components["schemas"]["AdminRevenueMonth"][];
+            customers: components["schemas"]["AdminPayingCustomer"][];
+        };
+        /** @description One paid invoice. */
+        AdminPayment: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            organization_name: string;
+            number: string;
+            /** Format: int64 */
+            total_micros: number;
+            currency: string;
+            provider: string;
+            payment_id: string;
+            /** Format: date-time */
+            paid_at: string;
+        };
+        AdminPaymentListResponse: {
+            items: components["schemas"]["AdminPayment"][];
+            /** Format: int64 */
+            total: number;
+        };
+        /** @description Unknown fields are rejected. The reason is recorded in the platform audit log. */
+        AdminReasonRequest: {
+            /** @description Must be non-blank after trimming (reason_required); at most 500 bytes (reason_too_long). */
+            reason: string;
+        };
+        AdminSetOrganizationPlanRequest: {
+            /** @description Code of a plan in the catalog; trimmed by the server. */
+            plan_code: string;
+            /** @description Must be non-blank after trimming; at most 500 bytes. */
+            reason: string;
+        };
+        AdminSetModelActiveRequest: {
+            active: boolean;
+            /** @description Must be non-blank after trimming; at most 500 bytes. */
+            reason: string;
+        };
+        AdminRevokeKeysResponse: {
+            /** @description Number of active keys revoked. */
+            revoked: number;
+        };
+        /** @description How many conversations one employee has through one gateway key. */
+        ConversationKeyCount: {
+            /** Format: uuid */
+            user_id: string;
+            /**
+             * Format: uuid
+             * @description Null when no key was recorded.
+             */
+            credential_id: string | null;
+            /** Format: int64 */
+            conversations: number;
+            /** Format: date-time */
+            last_activity_at: string;
+        };
+        ConversationKeyCountListResponse: {
+            items: components["schemas"]["ConversationKeyCount"][];
+        };
+        CreateConversationRequest: {
+            /** @description Defaults to "New Conversation" when blank or omitted. */
+            title?: string;
+        };
+        CreatedConversation: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: uuid */
+            user_id: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        CreateConversationMessageRequest: {
+            /** @enum {string} */
+            role: "system" | "user" | "assistant" | "tool";
+            /** @description Accepted but discarded; conversation text is never stored. */
+            content?: string;
+            /** Format: int32 */
+            tokens?: number;
+        };
+        CreatedConversationMessage: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            conversation_id: string;
+            role: string;
+            /** @description Always an empty string, because the text is not stored. */
+            content: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /**
+         * @description Alert rule types the database accepts. Rules created through the API store the canonical name, so spend_threshold, spend_exceeded, request_rate_spike, error_rate_spike and usage_anomaly appear only on older rows.
+         * @enum {string}
+         */
+        AlertRuleType: "spend_limit" | "spend_threshold" | "spend_exceeded" | "budget_warning" | "budget_exhaustion" | "rate_limit" | "rate_limit_spike" | "request_rate_spike" | "error_rate" | "error_rate_spike" | "anomaly" | "usage_anomaly" | "usage_spike" | "spend_spike" | "provider_failure" | "credential_failure" | "policy_violation" | "policy_denial_spike";
+        CreateAlertRequest: {
+            alert_type: components["schemas"]["AlertRuleType"];
+            name: string;
+            /**
+             * @default warning
+             * @enum {string}
+             */
+            severity: "info" | "warning" | "critical";
+            /** @description Accepted but ignored; a new rule is always active. */
+            status?: string;
+            /** @description Must be a JSON object; omitted means an empty object. */
+            configuration?: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description One occurrence of an alert rule triggering or resolving. */
+        AlertEvent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            alert_id: string;
+            /** @description The rule's alert_type when the event was recorded. */
+            alert_type: string;
+            /** @enum {string} */
+            severity: "info" | "warning" | "critical";
+            /** @enum {string} */
+            status: "triggered" | "resolved" | "acknowledged";
+            message: string;
+            /** @description Evaluator details; an empty object when none. */
+            context: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            triggered_at: string;
+            /**
+             * Format: date-time
+             * @description Absent until the event is resolved.
+             */
+            resolved_at?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AlertEventListResponse: {
+            items: components["schemas"]["AlertEvent"][];
+        };
+        /** @description One organization-wide in-app notification, usually raised by an alert event. */
+        InAppNotification: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Absent when the notification is not tied to a rule.
+             */
+            alert_id?: string;
+            /**
+             * Format: uuid
+             * @description Absent when the notification is not tied to an alert event.
+             */
+            alert_event_id?: string;
+            title: string;
+            message: string;
+            /** @enum {string} */
+            severity: "info" | "warning" | "critical";
+            read: boolean;
+            /** Format: date-time */
+            created_at: string;
+        };
+        InAppNotificationListResponse: {
+            items: components["schemas"]["InAppNotification"][];
+        };
+        /** @description Flat error body some billing handlers write instead of ErrorEnvelope for provider and billing-mode failures. */
+        BillingErrorResponse: {
+            /** @description Human-readable message. */
+            error: string;
+            /** @enum {string} */
+            code: "billing_disabled" | "missing_credentials" | "invalid_credentials" | "simulation_mode" | "invalid_signature" | "checkout_not_found";
+        };
+        BillingUpdateSubscriptionRequest: {
+            plan_code: string;
+        };
+        BillingCheckoutRequest: {
+            plan_code: string;
+            /** @description stripe or razorpay. Defaults to stripe when neither this nor provider is sent. */
+            payment_provider?: string;
+            /** @description Older alias of payment_provider, used only when payment_provider is empty. */
+            provider?: string;
+            customer_email?: string;
+            success_url?: string;
+            cancel_url?: string;
+        };
+        BillingCheckoutSession: {
+            session_id: string;
+            /** @description Hosted checkout URL to redirect to; may be empty for providers that complete checkout client-side. */
+            url: string;
+            provider: string;
+            customer_id?: string;
+            subscription_id?: string;
+            /** @description Razorpay order id, passed back to verify-payment. */
+            order_id?: string;
+            /** @description Public provider key for client-side checkout. */
+            key_id?: string;
+            /** @enum {string} */
+            mode: "disabled" | "simulation" | "test" | "live";
+            is_simulated: boolean;
+        };
+        BillingVerifyPaymentRequest: {
+            /** @description stripe or razorpay. One of payment_provider or provider is required. */
+            payment_provider?: string;
+            /** @description Older alias of payment_provider, used only when payment_provider is empty. */
+            provider?: string;
+            /** @description Required by the service; an empty value is reported as invalid_signature. */
+            order_id?: string;
+            /** @description Required by the service; an empty value is reported as invalid_signature. */
+            payment_id?: string;
+            signature: string;
+            plan_code?: string;
+        };
+        BillingWebhookAck: {
+            received: boolean;
+        };
+        Guardrail: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: string;
+            /** @enum {string} */
+            target_type: "global" | "team" | "project" | "gateway_credential";
+            /**
+             * Format: uuid
+             * @description Absent for global guardrails.
+             */
+            target_id?: string;
+            /** @enum {string} */
+            detector: "pii" | "secrets" | "unsafe_keywords" | "request_constraints";
+            /** @enum {string} */
+            action: "allow" | "warn" | "block" | "redact";
+            /** @description Detector-specific settings, passed through as raw JSON. */
+            configuration: {
+                [key: string]: unknown;
+            } | null;
+            enabled: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        GuardrailList: {
+            items: components["schemas"]["Guardrail"][];
+        };
+        /** @description Enum values are not validated by the server; they are stored as sent. */
+        CreateGuardrailRequest: {
+            name?: string;
+            description?: string;
+            /** @enum {string} */
+            target_type?: "global" | "team" | "project" | "gateway_credential";
+            /** @description Omit, null or empty string for a global guardrail. */
+            target_id?: string | null;
+            /** @enum {string} */
+            detector?: "pii" | "secrets" | "unsafe_keywords" | "request_constraints";
+            /** @enum {string} */
+            action?: "allow" | "warn" | "block" | "redact";
+            configuration?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description Defaults to false when omitted. */
+            enabled?: boolean;
+        };
+        /** @description Every field is written; an omitted field is stored as its zero value. */
+        UpdateGuardrailRequest: {
+            name?: string;
+            description?: string;
+            /** @enum {string} */
+            action?: "allow" | "warn" | "block" | "redact";
+            configuration?: {
+                [key: string]: unknown;
+            } | null;
+            enabled?: boolean;
+        };
+        GuardrailEvent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            guardrail_id: string;
+            request_id: string;
+            /** @enum {string} */
+            direction: "input" | "output";
+            detector: string;
+            action: string;
+            matched_category: string;
+            /** Format: date-time */
+            timestamp: string;
+        };
+        GuardrailEventList: {
+            items: components["schemas"]["GuardrailEvent"][];
+        };
+        TestGuardrailRequest: {
+            payload?: string;
+            token_count?: number;
+        };
+        TestGuardrailResponse: {
+            triggered: boolean;
+            /** @description Present only when triggered. */
+            action?: string;
+            /** @description Present only when triggered and a category matched. */
+            matched_category?: string;
+        };
+        PolicyPreviewRequest: {
+            model: string;
+            provider?: string;
+            input_tokens?: number;
+            output_tokens?: number;
+            /** Format: uuid */
+            team_id?: string | null;
+            /** Format: uuid */
+            project_id?: string | null;
+            /** Format: uuid */
+            user_id?: string | null;
+            /** Format: uuid */
+            service_account_id?: string | null;
+            /** Format: uuid */
+            credential_id?: string | null;
+            scopes?: string[];
+        };
+        PolicyPreviewResponse: {
+            allowed: boolean;
+            /** @enum {string} */
+            decision: "allow" | "deny";
+            /** @description Empty when allowed. */
+            reason: string;
+            /** @enum {string} */
+            effective_scope: "credential" | "user_or_service_account" | "project" | "team" | "organization";
+            /** @description Null when no rule matched. */
+            matched_rules: components["schemas"]["PolicyRule"][] | null;
+        };
+        PolicyValidationResult: {
+            valid: boolean;
+            /** Format: uuid */
+            policy_id: string;
+            name: string;
+            enforcement: string;
+            rules_count: number;
+            /** @description Null when there are no errors. */
+            errors: string[] | null;
+            /** @description Null when there are no warnings. */
+            warnings: string[] | null;
+        };
+        ModelAccessUpdateResponse: {
+            /** @enum {string} */
+            status: "updated";
         };
     };
     responses: never;
@@ -2185,7 +5095,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ActivityEventListResponse"];
                 };
             };
         };
@@ -2205,7 +5115,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ActivityCount"];
                 };
             };
         };
@@ -2225,7 +5135,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ActivityCount"];
                 };
             };
         };
@@ -2239,7 +5149,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
+            /** @description An open text/event-stream; each data line is an ActivityEvent. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2257,15 +5167,37 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignUpRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Created; session cookies are set. */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["AuthSession"];
+                };
+            };
+            /** @description The body is malformed or a field is invalid. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description An account with this email already exists (code email_taken). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2277,15 +5209,47 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignInRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
+            /** @description Signed in; session cookies are set. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["AuthSession"];
+                };
+            };
+            /** @description The body is malformed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Wrong email or password. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many attempts; a Retry-After header gives the wait in seconds. */
+            429: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2299,13 +5263,31 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
+            /** @description Rotated; new session cookies are set. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["AuthSession"];
+                };
+            };
+            /** @description The refresh cookie is missing (code missing_refresh_token) or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Missing or mismatched CSRF token (code csrf_token_invalid). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2319,13 +5301,20 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Signed out */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or mismatched CSRF token (code csrf_token_invalid). */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2345,7 +5334,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["AuthSession"];
+                };
+            };
+            /** @description No valid session. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2357,15 +5355,79 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevLoginRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
+            /** @description Signed in. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["AuthSession"];
+                };
+            };
+            /** @description The body is malformed or a field is invalid. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    postv1authswitchorg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwitchOrganizationRequest"];
+            };
+        };
+        responses: {
+            /** @description Switched; new session cookies are set. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSession"];
+                };
+            };
+            /** @description The body is malformed or organization_id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a user, or not a member of that organization. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The target organization is suspended (code organization_suspended). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2388,6 +5450,15 @@ export interface operations {
                     "application/json": components["schemas"]["Organization"];
                 };
             };
+            /** @description The caller's role does not grant org.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     getv1organization: {
@@ -2406,6 +5477,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Organization"];
+                };
+            };
+            /** @description The caller's role does not grant org.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2432,6 +5512,33 @@ export interface operations {
                     "application/json": components["schemas"]["Organization"];
                 };
             };
+            /** @description The body is malformed, name or slug is blank, or privacy_default is not a known mode. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant org.update. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The slug is taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     getv1members: {
@@ -2449,7 +5556,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["OrgMemberListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant members.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2463,7 +5579,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetMemberRoleRequest"];
+            };
+        };
         responses: {
             /** @description Success */
             200: {
@@ -2471,7 +5591,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["OrgMember"];
+                };
+            };
+            /** @description The userID is not a UUID, the body is malformed, or the role is not an organization role. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not permitted by the rules above. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such member in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2487,13 +5634,38 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The userID is not a UUID. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller may not remove this member. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such member in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2513,7 +5685,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["InvitationListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant members.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2525,15 +5706,37 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInvitationRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Created */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["CreateInvitationResponse"];
+                };
+            };
+            /** @description The body is malformed, the email is blank, or the role is not an organization role. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller may not grant this role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2545,15 +5748,46 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInvitationRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
+            /** @description Accepted */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["OrgMember"];
+                };
+            };
+            /** @description The invitation is invalid (invalid_invitation), expired (invitation_expired), or addressed to another email (invitation_email_mismatch). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a user. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unknown token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2569,13 +5803,38 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The id is not a UUID. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant members.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such invitation in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2595,7 +5854,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ProjectListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant projects.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2607,15 +5875,46 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProjectRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Created */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            /** @description The body is malformed or a field is invalid. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant projects.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The slug is taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2637,7 +5936,78 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such project in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    patchv1projectsid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            /** @description The id is not a UUID, the body is malformed, or the name is blank. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant projects.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such project in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2659,7 +6029,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["MembershipListResponse"];
+                };
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant projects.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2673,15 +6061,55 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddMembershipRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Created */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ProjectMemberRow"];
+                };
+            };
+            /** @description The id or user_id is not a UUID, the body is malformed, or the role is not admin or member. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant projects.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such project or user in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The user is already a member. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2698,13 +6126,91 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The id or userID is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant projects.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such membership. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    patchv1projectsidstatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetProjectStatusRequest"];
+            };
+        };
+        responses: {
             /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            /** @description The id is not a UUID, the body is malformed, or the status is not active or archived. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant projects.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such project in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2724,7 +6230,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["TeamListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant teams.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2736,15 +6251,46 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTeamRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Created */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            /** @description The body is malformed or the name is blank. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant teams.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description A team with this name exists. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2766,7 +6312,78 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such team in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    patchv1teamsid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTeamRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            /** @description The id is not a UUID, the body is malformed, or the name is blank. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant teams.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such team in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2788,7 +6405,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["MembershipListResponse"];
+                };
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant teams.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2802,15 +6437,55 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddMembershipRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Created */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["TeamMemberRow"];
+                };
+            };
+            /** @description The id or user_id is not a UUID, the body is malformed, or the role is not admin or member. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant teams.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such team or user in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The user is already a member. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2827,13 +6502,38 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The id or userID is not a UUID. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant teams.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such membership. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2853,7 +6553,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ServiceAccountListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2865,15 +6574,37 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateServiceAccountRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Created */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ServiceAccount"];
+                };
+            };
+            /** @description The body is malformed or the name is blank. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2889,13 +6620,38 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The id is not a UUID. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such service account in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2915,7 +6671,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ApiCredentialListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2927,15 +6692,46 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateApiCredentialRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Created */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["CreateApiCredentialResponse"];
+                };
+            };
+            /** @description The body is malformed, the name is blank, the scope is unknown, or a control/all key has no active service account. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The service account does not exist in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2951,13 +6747,38 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The id is not a UUID. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such key in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2977,7 +6798,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["GatewayCredentialListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -2989,15 +6819,46 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGatewayCredentialRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Created; key_prefix is the raw key. */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["GatewayCredential"];
+                };
+            };
+            /** @description The body is malformed, the name is blank, subject_type or a scope is unknown, scopes is empty, the service-account subject is not active, or expires_at is not in the future. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The subject service account, team or project does not exist in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3019,7 +6880,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["GatewayCredential"];
+                };
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such credential in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3035,13 +6923,38 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The id is not a UUID. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such credential in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3055,15 +6968,46 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RotateGatewayCredentialRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
-            200: {
+            /** @description The replacement credential; key_prefix is the raw key. */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["GatewayCredential"];
+                };
+            };
+            /** @description The id is not a UUID, the body is malformed, the credential is not active, a scope is unknown, or expires_at is not in the future. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such credential in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3079,13 +7023,38 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Expired */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The id is not a UUID. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such credential in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3101,13 +7070,38 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Restored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The id is not a UUID, the credential is not revoked, or it has expired. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such credential in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3127,7 +7121,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ProviderAccountListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant providers.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3139,15 +7142,46 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProviderAccountRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Created */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ProviderAccount"];
+                };
+            };
+            /** @description Malformed body, empty name, unknown provider_kind or a disallowed base_url. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant providers.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The account conflicts with an existing one. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3169,7 +7203,134 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ProviderAccount"];
+                };
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant providers.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such provider account in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    deleteProviderAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant providers.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such provider account in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    updateProviderAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProviderAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderAccount"];
+                };
+            };
+            /** @description The id is not a UUID, the body is malformed or status is not active or disabled. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant providers.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such provider account in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3183,15 +7344,229 @@ export interface operations {
             };
             cookie?: never;
         };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProviderCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderCredential"];
+                };
+            };
+            /** @description The id is not a UUID, the body is malformed, name or secret is empty, kind is unsupported or the provider rejected the key (invalid_provider_credential). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such provider account in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The provider account is not active. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The provider could not be reached to verify the key. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    validateProviderAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
         requestBody?: never;
         responses: {
-            /** @description Success */
+            /** @description The probe ran. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ProviderValidationResult"];
+                };
+            };
+            /** @description The id is not a UUID or the provider kind has no client. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant providers.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such account, or the account has no credential. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The provider could not be reached. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    syncProviderAccountModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The synced models. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogModelListResponse"];
+                };
+            };
+            /** @description The id is not a UUID, the account is disabled (account_disabled), every credential is revoked (credential_revoked) or the provider rejected the key (invalid_provider_credential). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant providers.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such account, or the account has no credential. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The provider offers no model discovery or could not be reached. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    checkProviderAccountHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The observed health. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderHealth"];
+                };
+            };
+            /** @description The id is not a UUID or the provider kind has no client. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant providers.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such account, or the account has no credential. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3211,7 +7586,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ProviderCredentialListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3233,7 +7617,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ProviderCredential"];
+                };
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such credential in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3249,13 +7660,38 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
-            200: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The id is not a UUID. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such credential in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3269,22 +7705,65 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RotateProviderCredentialRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
-            200: {
+            /** @description The new credential. */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ProviderCredential"];
+                };
+            };
+            /** @description The id is not a UUID, the body is malformed, the secret is empty, the credential is already revoked or the provider rejected the key. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant credentials.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such credential in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The provider account is not active. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
     };
     getv1models: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Pass true to include inactive catalog models. */
+                all?: "true";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3297,7 +7776,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["CatalogModelListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant providers.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3309,15 +7797,46 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SyncCatalogModelsRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
+            /** @description The synced models. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["CatalogModelListResponse"];
+                };
+            };
+            /** @description Unknown provider_kind, no active account for provider_kind, or the provider rejected the key. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant providers.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The provider offers no model discovery or could not be reached. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3329,15 +7848,46 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderProbeRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
+            /** @description The probe ran. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ProviderValidationResult"];
+                };
+            };
+            /** @description Malformed body, unknown provider_kind or empty api_key. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant providers.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The provider could not be reached. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3349,15 +7899,37 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderProbeRequest"];
+            };
+        };
         responses: {
-            /** @description Success */
+            /** @description The observed health. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ProviderHealth"];
+                };
+            };
+            /** @description Malformed body, unknown provider_kind or empty api_key. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant providers.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3377,14 +7949,36 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ProviderHealthListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant providers.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
     };
     getv1usagesummary: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description RFC3339 start of the window (inclusive). Defaults to 24 hours before now. */
+                from?: string;
+                /** @description RFC3339 end of the window (exclusive). Defaults to now. Must not be before from. */
+                to?: string;
+                project_id?: string;
+                user_id?: string;
+                service_account_id?: string;
+                team_id?: string;
+                /** @description Provider kind, e.g. openai. */
+                provider?: string;
+                model?: string;
+                status?: "succeeded" | "failed" | "cancelled";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3397,14 +7991,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["UsageSummary"];
+                };
+            };
+            /** @description A malformed timestamp, uuid, status or integer, or from after to. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant usage.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
     };
     getv1usagetimeseries: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description RFC3339 start of the window (inclusive). Defaults to 7 days before now. */
+                from?: string;
+                /** @description RFC3339 end of the window (exclusive). Defaults to now. Must not be before from. */
+                to?: string;
+                project_id?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3417,14 +8035,45 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["UsageTimeSeriesResponse"];
+                };
+            };
+            /** @description A malformed timestamp, uuid, status or integer, or from after to. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant usage.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
     };
     getv1usagebyproject: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description RFC3339 start of the window (inclusive). Defaults to 30 days before now. */
+                from?: string;
+                /** @description RFC3339 end of the window (exclusive). Defaults to now. Must not be before from. */
+                to?: string;
+                project_id?: string;
+                user_id?: string;
+                service_account_id?: string;
+                team_id?: string;
+                /** @description Provider kind, e.g. openai. */
+                provider?: string;
+                model?: string;
+                status?: "succeeded" | "failed" | "cancelled";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3437,14 +8086,45 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["UsageByProjectListResponse"];
+                };
+            };
+            /** @description A malformed timestamp, uuid, status or integer, or from after to. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant usage.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
     };
     getv1usagebymodel: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description RFC3339 start of the window (inclusive). Defaults to 30 days before now. */
+                from?: string;
+                /** @description RFC3339 end of the window (exclusive). Defaults to now. Must not be before from. */
+                to?: string;
+                project_id?: string;
+                user_id?: string;
+                service_account_id?: string;
+                team_id?: string;
+                /** @description Provider kind, e.g. openai. */
+                provider?: string;
+                model?: string;
+                status?: "succeeded" | "failed" | "cancelled";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3457,14 +8137,45 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["UsageByModelListResponse"];
+                };
+            };
+            /** @description A malformed timestamp, uuid, status or integer, or from after to. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant usage.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
     };
     getv1usagebyprovider: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description RFC3339 start of the window (inclusive). Defaults to 30 days before now. */
+                from?: string;
+                /** @description RFC3339 end of the window (exclusive). Defaults to now. Must not be before from. */
+                to?: string;
+                project_id?: string;
+                user_id?: string;
+                service_account_id?: string;
+                team_id?: string;
+                /** @description Provider kind, e.g. openai. */
+                provider?: string;
+                model?: string;
+                status?: "succeeded" | "failed" | "cancelled";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3477,14 +8188,45 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["UsageByProviderListResponse"];
+                };
+            };
+            /** @description A malformed timestamp, uuid, status or integer, or from after to. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant usage.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
     };
     getv1usagebyuser: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description RFC3339 start of the window (inclusive). Defaults to 30 days before now. */
+                from?: string;
+                /** @description RFC3339 end of the window (exclusive). Defaults to now. Must not be before from. */
+                to?: string;
+                project_id?: string;
+                user_id?: string;
+                service_account_id?: string;
+                team_id?: string;
+                /** @description Provider kind, e.g. openai. */
+                provider?: string;
+                model?: string;
+                status?: "succeeded" | "failed" | "cancelled";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3497,14 +8239,45 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["UsageByUserListResponse"];
+                };
+            };
+            /** @description A malformed timestamp, uuid, status or integer, or from after to. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant usage.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
     };
     getv1usagebyserviceaccount: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description RFC3339 start of the window (inclusive). Defaults to 30 days before now. */
+                from?: string;
+                /** @description RFC3339 end of the window (exclusive). Defaults to now. Must not be before from. */
+                to?: string;
+                project_id?: string;
+                user_id?: string;
+                service_account_id?: string;
+                team_id?: string;
+                /** @description Provider kind, e.g. openai. */
+                provider?: string;
+                model?: string;
+                status?: "succeeded" | "failed" | "cancelled";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3517,14 +8290,45 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["UsageByServiceAccountListResponse"];
+                };
+            };
+            /** @description A malformed timestamp, uuid, status or integer, or from after to. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant usage.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
     };
     getv1usagebyteam: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description RFC3339 start of the window (inclusive). Defaults to 30 days before now. */
+                from?: string;
+                /** @description RFC3339 end of the window (exclusive). Defaults to now. Must not be before from. */
+                to?: string;
+                project_id?: string;
+                user_id?: string;
+                service_account_id?: string;
+                team_id?: string;
+                /** @description Provider kind, e.g. openai. */
+                provider?: string;
+                model?: string;
+                status?: "succeeded" | "failed" | "cancelled";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3537,14 +8341,47 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["UsageByTeamListResponse"];
+                };
+            };
+            /** @description A malformed timestamp, uuid, status or integer, or from after to. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant usage.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
     };
     getv1usagelatency: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description RFC3339 start of the window (inclusive). Defaults to 24 hours before now. */
+                from?: string;
+                /** @description RFC3339 end of the window (exclusive). Defaults to now. Must not be before from. */
+                to?: string;
+                project_id?: string;
+                user_id?: string;
+                service_account_id?: string;
+                team_id?: string;
+                /** @description Provider kind, e.g. openai. */
+                provider?: string;
+                model?: string;
+                status?: "succeeded" | "failed" | "cancelled";
+                /** @description provider_model splits the percentiles per provider and model; any other value returns one overall row. */
+                group_by?: "provider_model";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3557,7 +8394,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["UsageLatencyListResponse"];
+                };
+            };
+            /** @description A malformed timestamp, uuid, status or integer, or from after to. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant usage.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3577,14 +8432,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["LlmRequestListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant usage.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
     };
     getv1usagerequests: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description RFC3339 start of the window (inclusive). Defaults to 24 hours before now. */
+                from?: string;
+                /** @description RFC3339 end of the window (exclusive). Defaults to now. Must not be before from. */
+                to?: string;
+                project_id?: string;
+                user_id?: string;
+                service_account_id?: string;
+                team_id?: string;
+                /** @description Provider kind, e.g. openai. */
+                provider?: string;
+                model?: string;
+                status?: "succeeded" | "failed" | "cancelled";
+                /** @description Page size, default 50; a value outside 1-100 falls back to 50. */
+                limit?: number;
+                /** @description Rows to skip, default 0; a negative value is treated as 0. */
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3597,7 +8478,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["LlmRequestPageResponse"];
+                };
+            };
+            /** @description A malformed timestamp, uuid, status or integer, or from after to. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant usage.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3608,6 +8507,8 @@ export interface operations {
                 user_id?: string;
                 team_id?: string;
                 project_id?: string;
+                /** @description A gateway key id (UUID), or the literal none for conversations that recorded no key. */
+                credential_id?: string;
                 provider?: string;
                 model?: string;
                 /** @description Only conversations started at or after this RFC3339 timestamp. */
@@ -3643,6 +8544,86 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
+            /** @description The caller's role does not grant usage.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    createConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateConversationRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedConversation"];
+                };
+            };
+            /** @description The body is malformed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant usage.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getv1conversationsbykey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationKeyCountListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant usage.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     getv1conversationsid: {
@@ -3667,6 +8648,62 @@ export interface operations {
             };
             /** @description The id is not a UUID. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller lacks usage.read, or the conversation belongs to another user. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such conversation in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    deletev1conversationsid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Only owners and admins may delete conversations. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3707,6 +8744,68 @@ export interface operations {
             };
             /** @description The id is not a UUID. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller lacks usage.read, or the conversation belongs to another user. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such conversation in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    createConversationMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateConversationMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedConversationMessage"];
+                };
+            };
+            /** @description The id is not a UUID or the body is malformed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller lacks usage.read, or the conversation belongs to another user. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3831,7 +8930,7 @@ export interface operations {
     getv1securityevents: {
         parameters: {
             query?: {
-                category?: "provider_incident" | "pipeline_failure";
+                category?: "provider_incident" | "pipeline_failure" | "policy_violation";
                 severity?: "info" | "warning" | "critical";
                 /** @description Only events created at or after this RFC3339 timestamp. */
                 from?: string;
@@ -3896,6 +8995,48 @@ export interface operations {
                 };
             };
             /** @description The caller's role does not grant alerts.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    createAlert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAlertRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alert"];
+                };
+            };
+            /** @description The body is malformed, the name or alert_type is blank, the severity is not a known value, or the configuration is not a JSON object. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant alerts.manage. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4104,6 +9245,46 @@ export interface operations {
             };
         };
     };
+    listAlertEventsByAlert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertEventListResponse"];
+                };
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant alerts.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     getv1billingplans: {
         parameters: {
             query?: never;
@@ -4171,6 +9352,113 @@ export interface operations {
             };
         };
     };
+    updateBillingSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillingUpdateSubscriptionRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated subscription. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Subscription"];
+                };
+            };
+            /** @description Malformed body or empty plan_code. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller may not manage billing. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No plan has this code, or the organization has no subscription. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Billing is disabled on this server (flat error body, code billing_disabled). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingErrorResponse"];
+                };
+            };
+        };
+    };
+    cancelBillingSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The subscription after cancellation was recorded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Subscription"];
+                };
+            };
+            /** @description The caller may not manage billing. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The organization has no subscription. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Billing is disabled on this server (flat error body, code billing_disabled). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingErrorResponse"];
+                };
+            };
+        };
+    };
     getv1billingusage: {
         parameters: {
             query?: {
@@ -4178,6 +9466,13 @@ export interface operations {
                 from?: string;
                 /** @description Exclusive RFC3339 end. Defaults to now. */
                 to?: string;
+                project_id?: string;
+                user_id?: string;
+                service_account_id?: string;
+                team_id?: string;
+                provider?: string;
+                model?: string;
+                status?: "succeeded" | "failed" | "cancelled";
             };
             header?: never;
             path?: never;
@@ -4194,7 +9489,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingUsageSummary"];
                 };
             };
-            /** @description from or to is not RFC3339, or from is not before to. */
+            /** @description A time is not RFC3339, from is after to, an id is not a UUID, or status is not one of the allowed values. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4239,6 +9534,224 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    createBillingCheckout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillingCheckoutRequest"];
+            };
+        };
+        responses: {
+            /** @description The provider checkout session. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingCheckoutSession"];
+                };
+            };
+            /** @description Malformed body, empty plan_code (ErrorEnvelope), or missing/invalid provider credentials (flat body, code missing_credentials or invalid_credentials). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"] | components["schemas"]["BillingErrorResponse"];
+                };
+            };
+            /** @description The caller may not manage billing. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No plan has this code. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Billing is disabled on this server (code billing_disabled). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingErrorResponse"];
+                };
+            };
+        };
+    };
+    verifyBillingPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillingVerifyPaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description The subscription after the payment was applied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Subscription"];
+                };
+            };
+            /** @description Malformed body or no provider/signature (ErrorEnvelope), or a flat error with code simulation_mode, invalid_signature, missing_credentials or invalid_credentials. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"] | components["schemas"]["BillingErrorResponse"];
+                };
+            };
+            /** @description The caller may not manage billing. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No checkout for this order in the organization (flat body, code checkout_not_found), or no subscription afterwards (ErrorEnvelope). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"] | components["schemas"]["BillingErrorResponse"];
+                };
+            };
+            /** @description Billing is disabled on this server (code billing_disabled). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingErrorResponse"];
+                };
+            };
+        };
+    };
+    handleStripeWebhook: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Stripe's signature header for the raw body. Without a valid one the event is rejected. */
+                "Stripe-Signature"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The Stripe event exactly as Stripe sent it. */
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description The event was accepted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingWebhookAck"];
+                };
+            };
+            /** @description Invalid signature or missing webhook credentials (flat JSON body), or any other processing failure (text/plain error message). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingErrorResponse"];
+                    "text/plain": string;
+                };
+            };
+            /** @description Billing is disabled on this server (code billing_disabled). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingErrorResponse"];
+                };
+            };
+        };
+    };
+    handleRazorpayWebhook: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Razorpay's HMAC signature of the raw body. Without a valid one the event is rejected. */
+                "X-Razorpay-Signature"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The Razorpay event exactly as Razorpay sent it. */
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description The event was accepted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingWebhookAck"];
+                };
+            };
+            /** @description Invalid signature or missing webhook credentials (flat JSON body), or any other processing failure (text/plain error message). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingErrorResponse"];
+                    "text/plain": string;
+                };
+            };
+            /** @description Billing is disabled on this server (code billing_disabled). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingErrorResponse"];
                 };
             };
         };
@@ -4294,7 +9807,7 @@ export interface operations {
                     "application/json": components["schemas"]["PricingModel"];
                 };
             };
-            /** @description Invalid request parameters */
+            /** @description Malformed body, empty model_slug, unknown provider_kind (invalid_provider_kind) or a currency that is not three letters (invalid_currency). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4335,6 +9848,15 @@ export interface operations {
                     "application/json": components["schemas"]["PricingModelDetail"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
             /** @description Pricing model not found */
             404: {
                 headers: {
@@ -4371,7 +9893,7 @@ export interface operations {
                     "application/json": components["schemas"]["PricingVersion"];
                 };
             };
-            /** @description Invalid price or unsupported token category */
+            /** @description Negative price (negative_price), cached price on a model without caching (unsupported_token_category), or effective_to not after effective_from (invalid_effective_window). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4423,7 +9945,25 @@ export interface operations {
                     "application/json": components["schemas"]["PricingVersion"];
                 };
             };
-            /** @description Version not found */
+            /** @description version is not a positive integer. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Model or version not found (not_found or pricing_not_found). */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4456,7 +9996,7 @@ export interface operations {
                     "application/json": components["schemas"]["CalculateCostResponse"];
                 };
             };
-            /** @description Invalid token counts or parameters */
+            /** @description Malformed body, empty model_slug, negative token counts (invalid_token_count), or cached tokens on a model without caching (unsupported_token_category). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4465,8 +10005,17 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description Pricing unavailable for model */
-            404: {
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No pricing is available for the model (pricing_unavailable). */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4518,6 +10067,24 @@ export interface operations {
                     "application/json": components["schemas"]["Policy"];
                 };
             };
+            /** @description Malformed body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     getPolicy: {
@@ -4540,6 +10107,24 @@ export interface operations {
                     "application/json": components["schemas"]["Policy"];
                 };
             };
+            /** @description The id is not a UUID. The body carries code internal, not invalid_id. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     deletePolicy: {
@@ -4559,6 +10144,33 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description The id is not a UUID (code internal). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
             };
         };
     };
@@ -4586,6 +10198,33 @@ export interface operations {
                     "application/json": components["schemas"]["Policy"];
                 };
             };
+            /** @description The id is not a UUID (code internal) or the body is malformed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     listPolicyRules: {
@@ -4606,6 +10245,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PolicyRuleList"];
+                };
+            };
+            /** @description The id is not a UUID (code internal). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -4634,6 +10282,24 @@ export interface operations {
                     "application/json": components["schemas"]["PolicyRule"];
                 };
             };
+            /** @description The id is not a UUID (code internal) or the body is malformed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     deletePolicyRule: {
@@ -4654,6 +10320,33 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description An id is not a UUID (code internal). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
             };
         };
     };
@@ -4682,6 +10375,33 @@ export interface operations {
                     "application/json": components["schemas"]["PolicyRule"];
                 };
             };
+            /** @description An id is not a UUID (code internal) or the body is malformed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     previewPolicy: {
@@ -4691,7 +10411,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyPreviewRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -4699,9 +10423,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["PolicyPreviewResponse"];
+                };
+            };
+            /** @description Malformed body, or model is empty (code internal). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -4723,9 +10454,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["PolicyValidationResult"];
+                };
+            };
+            /** @description The id is not a UUID (code internal). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -4769,7 +10516,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ModelAccessUpdateResponse"];
+                };
+            };
+            /** @description Malformed body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not the owner. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -4794,6 +10559,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelAccessPreviewResponse"];
+                };
+            };
+            /** @description Malformed body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not the owner. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -4845,6 +10628,24 @@ export interface operations {
                     "application/json": components["schemas"]["Budget"];
                 };
             };
+            /** @description Malformed body, or scope_id is not a UUID (code internal). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not the owner. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     getBudget: {
@@ -4865,6 +10666,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Budget"];
+                };
+            };
+            /** @description The id is not a UUID (code internal). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
             /** @description Not Found */
@@ -4895,6 +10705,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description The id is not a UUID (code internal). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not the owner. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
             };
             /** @description Not Found */
             404: {
@@ -4931,6 +10759,24 @@ export interface operations {
                     "application/json": components["schemas"]["Budget"];
                 };
             };
+            /** @description The id is not a UUID (code internal) or the body is malformed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not the owner. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
             /** @description Not Found */
             404: {
                 headers: {
@@ -4939,6 +10785,1672 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
+            };
+        };
+    };
+    getv1search: {
+        parameters: {
+            query?: {
+                q?: string;
+                /** @description Repeat the parameter to search several types. Unknown values are ignored; none given (or none valid) searches every type. */
+                types?: components["schemas"]["SearchResultType"][];
+                /** @description 1 to 100; any other value falls back to 20. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResponse"];
+                };
+            };
+        };
+    };
+    getAdminMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminMe"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getAdminOverview: {
+        parameters: {
+            query?: {
+                /** @description Traffic window; defaults to 30d. */
+                window?: "24h" | "7d" | "30d" | "90d";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOverview"];
+                };
+            };
+            /** @description Unknown window. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listAdminOrganizations: {
+        parameters: {
+            query?: {
+                search?: string;
+                status?: "active" | "suspended";
+                /** @description Window for requests and cost_micros; defaults to 30d. */
+                window?: "24h" | "7d" | "30d" | "90d";
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOrganizationListResponse"];
+                };
+            };
+            /** @description Invalid status, window, limit or offset. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getAdminOrganization: {
+        parameters: {
+            query?: {
+                /** @description Window for requests and cost_micros; defaults to 30d. */
+                window?: "24h" | "7d" | "30d" | "90d";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOrganizationDetail"];
+                };
+            };
+            /** @description Invalid id or window. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin, or no such organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    suspendAdminOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description Suspended. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid id or body, or reason missing or too long. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin, or no such organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    reactivateAdminOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description Reactivated. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid id or body, or reason missing or too long. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin, or no such organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    setAdminOrganizationPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSetOrganizationPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Plan changed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid id or body, unknown plan_code (unknown_plan), or reason missing or too long. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin, or no such organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    revokeAdminOrganizationKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminRevokeKeysResponse"];
+                };
+            };
+            /** @description Invalid id or body, or reason missing or too long. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listAdminUsers: {
+        parameters: {
+            query?: {
+                search?: string;
+                status?: "active" | "disabled";
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserListResponse"];
+                };
+            };
+            /** @description Invalid status, limit or offset. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    disableAdminUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description Disabled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid id or body, reason missing or too long, or the target is the caller. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin, or no such user. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    enableAdminUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description Enabled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid id or body, or reason missing or too long. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin, or no such user. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getAdminUsage: {
+        parameters: {
+            query?: {
+                /** @description Defaults to 30d. */
+                window?: "24h" | "7d" | "30d" | "90d";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUsage"];
+                };
+            };
+            /** @description Unknown window. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getAdminBilling: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminBilling"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listAdminPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanListResponse"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getAdminSystem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSystem"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listAdminModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminModelListResponse"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    setAdminModelActive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSetModelActiveRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid id or body, active missing (active_required), or reason missing or too long. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin, or no such model. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listAdminAudit: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAuditListResponse"];
+                };
+            };
+            /** @description Invalid limit or offset. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listAdminTenantAudit: {
+        parameters: {
+            query?: {
+                organization_id?: string;
+                /** @description Action prefix to match. */
+                action?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminTenantAuditListResponse"];
+                };
+            };
+            /** @description Invalid organization_id, limit or offset. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listAdminSecurityEvents: {
+        parameters: {
+            query?: {
+                /** @description Exact severity to match; not validated. */
+                severity?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSecurityEventListResponse"];
+                };
+            };
+            /** @description Invalid limit or offset. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getAdminServices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminServices"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listAdminAlerts: {
+        parameters: {
+            query?: {
+                /** @description live means open or acknowledged; omit for every status. */
+                status?: "live" | "open" | "acknowledged" | "resolved";
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAlertListResponse"];
+                };
+            };
+            /** @description Invalid status, limit or offset. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    acknowledgeAdminAlert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Acknowledged. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid id. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin, or no such alert. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listAdminLogs: {
+        parameters: {
+            query?: {
+                service?: string;
+                /** @description Case-insensitive; omit for both. */
+                level?: "WARN" | "ERROR";
+                /** @description Case-insensitive match on the message. */
+                search?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminServiceLogListResponse"];
+                };
+            };
+            /** @description Invalid level, limit or offset. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getAdminRevenue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminRevenue"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listAdminPayments: {
+        parameters: {
+            query?: {
+                organization_id?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPaymentListResponse"];
+                };
+            };
+            /** @description Invalid organization_id, limit or offset. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller is not a platform admin. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listAlertEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertEventListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant alerts.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    acknowledgeAlertEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertEvent"];
+                };
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant alerts.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such alert event in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    resolveAlertEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertEvent"];
+                };
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant alerts.manage. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such alert event in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listNotifications: {
+        parameters: {
+            query?: {
+                /** @description Only the exact value true filters to unread notifications; anything else lists all. */
+                unread_only?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InAppNotificationListResponse"];
+                };
+            };
+            /** @description The caller's role does not grant alerts.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    markNotificationRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Marked read. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The id is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant alerts.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such notification in the caller's organization. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    markAllNotificationsRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Marked read. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The caller's role does not grant alerts.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listAuditLogsAlias: {
+        parameters: {
+            query?: {
+                /** @description Matches a record written by either the user or the service account with this id. Combine with actor_type to disambiguate. */
+                actor_id?: string;
+                actor_type?: "user" | "service_account";
+                /** @description Exact action name, e.g. organization.update. */
+                action?: string;
+                resource_type?: string;
+                resource_id?: string;
+                /** @description Only records created at or after this RFC3339 timestamp. */
+                from?: string;
+                /** @description Only records created before this RFC3339 timestamp. */
+                to?: string;
+                /** @description Page size, 1 to 200. */
+                limit?: number;
+                /** @description Rows to skip; must be zero or greater. */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditLogListResponse"];
+                };
+            };
+            /** @description A filter or pagination value is malformed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant audit.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listSecurityEventsAlias: {
+        parameters: {
+            query?: {
+                category?: "provider_incident" | "pipeline_failure" | "policy_violation";
+                severity?: "info" | "warning" | "critical";
+                /** @description Only events created at or after this RFC3339 timestamp. */
+                from?: string;
+                /** @description Only events created before this RFC3339 timestamp. */
+                to?: string;
+                /** @description Page size, 1 to 200. */
+                limit?: number;
+                /** @description Rows to skip; must be zero or greater. */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityEventListResponse"];
+                };
+            };
+            /** @description A filter or pagination value is malformed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The caller's role does not grant security_events.read. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listGuardrails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuardrailList"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    createGuardrail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGuardrailRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Guardrail"];
+                };
+            };
+            /** @description Malformed body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listGuardrailEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuardrailEventList"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    getGuardrail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Guardrail ID (a UUID; not validated before lookup). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Guardrail"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    deleteGuardrail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Guardrail ID (a UUID; not validated before lookup). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    updateGuardrail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Guardrail ID (a UUID; not validated before lookup). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateGuardrailRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Guardrail"];
+                };
+            };
+            /** @description Malformed body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    testGuardrail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Guardrail ID (a UUID; not validated before lookup). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestGuardrailRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestGuardrailResponse"];
+                };
+            };
+            /** @description Malformed body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No guardrail evaluator is wired into this server. Empty body. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

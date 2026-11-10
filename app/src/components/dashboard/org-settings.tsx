@@ -7,7 +7,7 @@ import {
   updateOrganization,
   type OrganizationSettingsState,
 } from "@/components/dashboard/org-settings-actions";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import {
   Card,
   CardContent,
@@ -16,8 +16,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { formatDate } from "@/lib/format";
+import { Input } from "@ai-governance/console-ui/ui/input";
+import { formatDate } from "@ai-governance/console-ui/lib/format";
 import { ORG_STATUS_TONE, type Organization } from "@/types";
 
 function Field({

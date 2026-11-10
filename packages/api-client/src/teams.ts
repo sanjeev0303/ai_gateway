@@ -1,36 +1,20 @@
+import type { components } from "@ai-governance/contracts";
 import type { ListResponse, RequestOptions, Transport } from "./client";
 import type { Membership } from "./members";
 
-export interface Team {
-  id: string;
-  organization_id: string;
-  name: string;
-  description: string;
-  created_at: string;
-  updated_at: string;
-}
-
+export type Team = components["schemas"]["Team"];
 /** The row returned when adding a member; membership lists nest `user` instead. */
-export interface TeamMemberRow {
-  team_id: string;
-  user_id: string;
-  role: string;
-  member_since: string;
-}
-
-export interface TeamUpdateInput {
-  name?: string;
-  description?: string;
-}
+export type TeamMemberRow = components["schemas"]["TeamMemberRow"];
+export type TeamUpdateInput = components["schemas"]["UpdateTeamRequest"];
 
 export interface TeamsModule {
-  create(input: { name: string; description: string }, options?: RequestOptions): Promise<Team>;
+  create(input: components["schemas"]["CreateTeamRequest"], options?: RequestOptions): Promise<Team>;
   list(options?: RequestOptions): Promise<ListResponse<Team>>;
   get(teamId: string, options?: RequestOptions): Promise<Team>;
   update(teamId: string, input: TeamUpdateInput, options?: RequestOptions): Promise<Team>;
   addMember(
     teamId: string,
-    input: { user_id: string; role: string },
+    input: components["schemas"]["AddMembershipRequest"],
     options?: RequestOptions,
   ): Promise<TeamMemberRow>;
   listMembers(teamId: string, options?: RequestOptions): Promise<ListResponse<Membership>>;

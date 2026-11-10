@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { MailPlus } from "lucide-react";
 
 import { PageShell, StatCard, StatusBadge } from "@/components/dashboard";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import {
   Card,
   CardContent,
@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatDate, formatRelative } from "@/lib/format";
+import { formatDate, formatRelative } from "@ai-governance/console-ui/lib/format";
 import { ROLE_ORDER, ROLE_TONE, toneFor } from "@/lib/org-tones";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";

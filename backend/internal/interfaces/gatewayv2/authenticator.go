@@ -203,15 +203,6 @@ func (a *AuthenticatorImpl) fromCached(cached *CredentialCacheEntry) GatewayCred
 	}
 }
 
-// InvalidateByID evicts a credential from the cache by credential ID.
-func (a *AuthenticatorImpl) InvalidateByID(ctx context.Context, id string) {
-	if a.cache != nil {
-		if inMem, ok := a.cache.(*InMemoryCredentialCache); ok {
-			inMem.InvalidateByID(ctx, id)
-		}
-	}
-}
-
 // CredentialCache is a minimal cache interface for the authenticator.
 type CredentialCache interface {
 	Get(ctx context.Context, keyHash string) *CredentialCacheEntry

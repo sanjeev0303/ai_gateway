@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { PageShell, DataTable, type Column } from "@/components/dashboard";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { getApiClient } from "@/lib/session";
-import { formatDate, formatNumber, microsToUsd, formatUsd } from "@/lib/format";
+import { formatDate, formatNumber, microsToUsd, formatUsd } from "@ai-governance/console-ui/lib/format";
 import { toneFor } from "@/lib/org-tones";
 
 export const metadata: Metadata = {

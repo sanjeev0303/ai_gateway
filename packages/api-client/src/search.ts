@@ -1,28 +1,9 @@
+import type { components } from "@ai-governance/contracts";
 import type { Transport, Query } from "./client";
 
-export type SearchResultType =
-  | "request"
-  | "user"
-  | "team"
-  | "project"
-  | "policy"
-  | "model"
-  | "provider"
-  | "conversation"
-  | "gateway_credential";
-
-export interface SearchResultItem {
-  type: SearchResultType;
-  id: string;
-  name: string;
-  description?: string;
-  url: string;
-}
-
-export interface SearchResponse {
-  results: SearchResultItem[];
-  total: number;
-}
+export type SearchResultType = components["schemas"]["SearchResultType"];
+export type SearchResultItem = components["schemas"]["SearchResultItem"];
+export type SearchResponse = components["schemas"]["SearchResponse"];
 
 export interface SearchOptions {
   q: string;

@@ -3,10 +3,10 @@
 import * as React from "react";
 import { useState, useTransition } from "react";
 import { Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, Play } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@ai-governance/console-ui/ui/button";
+import { Input } from "@ai-governance/console-ui/ui/input";
+import { Label } from "@ai-governance/console-ui/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ai-governance/console-ui/ui/select";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import {
   Dialog,
@@ -16,10 +16,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@ai-governance/console-ui/ui/dialog";
 import { toast } from "sonner";
 import { DataTable, type Column } from "@/components/dashboard";
-import { formatRelative } from "@/lib/format";
+import { formatRelative } from "@ai-governance/console-ui/lib/format";
 import type { StatusTone } from "@/types";
 import { probeProviderHealthAction, refreshHealthAction } from "./actions";
 

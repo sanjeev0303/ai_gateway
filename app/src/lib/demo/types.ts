@@ -9,7 +9,7 @@
  * selectors.
  */
 
-import type { ID, ISODateString, StatusTone } from "@/types/common";
+import type { ID, ISODateString, StatusTone } from "@ai-governance/console-ui/types/common";
 
 export type { ID, ISODateString, StatusTone };
 

@@ -25,11 +25,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@ai-governance/console-ui/ui/dropdown-menu";
 import { DASHBOARD_NAV, type NavSection } from "@/lib/constants";
-import { initials } from "@/lib/format";
+import { initials } from "@ai-governance/console-ui/lib/format";
 import { useSession } from "@/lib/session-context";
-import { cn } from "@/lib/utils";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 
 interface SidebarNavProps {
   /** Called after a link is chosen, so the mobile sheet can close itself. */

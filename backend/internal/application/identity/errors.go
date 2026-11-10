@@ -19,4 +19,7 @@ var (
 	// ErrInvitationEmailMismatch is returned when the authenticated user's
 	// email differs from the address an invitation was issued to.
 	ErrInvitationEmailMismatch = errors.New("identity: invitation email mismatch")
+	// ErrOrganizationSuspended is returned when the caller's organization has
+	// been suspended by a platform admin.
+	ErrOrganizationSuspended = errors.New("identity: organization suspended")
 )

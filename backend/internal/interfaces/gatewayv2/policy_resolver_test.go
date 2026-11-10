@@ -4,6 +4,7 @@ package gatewayv2
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -79,16 +80,18 @@ func TestPolicyResolver_HappyPath(t *testing.T) {
 	if len(snapshot.Rules) != 2 {
 		t.Fatalf("expected both enabled rules in snapshot, got %d", len(snapshot.Rules))
 	}
-	rl, ok := snapshot.RateLimits["org:infer"]
+	// Rule keys are always namespaced under the snapshot's org.
+	orgPrefix := "org:" + mustUUIDs[0].String() + ":"
+	rl, ok := snapshot.RateLimits[orgPrefix+"org:infer"]
 	if !ok {
-		t.Fatal("expected extracted rate limit config for org:infer")
+		t.Fatalf("expected extracted rate limit config for org:infer, got %v", snapshot.RateLimits)
 	}
 	if rl.Limit != 100 || rl.Window != time.Minute || rl.Scope != "organization" || rl.BurstAllow != 0 {
 		t.Fatalf("unexpected rate limit config: %+v", rl)
 	}
-	bud, ok := snapshot.Budgets["org:budget"]
+	bud, ok := snapshot.Budgets[orgPrefix+"org:budget"]
 	if !ok {
-		t.Fatal("expected extracted budget config for org:budget")
+		t.Fatalf("expected extracted budget config for org:budget, got %v", snapshot.Budgets)
 	}
 	if bud.Limit != 1000 || bud.Window != time.Hour || bud.AlertAt != 0.8 {
 		t.Fatalf("unexpected budget config: %+v", bud)
@@ -98,6 +101,23 @@ func TestPolicyResolver_HappyPath(t *testing.T) {
 	}
 	if snapshot.EnforcedAt.IsZero() {
 		t.Fatal("expected enforced-at timestamp")
+	}
+}
+
+func TestPolicyResolver_RuleCannotNameAnotherOrgsCounter(t *testing.T) {
+	victim := uuid.New()
+	policy := enforcedPolicy("infer")
+	rule := budgetRule()
+	rule.Conditions = []byte(`{"type":"budget","key":"org:` + victim.String() + `"}`)
+	tr := makePolicyResolver(t, []domain.Policy{policy}, map[uuid.UUID][]domain.PolicyRule{policy.ID: {rule}})
+
+	snapshot, err := tr.GetSnapshot(context.Background(), mustUUIDs[0])
+	requireNoErr(t, err)
+
+	for key := range snapshot.Budgets {
+		if !strings.HasPrefix(key, "org:"+mustUUIDs[0].String()+":") {
+			t.Fatalf("budget key %q escapes the snapshot org", key)
+		}
 	}
 }
 

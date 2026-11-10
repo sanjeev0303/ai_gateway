@@ -158,8 +158,15 @@ func TestProviderLifecycle_OpenAI_NonStreaming(t *testing.T) {
 		t.Fatalf("expected 1 telemetry record, got %d", len(telemetry.usage))
 	}
 	u := telemetry.usage[0]
-	if u.RequestID != "req-openai-e2e-1" {
-		t.Errorf("expected RequestID req-openai-e2e-1, got %s", u.RequestID)
+	// The ledger ID is the gateway's own; the client's comes back separately.
+	if u.RequestID == "" || u.RequestID == "req-openai-e2e-1" {
+		t.Errorf("expected a server-generated RequestID, got %q", u.RequestID)
+	}
+	if u.RequestID != rec.Header().Get("x-request-id") {
+		t.Errorf("ledger RequestID %q does not match response x-request-id %q", u.RequestID, rec.Header().Get("x-request-id"))
+	}
+	if got := rec.Header().Get("x-client-request-id"); got != "req-openai-e2e-1" {
+		t.Errorf("expected x-client-request-id req-openai-e2e-1, got %q", got)
 	}
 	if u.InputTokens != 15 || u.OutputTokens != 25 {
 		t.Errorf("expected 15 input and 25 output tokens, got %d/%d", u.InputTokens, u.OutputTokens)
@@ -277,8 +284,9 @@ func TestProviderLifecycle_Anthropic_NonStreaming(t *testing.T) {
 	}
 
 	u := telemetry.usage[0]
-	if u.InputTokens != 18 || u.OutputTokens != 28 {
-		t.Errorf("expected 18/28 tokens, got %d/%d", u.InputTokens, u.OutputTokens)
+	// Anthropic input excludes cache tokens; the gateway folds them in (18+8+2).
+	if u.InputTokens != 28 || u.OutputTokens != 28 {
+		t.Errorf("expected 28/28 tokens, got %d/%d", u.InputTokens, u.OutputTokens)
 	}
 	if u.CacheReadTokens != 8 || u.CacheWriteTokens != 2 {
 		t.Errorf("expected 8 read and 2 write cache tokens, got %d/%d", u.CacheReadTokens, u.CacheWriteTokens)

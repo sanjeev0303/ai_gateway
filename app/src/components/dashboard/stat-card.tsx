@@ -4,8 +4,8 @@ import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 
 import { Sparkline } from "@/components/charts";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatDelta } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { formatDelta } from "@ai-governance/console-ui/lib/format";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 import type { StatusTone, TimeSeriesPoint, TrendDirection } from "@/types";
 
 interface StatDelta {

@@ -1,5 +1,5 @@
-export * from "./utils";
-export * from "./area-chart";
+export * from "@ai-governance/console-ui/charts/utils";
+export * from "@ai-governance/console-ui/charts/area-chart";
 export * from "./bar-chart";
 export * from "./donut-chart";
 export * from "./line-chart";

@@ -372,6 +372,13 @@ func (a *api) verifyBillingPayment(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+		if errors.Is(err, payment.ErrCheckoutNotFound) {
+			httpx.WriteJSON(w, http.StatusNotFound, map[string]string{
+				"error": "No checkout for this order in your organization",
+				"code":  "checkout_not_found",
+			})
+			return
+		}
 		if errors.Is(err, payment.ErrMissingCredentials) {
 			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{
 				"error": "Payment provider credentials are missing",

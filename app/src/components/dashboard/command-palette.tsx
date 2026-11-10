@@ -4,11 +4,11 @@ import * as React from "react";
 import { Search, Keyboard, ArrowUp, ArrowDown, ArrowRight, ExternalLink, Loader2 } from "lucide-react";
 import { cn } from "cn";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@ai-governance/console-ui/ui/button";
+import { Input } from "@ai-governance/console-ui/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogPortal, DialogOverlay, DialogTitle } from "@/components/ui/dialog";
+import { Skeleton } from "@ai-governance/console-ui/ui/skeleton";
+import { Dialog, DialogContent, DialogPortal, DialogOverlay, DialogTitle } from "@ai-governance/console-ui/ui/dialog";
 import { useSession } from "@/lib/session-context";
 import { useApiClient } from "@/hooks/use-api-client";
 import type { SearchOptions, SearchResultItem } from "@ai-governance/api-client";

@@ -113,7 +113,7 @@ export async function syncAccountModelsAction(accountId: string): Promise<{ succ
     const { providers } = await getApiClient();
     const res = await providers.syncAccountModels(accountId);
     revalidatePath("/app/platform/model-registry");
-    return { success: true, total: res.total };
+    return { success: true, total: res.items.length };
   } catch (err: any) {
     return { success: false, error: err?.message || "Model sync failed" };
   }

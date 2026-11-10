@@ -139,6 +139,17 @@ func (o *usageObserver) finish() *StreamUsage {
 	}
 	usage := o.usage
 	usage.Text = o.text.String()
+
+	// Anthropic's input_tokens leaves out cache reads and writes, while
+	// OpenAI and Gemini count cached tokens inside the prompt total. Pricing,
+	// token budgets and total_tokens all assume the OpenAI meaning, so fold
+	// Anthropic's cache tokens in here, once, for everyone downstream.
+	// ponytail: cache writes are then priced at the plain input rate, about
+	// 25% under Anthropic's write rate; add a write rate to the price specs
+	// if that gap matters.
+	if usage.Provider == "anthropic" {
+		usage.InputTokens += usage.CacheReadTokens + usage.CacheWriteTokens
+	}
 	return &usage
 }
 

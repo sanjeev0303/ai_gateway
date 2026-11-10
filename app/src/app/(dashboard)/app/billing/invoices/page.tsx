@@ -17,8 +17,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { formatDate, formatNumber, formatUsd, microsToUsd } from "@/lib/format";
+} from "@ai-governance/console-ui/ui/table";
+import { formatDate, formatNumber, formatUsd, microsToUsd } from "@ai-governance/console-ui/lib/format";
 import { getApiClient } from "@/lib/session";
 import type { StatusTone } from "@/types";
 import { ExportAllInvoicesButton, InvoiceActions } from "./client";
@@ -32,6 +32,8 @@ const INVOICE_TONE: Record<InvoiceStatus, StatusTone> = {
   open: "warning",
   void: "neutral",
   paid: "success",
+  draft: "neutral",
+  uncollectible: "danger",
 };
 
 async function loadInvoices(): Promise<Invoice[]> {

@@ -10,8 +10,8 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
+} from "@ai-governance/console-ui/ui/dropdown-menu";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import { MoreHorizontal, ShieldCheck, UserMinus } from "lucide-react";
 import type { MemberRow } from "./members-client";
 

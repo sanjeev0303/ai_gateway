@@ -18,15 +18,20 @@ var client = &http.Client{Timeout: 30 * time.Second}
 
 func main() {
 	fmt.Println("=================================================================")
-	fmt.Println("     SENTINEL LIVE INTEGRATION FOR sanju.04044@gmail.com         ")
+	fmt.Println("     SENTINEL LIVE INTEGRATION                                   ")
 	fmt.Println("=================================================================")
 
 	liveGeminiKey := os.Getenv("GEMINI_API_KEY")
 	if liveGeminiKey == "" {
 		liveGeminiKey = os.Getenv("GOOGLE_API_KEY")
 	}
-	sanjuEmail := "sanju.04044@gmail.com"
-	sanjuPass := "@sanju#04044"
+	// Credentials come from the environment; never hard-code them here.
+	sanjuEmail := os.Getenv("SANJU_EMAIL")
+	sanjuPass := os.Getenv("SANJU_PASSWORD")
+	if sanjuEmail == "" || sanjuPass == "" {
+		fmt.Println("FATAL: set SANJU_EMAIL and SANJU_PASSWORD")
+		return
+	}
 
 	// 1. Sign In to Developer Account
 	fmt.Println("\n>>> [1/10] Signing in to Developer Account:", sanjuEmail)
@@ -432,7 +437,7 @@ func main() {
 		"/app/organization/projects",
 	}
 
-	fmt.Println("\nVerifying Next.js Dashboard Routes for sanju.04044@gmail.com:")
+	fmt.Printf("\nVerifying Next.js Dashboard Routes for %s:\n", sanjuEmail)
 	for _, route := range dashRoutes {
 		code, _ := getStatus(route, cookie, 3000)
 		fmt.Printf("  [PAGE HTTP %d] http://localhost:3000%s\n", code, route)
@@ -440,7 +445,7 @@ func main() {
 
 	fmt.Println("\n=================================================================")
 	fmt.Println("   ALL ACTIONS COMPLETED! DASHBOARD IS LIVE AND POPULATED FOR    ")
-	fmt.Println("              sanju.04044@gmail.com                              ")
+	fmt.Println("             ", sanjuEmail)
 	fmt.Println("=================================================================")
 }
 

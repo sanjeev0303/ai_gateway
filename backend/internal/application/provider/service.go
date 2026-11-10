@@ -764,11 +764,9 @@ func (s *Service) syncModelsWith(ctx context.Context, actor domain.Actor, provid
 		infProv = ip
 	}
 
-	activeSlugs := make([]string, 0, len(remote))
 	synced := make([]domain.Model, 0, len(remote))
 
 	for _, m := range remote {
-		activeSlugs = append(activeSlugs, m.ID)
 		displayName := m.DisplayName
 		if displayName == "" {
 			displayName = m.ID
@@ -836,9 +834,10 @@ func (s *Service) syncModelsWith(ctx context.Context, actor domain.Actor, provid
 		synced = append(synced, model)
 	}
 
-	if err := s.models.MarkInactiveExcept(ctx, providerKind, activeSlugs); err != nil {
-		s.log.WarnContext(ctx, "failed to mark stale models inactive", "provider_kind", providerKind, "error", err)
-	}
+	// No MarkInactiveExcept here. The models table is shared by every org,
+	// while this list comes from one tenant's key (or one tenant's custom
+	// base_url), so retiring everything it omits let any org switch models
+	// off for all orgs. Retirement needs a per-org catalog or an operator job.
 
 	payload, _ := json.Marshal(map[string]any{"provider_kind": providerKind, "count": len(synced)})
 	s.audit(ctx, actor, "provider.models.sync", "provider_kind", nil, nil, payload)

@@ -1,132 +1,28 @@
+import type { components } from "@ai-governance/contracts";
 import type { ListResponse, Query, RequestOptions, Transport } from "./client";
+
+type Schemas = components["schemas"];
 
 /**
  * Usage payloads come from Go structs with no JSON tags, so these fields are
  * PascalCase on the wire. `CostMicros`/`TotalCostMicros` are micro-dollars.
  *
- * Latency and error-rate metrics are optional because they are absent, not
- * zero, when no sample exists: a non-streaming request has no
- * time-to-first-token sample, and an empty window has no samples at all.
- * Render a missing metric as "n/a" rather than 0.
+ * Latency metrics are null, not zero, when no sample exists: a non-streaming
+ * request has no time-to-first-token sample, and an empty window has no
+ * samples at all. Render a null metric as "n/a" rather than 0.
  */
-
-/** Fields shared by every entity breakdown; the Go struct embeds these, so they arrive flattened. */
-export interface UsageTotals {
-  Requests: number;
-  InputTokens: number;
-  OutputTokens: number;
-  TotalTokens: number;
-  CostMicros: number;
-  Errors: number;
-  AvgLatencyMs?: number;
-  /** RFC3339. */
-  LastActivityAt: string;
-}
-
-export interface UsageSummary {
-  Requests: number;
-  InputTokens: number;
-  OutputTokens: number;
-  CachedTokens: number;
-  ReasoningTokens?: number;
-  ToolTokens?: number;
-  TotalTokens: number;
-  TotalCostMicros: number;
-  Errors: number;
-  AvgLatencyMs?: number;
-  ActiveUsers?: number;
-  /** RFC3339. */
-  LastActivityAt: string;
-}
-
-export interface UsageTimeSeriesPoint {
-  BucketStart: string;
-  Requests: number;
-  TotalTokens: number;
-  CostMicros: number;
-}
-
-export interface UsageByProject extends UsageTotals {
-  ProjectID: string;
-  Name: string;
-}
-
-export interface UsageByModel {
-  Model: string;
-  Requests: number;
-  TotalTokens: number;
-  CostMicros: number;
-}
-
-export interface UsageByProvider {
-  Provider: string;
-  Requests: number;
-  TotalTokens: number;
-  CostMicros: number;
-}
-
-export interface UsageByUser extends UsageTotals {
-  UserID: string;
-  Email: string;
-  DisplayName: string;
-}
-
+export type UsageTotals = Schemas["UsageTotals"];
+export type UsageSummary = Schemas["UsageSummary"];
+export type UsageTimeSeriesPoint = Schemas["UsageTimeSeriesPoint"];
+export type UsageByProject = Schemas["UsageByProject"];
+export type UsageByModel = Schemas["UsageByModel"];
+export type UsageByProvider = Schemas["UsageByProvider"];
+export type UsageByUser = Schemas["UsageByUser"];
 /** Team totals are not additive: one request counts toward every team its user belongs to. */
-export interface UsageByTeam extends UsageTotals {
-  TeamID: string;
-  Name: string;
-}
-
-export interface UsageByServiceAccount extends UsageTotals {
-  ServiceAccountID: string;
-  Name: string;
-}
-
-/**
- * A percentile summary computed in Postgres. `Provider`/`Model` are absent for
- * the single overall row. `TtftSamples` and `TotalSamples` are counted
- * separately, so a family is absent only when that specific family has none.
- */
-export interface UsageLatency {
-  Provider?: string;
-  Model?: string;
-  TtftSamples: number;
-  TotalSamples: number;
-  AvgTTFTMs?: number;
-  P50TTFTMs?: number;
-  P95TTFTMs?: number;
-  P99TTFTMs?: number;
-  AvgTotalMs?: number;
-  P50TotalMs?: number;
-  P95TotalMs?: number;
-  P99TotalMs?: number;
-}
-
-export interface LlmRequest {
-  ID: string;
-  OrganizationID: string;
-  ProjectID?: string;
-  UserID?: string;
-  APICredentialID?: string;
-  RequestID: string;
-  ProviderRequestID?: string;
-  ProviderKind: string;
-  Model: string;
-  Status: string;
-  ErrorCode?: string;
-  PromptTokens: number;
-  CompletionTokens: number;
-  CachedInputTokens: number;
-  TotalTokens: number;
-  LatencyMs: number;
-  CostMicros: number;
-  CreatedAt: string;
-  RequestStartedAt?: string;
-  FirstTokenAt?: string;
-  CompletedAt?: string;
-  TimeToFirstTokenMs?: number;
-  TotalLatencyMs?: number;
-}
+export type UsageByTeam = Schemas["UsageByTeam"];
+export type UsageByServiceAccount = Schemas["UsageByServiceAccount"];
+export type UsageLatency = Schemas["UsageLatency"];
+export type LlmRequest = Schemas["LlmRequest"];
 
 export interface UsageQuery {
   /** RFC3339; a `Date` is serialised as ISO 8601. */

@@ -1,7 +1,7 @@
 "use client";
 
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@ai-governance/console-ui/ui/dropdown-menu";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import { MoreHorizontal, MailPlus } from "lucide-react";
 import type { InviteRow } from "./invitations-client";
 

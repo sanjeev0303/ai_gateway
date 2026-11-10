@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { AlertTriangle, RefreshCw, WifiOff, Lock, FileX, ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ai-governance/console-ui/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 interface ErrorBoundaryState {

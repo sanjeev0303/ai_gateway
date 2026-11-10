@@ -303,48 +303,36 @@ func (s *Service) VerifyPaymentCallback(ctx context.Context, actor domain.Actor,
 		return nil, err
 	}
 
-	// 2. Lookup trusted checkout record
-	var checkout *domain.Checkout
-	if s.checkouts != nil {
-		if c, err := s.checkouts.GetByOrderID(ctx, actor.OrganizationID, orderID); err == nil && c.CheckoutSessionID != "" {
-			checkout = &c
-		}
+	// 2. Lookup trusted checkout record. It must exist in the caller's own
+	// org: the signature only proves that *some* order was paid, so without
+	// this an order paid for a cheap plan in another org could be replayed
+	// here with any plan_code.
+	if s.checkouts == nil {
+		return nil, payment.ErrCheckoutNotFound
 	}
-
-	var expectedMicros int64
-	var expectedCurrency string
-
-	if checkout != nil {
-		if checkout.Status == domain.CheckoutStatusCompleted {
-			// Idempotent retry: checkout already completed and reconciled
-			return s.GetSubscription(ctx, actor)
-		}
-		if checkout.Status == domain.CheckoutStatusExpired || (!checkout.ExpiresAt.IsZero() && time.Now().UTC().After(checkout.ExpiresAt)) {
-			_ = s.checkouts.UpdateStatus(ctx, actor.OrganizationID, checkout.CheckoutSessionID, domain.CheckoutStatusExpired, paymentID)
-			return nil, payment.ErrCheckoutExpired
-		}
-		if checkout.Status == domain.CheckoutStatusCancelled {
-			return nil, payment.ErrCheckoutCancelled
-		}
-		if planCode != "" && planCode != checkout.PlanCode {
-			return nil, payment.ErrPlanMismatch
-		}
-		expectedMicros = checkout.AmountMicros
-		expectedCurrency = checkout.Currency
-		planCode = checkout.PlanCode
-	} else {
-		// Server-side plan lookup: determine authoritative plan and amount
-		targetPlan, err := s.findPlan(ctx, planCode)
-		if err != nil {
-			return nil, err
-		}
-		if targetPlan.PriceMicros > 0 {
-			expectedMicros = targetPlan.PriceMicros
-			expectedCurrency = targetPlan.Currency
-		} else {
-			expectedMicros, expectedCurrency = domain.GetPlanPrice(planCode)
-		}
+	c, err := s.checkouts.GetByOrderID(ctx, actor.OrganizationID, orderID)
+	if err != nil || c.CheckoutSessionID == "" {
+		return nil, payment.ErrCheckoutNotFound
 	}
+	checkout := &c
+
+	if checkout.Status == domain.CheckoutStatusCompleted {
+		// Idempotent retry: checkout already completed and reconciled
+		return s.GetSubscription(ctx, actor)
+	}
+	if checkout.Status == domain.CheckoutStatusExpired || (!checkout.ExpiresAt.IsZero() && time.Now().UTC().After(checkout.ExpiresAt)) {
+		_ = s.checkouts.UpdateStatus(ctx, actor.OrganizationID, checkout.CheckoutSessionID, domain.CheckoutStatusExpired, paymentID)
+		return nil, payment.ErrCheckoutExpired
+	}
+	if checkout.Status == domain.CheckoutStatusCancelled {
+		return nil, payment.ErrCheckoutCancelled
+	}
+	if planCode != "" && planCode != checkout.PlanCode {
+		return nil, payment.ErrPlanMismatch
+	}
+	expectedMicros := checkout.AmountMicros
+	expectedCurrency := checkout.Currency
+	planCode = checkout.PlanCode
 
 	targetPlan, err := s.findPlan(ctx, planCode)
 	if err != nil {
@@ -369,10 +357,8 @@ func (s *Service) VerifyPaymentCallback(ctx context.Context, actor domain.Actor,
 	}
 
 	// 3d. Mark checkout completed
-	if checkout != nil && s.checkouts != nil {
-		if err := s.checkouts.UpdateStatus(ctx, actor.OrganizationID, checkout.CheckoutSessionID, domain.CheckoutStatusCompleted, paymentID); err != nil {
-			return nil, fmt.Errorf("billing: update checkout status: %w", err)
-		}
+	if err := s.checkouts.UpdateStatus(ctx, actor.OrganizationID, checkout.CheckoutSessionID, domain.CheckoutStatusCompleted, paymentID); err != nil {
+		return nil, fmt.Errorf("billing: update checkout status: %w", err)
 	}
 
 	// 3e. Record auditable billing event in ledger

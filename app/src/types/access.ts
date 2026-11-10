@@ -1,4 +1,4 @@
-import type { ID, ISODateString, StatusTone } from "./common";
+import type { ID, ISODateString, StatusTone } from "@ai-governance/console-ui/types/common";
 import type { PlanTier } from "./organization";
 
 /** A rule granting a set of principals access to a set of models. */

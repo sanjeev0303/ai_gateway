@@ -3,8 +3,8 @@
 import * as React from "react";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@ai-governance/console-ui/ui/button";
+import { Input } from "@ai-governance/console-ui/ui/input";
 import { FormDialog } from "@/components/dashboard/dialogs";
 
 export function OneTimeSecretDialog({

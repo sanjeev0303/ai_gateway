@@ -64,6 +64,12 @@ x-backend-env: &backend-env
   AIGW_AUTH_SESSION_COOKIE_SECURE: "false" # http in dev
   AIGW_AUTH_CSRF_ENABLED: "false"
   AIGW_AUTH_DEV_LOGIN_ENABLED: "true" # demo login via control-api
+  # Users who may open the platform console (/admin); empty disables it. Register
+  # each account before listing it: sign-up does not verify email ownership.
+  AIGW_AUTH_PLATFORM_ADMIN_EMAILS: ${PLATFORM_ADMIN_EMAILS:-}
+  # Guards every service's /internal/stats endpoint; the worker presents it when
+  # it polls them for the admin console's health and resource figures.
+  AIGW_MONITOR_TOKEN: ${MONITOR_TOKEN:-change-me-monitor-token}
   # Conversation text lives only in gateway-v2 memory (24h). The control API
   # reads it over this private port, which is deliberately not published.
   AIGW_CONVERSATION_TRANSCRIPT_ADDR: ":8091"
@@ -234,6 +240,16 @@ services:
       <<: *backend-env
       AIGW_SERVER_ADDR: ":8080"
       AIGW_OBSERVABILITY_SERVICE_NAME: worker
+      # The platform monitor: who to poll, and where alert emails go out from.
+      AIGW_MONITOR_TARGETS: gateway-v2=http://gateway-v2:8080,control-api=http://control-api:8080,web=http://app:3000
+      AIGW_MONITOR_CONSOLE_URL: ${ADMIN_CONSOLE_URL:-http://localhost:3300}
+      # Locally Mailpit catches the emails (http://localhost:8025); set the
+      # SMTP_* values in .env to a real provider to deliver them.
+      AIGW_SMTP_HOST: ${SMTP_HOST:-mailpit}
+      AIGW_SMTP_PORT: ${SMTP_PORT:-1025}
+      AIGW_SMTP_USERNAME: ${SMTP_USERNAME:-}
+      AIGW_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      AIGW_SMTP_FROM: ${SMTP_FROM:-alerts@tollseal.local}
     ports:
       - "8082:8080"
     restart: unless-stopped
@@ -270,6 +286,8 @@ services:
       CONTROL_API_URL: http://control-api:8080
       AIGW_AUTH_SESSION_COOKIE_NAME: ${AIGW_AUTH_SESSION_COOKIE_NAME:-session}
       AIGW_AUTH_SESSION_COOKIE_SECURE: ${AIGW_AUTH_SESSION_COOKIE_SECURE:-false}
+      # Lets the worker's monitor read this server's CPU and memory (/internal/stats).
+      MONITOR_TOKEN: ${MONITOR_TOKEN:-change-me-monitor-token}
     ports:
       - "3000:3000"
     depends_on:
@@ -281,6 +299,40 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+    restart: unless-stopped
+
+  # Platform console: the super-admin app, separate from the customer dashboard.
+  admin:
+    image: ai-gateway-admin:dev
+    build:
+      context: ../..
+      dockerfile: admin/Dockerfile
+      args:
+        CONTROL_API_URL: "http://control-api:8080"
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      CONTROL_API_URL: http://control-api:8080
+      AIGW_AUTH_SESSION_COOKIE_NAME: ${AIGW_AUTH_SESSION_COOKIE_NAME:-session}
+    ports:
+      - "3300:3000"
+    depends_on:
+      control-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/signin || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  # Catches platform alert emails locally; web UI on :8025.
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "127.0.0.1:8025:8025"
     restart: unless-stopped
 
 volumes:

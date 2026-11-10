@@ -6,7 +6,7 @@ import {
   maxOf,
   minOf,
   type Point,
-} from "./utils";
+} from "@ai-governance/console-ui/charts/utils";
 
 interface SparklineProps {
   data: readonly TimeSeriesPoint[];

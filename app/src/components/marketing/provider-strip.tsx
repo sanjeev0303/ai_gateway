@@ -1,5 +1,5 @@
 import { MARKETING_PROVIDERS } from "@/lib/constants";
-import { cn } from "@/lib/utils";
+import { cn } from "@ai-governance/console-ui/lib/utils";
 
 export function ProviderStrip({ className }: { className?: string }) {
   return (
